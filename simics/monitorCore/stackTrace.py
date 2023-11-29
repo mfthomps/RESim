@@ -29,6 +29,7 @@ import memUtils
 import decode
 import decodeArm
 import resimUtils
+import ntpath
 def cppClean(fun):
     if fun.startswith('std::'):
         fun = fun[len('std::'):]
@@ -187,7 +188,10 @@ class StackTrace():
     def printTrace(self, verbose=False):
         for frame in self.frames:
             if frame.fname is not None:
-                fname = os.path.basename(frame.fname)
+                if self.top.isWindows():
+                    fname = ntpath.basename(frame.fname)
+                else:
+                    fname = os.path.basename(frame.fname)
             else:
                 fname = 'unknown'
             sp_string = ''
@@ -769,16 +773,18 @@ class StackTrace():
                 #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
 
         if self.cpu.architecture != 'arm':
-            bp = self.doX86()
-            if bp == 0 and len(self.frames)>1:
-                ''' walked full stack '''
-                #self.lgr.debug('doTrace starting doX86 got it, we are done')
-                done = True
-            else:
-                #self.lgr.debug('stackTrace doTrace after doX86 bp 0x%x num frames %s' % (bp, len(self.frames)))
-                if len(self.frames) > 5:
-                    ''' TBD revisit this wag '''
+            # TBD need way to indicate whether bp register is used
+            if not self.top.isWindows():
+                bp = self.doX86()
+                if bp == 0 and len(self.frames)>1:
+                    ''' walked full stack '''
+                    #self.lgr.debug('doTrace starting doX86 got it, we are done')
                     done = True
+                else:
+                    #self.lgr.debug('stackTrace doTrace after doX86 bp 0x%x num frames %s' % (bp, len(self.frames)))
+                    if len(self.frames) > 5:
+                        ''' TBD revisit this wag '''
+                        done = True
 
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''
@@ -816,22 +822,26 @@ class StackTrace():
                     call_to = self.getCallTo(call_ip)
                     if call_to is not None:
                         #self.lgr.debug('stackTrace call_to 0x%x ' % call_to)
+                        fname, start, end = self.soMap.getSOInfo(call_to)
                         if not self.fun_mgr.soChecked(call_to):
                             ''' should we add ida function analysys? '''
-                            if not self.fun_mgr.isFun(call_to):
-                                fname, start, end = self.soMap.getSOInfo(call_to)
+                            # windows can take forever to search.  so, no.
+                            if not self.top.isWindows() and not self.fun_mgr.isFun(call_to):
                                 #self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
+                                    #self.lgr.debug('stackTrace call getFull for %s' % fname)
                                     full_path = self.targetFS.getFull(fname, self.lgr)
                                     if full_path is not None:
+                                        #self.lgr.debug('stackTrace call add for %s' % full_path)
                                         self.fun_mgr.add(full_path, start)
                                     else:
-                                        self.lgr.debug('stackTrace, adding analysis? failed to get full_path from fname %s' % fname)
+                                        #self.lgr.debug('stackTrace, adding analysis? failed to get full_path from fname %s' % fname)
                             self.fun_mgr.soCheckAdd(call_to) 
                         if self.fun_mgr.isFun(call_to):
+                            #self.lgr.debug('stackTrace call_to 0x%x is fun prev_ip is 0x%x' % (call_to, prev_ip))
                             if not self.fun_mgr.inFun(prev_ip, call_to):
                                 first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
-                                #self.lgr.debug('first_instruct is %s' % first_instruct[1])
+                                #self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
                                 if self.cpu.architecture == 'arm' and first_instruct[1].lower().startswith('b '):
                                     fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(first_instruct, call_to)
                                     #self.lgr.debug('direct branch 0x%x %s' % (fun_hex, fun))
@@ -862,11 +872,19 @@ class StackTrace():
                                 else:
                                     skip_this = True
                                     #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
+                            else:
+                                #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
+                                instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
+                                fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_to)
+                                frame = self.FrameEntry(call_to, fname, instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
+                                #self.lgr.debug('stackTrace simple call fname: %s add frame %s' % (fname, frame.dumpString()))
+                                self.addFrame(frame)
                         else:
+                            #self.lgr.debug('stackTrace call_to 0x%x is not a fun' % (call_to))
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
                                 skip_this = True
-                                #self.lgr.debug('stackTrace 0x%x is jump table?' % call_to)
+                                #self.lgr.debug('stackTrace 0x%x is jump table? skip_this' % call_to)
                             elif self.fun_mgr.isRelocate(call_to):
                                 #self.lgr.debug('stackTrace 0x%x is relocatable, but already in main text, assume noise and skip' % call_to)
                                 skip_this = True
@@ -875,6 +893,7 @@ class StackTrace():
                                 pass
                 ''' The block above assumes we've been in main.  TBD clean it up.''' 
                 if call_ip is not None and not skip_this:
+                    #self.lgr.debug('StackTrace call_ip 0x%x' % call_ip)
                     skip_this = False
                     instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                     fun_addr = None 
@@ -892,7 +911,7 @@ class StackTrace():
                                     if self.cpu.architecture != 'arm':
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                         if (bp + self.mem_utils.wordSize(self.cpu)) != ptr:
-                                            #self.lgr.debug('StackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
+                                            self.lgr.debug('StackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
                                             count += 1
                                             ptr = ptr + self.mem_utils.wordSize(self.cpu)
                                             cur_fun_name = None
@@ -900,7 +919,7 @@ class StackTrace():
                                         else:
                                             cur_fun_name = None
                                     else:
-                                        #self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
+                                        self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
                                         ''' don't count this against max frames '''
                                         count += 1
                                         ptr = ptr + self.mem_utils.wordSize(self.cpu)
