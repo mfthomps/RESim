@@ -126,7 +126,12 @@ import json
 import pickle
 import re
 import shutil
-import imp
+try:
+    import importlib
+except:
+    ''' must be py 2.7 '''
+    import imp 
+    pass
 import glob
 import inspect
 
@@ -253,7 +258,8 @@ class GenMonitor():
                 abs_path = os.path.join(os.path.dirname(__file__), one_done_script)
 
             if os.path.isfile(abs_path):
-                self.one_done_module = imp.load_source(one_done_script, abs_path)
+                self.one_done_module = resimUtils.doLoad(one_done_script, abs_path)
+                #self.one_done_module = imp.load_source(one_done_script, abs_path)
                 self.lgr.debug('onedone found at %s' % abs_path)
             else:
                 self.lgr.error('no onedone found for %s' % one_done_script)
