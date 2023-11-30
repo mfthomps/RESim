@@ -909,12 +909,16 @@ class GenMonitor():
                             continue
                     '''
                     if True:
-                        unistd32 = None
-                        if cell_name in self.unistd32:
-                            unistd32 = self.unistd32[cell_name]
-                        task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                            self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
-                        swapper = task_utils.findSwapper()
+                        if self.isWindows(cell_name):
+                            task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                            swapper = task_utils.getSystemProcRec()
+                        else: 
+                            unistd32 = None
+                            if cell_name in self.unistd32:
+                                unistd32 = self.unistd32[cell_name]
+                            task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
+                                self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                            swapper = task_utils.findSwapper()
                         if swapper is None:
                             self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
                             done = False

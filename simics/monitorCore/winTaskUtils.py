@@ -59,6 +59,7 @@ class WinTaskUtils():
     THREAD_HEAD = 0x308
     # offset of head within ETHREAD
     THREAD_NEXT = 0x428
+    # offset within EPROCESS of count of active threads
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
     PEB_ADDR = 0x338
@@ -93,7 +94,15 @@ class WinTaskUtils():
             self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
             return
 
-        if run_from_snap is not None:
+        if run_from_snap is None:
+            va = cpu.ia32_gs_base + self.param.current_task
+            phys = self.mem_utils.v2p(self.cpu, va)
+            self.lgr.debug('winTaskUtils current task 0x%x, phys 0x%x' % (va, phys))
+            self.mem_utils.saveKernelCR3(self.cpu)
+            self.phys_current_task = phys
+            self.phys_saved_cr3 = self.mem_utils.getKernelSavedCR3()
+           
+        else:
             phys_current_task_file = os.path.join('./', run_from_snap, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 value = pickle.load( open(phys_current_task_file, 'rb') ) 
@@ -158,9 +167,6 @@ class WinTaskUtils():
                     self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[str(tid)]))
             else:
                 self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
-        else:
-            pass
-            # fix to saved values gather from booted system
 
     def commSize(self):
         return 14
@@ -494,7 +500,7 @@ class WinTaskUtils():
             task_next = self.mem_utils.getUnsigned(task_ptr + offset)
             val = self.mem_utils.readWord(self.cpu, task_next)
             if val is None:
-                print('died on task_next 0x%x' % task_next)
+                #print('died on task_next 0x%x' % task_next)
                 break
             else:
                 next_head = self.mem_utils.getUnsigned(val)
