@@ -16,12 +16,12 @@ The example uses 2 disk images
 The image from
    https://nps.box.com/s/t88gkonktje8xuer3qnwnl5gl05rhbl5
 should be copied to:
-    $RESIM_IMAGES/cadet01/viper.disk.hd_image.craff
+    $RESIM_IMAGE/cadet01/viper.disk.hd_image.craff
 
 And the image from
    https://nps.box.com/s/pzdljc8fvijx3nga87bveusgjp7yv4tb
 should be copied to:
-   $RESIM_IMAGES/driver/driver2.disk.hd_image.craff
+   $RESIM_IMAGE/driver/driver2.disk.hd_image.craff
 
 You should have at least two terminals on the system that is running Simics.
 One should be in the workspace directory.  The workspace should
