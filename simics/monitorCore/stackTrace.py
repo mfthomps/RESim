@@ -835,7 +835,7 @@ class StackTrace():
                                         #self.lgr.debug('stackTrace call add for %s' % full_path)
                                         self.fun_mgr.add(full_path, start)
                                     else:
-                                        #self.lgr.debug('stackTrace, adding analysis? failed to get full_path from fname %s' % fname)
+                                        self.lgr.debug('stackTrace, adding analysis? failed to get full_path from fname %s' % fname)
                             self.fun_mgr.soCheckAdd(call_to) 
                         if self.fun_mgr.isFun(call_to):
                             #self.lgr.debug('stackTrace call_to 0x%x is fun prev_ip is 0x%x' % (call_to, prev_ip))
