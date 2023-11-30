@@ -313,10 +313,20 @@ class WinTaskUtils():
         #self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
         if cur_proc_rec is None:
             return None, None, None
+        #self.lgr.debug('taskUtils curThread get comm')
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
+        #self.lgr.debug('taskUtils curThread get pid')
         pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
+        #self.lgr.debug('taskUtils curThread pid %s' % pid)
         thread = self.getThreadId()
+        if pid is None:
+            pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
+            self.lgr.debug('taskUtils curThread tried again, pid %s' % pid)
+        if pid is None or thread is None:
+            self.lgr.error('winTaskUtils curThread pid %s thread %s cur_proc_rec 0x%x' % (pid, thread, cur_proc_rec))
+            return None, None, None
+        comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         pid_thread = '%d-%d' % (pid, thread)
         #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)

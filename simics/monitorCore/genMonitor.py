@@ -5841,6 +5841,10 @@ class GenMonitor():
         if self.afl_instance is not None:
             self.afl_instance.saveThisData()
             self.quit() 
+
+    def curThread(self):
+        self.task_utils[self.target].curThread()
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
