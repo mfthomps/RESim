@@ -3363,11 +3363,6 @@ and through use of the Windows kernel debugger. These hard-coded values include 
 and the unique PID and program strings, (similar to Linux {\tt comm} values.  Future work includes extending this program to automatically gather these values, and do so for different 
 kernel versions.
 
-Until future work resolves the remaining discrepancies, set {\tt CREATE\_RESIM\_PARAMS=YES} and boot from a windows image.
-Then create a snapshot via {\tt write-configuration} before any processes of interest are loaded.  Then quit and set the snapshot name in
-the ini file and restart and then run the {\tt @gkp.go()}.  Then remove the {\tt CREATE\_RESIM\_PARAMS} entry.  Do not try to generate the 
-parameters directly from the boot, or you will encounter errors when loading the snapshot.
-
 Many of the kernel parameters are derived from information published here:  https://www.geoffchappell.com/index.htm
 The parameters needed by RESim are as follows (using RESim variable names).
 
