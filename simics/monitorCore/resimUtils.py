@@ -3,7 +3,6 @@ import sys
 import time
 import logging
 import subprocess
-import imp 
 import elfText
 import json
 import re
@@ -20,6 +19,7 @@ try:
     import importlib
 except:
     ''' must be py 2.7 '''
+    import imp 
     pass
 try:
     import ConfigParser
@@ -177,15 +177,15 @@ def getIdaData(full_path, root_prefix):
         
     return retval
 
-def doLoad(packet_filter, path):
+def doLoad(module, path):
     #print('version is %d %d' % (sys.version_info[0], sys.version_info[1]))
     if sys.version_info[0] == 3:
-        spec = importlib.util.spec_from_file_location(packet_filter, path)
+        spec = importlib.util.spec_from_file_location(module, path)
         retval = importlib.util.module_from_spec(spec)
-        sys.modules[packet_filter] = retval
+        sys.modules[module] = retval
         spec.loader.exec_module(retval)
     else: 
-        retval = imp.load_source(packet_filter, path)
+        retval = imp.load_source(module, path)
     return retval
 
 def getPacketFilter(packet_filter, lgr):
