@@ -53,6 +53,24 @@ elif [[ "$2" == -b ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
     ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e "@SIM_main_loop()" -batch-mode
+elif [[ "$2" == -e ]];then
+    if [ "$#" -lt 3 ]; then
+        echo "usage: resim <target> [-e] @cgc.command"
+        exit
+    fi
+    export RESIM_DISPLAY=$DISPLAY
+    unset DISPLAY
+    echo "cmd is $3"
+    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e $3
+elif [[ "$2" == -c ]];then
+    if [ "$#" -lt 3 ]; then
+        echo "usage: resim <target> [-c] command"
+        exit
+    fi
+    export RESIM_DISPLAY=$DISPLAY
+    unset DISPLAY
+    echo "cmd is $3"
+    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE $3
 else
     if [ ! -d ./targets/qsp-x86 ]; then
         ./simics -gui $LMGRD_SUCKS -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
