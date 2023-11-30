@@ -1648,6 +1648,7 @@ that the comparison is relevant to the input data reference.  With ARM programs,
 which means that the data reference occurs subsequent to a {\tt cmp} instruction and prior to a conditional branch, i.e., the conditional branch is not dependent on the data reference.
 
 \subsubsection{Tracking injected data}
+\label{tracking-injected-data}
 Once a trackIO is performed and you've reviewed input data references, you can repeat the tracking step with modified data.
 The recommended way to iteratively modify input data is to use  {\tt injectIO}, which injects data from a file into simulated memory.
 The RESim AFL fuzzing functions use a similar data injection scheme.
@@ -1956,7 +1957,7 @@ AFL might struggle to determine the field delimiters (not that it explicitly doe
 It is often the case that smaller seeds yield quicker results.  There are though plenty of exceptions to this.  An understanding of the protocol is 
 
 \subsection{Multiple UDP packets}
-AFL is organized as a file fuzzer, and it is up to the user to adapt it (or the target) for network environments.
+AFL is organized as a file fuzzer. It is up to the user to adapt it (or the target) for network environments.
 Our fork of AFL uses networking instead of files to provide data to the RESim environment.
 AFL generates fuzzed data.  RESim injects this data directly into the target memory to at a point where the target has returned from a recv syscall.
 For single UDP packets, we simply truncate the AFL data to conform to expected UDP packet size (trusting that AFL will not focus future resources on fuzzing 
@@ -1969,25 +1970,17 @@ Splitting multiple UDP packets for each coverage session currently takes one of 
 to have a fixed UDP header, e.g., RrUdP, then we can split AFL data at those strings using the {\tt AFL\_UDP\_HEADER} environment
 defintion in the ini file.  Seed packet combinations can be concatentated
 to accomodate whatever packet quantity is desired.  RESim will reject any packet that lacks the prescribed header for subsequent
-packets, which should cause AFL
-to see reduced coverage for such data sets.
+packets, which should cause AFL to see reduced coverage for such data sets.  The second approach is to inject the UPD packets
+into the driver computer as described in  \ref{tracking-injected-data}.
 
-The more challenging case is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
+One potential challenge is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
 minimum size is 1400 bytes, a 2 packet sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
 
 \subsection{Fuzzing TCP}
-Use the {\tt aflTCP} command (or preferrably the {\tt -t} switch on the {\tt runAFL} command) to start a session to fuzz TCP.  
-When setting up the snapshot, use a driver computer rather than
-real networks, e.g, with netcat.  Otherwise undefined behavior will result, e.g. if the process tries to send to the socket.
 TCP sessions initialized using the {\tt prepInject} command assume the application gets its data from a single read call to the kernel.
 Applications that depend on the kernel to provide buffered input, e.g., character-at-a-time reads, or applications that otherwise make multiple
 kernel calls to read data should have data injected into the kernel buffer.  This is acheived by using {\tt prepInjectWatch}. 
 as described in section \ref{partial-reads} 
-
-Note that while kernel data injection may provide the appearance of generating data for multiple application calls to the kernel, in practice
-many programs treat TCP as an application level packet delivery system, and depend on packetizing side effects.  Consider the case were a client
-send a command to the server, waits for a reply and then sends another command.  A developer might implement the server while assuming only a
-single command would be seen with each read.
 
 \subsubsection{Partial reads}
 \label{partial-reads}
@@ -2017,6 +2010,14 @@ injection would then be overwritting the LIST directive.
 
 Using AFL to fuzz a sequence of FTP commands is not currenty possible.
 
+The CADET01 example is fuzzed by the {\tt simics/testing/cadet-test}.  This simple CGC service lives up to a reputation it achieved for 
+illustrating subtle issues related to TCP.  The service reads a character at a time, until it sees a newline at which point it processes
+the buffered data.  Each fuzzing iteration will
+catch each read system call and their returns to determine when the injected data has been consumed, and it will set the {\tt read} syscall return value to
+zero following the consumption of the buffer. In cases having the newline, this will happen after all buffer processing and after the subsequent read
+for the next round of the service.  From a fuzzing perspective, this is wasteful and slow because we could have stopped fuzzing upon the next call
+to read instead of waiting for that zero value to be set and processed.  One alternative would be to set {\tt STOP\_ON\_READ} and set a filter to force
+the newline in each input.
 
 \subsection{Packet filters}
 Sometimes you may wish to focus the fuzzing on a specific code path determined by data within the packet.  This may be of particular
@@ -2859,6 +2860,9 @@ optimization schemes should not try to reduce breakpoint counts on the fly.
 \section{ToDo}
 \subsection {Msc}
 \begin{itemize}
+\item Stack trace on x86 assumes use of bp register unless OS is windows.  This is a poor assumption.  Need automated way
+of looking at functions.  Though libraries or compilation units may differ in same program.
+
 \item Standardize syscall trace output so that each entry includes the comm.
 
 \item Add duration option to traceAll so it can run quitely and stop when given duration has been reached.  But must deal with
@@ -3319,7 +3323,7 @@ target to be scheduled.  This is expected.
 \section{Windows}
 \label{Windows}
 A preliminary implementation of Windows application tracking is under development in the win7 branch of RESim.
-These preliminary functions are build for 64bit Windows 7.  The build is 6.1
+These preliminary functions support analysis of 64-bit Windows 7.  The build is 6.1
 Support functions include:
 \begin{itemize}
 \item Tracing syscalls with traceAll.  There is also a {\tt traceWindows} command that traces a subset of windows system calls.  This can be useful when performance is 
@@ -3343,7 +3347,9 @@ the system call parameters.
 \end{itemize}
 
 Windows applications can be very system call intensive.  Use of crypto DLLs seems to generate many system calls.  A new function was introduced to suspend 
-system call tracing while executing from selected DLLs.
+system call tracing while executing from selected DLLs. A file with a suffix of {\tt .dll\_skip} contains, as the first non-comment line, the name of the DLL whose system calls are to be 
+skipped. System call tracing will stop when that DLL is entered.  That name is then followed by a list of other DLL names, one per line.  
+System call tracing will recommence when any DLL \textit{other} than those in the list are entered.
 
 Windows page table management differs from Linux in that directory table entries are updated individually? With linux, the coverage module can
 set a break on the start of a table directory.  When that break it hit, we can then wait until a return to user mode at which time the
@@ -3363,6 +3369,30 @@ the ini file and restart and then run the {\tt @gkp.go()}.  Then remove the {\tt
 parameters directly from the boot, or you will encounter errors when loading the snapshot.
 
 Many of the kernel parameters are derived from information published here:  https://www.geoffchappell.com/index.htm
+The parameters needed by RESim are as follows (using RESim variable names).
+
+These offsets are currently hard-coded.
+\begin{itemize}
+\item ts\_next Offset of the next record pointer in the head in EPROCESS.
+\item ts\_prev Offset of the previous record pointer in the head in EPROCESS.
+\item ts\_comm Offset of the program name (equivalent to comm in Linux records) in EPROCESS.
+\item ts\_pid Offset of the process ID in EPROCESS
+\item proc\_ptr Offset within ETHREAD to the pointer to the thread's EPROCESS record.
+\end{itemize}
+
+These values are derived by getKernelParameters.py
+\begin{itemize}
+\item gs\_base Base address of GS segment when the parameters were generated.
+\item current\_task Offset within GS segment of pointer to the current thread.
+\item sysret64 Kernel address from which the return is made to user space.  
+\item sysenter Kernel address of syscall entry point.
+\item win7\_saved\_cr3\_phys physical address of where the kernel saves its cr3 value.
+\item saved\_cr3 Offset within GS segment where cr3 is saved.
+\item ptr2stack Offset within GS segment where pointer to the user stack is saved.
+\item syscall\_compute Kernel address at which the syscall jump table value is computed.
+\item syscall\_jump Jump table value that is multiplied by the syscall number to compute the jump value.
+\item page\_fault Kernel address of entry when page fault is encountered.
+\end{itemize}
 
 \subsection{PIDs and Threads}
 Windows threads share a common pid. Linux threads have distinct PIDs.
