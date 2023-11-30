@@ -14,7 +14,7 @@ if [ $base != $workspace ]; then
     exit
 fi
 aflout=$AFL_DATA/output/$base
-fuzz_archive=/mnt/resim_archive/fuzz/$1/$base
+fuzz_archive=$RESIM_FUZZ_ARCHIVE/$1/$base
 archive=$fuzz_archive/afl/output/sync_dirs.tgz
 mkdir -p $aflout
 tar -C $aflout -xf $archive
