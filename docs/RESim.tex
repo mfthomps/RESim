@@ -3378,6 +3378,11 @@ These offsets are currently hard-coded.
 \item ts\_comm Offset of the program name (equivalent to comm in Linux records) in EPROCESS.
 \item ts\_pid Offset of the process ID in EPROCESS
 \item proc\_ptr Offset within ETHREAD to the pointer to the thread's EPROCESS record.
+\item THREAD\_ID\_OFFSET within ETHREAD to thread identifier.
+\item THREAD\_HEAD within EPROCESS to thread head within ETHREAD.
+\item THREAD\_NEXT within ETHREAD to pointer to next record.
+\item ACTIVE\_THREADS within EPROCESS of count of active threads.
+\item PEB\_ADDR Offset within EPROCESS of the address of the process envrionment block (PEB).
 \end{itemize}
 
 These values are derived by getKernelParameters.py
