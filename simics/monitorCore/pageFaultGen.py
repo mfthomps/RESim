@@ -60,6 +60,10 @@ class PageFaultGen():
         self.user_eip = None
         ''' hack to tell context manager to call back to PageFaultGen on context switches to watched processes '''
         context_manager.callMe(self)
+        ''' TIDS that have returned to user space to find the fault is not resolved.  Assumes reschedule on fault and lazy
+            return to the user space without resoving it. 
+        '''
+        self.pending_double_faults = []
 
     def rmExit(self, tid):
         if tid in self.exit_break:
@@ -141,6 +145,7 @@ class PageFaultGen():
  
     def pageFaultHap(self, compat32, third, forth, memory):
         ''' Invoked when the kernel's page fault entry point is hit'''
+        # BEWARE of many returns
         if self.fault_hap is None:
             return
         #cpu, comm, tid = self.task_utils.curThread() 
@@ -209,17 +214,19 @@ class PageFaultGen():
             else:
                 self.lgr.debug('pageFaultHap cr2 reg is NONE????? set to faulting addr to eip 0x%x' % eip)
                 fault_addr = eip
-        # record cycle and eip for reversing back to user space    
-        
         if self.mem_utils.isKernel(self.user_eip):
+            # record cycle and eip for reversing back to user space    
             self.recordFault(tid, self.user_eip)
+        if self.top.isCode(fault_addr, tid):
+            #self.lgr.debug('pageFaultHap 0x%x is code, bail' % fault_addr)
+            return
         if tid not in self.faulted_pages:
             self.faulted_pages[tid] = []
         if fault_addr in self.faulted_pages[tid]:
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
         self.faulted_pages[tid].append(fault_addr)
-        #self.lgr.debug('pageFaultHapAlone for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context))
+        #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
         #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
@@ -235,8 +242,10 @@ class PageFaultGen():
             if self.mode_hap is None:
                 #self.lgr.debug('pageFaultGen adding mode hap')
                 self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
+        #else:
+        #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
+            
         hack_rec = (compat32, page_info, prec)
-
         SIM_run_alone(self.pageFaultHapAlone, hack_rec)
 
     def rmModeHapAlone(self, dumb):
@@ -246,9 +255,10 @@ class PageFaultGen():
             self.mode_hap = None
 
     def modeChanged(self, want_tid, one, old, new):
+        # we had pending page fault, and we now changed mode.  if user space, see if the fault has cleared.
         if self.mode_hap is None:
             return
-        cpu, comm, tid = self.task_utils.curThread() 
+        dumb, comm, tid = self.task_utils.curThread() 
         if tid != want_tid:
             #self.lgr.debug('pageFaultGen modeChanged wrong tid  tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
             return
@@ -257,13 +267,23 @@ class PageFaultGen():
         if new != Sim_CPU_Mode_Supervisor:
             #self.lgr.debug('pageFaultGen modeChanged user space')
             if tid in self.pending_faults:
-                #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x' % self.pending_faults[tid].cr2)
-                phys_block = None
+                #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x cycle: 0x%x' % (self.pending_faults[tid].cr2, self.cpu.cycles))
                 prec = self.pending_faults[tid]
-                if prec.cr2 is not None:
-                    phys_block = cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
-                if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
-                    #self.lgr.debug('pageFaultGen modeChanged in user space  0x%x mapped to 0x%x' % (prec.cr2, phys_block.address))
+                if prec.cr2 is None:
+                    self.lgr.error('pageFaultGen modeChanged with no prec.cr2 set. Not expecting this')
+                    return
+                phys_addr = self.mem_utils.v2p(self.cpu, prec.cr2)
+                if phys_addr is None:
+                    #TBD remove this, seems redundant
+                    self.lgr.debug('pageFaultGen modeChanged v2p failed.')
+                    phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
+                    if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
+                        self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
+                        phys_addr = phys_block.address
+                  
+                if phys_addr is not None:  
+                    if tid in self.pending_double_faults:
+                        self.pending_double_faults.remove(tid)
                     del self.pending_faults[tid]
                     if self.ptable_hap is not None:
                         hap = self.ptable_hap
@@ -273,18 +293,26 @@ class PageFaultGen():
                         hap = self.pdir_hap
                         SIM_run_alone(self.rmPDirHap, hap)
                         self.pdir_hap = None
+
                 elif self.cpu.architecture != 'arm':
                     ''' TBD handle reflection of segv to user space for arm? '''
                     instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
-                    if instruct[1].startswith('push') or 'sp' in instruct[1]:
-                        ''' growing stack '''
-                        #self.lgr.debug('pageFaultGen modeChanged fault addr 0x%x instruct is stack related: %s' % (prec.cr2, instruct[1]))
+                   
+                    if self.mem_utils.isKernel(prec.cr2): 
+                        self.lgr.debug('pageFaultGen modeChanged fault addr 0x%x is in kernel, we are now user space and still not mapped??' % prec.cr2)
+
+                    if instruct[1].startswith('push') or 'sp' in instruct[1] or instruct[1].startswith('call'):
+                        ''' growing stack  TBD what about call to reg whose value is corrupted?'''
+                        self.lgr.debug('pageFaultGen modeChanged fault addr 0x%x instruct is stack or something related: %s' % (prec.cr2, instruct[1]))
                         del self.pending_faults[tid]
                     elif self.mem_utils.isKernel(self.user_eip):
                         self.lgr.debug('pageFaultHap tid:%s user_eip: 0x%x is kernel.  TBD misses kernel ref to passed pointers' % (tid, self.user_eip))
                         del self.pending_faults[tid]
+                    elif tid not in self.pending_double_faults:
+                        self.pending_double_faults.append(tid)
+                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped. Instruct %s.  Watch for double fault' % (prec.cr2, instruct[1]))
                     else:
-                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped' % prec.cr2)
+                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped, DOUBLE fault. Instruct %s' % (prec.cr2, instruct[1]))
                         SIM_run_alone(self.hapAlone, self.pending_faults[tid])
                         SIM_run_alone(self.rmModeHapAlone, None) 
                         #SIM_break_simulation('remove this')
