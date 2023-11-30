@@ -399,10 +399,13 @@ class GetKernelParams():
                 print('eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (eip, instruct[1], mn, op2, op1)) 
                 #SIM_break_simulation('remove')
                 #return
-                #if mn != 'mov' or op1 == 'rsp' or not op1.startswith('r'):
                 # TBD may need to cycle through multiple gsFindAlone iterations to get to the right gs reference.
-                if mn != 'mov' or not op1.startswith('ra'):
-                    continue
+                if self.isWindows(): 
+                    if mn != 'mov' or op1 == 'rsp' or not op1.startswith('r'):
+                        continue
+                else:
+                    if mn != 'mov' or not op1.startswith('ra'):
+                        continue
                 prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
