@@ -653,7 +653,7 @@ class WinTaskUtils():
     def recentExitTid(self):
         return self.exit_tid
 
-    def getTidsForComm(self, comm_in):
+    def getTidsForComm(self, comm_in, ignore_exits=False):
         comm = os.path.basename(comm_in).strip()
         retval = []
         self.lgr.debug('getTidsForComm %s' % comm_in)
@@ -667,7 +667,7 @@ class WinTaskUtils():
                 for t in thread_dict:
                     tid = '%d-%d' % (pid, t)
                     ''' skip if exiting as recorded by syscall '''
-                    if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
                         retval.append(tid)
         return retval
 
