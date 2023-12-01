@@ -133,7 +133,9 @@ class FunMgr():
         if full_path.startswith(root_prefix):
             analysis_path = self.top.getAnalysisPath(full_path)
             #self.lgr.debug('getIDAFuns analysis_path %s' % analysis_path) 
-
+            if analysis_path is None:
+                self.lgr.error('funMgr getIdaFuns, no analysis found for  %s, will not be able to debug' % full_path)
+                return
             fun_path = analysis_path+'.funs'
             iterator_path = analysis_path+'.iterators'
             root_dir = os.path.basename(root_prefix)
