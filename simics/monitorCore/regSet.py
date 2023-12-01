@@ -85,16 +85,16 @@ class RegSet():
 
     def addBreak(self, addr, comm, reg, value):
                 breakpt = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-                self.lgr.debug('RegSet addBreak %d addr 0x%x context %s' % (breakpt, addr, self.cpu.current_context))
+                self.lgr.debug('RegSet addBreak %d addr 0x%x comm: %s context %s' % (breakpt, addr, comm, self.cpu.current_context))
                 hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.executeHap, None, breakpt)
-                self.breakmap[breakpt] = BreakRec(addr, comm, reg, value, hap)
+                self.breakmap[breakpt] = BreakRec(addr, comm.strip(), reg, value, hap)
          
     def executeHap(self, dumb, context, break_num, memory):
         if break_num not in self.breakmap:
             self.lgr.error('RegSet syscallHap break %d not in breakmap' % break_num)
             return
         cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu) 
-        if comm != self.breakmap[break_num].comm:
+        if not self.breakmap[break_num].comm.startswith(comm):
             self.lgr.debug('RegSet: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, comm))
         else:
             self.lgr.debug('RegSet comm %s hit 0x%x would update reg %s to 0x%x' % (comm, memory.logical_address, self.breakmap[break_num].reg, self.breakmap[break_num].value)) 
@@ -111,9 +111,10 @@ class RegSet():
 
     def swapContext(self):
         cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu) 
+        self.lgr.debug('RegSet swapContext, current comm %s' % comm)
         swap_list = []
         for break_num in self.breakmap:
-            if self.breakmap[break_num].comm == comm:
+            if self.breakmap[break_num].comm.startswith(comm):
                 swap_list.append(break_num)
         for break_num in swap_list:
             self.lgr.debug('RegSet swapContext for comm %s current context %s' % (self.breakmap[break_num].comm, self.cpu.current_context))
