@@ -120,7 +120,7 @@ class NetAddresses():
             self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
-    def __init__(self, cpu, params, mem_utils, fd=None, length=0):
+    def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None):
         self.length = length
         self.flags = 0
         if fd is None:
@@ -138,7 +138,7 @@ class SockStruct():
         self.sin_addr = None
         self.sa_data = None
         self.sa_family = None
-        self.sock_type = None
+        self.sock_type = sock_type
         self.domain = None
         self.protocol = None
         try:
