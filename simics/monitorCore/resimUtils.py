@@ -533,6 +533,6 @@ def isClib(lib_file):
     retval = False
     if lib_file is not None:
         lf = lib_file.lower()
-        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf:
+        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr71.dll' in lf or 'msvcp71.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
             retval = True
     return retval
