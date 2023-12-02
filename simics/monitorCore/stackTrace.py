@@ -166,7 +166,11 @@ class StackTrace():
         for frame in self.frames:
             item = {}
             item['ip'] = frame.ip
-            item['fname'] = frame.fname
+            if self.top.isWindows():
+                fname = ntpath.basename(frame.fname)
+            else:
+                fname = os.path.basename(frame.fname)
+            item['fname'] = fname
             item['instruct'] = frame.instruct
             item['fun_of_ip'] = frame.fun_of_ip
             retval.append(item)
@@ -687,7 +691,7 @@ class StackTrace():
         instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
         call_to_s = instruct.split()[1]
         call_to = None
-        #self.lgr.debug('stackTrace check call to %s' % call_to_s)
+        #self.lgr.debug('stackTrace getCallTo check call to %s' % call_to_s)
         try:
             call_to = int(call_to_s, 16)
         except:
@@ -815,10 +819,11 @@ class StackTrace():
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''
+                    #self.lgr.debug('stackTrace been_in_main is true')
                     skip_this = True
                     
                 if been_in_main and self.fun_mgr is not None and call_ip is not None and prev_ip is not None:
-                #if self.ida_funs is not None and call_ip is not None and prev_ip is not None:
+                    # Note "been_in_main" simply means we've been in a non-clib library.
                     call_to = self.getCallTo(call_ip)
                     if call_to is not None:
                         #self.lgr.debug('stackTrace call_to 0x%x ' % call_to)
@@ -873,10 +878,11 @@ class StackTrace():
                                     skip_this = True
                                     #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                             else:
+                                # inFun returned true
                                 #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
                                 instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                                 fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_to)
-                                frame = self.FrameEntry(call_to, fname, instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
+                                frame = self.FrameEntry(call_ip, fname, instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
                                 #self.lgr.debug('stackTrace simple call fname: %s add frame %s' % (fname, frame.dumpString()))
                                 self.addFrame(frame)
                         else:
@@ -891,7 +897,11 @@ class StackTrace():
                             else:
                                 #self.lgr.debug('stackTrace 0x%x is not a function?' % call_to)
                                 pass
-                ''' The block above assumes we've been in main.  TBD clean it up.''' 
+                    else:
+                        #self.lgr.debug('stackTrace call to getCallTo was none for call_ip 0x%x' % call_ip)
+                        skip_this = False
+
+                ''' The block above assumes we've been in a non-clib type library or main '''
                 if call_ip is not None and not skip_this:
                     #self.lgr.debug('StackTrace call_ip 0x%x' % call_ip)
                     skip_this = False
@@ -901,7 +911,7 @@ class StackTrace():
                     instruct_str = instruct[1]
                     if instruct_str.startswith(self.callmn):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_ip)
-                        #self.lgr.debug('StackTrace clean this up, got fun %s' % fun)
+                        #self.lgr.debug('StackTrace clean this up, got fun %s call_ip 0x%x instruct %s' % (fun, call_ip, instruct_str))
                         if prev_ip is not None:
                             cur_fun_name = self.fun_mgr.getFunName(prev_ip)
                             #self.lgr.debug('StackTrace prev_ip 0x%x, fun %s' % (prev_ip, cur_fun_name))
@@ -911,7 +921,7 @@ class StackTrace():
                                     if self.cpu.architecture != 'arm':
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                         if (bp + self.mem_utils.wordSize(self.cpu)) != ptr:
-                                            self.lgr.debug('StackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
+                                            #self.lgr.debug('StackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun, cur_fun_name, bp, ptr))
                                             count += 1
                                             ptr = ptr + self.mem_utils.wordSize(self.cpu)
                                             cur_fun_name = None
@@ -919,7 +929,7 @@ class StackTrace():
                                         else:
                                             cur_fun_name = None
                                     else:
-                                        self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
+                                        #self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun, cur_fun_name))
                                         ''' don't count this against max frames '''
                                         count += 1
                                         ptr = ptr + self.mem_utils.wordSize(self.cpu)
@@ -956,14 +966,16 @@ class StackTrace():
                                     instruct_str = '%s   %s' % (self.callmn, fun)
                                     pass
                                 
-                        #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct_str, ptr, call_ip))
                         fname = self.soMap.getSOFile(val)
-                        if fname is None:
+                        if been_in_main and resimUtils.isClib(fname):
+                            skip_this = True
+                        elif fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
                             frame = self.FrameEntry(call_ip, 'unknown', instruct_str, ptr, fun_addr=fun_hex, fun_name=fun)
                             self.addFrame(frame)
                             #self.lgr.debug('stackTrace fname none add frame %s' % frame.dumpString())
                         else:
+                            #self.lgr.debug('ADD STACK FRAME FOR 0x%x %s  ptr 0x%x.  prev_ip will become 0x%x' % (call_ip, instruct_str, ptr, call_ip))
                             ''' ad-hoc detect clib ghost frames, assume clib does not call other libraries.  exceptions?  TBD '''
                             #if fname.startswith('clib'):
                             #    if not prev_fname.startswith('clib') and not prev_fname.startswith('libpthread'):
@@ -984,7 +996,7 @@ class StackTrace():
                                 if self.cpu.architecture == 'arm':
                                     ret_addr = call_ip + 4
                                     if fun_hex is None:
-                                        self.lgr.debug('stackTrace FUN HEX NONE')
+                                        #self.lgr.debug('stackTrace FUN HEX NONE')
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
                                 else:
                                     #self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
