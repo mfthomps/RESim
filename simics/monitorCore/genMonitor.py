@@ -3568,10 +3568,10 @@ class GenMonitor():
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
         if target_cpu is None:
             target = self.target
+            target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
-        cpu, comm, tid = self.task_utils[target].curThread() 
-        self.mem_utils[target].setRegValue(cpu, reg, value)
+        self.mem_utils[target].setRegValue(target_cpu, reg, value)
         #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if self.reverseEnabled():
             if alone:
@@ -5354,13 +5354,13 @@ class GenMonitor():
         cmd = 'run count = %d unit = ms' % (int(ms))
         SIM_run_command(cmd)
         
-    def loadJumpers(self):    
+    def loadJumpers(self, physical=False):    
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
                 cpu = self.cell_config.cpuFromCell(self.target)
                 self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
-            self.jumper_dict[self.target].loadJumpers(jumper_file, physical=False)
+            self.jumper_dict[self.target].loadJumpers(jumper_file, physical=physical)
             print('Loaded jumpers from %s' % jumper_file)
         else:
             print('No jumper file defined.')
