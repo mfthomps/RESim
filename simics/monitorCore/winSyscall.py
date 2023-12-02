@@ -122,10 +122,6 @@ class WinSyscall():
         ''' track kernel buffers '''
         self.kbuffer = kbuffer
 
-        '''complex means of tracking socket info'''
-        self.tid_sockets = {}
-        self.tid_fd_sockets = {}
-
         ''' And one for tracking epoll info '''
         self.epolls = {}
       
@@ -183,6 +179,7 @@ class WinSyscall():
             self.lgr.debug('winSyscall using default application word size from env: %d' % self.default_app_word_size)
         else:
             self.lgr.debug('winSyscall using default application word size of 8')
+
 
     def breakOnProg(self):
         for call in self.call_params:
@@ -450,8 +447,7 @@ class WinSyscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, tid)
                             if self.callback is None:
-                                #if len(syscall_info.call_params) == 0 or exit_info.call_params is not None or tracing_all or tid in self.tid_sockets:
-                                if not syscall.hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all or tid in self.tid_sockets:
+                                if not syscall.hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all:
 
                                     if self.stop_on_call:
                                         if exit_info.call_params is None or exit_info.call_params.name != 'runToCall':
@@ -784,10 +780,26 @@ class WinSyscall():
                             extended_size = min(extended_size, 200)
                             extended_addr = self.stackParam(6, frame)
                             if extended_addr is not None:
+                                '''
+                                Observations running tcp and udp servers
+                                9th byte string
+                                25th byte tcp 0  udp 11
+                                33rd byte tcp 2  udp 2
+                                37th byte tcp 1  udp 2 
+                                '''
+                                str_ptr = extended_addr + 8 
+                                sock_str= self.mem_utils.readWinString(self.cpu, str_ptr, 20)
+                                #SIM_break_simulation('remove this')
                                 extended = self.mem_utils.readBytes(self.cpu, extended_addr, extended_size)
                                 if extended is not None:
+                                    exit_info.sock_struct = extended
+                                    b24 = extended[24]
+                                    b32 = extended[32]
+                                    b36 = extended[36]
+                                    self.lgr.debug('winSyscall endpoint extended_addr 0x%x socket string %s b24 0x%x b32 0x%x b36 0x%x' % (extended_addr, sock_str, b24, b32, b36))
                                     extended_hx = binascii.hexlify(extended)
-                                    trace_msg = trace_msg + ' - socket() call \n AFD extended: %s' % extended_hx
+                                    sock_type = net.socktype[b36]
+                                    trace_msg = trace_msg + ' - socket() call socket type: %s\n AFD extended: %s' % (sock_type, extended_hx)
                     exit_info = self.genericCallParams(syscall_info, exit_info, callname)
 
         elif callname == 'QueryAttributesFile':
@@ -917,8 +929,12 @@ class WinSyscall():
                 else:
                     sock_addr = self.paramOffPtr(7, [8], frame, word_size) 
                 #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
-                self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x' % (pdata_addr, sock_addr))
-                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                sock_type = self.sharedSyscall.win_call_exit.getSockType(tid, exit_info.old_fd)
+                if sock_type is not None:
+                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type: 0x%x ' % (pdata_addr, sock_addr, sock_type))
+                else:
+                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type unknown  ' % (pdata_addr, sock_addr))
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
                 #self.lgr.debug(trace_msg)
@@ -1527,7 +1543,7 @@ class WinSyscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                rprint("Tid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
+                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
                 SIM_break_simulation('timer loop?')
    
  

@@ -76,6 +76,9 @@ class WinCallExit():
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
 
+        ''' track socket types (tcp/udp) for tids and their handles'''
+        self.tid_sockets = {}
+
     def watchData(self, exit_info):
         if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
             return True
@@ -174,6 +177,13 @@ class WinCallExit():
                     if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
                         self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                         self.soMap.addFile(exit_info.fname, fd, tid)
+        
+                    elif exit_info.fname.endswith('Endpoint'):
+                        # gross speculation based on observation
+                        socket_type = exit_info.sock_struct[36]
+                        if tid not in self.tid_sockets:
+                            self.tid_sockets[tid] = {}
+                        self.tid_sockets[tid][fd] = socket_type
                     self.openCallParams(exit_info)
 
                 else:
@@ -298,7 +308,8 @@ class WinCallExit():
 
             if exit_info.socket_callname in ['BIND', 'GET_SOCK_NAME']:
                 sock_addr = exit_info.retval_addr
-                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                sock_type = self.getSockType(tid, exit_info.old_fd)
+                sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
 
@@ -359,7 +370,8 @@ class WinCallExit():
                 self.lgr.debug('winCallExit call stopAlone of syscall')
                 SIM_run_alone(my_syscall.stopAlone, callname)
                 self.top.idaMessage() 
-                #self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                if not my_syscall.linger: 
+                    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
@@ -388,3 +400,9 @@ class WinCallExit():
     def getMatchingExitInfo(self):
         return self.matching_exit_info 
 
+
+    def getSockType(self, tid, fd):
+        sock_type = None
+        if tid in self.tid_sockets and fd in self.tid_sockets[tid]:
+            sock_type = self.tid_sockets[tid][fd]
+        return sock_type
