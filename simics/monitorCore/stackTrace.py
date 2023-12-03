@@ -996,7 +996,7 @@ class StackTrace():
                                 if self.cpu.architecture == 'arm':
                                     ret_addr = call_ip + 4
                                     if fun_hex is None:
-                                        #self.lgr.debug('stackTrace FUN HEX NONE')
+                                        self.lgr.debug('stackTrace FUN HEX NONE')
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
                                 else:
                                     #self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
