@@ -180,6 +180,8 @@ class WinSyscall():
         else:
             self.lgr.debug('winSyscall using default application word size of 8')
 
+        # when stophap it, remove these parameters
+        self.rm_param_queue = []
 
     def breakOnProg(self):
         for call in self.call_params:
@@ -1369,7 +1371,7 @@ class WinSyscall():
         return retval
 
     def stopAlone(self, msg):
-        ''' NOTE: this is also called by sharedSyscall '''
+        ''' NOTE: this is also called by sharedSyscall/winCallExit '''
         eip = self.top.getEIP()
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
@@ -1422,10 +1424,15 @@ class WinSyscall():
                 self.lgr.debug('syscall stopHap run stop_action, funs: %s' % funs)
                 self.stop_action.run(cb_param=msg)
 
+                # TBD remove when call traces finally trashed
                 if self.call_list is not None:
                     for callname in self.call_list:
                         #self.top.rmCallTrace(self.cell_name, callname)
                         self.top.rmCallTrace(self.cell_name, self.name)
+                # mftmft TBD
+                for param in self.rm_param_queue:
+                    self.top.rmSyscall(param.name)
+                self.rm_param_queue = []
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
@@ -1768,3 +1775,5 @@ class WinSyscall():
     def resetHackCycle(self):
         self.hack_cycle= 0
 
+    def appendRmParam(self, param):
+        self.rm_param_queue.append(param)

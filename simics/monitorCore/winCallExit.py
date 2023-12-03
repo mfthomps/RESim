@@ -370,8 +370,11 @@ class WinCallExit():
                 self.lgr.debug('winCallExit call stopAlone of syscall')
                 SIM_run_alone(my_syscall.stopAlone, callname)
                 self.top.idaMessage() 
-                if not my_syscall.linger: 
-                    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                # remove it from syscall else there will be stop hap to execute
+                #if not my_syscall.linger: 
+                #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.call_params.name)
+                my_syscall.appendRmParam(exit_info.call_params)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
