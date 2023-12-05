@@ -176,6 +176,7 @@ class SharedSyscall():
                     self.context_manager.genDeleteHap(self.exit_hap[eip])
                     del self.exit_hap[eip]
                 #self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
+        #self.lgr.debug('sharedSyscall rmExitHap done')
 
 
     def addExitHap(self, cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name, context_override=None):
@@ -479,7 +480,7 @@ class SharedSyscall():
                     exit_info.call_params = None
                     trace_msg = ('\treturn from socketcall %s tid:%s  FD: None' % (socket_callname, tid))
                     return trace_msg 
-                if exit_info.sock_struct.length is None:
+                if exit_info.sock_struct is None or exit_info.sock_struct.length is None:
                     self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call')
                     trace_msg = ('\treturn from socketcall %s tid:%s  FD: %d length none (from revToCall?)' % (socket_callname, tid, exit_info.old_fd))
                     return trace_msg 
@@ -868,7 +869,7 @@ class SharedSyscall():
                               eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
                 my_syscall = exit_info.syscall_instance
                 if exit_info.call_params is not None and (exit_info.call_params.break_simulation or my_syscall.linger) and self.dataWatch is not None \
-                   and type(exit_info.call_params.match_param) is int:
+                   and type(exit_info.call_params.match_param) is int and exit_info.call_params.match_param == exit_info.old_fd:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read length (eax) is %d' % eax)
                     # Set range over max length of read to catch coding error reference to previous reads or such
@@ -900,7 +901,7 @@ class SharedSyscall():
                                 if dmod.getCount() == 0:
                                     self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
                                     if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
-                                        self.lgr.debug('sharedSyscall read Dmod stopping trace')
+                                        self.lgr.debug('sharedSyscall read Dmod stopping trace dmod %s' % dmod.getPath())
                                         self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
                                         #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
                                         self.stopTrace()
@@ -911,6 +912,7 @@ class SharedSyscall():
                                             self.top.notRunning(quiet=True)
                                             SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                                     else:
+                                        self.top.rmDmod(self.cell_name, dmod.getPath())
                                         exit_info.syscall_instance.rmCallParam(call_param)
                                 else:
                                     print('%s performed' % dmod.getPath())
