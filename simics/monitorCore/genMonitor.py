@@ -1533,9 +1533,9 @@ class GenMonitor():
             self.toExecve(comm=proc, flist=flist)
 
 
-    def toProc(self, proc, binary=True, run=True):
+    def toProc(self, proc, binary=False, run=True):
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
-        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
+        if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
@@ -1579,7 +1579,7 @@ class GenMonitor():
         self.rmDebugWarnHap()
         #self.stopTrace()
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
-        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils[self.target].getExitTid()):
+        if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
             self.lgr.debug('debugProc process %s found, run until some instance is scheduled' % proc)
@@ -5311,8 +5311,11 @@ class GenMonitor():
                 else: 
                     prog_name = self.task_utils[target].getProgNameFromComm(comm) 
                     if prog_name is None:
-                        prog_name = comm
-                        self.lgr.debug('genMonitor getProgName tid:%s reverted to getCommFromTid, got %s' % (tid, prog_name))
+                        prog_name = self.soMap[target].getFullPath(comm)
+                        self.lgr.debug('genMonitor getProgName tid:%s call soMap with comm from getCommFromTid, got %s' % (tid, prog_name))
+                        if prog_name is None:
+                            prog_name = comm
+                            self.lgr.debug('genMonitor getProgName tid:%s reverted to getCommFromTid, got %s' % (tid, prog_name))
                 self.traceProcs[target].setName(tid, prog_name, None)
         return prog_name
  
