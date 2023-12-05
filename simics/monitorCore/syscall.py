@@ -929,9 +929,10 @@ class Syscall():
             at_enter = False
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, at_enter, cpu)
         self.lgr.debug('parseExecve prog_string <%s>' % prog_string)
-        prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
-        if prog_string is not None and prog_comm in self.ignore_progs:
-            return False
+        if prog_string is not None:
+            prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
+            if prog_string is not None and prog_comm in self.ignore_progs:
+                return False
         #self.lgr.debug('parseExecve len of arg_string_list %d' % len(arg_string_list))
           
         tid_list = self.context_manager.getThreadTids()
