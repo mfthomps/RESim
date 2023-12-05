@@ -406,6 +406,8 @@ def getfileInsensitive(path, root_prefix, lgr):
                 got_it = True
                 break
     else:
+        if lgr is not None:
+            lgr.error('getfileInsensitive RELATIVE %s root: %s' % (path, root_prefix))
 
         for root, dirs, files in os.walk(root_prefix):
             for f in files:
@@ -488,6 +490,19 @@ def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None, root_prefix=None)
     retval = os.path.join(os.path.dirname(root_prefix), relative)
     return retval
 
+def soMatch(fname, cache, lgr):
+    # look for matches to handle things like libfu.so.0 as the fname vs a cache with something like libfu.so.0.0.1.funs
+    retval = None
+    base = os.path.basename(fname).upper()
+    for item in cache:
+        upper_item = item.upper()
+        if upper_item.startswith(base) and upper_item.endswith('.FUNS'):
+            if lgr  is not None:
+                #lgr.debug('resimUtils soMatch found match %s' % item)
+                retval = item
+    return retval
+    
+
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
     #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
@@ -503,20 +518,24 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
-        #if lgr is not None:
-        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            #if lgr is not None:
-            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
                 fname = fname[7:]
 
-        base = ntpath.basename(fname)+'.funs'
-        if base.upper() in map(str.upper, fun_list_cache):
-            with_funs = fname+'.funs'
+        base = os.path.basename(fname)+'.funs'
+        #if base.upper() in map(str.upper, fun_list_cache):
+        is_match = soMatch(fname, fun_list_cache, lgr)
+        if is_match is not None:
+            parent = os.path.dirname(fname)
+            with_funs = os.path.join(parent, is_match)
+            #with_funs = fname+'.funs'
             #lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, lgr)
             if retval is not None:
