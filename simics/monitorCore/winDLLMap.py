@@ -310,6 +310,10 @@ class WinDLLMap():
                     print('pid:%s 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
                     self.lgr.debug('winDLLMap showSO pid:%s 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
 
+    def listSO(self):
+        for pid in self.text:
+            end = self.text[pid].addr + self.text[pid].size
+            print('pid:%s  0x%x - 0x%x   %s' % (pid, self.text[pid].addr, end, self.text[pid].fname))
 
     def isMainText(self, address):
         retval = False
@@ -379,7 +383,8 @@ class WinDLLMap():
                             retval = True
                             break 
         else:
-            self.lgr.error('winDLLMap isCode pid:%s not in min/max addr dictionary' % pid)
+            self.lgr.debug('winDLLMap isCode pid:%s not in min/max addr dictionary' % pid)
+            pass
         return retval
 
     class HackCompat():
@@ -501,7 +506,7 @@ class WinDLLMap():
     def addSectionFunction(self, section, locate):
         fun_path = self.getAnalysisPath(section.fname)
         if fun_path is not None:
-            self.lgr.debug('winDLL setIdaFuns set addr 0x%x for %s' % (locate, fun_path))
+            self.lgr.debug('winDLL addSectionFunction set addr 0x%x for %s' % (locate, fun_path))
             if section.image_base is None:
                 full_path = self.top.getFullPath(fname=section.fname)
                 self.lgr.debug('winDLL addSectionFunction got %s from getFullPath' % full_path)
@@ -623,3 +628,10 @@ class WinDLLMap():
             retval = dll_info.fname
         return retval
 
+    def getFullPath(self, comm):
+        retval = None
+        for pid in self.text:
+            base = ntpath.basename(self.text[pid].fname)
+            if base.startswith(comm):
+                retval = self.text[pid].fname
+        return retval
