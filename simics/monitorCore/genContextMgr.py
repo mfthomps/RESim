@@ -720,14 +720,15 @@ class GenContextMgr():
         elif not self.top.isWindows(target=self.cell_name) and tid in self.tid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
         elif self.top.isWindows(target=self.cell_name):
-            if tid not in self.tid_cache: 
+            if tid not in self.tid_cache  and tid != self.task_utils.recentExitTid():
                 pid = tid.split('-')[0]
-                for tid_item in self.tid_cache:
-                    pid_item = tid_item.split('-')[0]
-                    if pid_item == pid:
-                        add_task=True
-                        leader_tid = None
-                        break 
+                if pid != self.task_utils.recentExitTid():
+                    for tid_item in self.tid_cache:
+                        pid_item = tid_item.split('-')[0]
+                        if pid_item == pid:
+                            add_task=True
+                            leader_tid = None
+                            break 
             if add_task:
                 self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
                 self.addTask(tid, new_addr, watch_exit=False)
@@ -999,7 +1000,7 @@ class GenContextMgr():
             #self.lgr.debug('resetWatchTasks tid was not, got current as tid:%s' % tid)
         #self.lgr.debug('resetWatchTasks tid:%s' % tid)
         self.stopWatchTasksAlone(None)
-        #self.lgr.debug('resetWatchTasks back from stopWatch')
+        self.lgr.debug('resetWatchTasks back from stopWatch')
         self.watchTasks(set_debug_tid = True, tid=tid)
         #self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
@@ -1426,6 +1427,7 @@ class GenContextMgr():
         if tid in self.ignore_tids:
             self.lgr.debug('contextManager tidEXit remove from ignore_pids: %s' % tid)
             self.ignore_tids.remove(tid)
+        self.task_utils.setExitTid(tid)
 
     def ignoreProg(self, prog):
         comm = os.path.basename(prog)[:self.task_utils.commSize()]

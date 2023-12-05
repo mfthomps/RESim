@@ -104,7 +104,7 @@ class TaskUtils():
         self.mem_utils = mem_utils
         self.phys_current_task = None
         self.exit_cycles = 0
-        self.exit_tid = 0
+        self.exit_tid = None
         self.exec_addrs = {}
         self.swapper = None
         self.ia32_gs_base = None
@@ -482,8 +482,20 @@ class TaskUtils():
     def recentExitTid(self):
         return self.exit_tid
 
+    def isExitTid(self, tid):
+        retval = False
+        etid = self.getExitTid()
+        if etid is not None:
+            if '-' in etid:
+                if tid == etid:
+                    retval = True
+            else:
+                proc_part = tid.split('-')[0]
+                if proc_part == etid:
+                    retval = True
+        return retval
     def getExitTid(self):
-        ''' if we are at or past the point of exit, return the most recently exitied tid. 
+        ''' if we are at or past the point of exit, return the most recently exited tid. 
             TBD, more robust, multiple PIDs? '''
         if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
             return self.exit_tid
@@ -496,7 +508,7 @@ class TaskUtils():
         self.lgr.debug('taskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
 
     def clearExitTid(self):
-        self.exit_tid = 0
+        self.exit_tid = None
         self.exit_cycles = 0
 
     def getGroupLeaderTid(self, tid):
@@ -542,7 +554,8 @@ class TaskUtils():
                 if group_leader == leader_rec:
                     pid = self.mem_utils.readWord32(self.cpu, ts + self.param.ts_pid)
                     ''' skip if exiting as recorded by syscall '''
-                    if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    #if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    if not self.isExitTid(str(pid)):
                         #retval.append(ts_list[ts].pid)
                         retval[str(pid)] = ts
                         #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
@@ -555,7 +568,8 @@ class TaskUtils():
                      leader_comm, ts_list[ts].comm))
                 if comm_leader_tid == leader_tid and ts_pid not in retval:
                     self.lgr.debug('getGroupTids tid matched')
-                    if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    #if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    if not self.isExitTid(ts_pid):
                         this_prog = None
                         if ts_pid in self.exec_addrs:
                             this_prog = self.exec_addrs[ts_pid].prog_name
@@ -579,7 +593,8 @@ class TaskUtils():
                 tid = str(ts_list[ts].pid)
                 #self.lgr.debug('getTidsForComm MATCHED ? %s to %s  tid %s' % (comm, ts_list[ts].comm, tid))
                 ''' skip if exiting as recorded by syscall '''
-                if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
+                #if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
+                if not (self.isExitTid(tid) and ignore_exits):
                     retval.append(tid)
         return retval
 
@@ -816,6 +831,7 @@ class TaskUtils():
         arg_string_list = []
         prog_string = self.mem_utils.readString(cpu, self.exec_addrs[tid].prog_addr, 512)
         if prog_string is not None:
+            prog_string = prog_string.strip()
             #self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
             for arg_addr in self.exec_addrs[tid].arg_addr_list:
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)

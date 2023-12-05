@@ -76,7 +76,7 @@ class WinTaskUtils():
 
         self.program_map = {}
         self.exit_cycles = 0
-        self.exit_tid = 0
+        self.exit_tid = None
 
         self.system_proc_rec = None
 
@@ -445,7 +445,7 @@ class WinTaskUtils():
             if thread_id is not None:
                 next_thread_addr = rec_start + self.THREAD_NEXT
                 next_thread = self.mem_utils.readWord(self.cpu, next_thread_addr)
-                self.lgr.debug('winTaskUtils getTaskListPtr thread_id %d next_thread 0x%x next_thread_addr 0x%x rec_start 0x%x' % (thread_id, next_thread, next_thread_addr, rec_start))
+                #self.lgr.debug('winTaskUtils getTaskListPtr thread_id %d next_thread 0x%x next_thread_addr 0x%x rec_start 0x%x' % (thread_id, next_thread, next_thread_addr, rec_start))
                 if next_thread == look_for:
                     retval = next_thread_addr
                     break
@@ -581,7 +581,7 @@ class WinTaskUtils():
         return None
 
     def clearExitTid(self):
-        self.exit_tid = 0
+        self.exit_tid = None
         self.exit_cycles = 0
 
     def getCurrentThreadLeaderTid(self):
@@ -637,23 +637,14 @@ class WinTaskUtils():
                 for t in thread_dict:
                     tid = '%d-%d' % (pid, t)
                     ''' skip if exiting as recorded by syscall '''
-                    if tid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                    if not self.isExitTid(tid):
                         retval[tid] = thread_dict[t]
                 break
         return retval
 
-    def getExitTid(self):
-        ''' if we are at or past the point of exit, return the most recently exitied pid. 
-            TBD, more robust, multiple PIDs? '''
-        if self.exit_cycles is not None and self.cpu.cycles >= self.exit_cycles:
-            return self.exit_tid
-        else:
-            return None
-
-    def recentExitTid(self):
-        return self.exit_tid
-
     def getTidsForComm(self, comm_in, ignore_exits=False):
+        # get the tids whose comm matches the give comm.
+        # If ignore_exits, then do not include any that are exiting
         comm = os.path.basename(comm_in).strip()
         retval = []
         self.lgr.debug('getTidsForComm %s' % comm_in)
@@ -667,7 +658,8 @@ class WinTaskUtils():
                 for t in thread_dict:
                     tid = '%d-%d' % (pid, t)
                     ''' skip if exiting as recorded by syscall '''
-                    if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
+                    #if tid != self.exit_tid or (self.cpu.cycles != self.exit_cycles and not ignore_exits):
+                    if not (ignore_exits and self.isExitTid(tid)):
                         retval.append(tid)
         return retval
 
@@ -762,6 +754,18 @@ class WinTaskUtils():
 
         return thread_id_dict
 
+    def isExitTid(self, tid):
+        retval = False
+        etid = self.getExitTid()
+        if etid is not None:
+            if '-' in etid:
+                if tid == etid:
+                    retval = True
+            else:
+                proc_part = tid.split('-')[0]
+                if proc_part == etid:
+                    retval = True
+        return retval
 
     def recentExitTid(self):
         return self.exit_tid
@@ -780,7 +784,7 @@ class WinTaskUtils():
         self.lgr.debug('taskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
 
     def clearExitTid(self):
-        self.exit_tid = 0
+        self.exit_tid = None
         self.exit_cycles = 0
         
     def getTidCommFromNext(self, next_addr):
