@@ -159,7 +159,7 @@ class WinSyscall():
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 
-        self.exit_calls = ['TerminateProcess']
+        self.exit_calls = ['TerminateProcess', 'TerminateThread']
         
         ''' TBD '''
         self.stop_on_exit = False
@@ -423,12 +423,15 @@ class WinSyscall():
                 self.lgr.debug('winSyscall %s process who: 0x%x' % (callname, who))
                 if who == 0xffffffffffffffff:
                     self.lgr.debug('winSyscall %s process will exit' % callname)
-                    self.handleExit(tid, ida_msg, exit_group=True)
+                    self.handleTerminateProcess(tid, ida_msg)
                     self.context_manager.stopWatchTid(tid)
                     if self.stop_on_exit:
                         self.lgr.debug('syscall break simulation for stop_on_exit')
                         SIM_break_simulation(ida_msg)
                     return
+            elif callname == 'TerminateThread':
+                self.lgr.debug('winSyscall %s call stopWatchTid' % callname)
+                self.context_manager.stopWatchTid(tid)
 
         ''' Set exit breaks '''
         #self.lgr.debug('syscallHap in proc %d (%s), callnum: 0x%x  EIP: 0x%x' % (tid, comm, callnum, break_eip))
@@ -462,7 +465,7 @@ class WinSyscall():
                                         self.dataWatch.stopWatch()
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
-                                    self.lgr.debug('did not add exitHap')
+                                    #self.lgr.debug('did not add exitHap')
                                     pass
                             else:
                                 self.lgr.debug('syscall invoking callback')
@@ -907,7 +910,7 @@ class WinSyscall():
                                      self.lgr.error('invalid expression: %s' % pat)
                                      return None
                              
-                                 self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                                 #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
                              if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
                                  self.lgr.debug('socketParse found match %s' % (call_param.match_param))
                                  exit_info.call_params = call_param
@@ -951,7 +954,7 @@ class WinSyscall():
                 trace_msg = trace_msg + " Bind_Handle: 0x%x  Connect_Handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
                 self.lgr.debug(trace_msg)
                 for call_param in syscall_info.call_params:
-                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
+                    #self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                     if type(call_param.match_param) is int:
                         if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
                             self.lgr.debug('did accept match')
@@ -1009,7 +1012,7 @@ class WinSyscall():
 
             #self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
-                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s call_list: %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name, str(self.call_list)))
+                #self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s call_list: %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name, str(self.call_list)))
                 if self.call_list is not None and (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
                              (call_param.match_param == -1 or call_param.match_param == exit_info.old_fd) and \
                              (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
@@ -1210,7 +1213,7 @@ class WinSyscall():
         else:
             #self.lgr.debug(trace_msg)
             pass
-        self.lgr.debug('winSyscall syscallParse %s cycles:0x%x' % (trace_msg, self.cpu.cycles))
+        #self.lgr.debug('winSyscall syscallParse %s cycles:0x%x' % (trace_msg, self.cpu.cycles))
         #else:
         #    self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
         #    exit_info = None
@@ -1593,38 +1596,22 @@ class WinSyscall():
         self.stop_on_exit=True
         self.lgr.debug('syscall stopOnExit')
 
-    def handleExit(self, tid, ida_msg, killed=False, retain_so=False, exit_group=False):
-            ''' TBD fix for windws?'''
+    def handleTerminateProcess(self, tid_in, ida_msg):
+        proc_part = tid_in.split('-')[0]
+        thread_dict = self.task_utils.findThreads()
+        self.lgr.debug(ida_msg)
+        if self.traceMgr is not None:
+            self.traceMgr.write(ida_msg+'\n')
+        self.context_manager.setIdaMessage(ida_msg)
+        self.task_utils.setExitTid(proc_part)
+        self.sharedSyscall.stopTrace()
+        for thread_id in thread_dict:
+            tid = '%s-%s' % (proc_part, thread_id) 
             if self.traceProcs is not None:
                 self.traceProcs.exit(tid)
-            if killed:
-                self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
-                self.stop_action.rmFun(self.top.skipAndMail)
-            self.lgr.debug(ida_msg)
-            if self.traceMgr is not None:
-                self.traceMgr.write(ida_msg+'\n')
-            self.context_manager.setIdaMessage(ida_msg)
-            if self.soMap is not None:
-                if not retain_so and not self.context_manager.amWatching(tid):
-                    self.soMap.handleExit(tid, killed)
-            else:
-                self.lgr.debug('syscallHap exit soMap is None, tid:%s' % (tid))
-            last_one = self.context_manager.rmTask(tid, killed) 
-            debugging_tid, dumb = self.context_manager.getDebugTid()
-            self.lgr.debug('syscallHap handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
-            if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
-                if self.top.hasProcHap():
-                    ''' exit before we got to text section '''
-                    self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % tid)
-                    SIM_run_alone(self.top.undoDebug, None)
-                self.lgr.debug('syscall handleExit exit or exit_group or tgkill tid:%s' % tid)
-                self.sharedSyscall.stopTrace()
-                ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
-                self.task_utils.setExitTid(tid)
-                #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
-                #self.stop_action.addFun(fun)
-                print('exit tid:%s' % tid)
-                SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
+            self.context_manager.stopWatchTid(tid)
+        print('exit process :%s' % proc_part)
+        SIM_run_alone(self.stopAlone, 'Terminate Process :%s' % proc_part)
 
     def addCallParams(self, call_params):
         gotone = False
