@@ -244,7 +244,7 @@ class RunTo():
         else:
             self.lgr.debug('runTo toRunningProc, look for <%s>, current tid:%s <%s>' % (proc, tid, comm))
         if flist is not None and self.inFlist([self.top.debug, self.top.debugGroup], flist): 
-            if tid != self.task_utils.getExitTid():
+            if not self.task_utils.isExitTid(tid):
                 if proc is not None and proc == comm:
                     self.lgr.debug('runTo toRunningProc Already at proc %s, done' % proc)
                     hap_clean = hapCleaner.HapCleaner(cpu)
