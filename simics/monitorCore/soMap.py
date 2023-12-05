@@ -662,3 +662,11 @@ class SOMap():
            return 32
        else:
            return 64
+
+    def getFullPath(self, comm):
+        retval = None
+        for pid in self.text_prog:
+            base = os.path.basename(self.text_prog[pid])
+            if base.startswith(comm):
+                retval = self.text_prog[pid]
+        return retval
