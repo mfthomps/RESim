@@ -27,9 +27,11 @@ class TargetFS():
         for root, dirs, files in os.walk(from_dir):
    
             #self.lgr.debug('TargetFS find files is %s' % str(files))
-            if '/etc/' in root or '/lib/' in root:
+            #TBD poor coverage of what might actually occur.  Need to weed out scripts some other way
+            if '/etc/' in root or '/lib/' in root or '/sh/' in root or root.endswith('/sh'):
                 continue 
             if name in files:
+                self.lgr.debug('TargetFS findFrom found %s root %s name %s' % (name, root, name))
                 retval = os.path.join(from_dir, root, name)
                 abspath = os.path.abspath(retval)
                 return abspath
