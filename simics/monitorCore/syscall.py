@@ -669,10 +669,10 @@ class Syscall():
         #        #return None, None, None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         if callname == 'openat':
-            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  tid:%s' % (callname, flags, 
-                mode, fname_addr, fname, frame['param1'], tid)
+            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  tid:%s (%s)' % (callname, flags, 
+                mode, fname_addr, fname, frame['param1'], tid, comm)
         else:
-            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s   tid:%s' % (callname, flags, mode, fname_addr, fname, tid)
+            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, mode, fname_addr, fname, tid, comm)
         #self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
         self.context_manager.setIdaMessage(ida_msg)
         #if fname is None:
@@ -838,7 +838,8 @@ class Syscall():
         self.lgr.debug('finishParseExec delete finish_break')
         del self.finish_hap[tid]
         del self.finish_break[tid]
-        if prog_string in self.ignore_progs:
+        prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
+        if prog_comm in self.ignore_progs:
             self.lgr.debug('finishParseExecve tid:%s skipping (%s)' % (tid, prog_string))
             return False
         self.lgr.debug('finishParseExecve tid:%s progstring (%s)' % (tid, prog_string))
@@ -864,7 +865,7 @@ class Syscall():
 
 
     def checkExecve(self, prog_string, arg_string_list, tid):
-        #self.lgr.debug('checkExecve syscall %s  %s' % (self.name, prog_string))
+        self.lgr.debug('checkExecve syscall %s  %s' % (self.name, prog_string))
         cp = None
         for call in self.call_params:
             #self.lgr.debug('checkExecve call %s' % call)
@@ -920,7 +921,6 @@ class Syscall():
                         SIM_run_alone(self.stopAlone, 'execve of %s %s' % (prog_string, sw))
 
     def parseExecve(self, syscall_info):
-        self.lgr.debug('parseExecve')
         retval = True
         cpu, comm, tid = self.task_utils.curThread() 
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
@@ -928,7 +928,9 @@ class Syscall():
         if syscall_info.calculated is not None:
             at_enter = False
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, at_enter, cpu)
-        if prog_string is not None and os.path.basename(prog_string) in self.ignore_progs:
+        self.lgr.debug('parseExecve prog_string <%s>' % prog_string)
+        prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
+        if prog_string is not None and prog_comm in self.ignore_progs:
             return False
         #self.lgr.debug('parseExecve len of arg_string_list %d' % len(arg_string_list))
           
@@ -964,7 +966,7 @@ class Syscall():
                 arg_string += arg_string_list[i]+' '
             else:
                 break
-        ida_msg = 'execve prog: %s %s  tid:%s' % (prog_string, arg_string, tid)
+        ida_msg = 'execve prog: %s %s  tid:%s (%s)' % (prog_string, arg_string, tid, comm)
         self.context_manager.newProg(prog_string, tid)
         self.lgr.debug(ida_msg)
         if self.traceMgr is not None:
@@ -1094,18 +1096,18 @@ class Syscall():
                 sock_type_full = self.mem_utils.readWord32(self.cpu, params+4)
                 protocol = self.mem_utils.readWord32(self.cpu, params+8)
             if domain is None or sock_type_full is None:
-                ida_msg = '%s - %s tid:%s input values not mapped???? ' % (callname, socket_callname, tid)
+                ida_msg = '%s - %s tid:%s (%s) input values not mapped???? ' % (callname, socket_callname, tid, comm)
             else:
                 sock_type = sock_type_full & net.SOCK_TYPE_MASK
                 try:
                     type_string = net.socktype[sock_type]
-                    ida_msg = '%s - %s tid:%s domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, tid, domain, type_string, protocol)
+                    ida_msg = '%s - %s tid:%s (%s) domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, tid, comm, domain, type_string, protocol)
                     #self.lgr.debug(ida_msg)
                 except:
                     self.lgr.debug('syscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
-                    ida_msg = '%s - %s tid:%s domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, tid, domain, sock_type, protocol)
+                    ida_msg = '%s - %s tid:%s (%s) domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, tid, comm, domain, sock_type, protocol)
         elif socket_callname == 'connect':
-            ida_msg = '%s - %s tid:%s %s %s  param at: 0x%x' % (callname, socket_callname, tid, ss.getString(), ss.addressInfo(), frame['param2'])
+            ida_msg = '%s - %s tid:%s (%s) %s %s  param at: 0x%x' % (callname, socket_callname, tid, comm, ss.getString(), ss.addressInfo(), frame['param2'])
             for call_param in syscall_info.call_params:
                 self.lgr.debug('check for match subcall %s' % call_param.subcall)
                 if call_param.subcall == 'connect' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
@@ -1146,7 +1148,7 @@ class Syscall():
                          exit_info.call_params = call_param
               
         elif socket_callname == 'bind':
-            ida_msg = '%s - %s tid:%s socket_string: %s' % (callname, socket_callname, tid, ss.getString())
+            ida_msg = '%s - %s tid:%s (%s) socket_string: %s' % (callname, socket_callname, tid, comm, ss.getString())
             #if ss.famName() == 'AF_CAN':
             #    frame_string = taskUtils.stringFromFrame(frame)
             #    self.lgr.debug('bind params %s' % frame_string)
@@ -1185,7 +1187,7 @@ class Syscall():
                          self.sockwatch.bind(tid, ss.fd, call_param)
 
         elif socket_callname == 'getpeername':
-            ida_msg = '%s - %s tid:%s FD: %d' % (callname, socket_callname, tid, ss.fd)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
             #exit_info.call_params = self.sockwatch.getParam(tid, ss.fd)
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'getpeername') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
@@ -1196,11 +1198,11 @@ class Syscall():
         elif socket_callname == 'accept' or socket_callname == 'accept4':
             phys = self.mem_utils.v2p(self.cpu, ss.addr)
             if ss.addr is not None and ss.addr != 0:
-                ida_msg = '%s - %s tid:%s FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, ss.fd, ss.addr, ss.length, phys)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, comm, ss.fd, ss.addr, ss.length, phys)
             elif ss.fd is not None:
-                ida_msg = '%s - %s tid:%s FD: %d' % (callname, socket_callname, tid, ss.fd)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
             else:
-                ida_msg = '%s - %s tid:%s FD is None?' % (callname, socket_callname, tid)
+                ida_msg = '%s - %s tid:%s (%s) FD is None?' % (callname, socket_callname, tid, comm)
                 self.lgr.debug('syscall acccept with ss.fd of none?')
              
             if ss.fd is not None:
@@ -1214,7 +1216,7 @@ class Syscall():
                             break
 
         elif socket_callname == 'getsockname':
-            ida_msg = '%s - %s tid:%s FD: %d' % (callname, socket_callname, tid, ss.fd)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
             #exit_info.call_params = self.sockwatch.getParam(tid, ss.fd)
             for call_param in syscall_info.call_params:
                 if call_param.subcall == 'getsockname' and call_param.match_param == ss.fd:
@@ -1240,7 +1242,7 @@ class Syscall():
                 if source_ss.sa_family is not None:
                     exit_info.fname_addr = src_addr
                     exit_info.count = src_addr_len
-                ida_msg = '%s - %s tid:%s FD: %d len: %d' % (callname, socket_callname, tid, ss.fd, ss.length)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, ss.fd, ss.length)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
@@ -1252,7 +1254,7 @@ class Syscall():
             elif tid is None:
                 self.lgr.error('tid is none') 
             else:
-                ida_msg = '%s - %s tid:%s FD: %d len: %d %s' % (callname, socket_callname, tid, ss.fd, ss.length, ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d %s' % (callname, socket_callname, tid, comm, ss.fd, ss.length, ss.getString())
             for call_param in syscall_info.call_params:
                 self.lgr.debug('syscall parse tid:%s socket rec... subcall is %s ss.fd is %s match_param is %s' % (tid, call_param.subcall, str(ss.fd), str(call_param.match_param)))
                 if (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
@@ -1278,12 +1280,12 @@ class Syscall():
                 exit_info.old_fd = frame['param1']
                 exit_info.retval_addr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'], self.lgr)
-                ida_msg = '%s - %s tid:%s FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, exit_info.old_fd, frame['param2'], msghdr.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, frame['param2'], msghdr.getString())
             elif self.cpu.architecture == 'arm':
                 exit_info.old_fd = frame['param1']
                 msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                ida_msg = '%s - %s tid:%s FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
                 self.lgr.debug(ida_msg) 
  
             else:
@@ -1293,7 +1295,7 @@ class Syscall():
                 msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
                 exit_info.retval_addr = msg_hdr_ptr
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                ida_msg = '%s - %s tid:%s FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
             exit_info.msghdr = msghdr
             exit_info.call_params = self.sockwatch.getParam(tid, exit_info.old_fd)
 
@@ -1314,7 +1316,7 @@ class Syscall():
                 msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
                 exit_info.msghdr = msghdr
-                ida_msg = '%s - %s tid:%s FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
                 self.lgr.debug(ida_msg) 
                 #SIM_break_simulation('sendmsg')
 
@@ -1338,13 +1340,13 @@ class Syscall():
                 #frame_string = taskUtils.stringFromFrame(frame)
                 #print(frame_string)
                 #SIM_break_simulation('sendto addr is 0x%x' % dest_addr)
-                ida_msg = '%s - %s tid:%s buf: 0x%x %s dest: %s' % (callname, socket_callname, tid, ss.addr, ss.getString(), dest_ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s dest: %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString(), dest_ss.getString())
                 #if dest_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
                 #    SIM_break_simulation(ida_msg)
             else:
-                ida_msg = '%s - %s tid:%s buf: 0x%x %s' % (callname, socket_callname, tid, ss.addr, ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString())
             for call_param in syscall_info.call_params:
                 if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
@@ -1369,7 +1371,7 @@ class Syscall():
 
         elif socket_callname == 'listen':
             exit_info.call_params = self.sockwatch.getParam(tid, ss.fd)
-            ida_msg = '%s - %s tid:%s %s' % (callname, socket_callname, tid, ss.getString())
+            ida_msg = '%s - %s tid:%s (%s) %s' % (callname, socket_callname, tid, comm, ss.getString())
                 
         elif socket_callname == 'setsockopt' or socket_callname == 'getsockopt':
             if callname == 'socketcall':
@@ -1395,17 +1397,17 @@ class Syscall():
                     optval_val = 'option: %s' % str(thebytes)
                 else:
                     optval_val = 'option: page not mapped'
-            ida_msg = '%s - %s tid:%s FD: %d level: %d  optname: %d optval: 0x%x  oplen %d  %s' % (callname, 
-                 socket_callname, tid, self.fd, level, optname, optval, optlen, optval_val)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d level: %d  optname: %d optval: 0x%x  oplen %d  %s' % (callname, 
+                 socket_callname, tid, comm, self.fd, level, optname, optval, optlen, optval_val)
         elif socket_callname == 'socketpair':
             if callname == 'socketcall':
                 exit_info.retval_addr = self.mem_utils.readWord32(self.cpu, frame['param4'])
             else:
                 exit_info.retval_addr = frame['param4']
-            ida_msg = '%s - %s %s tid:%s ' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid)
+            ida_msg = '%s - %s %s tid:%s (%s) ' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid, comm)
             
         else:
-            ida_msg = '%s - %s %s   tid:%s' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid)
+            ida_msg = '%s - %s %s   tid:%s (%s)' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid, comm)
 
 
         return ida_msg
@@ -1575,7 +1577,7 @@ class Syscall():
             if call == ipc.MSGGET or call == ipc.SHMGET:
                 key = frame['param2']
                 exit_info.fname = key
-                ida_msg = 'ipc %s tid:%s key: 0x%x size: %d  flags: 0x%x\n %s' % (callname, tid, key, frame['param3'], frame['param4'],
+                ida_msg = 'ipc %s tid:%s (%s) key: 0x%x size: %d  flags: 0x%x\n %s' % (callname, tid, comm, key, frame['param3'], frame['param4'],
                        taskUtils.stringFromFrame(frame)) 
             elif call == ipc.MSGSND or call == ipc.MSGRCV:
                 exit_info.retval_addr = frame['param5']
@@ -1583,17 +1585,17 @@ class Syscall():
                 exit_info.fname = frame['param4']
                 if call == ipc.MSGSND:
                     exit_info.bytes_to_write = self.mem_utils.getBytes(self.cpu, frame['param3'], frame['param5'])
-                    ida_msg = 'ipc %s tid:%s quid: 0x%x size: %d addr: 0x%x' % (callname, tid, frame['param4'], frame['param3'], frame['param5'])
+                    ida_msg = 'ipc %s tid:%s (%s) quid: 0x%x size: %d addr: 0x%x' % (callname, tid, comm, frame['param4'], frame['param3'], frame['param5'])
                     call_name = 'MSGSND'
                 else:
-                    ida_msg = 'ipc %s tid:%s quid: 0x%x size: %d addr: 0x%x' % (callname, tid, frame['param4'], frame['param3'], frame['param5'])
+                    ida_msg = 'ipc %s tid:%s (%s) quid: 0x%x size: %d addr: 0x%x' % (callname, tid, comm, frame['param4'], frame['param3'], frame['param5'])
                     call_name = 'MSGRCV'
                 #self.lgr.debug(ida_msg)
                 #SIM_break_simulation(call_name)    
             elif call == ipc.SHMAT:
-                ida_msg = 'ipc %s tid:%s segid: 0x%x ret_addr: 0x%x' % (callname, tid, frame['param2'], frame['param4'])
+                ida_msg = 'ipc %s tid:%s (%s) segid: 0x%x ret_addr: 0x%x' % (callname, tid, comm, frame['param2'], frame['param4'])
             else:
-                ida_msg = 'ipc %s tid:%s %s' % (callname, tid, taskUtils.stringFromFrame(frame) )
+                ida_msg = 'ipc %s tid:%s (%s) %s' % (callname, tid, comm, taskUtils.stringFromFrame(frame) )
             #self.lgr.debug(ida_msg)
             for call_param in syscall_info.call_params:
                 if call_param.match_param.__class__.__name__ == 'IPCFilter':
@@ -1613,15 +1615,15 @@ class Syscall():
             exit_info.old_fd = fd
             if cmd == net.FIONBIO:
                 value = self.mem_utils.readWord32(cpu, param)
-                ida_msg = 'ioctl tid:%s FD: %d FIONBIO: %d' % (tid, fd, value) 
+                ida_msg = 'ioctl tid:%s (%s) FD: %d FIONBIO: %d' % (tid, comm, fd, value) 
             elif cmd == net.FIONREAD:
-                ida_msg = 'ioctl tid:%s FD: %d FIONREAD ptr: 0x%x' % (tid, fd, param) 
+                ida_msg = 'ioctl tid:%s (%s) FD: %d FIONREAD ptr: 0x%x' % (tid, comm, fd, param) 
                 exit_info.retval_addr = param
             elif cmd == 0x703:
-                ida_msg = 'ioctl tid:%s FD: %d slave address: 0x%x' % (tid, fd, param) 
+                ida_msg = 'ioctl tid:%s (%s) FD: %d slave address: 0x%x' % (tid, comm, fd, param) 
                 exit_info.flags = param
             else:
-                ida_msg = 'ioctl tid:%s FD: %d cmd: 0x%x ptr: 0x%x' % (tid, fd, cmd, param) 
+                ida_msg = 'ioctl tid:%s (%s) FD: %d cmd: 0x%x ptr: 0x%x' % (tid, comm, fd, cmd, param) 
                 exit_info.retval_addr = param
             self.lgr.debug(ida_msg)
             for call_param in syscall_info.call_params:
@@ -1650,7 +1652,7 @@ class Syscall():
             time_spec = frame['param1']
             seconds = self.mem_utils.readWord32(cpu, time_spec)
             nano = self.mem_utils.readWord32(cpu, time_spec+self.mem_utils.WORD_SIZE)
-            ida_msg = 'nanosleep tid:%s time_spec: 0x%x seconds: %d nano: %d' % (tid, time_spec, seconds, nano)
+            ida_msg = 'nanosleep tid:%s (%s) time_spec: 0x%x seconds: %d nano: %d' % (tid, comm, time_spec, seconds, nano)
             #SIM_break_simulation(ida_msg)
 
         elif callname == 'fcntl64':        
@@ -1659,9 +1661,9 @@ class Syscall():
             cmd = net.fcntlCmd(cmd_val)
             arg = frame['param3']
             if cmd == 'F_SETFD':
-                ida_msg = 'fcntl64 tid:%s FD: %d %s flags: 0%o' % (tid, fd, cmd, arg)
+                ida_msg = 'fcntl64 tid:%s (%s) FD: %d %s flags: 0%o' % (tid, comm, fd, cmd, arg)
             else:
-                ida_msg = 'fcntl64 tid:%s FD: %d command: %s arg: %d\n\t%s' % (tid, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
+                ida_msg = 'fcntl64 tid:%s (%s) FD: %d command: %s arg: %d\n\t%s' % (tid, comm, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
             exit_info.old_fd = fd
             exit_info.cmd = cmd_val
             
@@ -1678,14 +1680,14 @@ class Syscall():
                 low = frame['param3']
                 result =  frame['param4']
                 whence = frame['param5']
-                ida_msg = '%s tid:%s FD: %d high: 0x%x low: 0x%x result: 0x%x whence: 0x%x \n%s' % (callname, tid, fd, high, low, 
+                ida_msg = '%s tid:%s (%s) FD: %d high: 0x%x low: 0x%x result: 0x%x whence: 0x%x \n%s' % (callname, tid, comm, fd, high, low, 
                         result, whence, taskUtils.stringFromFrame(frame))
                 exit_info.retval_addr = result
             else:
                 fd = frame['param1']
                 offset = frame['param2']
                 origin = frame['param3']
-                ida_msg = '%s tid:%s FD: %d offset: 0x%x origin: 0x%x' % (callname, tid, fd, offset, origin)
+                ida_msg = '%s tid:%s (%s) FD: %d offset: 0x%x origin: 0x%x' % (callname, tid, comm, fd, offset, origin)
 
             exit_info.old_fd = fd
             for call_param in syscall_info.call_params:
@@ -1860,7 +1862,7 @@ class Syscall():
                 elif fd is not None:
                     fd = str(fd)  
                 prot = frame['param3']
-                ida_msg = '%s tid:%s FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
                 self.lgr.debug(ida_msg)
@@ -1871,7 +1873,7 @@ class Syscall():
                 elif fd is not None:
                     fd = str(fd)  
                 prot = frame['param3']
-                ida_msg = '%s tid:%s FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, 
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 #if self.watch_first_mmap is not None:
                 #    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
@@ -1892,7 +1894,7 @@ class Syscall():
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
-            ida_msg = '%s tid:%s %s\n' % (callname, tid, exit_info.select_info.getString())
+            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -1902,7 +1904,7 @@ class Syscall():
         elif callname == 'poll' or callname == 'ppoll':
             exit_info.poll_info = PollInfo(frame['param1'], frame['param2'], frame['param3'], self.mem_utils, cpu, self.lgr)
 
-            ida_msg = '%s tid:%s %s\n' % (callname, tid, exit_info.poll_info.getString())
+            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.poll_info.getString())
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and exit_info.poll_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -1920,7 +1922,7 @@ class Syscall():
                 self.epolls[tid][epfd] = EPollInfo(epfd)
                 self.epolls[tid][epfd].add(fd, events_ptr)
 
-            ida_msg = '%s tid:%s epfd: %d op: %s FD: %d\n' % (callname, tid, epfd, EPollInfo.EPOLL_OPER[op], fd)
+            ida_msg = '%s tid:%s (%s) epfd: %d op: %s FD: %d\n' % (callname, comm, tid, epfd, EPollInfo.EPOLL_OPER[op], fd)
             #SIM_break_simulation('events_ptr 0x%x' % events_ptr)
             ida_msg = ida_msg+epoll.getEvent(self.cpu, self.mem_utils, events_ptr, self.lgr)
 
@@ -1929,13 +1931,13 @@ class Syscall():
         elif callname == 'epoll_wait' or callname == 'epoll_pwait':
             exit_info.epoll_wait = EPollWaitInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'])
             exit_info.old_fd = frame['param1']
-            ida_msg = '%s tid:%s %s\n' % (callname, tid, exit_info.epoll_wait.toString())
+            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.epoll_wait.toString())
             self.lgr.debug(ida_msg)
 
         elif callname == 'timerfd_settime':
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = frame['param3']
-            ida_msg = '%s tid:%s FD: %d struct: 0x%x\n' % (callname, tid, exit_info.old_fd, exit_info.retval_addr)
+            ida_msg = '%s tid:%s (%s) FD: %d struct: 0x%x\n' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr)
             self.lgr.debug(ida_msg)
 
         elif callname == 'socketcall' or callname.upper() in net.callname:
@@ -1946,7 +1948,7 @@ class Syscall():
                 exit_info = None
 
         elif callname == 'wait4':
-            ida_msg = '%s tid:%s waitfortid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, tid, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
+            ida_msg = '%s tid:%s (%s) waitfortid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, tid, comm, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
 
         elif callname == 'rt_sigaction':
             handler = self.mem_utils.readPtr(self.cpu, frame['param2'])
@@ -1955,9 +1957,9 @@ class Syscall():
                 self.sig_handler[tid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, self.syscall_info, proc_break, 'sig_handler')
                 self.lgr.debug('syscallHap %s set break on handler 0x%x' % (callname, handler))
             if handler is not None:
-                ida_msg = '%s tid:%s signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, frame['param1'], frame['param2'], handler)
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, comm, frame['param1'], frame['param2'], handler)
             else:
-                ida_msg = '%s tid:%s signum: %d sigaction: 0x%x no handler found' % (callname, tid, frame['param1'], frame['param2'])
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x no handler found' % (callname, tid, comm, frame['param1'], frame['param2'])
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
@@ -1968,9 +1970,9 @@ class Syscall():
             exit_info.retval_addr = retval_addr
             exit_info.fname_addr = fname_addr
             if fname is None:
-                ida_msg = '%s tid:%s path: not yet mapped? return buffer: 0x%x' % (callname, tid, retval_addr) 
+                ida_msg = '%s tid:%s (%s) path: not yet mapped? return buffer: 0x%x' % (callname, tid, comm, retval_addr) 
             else:
-                ida_msg = '%s tid:%s path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, fname_addr, fname, retval_addr)
+                ida_msg = '%s tid:%s (%s) path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, fname_addr, fname, retval_addr)
             #SIM_break_simulation(ida_msg)
             #return
 
@@ -2536,11 +2538,11 @@ class Syscall():
             retval = None
         return retval
 
-    def handleSelect(self, callname, tid, frame, exit_info, syscall_info):
+    def handleSelect(self, callname, tid, comm, frame, exit_info, syscall_info):
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  self.cpu, self.mem_utils, self.lgr)
 
-            ida_msg = '%s tid:%s %s\n' % (callname, tid, exit_info.select_info.getString())
+            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
             #self.lgr.debug('handleSelect %s' % ida_msg)
             for call_param in syscall_info.call_params:
                 #self.lgr.debug('handleSelect call_param %s' % str(call_param))
@@ -2583,7 +2585,7 @@ class Syscall():
             if callname == 'socketcall' or callname.upper() in net.callname:
                 the_callname = self.handleReadOrSocket(callname, frames[tid], exit_info, syscall_info)
             elif callname in ['select','_newselect', 'pselect6']:        
-                self.handleSelect(callname, tid, frames[tid], exit_info, syscall_info)
+                self.handleSelect(callname, tid, comm, frames[tid], exit_info, syscall_info)
 
             #TBD what the heck?  where should call_params come from do we care here? Must be something or dataWatch.setRange won't be called.
             for cp in self.call_params:
