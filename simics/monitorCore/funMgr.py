@@ -336,4 +336,9 @@ class FunMgr():
         self.ida_funs.showFunEntries(fun_name)
 
     def getFunEntry(self, fun_name):
-        return self.ida_funs.getFunEntry(fun_name)
+        if self.ida_funs is not None:
+            return self.ida_funs.getFunEntry(fun_name)
+        else:
+            self.lgr.error('funMgr called but no IDA functions defined')
+
+
