@@ -31,7 +31,7 @@ ida_suffix=id0
 idacmd=$IDA_DIR/idat
 if [[ "$1" == "-64" ]]; then
    echo "is 64"
-   idacmd=$IDA_DIR/ida64t
+   idacmd=$IDA_DIR/ida64
    ida_suffix=i64
    shift 1
 fi
@@ -67,6 +67,10 @@ fi
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path"
 
+if [ ! -f $target ]; then
+    echo "***ERROR:   No file found at $target"
+    exit 1
+fi
 echo "target is $target"
 echo "dbpath $ida_db_path"
 if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
@@ -84,6 +88,7 @@ if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
+    echo $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target"
     $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target"
     echo $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
 fi
