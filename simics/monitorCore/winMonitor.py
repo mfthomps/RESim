@@ -108,7 +108,7 @@ class WinMonitor():
         ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
 
         plist = self.task_utils.getTidsForComm(proc)
-        if len(plist) > 0 and not (len(plist)==1 and plist[0] == self.task_utils.getExitTid()):
+        if len(plist) > 0 and not (len(plist)==1 and self.task_utils.isExitTid(plist[0])):
             self.lgr.debug('winMonitor debugProc plist len %d plist[0] %d  exittid %s' % (len(plist), plist[0], self.task_utils.getExitTid()))
 
             self.lgr.debug('winMonitor debugProc process %s found, run until some instance is scheduled' % proc)
