@@ -23,6 +23,8 @@ import net
 import winDelay
 from resimHaps import *
 from resimUtils import rprint
+PROC_CREATE_INFO_OFFSET=0x58
+PROG_NAME_OFFSET=0x18
 def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
         param = 'param%d' % pnum
         pval = frame[param]
@@ -555,7 +557,6 @@ class WinSyscall():
                         exit_info.call_params = call_param
                         self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % alter_callname)
 
-
         frame_string = taskUtils.stringFromFrame(frame)
         #trace_msg = 'tid:%s (%s) %s %s' % (tid, comm, callname, frame_string)
         #self.lgr.debug('winSyscall syscallParse '+trace_msg)
@@ -563,15 +564,18 @@ class WinSyscall():
         if callname == 'CreateUserProcess':
             ''' TBD move offsets into param '''
             rsp = frame['sp']
-            ptr = rsp + 0x58
+            ptr = rsp + PROC_CREATE_INFO_OFFSET
             base = self.mem_utils.readPtr(self.cpu, ptr)
             if base is not None:
-                ptr2 = base + 0x18
+                ptr2 = base + PROG_NAME_OFFSET
                 ptr3 = self.mem_utils.readPtr(self.cpu, ptr2)
                 if ptr3 is None:
                     self.lgr.debug('winSyscall syscallParse cup %s ptr3 is None' % (trace_msg))
                 else:
                     prog = self.mem_utils.readWinString(self.cpu, ptr3, 200)
+                    if prog is None:
+                        self.lgr.warning('winSyscall failed to read program name for CreateUserProcess.  TBD Add callback for when program name is mapped to memory')
+                        return
                     trace_msg = trace_msg+' prog: %s frame: %s' % (prog, frame_string)
                     self.lgr.debug('winSyscall syscallparse cup %s' % trace_msg)
                     want_to_debug = False
