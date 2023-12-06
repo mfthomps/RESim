@@ -603,8 +603,9 @@ class WinDLLMap():
         return retval
 
     def addPendingProc(self, prog_path):
-        self.pending_procs.append(prog_path)
-        self.lgr.debug('winDLL addPendingProc %s' % prog_path)
+        if len(prog_path.strip()) > 0:
+            self.pending_procs.append(prog_path)
+            self.lgr.debug('winDLL addPendingProc %s' % prog_path)
 
     def handleExit(self, tid, killed=False):
         ''' when a thread leader exits, clone the so map structures to each child, TBD determine new thread leader? '''
