@@ -46,15 +46,17 @@ class NetLinks():
         sock_sock = 'return from socketcall SOCKET'
         recv_from = '- recvfrom'
         send_to = '- sendto'
-        proc_trace_file = os.path.join(path, 'procTrace.txt')
-        if os.path.isfile(proc_trace_file):
-            self.proc_trace = procTrace.ProcTrace(proc_trace_file) 
+        self.proc_trace = None
+        if os.path.isfile(path):
+            syscall_file = path
         else:
-            self.proc_trace = None
-        syscall_file = os.path.join(path, 'syscall_trace.txt')
-        if not os.path.isfile(syscall_file):
-            syscall_file = glob.glob('%s/syscall_trace*' % path)[0]
-            print('Using syscall file %s' % syscall_file)
+            proc_trace_file = os.path.join(path, 'procTrace.txt')
+            if os.path.isfile(proc_trace_file):
+                self.proc_trace = procTrace.ProcTrace(proc_trace_file) 
+            syscall_file = os.path.join(path, 'syscall_trace.txt')
+            if not os.path.isfile(syscall_file):
+                syscall_file = glob.glob('%s/syscall_trace*' % path)[0]
+                print('Using syscall file %s' % syscall_file)
 
         self.sock_socks = {}
         self.sock_start = {}
@@ -90,7 +92,8 @@ class NetLinks():
                         sock_file = parts[-1]
                         self.file_sock_binders[sock_file] = pname
                     elif 'AF_INET' in line:
-                        addr_port = parts[-1]
+                        #addr_port = parts[-1]
+                        addr_port = getTokValue(line, 'address')
                         if ':' in addr_port:
                             addr, port = addr_port.split(':')
                         else:
@@ -107,6 +110,8 @@ class NetLinks():
                             if sock_type == 'SOCK_DGRAM':
                                 port = port+'-UDP' 
                                 addr_port = addr_port+'-UDP' 
+                        if '(random)' in line:
+                            addr_port = addr_port+'(random)' 
                         if addr.startswith('127.'):
                             ''' internal '''
                             self.port_sock_binders[port] = pname
