@@ -5311,8 +5311,10 @@ class GenMonitor():
                 else: 
                     prog_name = self.task_utils[target].getProgNameFromComm(comm) 
                     if prog_name is None:
-                        prog_name = self.soMap[target].getFullPath(comm)
-                        self.lgr.debug('genMonitor getProgName tid:%s call soMap with comm from getCommFromTid, got %s' % (tid, prog_name))
+                        if target in self.soMap:
+                            # TBD dependency loop
+                            prog_name = self.soMap[target].getFullPath(comm)
+                            self.lgr.debug('genMonitor getProgName tid:%s call soMap with comm from getCommFromTid, got %s' % (tid, prog_name))
                         if prog_name is None:
                             prog_name = comm
                             self.lgr.debug('genMonitor getProgName tid:%s reverted to getCommFromTid, got %s' % (tid, prog_name))
