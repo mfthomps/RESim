@@ -407,14 +407,14 @@ def getfileInsensitive(path, root_prefix, lgr):
                 break
     else:
         if lgr is not None:
-            lgr.error('getfileInsensitive RELATIVE %s root: %s' % (path, root_prefix))
+             lgr.warning('getfileInsensitive RELATIVE %s root: %s   NOT LOOKING, return none' % (path, root_prefix))
 
-        for root, dirs, files in os.walk(root_prefix):
-            for f in files:
-                if f.upper() == path.upper():
-                    retval = os.path.join(root_prefix, root, f)
-                    abspath = os.path.abspath(retval)
-                    return abspath
+        #for root, dirs, files in os.walk(root_prefix):
+        #    for f in files:
+        #        if f.upper() == path.upper():
+        #            retval = os.path.join(root_prefix, root, f)
+        #            abspath = os.path.abspath(retval)
+        #            return abspath
         return None
 
 
