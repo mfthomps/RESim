@@ -776,7 +776,7 @@ class GenMonitor():
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
 
-            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[cell_name], 
+            self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[cell_name], 
                                         self.soMap[cell_name], self.traceMgr[cell_name], self.param[cell_name], self.lgr)
             self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
                                         self.context_manager[cell_name], self.soMap[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
@@ -3107,7 +3107,11 @@ class GenMonitor():
     def runToWrite(self, substring):
         call_params = syscall.CallParams('runToWrite', 'write', substring, break_simulation=True)        
         cell = self.cell_config.cell_context[self.target]
-        self.runTo(['write'], call_params, name='write')
+        if self.isWindows():
+            call_list = ['WriteFile']
+        else:
+            call_list = ['write']
+        self.runTo(call_list, call_params, name='write')
         self.lgr.debug('runToWrite to %s' % substring)
 
     def runToOpen(self, substring):
