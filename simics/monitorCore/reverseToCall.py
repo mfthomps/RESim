@@ -228,7 +228,6 @@ class reverseToCall():
             call_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
-            command = 'set-prefix %d "call"' % call_break_num
             if self.cpu.architecture == 'arm':
                 command = 'set-prefix %d "bl"' % call_break_num
             else:
