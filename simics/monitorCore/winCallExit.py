@@ -310,8 +310,12 @@ class WinCallExit():
                 sock_addr = exit_info.retval_addr
                 sock_type = self.getSockType(tid, exit_info.old_fd)
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
+                if exit_info.sock_struct is not None and sock_struct.dottedPort() != exit_info.sock_struct.dottedPort():
+                    rand = ' (random)'
+                else:
+                    rand = ''
                 to_string = sock_struct.getString()
-                trace_msg = trace_msg+' '+to_string
+                trace_msg = trace_msg+' '+to_string+rand
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 ''' fname_addr has address of return count'''
