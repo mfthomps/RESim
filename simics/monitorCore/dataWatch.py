@@ -79,7 +79,7 @@ class MemSomething():
             self.count = count
             self.called_from_ip = called_from_ip
             self.trans_size = trans_size
-            ''' meaning varies. poort name'''
+            ''' meaning varies. poor name'''
             self.ret_addr_addr = ret_addr_addr
             ''' used for finishReadHap '''
             self.op_type = op_type
@@ -4291,7 +4291,7 @@ class DataWatch():
                 return
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
-            self.lgr.debug('dataWatch memcpyCheck dest is in range, looks like a memcpy rax is %d r8 %d' % (rax, r8))
+            self.lgr.debug('dataWatch recordObscureMemcpyEntry dest is in range, looks like a memcpy rax is %d r8 %d' % (rax, r8))
             self.mem_something.dest = rcx
             self.mem_something.count = r8
             self.mem_something.fun = 'memcpy_xmm'
@@ -4301,7 +4301,7 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
             ret_addr_offset = rsp - self.mem_something.ret_addr_addr 
-            self.lgr.debug('dataWatch memcpyCheck add mem_something_entry addr %s eip 0x%x ret_addr_addr 0x%x ret_addr_offset 0x%x' % (self.mem_something.fun, 
+            self.lgr.debug('dataWatch recordObscureMemcpyEntry add mem_something_entry addr %s eip 0x%x ret_addr_addr 0x%x ret_addr_offset 0x%x' % (self.mem_something.fun, 
                             eip, self.mem_something.ret_addr_addr, ret_addr_offset))
             if self.mem_something.fun not in self.mem_fun_entries:
                 self.mem_fun_entries[self.mem_something.fun] = {}
@@ -4309,14 +4309,42 @@ class DataWatch():
                 self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
                 self.added_mem_fun_entry = True
             else:
-                self.lgr.debug('dataWatch memcpyCheck eip 0x%x already in mem_fun_entries' % eip)
+                self.lgr.debug('dataWatch recordObscureMemcpyEntry eip 0x%x already in mem_fun_entries' % eip)
+            self.runToReturnAlone(False)
+
+    def recordObscureMemcpyEntry2(self, src_dest_count):
+            src_ptr, dest_ptr, count = src_dest_count
+            ''' we are at the call to a memcpyis whose parameters are on the stack.  we need to record the function entry '''
+            next_cycle = self.cpu.cycles+1
+            if not resimUtils.skipToTest(self.cpu, next_cycle, self.lgr):
+                self.lgr.error('recordObscureEntry, tried going forward, failed')
+                return
+            self.lgr.debug('dataWatch recordObscureMemcpyEntry2')
+            self.mem_something.dest = dest_ptr
+            self.mem_something.count = count
+            self.mem_something.fun = 'memcpy_xmm'
+            self.mem_something.run = True
+            self.mem_something.op_type = Sim_Trans_Load
+
+            eip = self.top.getEIP(self.cpu)
+            rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
+            ret_addr_offset = rsp - self.mem_something.ret_addr_addr 
+            self.lgr.debug('dataWatch recordObscureMemcpyEntry2 add mem_something_entry addr %s eip 0x%x ret_addr_addr 0x%x ret_addr_offset 0x%x' % (self.mem_something.fun, 
+                            eip, self.mem_something.ret_addr_addr, ret_addr_offset))
+            if self.mem_something.fun not in self.mem_fun_entries:
+                self.mem_fun_entries[self.mem_something.fun] = {}
+            if eip not in self.mem_fun_entries[self.mem_something.fun]:
+                self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
+                self.added_mem_fun_entry = True
+            else:
+                self.lgr.debug('dataWatch recordObscureMemcpyEntry2 eip 0x%x already in mem_fun_entries' % eip)
             self.runToReturnAlone(False)
 
     def memcpyCheck(self, vt_stuff, one, exception, error_string):
         ''' We are at the call to what looks like an obscure memcpy.  We are stopped, but in a hap.
             Determine if this is in fact an obscure memcpy (one with no analysis signature).
         '''
-        self.lgr.debug('dataWatch memcpyCheck')
+        self.lgr.debug('dataWatch memcpyCheck cycle: 0x%x' % self.cpu.cycles)
         SIM_run_command('enable-vmp') 
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
@@ -4332,6 +4360,7 @@ class DataWatch():
         buf_index = self.findRangeIndex(self.mem_something.src)
         got_it = False
         if buf_index is not None:
+            dum_cpu, comm, tid = self.task_utils.curThread()
             rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
             if rdx == self.mem_something.src:
                 self.lgr.debug('dataWatch memcpyCheck src is rdx 0x%x' % rdx)
@@ -4345,7 +4374,23 @@ class DataWatch():
                 else:
                     self.lgr.debug('dataWatch memcpyCheck src rcx 0x%x and end 0x%x does not include dest 0x%x' % (rcx, end, self.mem_something.dest))
             else:
-                self.lgr.debug('dataWatch memcpyCheck src 0x%x does not match rdx 0x%x' % (self.mem_something.src, rdx))
+                # see if stack parameters
+                word_size = self.top.wordSize(tid, target=self.cell_name)
+                rsp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                src_ptr = self.mem_utils.readAppPtr(self.cpu, rsp+word_size, word_size)
+                self.lgr.debug('dataWatch memcpyCheck tid:%s src_ptr from stack is 0x%x word_size %d' % (tid, src_ptr, word_size))
+                # hack to handle memcpy first byte  TBD ranges are not right per what is actually copied.
+                if (src_ptr+1) >= self.start[buf_index] and src_ptr < (self.start[buf_index]+self.length[buf_index]):
+                    dest_ptr = self.mem_utils.readAppPtr(self.cpu, rsp, word_size)
+                    count = self.mem_utils.readAppPtr(self.cpu, rsp+2*word_size, word_size)
+                    end = dest_ptr + self.length[buf_index]
+                    if self.mem_something.dest >= dest_ptr and self.mem_something.dest <= end: 
+                        self.lgr.debug('dataWatch memcpyCheck looks like stack params, dest_ptr 0x%x count 0x%x' % (dest_ptr, count))
+                        src_dest_count = (src_ptr, dest_ptr, count)
+                        got_it = True
+                        SIM_run_alone(self.recordObscureMemcpyEntry2, src_dest_count)
+                else:
+                    self.lgr.debug('dataWatch memcpyCheck src 0x%x does not match rdx 0x%x or src_ptr from stack 0x%x' % (self.mem_something.src, rdx, src_ptr))
         else:
             self.lgr.debug('dataWatch memcpyCheck src not in ranges 0x%x' % self.mem_something.scr)
         if not got_it:
