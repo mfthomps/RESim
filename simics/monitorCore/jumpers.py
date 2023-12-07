@@ -140,6 +140,7 @@ class Jumpers():
         if not os.path.isfile(fname):
             self.lgr.error('No jumper file found at %s' % fname)
         else:
+            print('Loading jumpers from %s' % fname)
             with open(fname) as fh:
                 for line in fh:
                     if line.strip().startswith('#'):
