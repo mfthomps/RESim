@@ -744,6 +744,8 @@ class WinSyscall():
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(1, frame)
             val = self.stackParam(3, frame) 
+            write_string = None
+            buffer_addr = None
             if val is not None:
                 count = val & 0x00000000FFFFFFFF
                 buffer_addr = self.stackParam(2, frame)
@@ -752,13 +754,17 @@ class WinSyscall():
 
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, frame['param1']))
+                    self.lgr.debug('winSyscall call param found %d, matches %d' % (call_param.match_param, frame['param1']))
                     exit_info.call_params = call_param
                     break
-                elif type(call_param.match_param) is str:
-                    self.lgr.debug('write match param for tid:%s is string, add to exit info' % tid)
-                    exit_info.call_params = call_param
-                    break
+                elif type(call_param.match_param) is str: 
+                    if write_string is not None and call_param.match_param in write_string:
+                        self.lgr.debug('winSyscall write match param for tid:%s is string %s, add to exit info' % (tid, write_string))
+                        exit_info.call_params = call_param
+                        exit_info.append_msg = 'String from address 0x%x' % buffer_addr
+                        break
+                    else:
+                        self.lgr.debug('winSyscall WriteFile match param is string but we read %s' % write_string)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if count < 4028:
                         self.lgr.debug('syscall write check dmod count %d' % count)

@@ -117,6 +117,8 @@ class WinCallExit():
             status = winNTSTATUS.ntstatus_map[eax]
         
         trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
+        if exit_info.append_msg is not None: 
+            trace_msg = trace_msg + ' '+exit_info.append_msg
 
         ''' who taught bill about error codes? '''
         #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
