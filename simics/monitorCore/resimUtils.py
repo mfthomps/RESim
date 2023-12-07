@@ -518,12 +518,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
-        if lgr is not None:
-            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+        #if lgr is not None:
+        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            if lgr is not None:
-                lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            #if lgr is not None:
+            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
