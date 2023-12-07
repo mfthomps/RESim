@@ -120,6 +120,8 @@ import winProg
 import stackFrameManager
 import traceBuffer
 import dmodMgr
+import runToReturn
+import recordLogEvents
 
 #import fsMgr
 import json
@@ -5857,6 +5859,18 @@ class GenMonitor():
 
     def curThread(self):
         self.task_utils[self.target].curThread()
+
+    def runToReturn(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        rtr = runToReturn.RunToReturn(self, cpu, self.task_utils[self.target], 
+                     self.param[self.target].kernel_base, self.context_manager[self.target], self.lgr)
+        self.lgr.debug('runToReturn breaks set now continue')
+        SIM_continue(0)
+
+    def recordLogEvents(self, obj):
+        fname = 'logs/%s.log' % obj
+        cpu = self.cell_config.cpuFromCell(self.target)
+        rle = recordLogEvents.RecordLogEvents(fname, obj, 4, cpu, self.lgr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
