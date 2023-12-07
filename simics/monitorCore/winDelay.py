@@ -206,20 +206,20 @@ class WinDelay():
     def toUserAlone(self, dumb):
         tid = self.top.getTID()
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, tid)
-        self.lgr.debug('windDelay toUserAlone, set mode hap for tid:%s' % tid)
+        self.lgr.debug('winDelay toUserAlone, set mode hap for tid:%s' % tid)
 
     def modeChanged(self, want_tid, one, old, new):
         if self.mode_hap is None:
             return
         this_tid = self.top.getTID()
         if want_tid != this_tid:
-            self.lgr.debug('windDelay mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+            self.lgr.debug('winDelay mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         cpl = memUtils.getCPL(self.cpu)
         if new == Sim_CPU_Mode_Supervisor:
-            self.lgr.warning('windDelay mode changed wrong mode, new is supervisor?')
+            self.lgr.warning('winDelay mode changed wrong mode, new is supervisor?')
         else:
-            self.lgr.debug('windDelay mode changed in user, call doDataWatch')
+            self.lgr.debug('winDelay mode changed in user, call doDataWatch')
             SIM_run_alone(self.doDataWatch, None)
         
     def rmHap(self, hap, immediate=False): 
