@@ -855,7 +855,8 @@ class StackTrace():
                                         #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                     else:
                                         ''' record the direct branch, e.g., B fuFun '''
-                                        frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
+                                        frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
+                                        frame.ret_addr = call_ip + first_instruct[0] 
                                         #self.lgr.debug('stackTrace direct branch fname: %s add frame %s' % (fname, frame.dumpString()))
                                         self.addFrame(frame)
                                 elif self.cpu.architecture != 'arm':
@@ -866,7 +867,8 @@ class StackTrace():
                                             #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                         else:
                                             ''' record the direct branch, e.g., jmp dword...'''
-                                            frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
+                                            frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
+                                            frame.ret_addr = call_ip + first_instruct[0] 
                                             #self.lgr.debug('stackTrace direct branch fname: %s add frame %s' % (fname, frame.dumpString()))
                                             self.addFrame(frame)
                                     else:
@@ -882,7 +884,8 @@ class StackTrace():
                                 #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
                                 instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                                 fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_to)
-                                frame = self.FrameEntry(call_ip, fname, instruct[1], ptr, fun_addr=fun_hex, fun_name=fun)
+                                frame = self.FrameEntry(call_ip, fname, instruct[1], ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
+                                frame.ret_addr = call_ip + instruct[0] 
                                 #self.lgr.debug('stackTrace simple call fname: %s add frame %s' % (fname, frame.dumpString()))
                                 self.addFrame(frame)
                         else:
@@ -971,7 +974,8 @@ class StackTrace():
                             skip_this = True
                         elif fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
-                            frame = self.FrameEntry(call_ip, 'unknown', instruct_str, ptr, fun_addr=fun_hex, fun_name=fun)
+                            frame = self.FrameEntry(call_ip, 'unknown', instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
+                            frame.ret_addr = call_ip + instruct[0] 
                             self.addFrame(frame)
                             #self.lgr.debug('stackTrace fname none add frame %s' % frame.dumpString())
                         else:
@@ -1000,7 +1004,8 @@ class StackTrace():
                                     frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_addr=ret_addr)
                                 else:
                                     #self.lgr.warning('stackTrace NOT setting ret_addr for x86, TBD')
-                                    frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun)
+                                    frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
+                                    frame.ret_addr = call_ip + instruct[0] 
                                 self.addFrame(frame)
                                 #self.lgr.debug('stackTrace fname %s fun is %s add frame %s' % (fname, fun, frame.dumpString()))
                             else:
@@ -1015,6 +1020,7 @@ class StackTrace():
                     else:
                         #self.lgr.debug('doTrace not a call? %s' % instruct_str)
                         frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, None, None)
+                        frame.ret_addr = call_ip + instruct[0] 
                         self.addFrame(frame)
                         #self.lgr.debug('stackTrace not a call? %s fname %s, add frame %s' % (instruct_str, fname, frame.dumpString()))
                 else:
