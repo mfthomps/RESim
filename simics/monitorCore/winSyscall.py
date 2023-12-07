@@ -419,7 +419,7 @@ class WinSyscall():
         if callname in self.exit_calls:
             self.context_manager.tidExit(tid)
             self.lgr.debug('winSyscall %s exit of tid:%s stop_on_exit: %r' % (self.name, tid, self.stop_on_exit))
-            ida_msg = '%s tid:%s' % (callname, tid)
+            ida_msg = '%s tid:%s (%s)' % (callname, tid, comm)
             if callname == 'TerminateProcess':
                 who = frame['param1']
                 self.lgr.debug('winSyscall %s process who: 0x%x' % (callname, who))
@@ -427,7 +427,7 @@ class WinSyscall():
                     self.lgr.debug('winSyscall %s process will exit' % callname)
                     self.handleTerminateProcess(tid, ida_msg)
                     self.context_manager.stopWatchTid(tid)
-                    if self.stop_on_exit:
+                    if self.stop_on_exit and self.top.debugging():
                         self.lgr.debug('syscall break simulation for stop_on_exit')
                         SIM_break_simulation(ida_msg)
                     return
@@ -659,6 +659,24 @@ class WinSyscall():
                 trace_msg = trace_msg + ' information_class: %s buf_addr: 0x%x buf_size: 0x%x buf_contents: %s' % (winFile.file_information_class[info_class], buf_addr, buf_size, buf_hx)
                 if (winFile.file_information_class[info_class] == "FileDispositionInformation") and (buf_hx != b'00'):
                     trace_msg = trace_msg + ' - FILE BEING FLAGGED FOR DELETION AFTER CLOSE'
+
+
+            elif callname == 'Close':
+                fd = frame['param1']
+                trace_msg = trace_msg + ' handle: 0x%x' % fd
+                self.lgr.debug(trace_msg)
+                for call_param in syscall_info.call_params:
+                    self.lgr.debug('winSyscall %s call_param.subcall %s type %s value %s call_param.proc %s' % (callname, call_param.subcall, 
+                               type(call_param.match_param), str(call_param.match_param), call_param.proc))
+                    if call_param.match_param == fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                        self.lgr.debug('winSyscall closed fd %d, stop trace' % fd)
+                        self.stopTrace()
+                        ida_msg = 'Closed FD %d' % fd
+                        exit_info.call_params = call_param
+                        break 
+                    elif call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
+                        self.lgr.debug('winSyscall close Dmod, tid and fd match')
+                        exit_info.call_params = call_param
                 
         # Handle other functions specifically
         elif callname == 'QuerySystemInformation':
@@ -722,6 +740,7 @@ class WinSyscall():
 
 
         elif callname == 'WriteFile':
+            self.lgr.debug('WriteFile')
             exit_info.old_fd = frame['param1']
             exit_info.retval_addr = self.stackParam(1, frame)
             val = self.stackParam(3, frame) 
@@ -731,6 +750,35 @@ class WinSyscall():
                 write_string = self.mem_utils.readWinString(self.cpu, buffer_addr, count)
                 trace_msg = trace_msg+' Handle: 0x%x retval_addr: 0x%x buf_addr: 0x%x buf_size: %d buf_contents: %s' % (exit_info.old_fd, exit_info.retval_addr, buffer_addr, count, repr(write_string))
 
+            for call_param in syscall_info.call_params:
+                if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, frame['param1']))
+                    exit_info.call_params = call_param
+                    break
+                elif type(call_param.match_param) is str:
+                    self.lgr.debug('write match param for tid:%s is string, add to exit info' % tid)
+                    exit_info.call_params = call_param
+                    break
+                elif call_param.match_param.__class__.__name__ == 'Dmod':
+                    if count < 4028:
+                        self.lgr.debug('syscall write check dmod count %d' % count)
+                        mod = call_param.match_param
+                        if mod.checkString(self.cpu, frame['param2'], count):
+                            if mod.getCount() == 0:
+                                self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
+                                if not self.remainingDmod(call_param.name):
+                                    #self.top.stopTrace(cell_name=self.cell_name, syscall=self)
+                                    self.top.rmSyscall(call_param.name)
+                                    if not self.top.remainingCallTraces(cell_name=self.cell_name) and SIM_simics_is_running():
+                                        self.top.notRunning(quiet=True)
+                                        SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, mod.getPath()))
+                                    else:
+                                        print('%s performed' % mod.getPath())
+                                else:
+                                    self.syscall_info.callparams.remove(call_param)
+                else:
+                    #self.lgr.debug('syscall write call_param match_param is type %s' % (call_param.match_param.__class__.__name__))
+                    pass
         elif callname == 'CreateFile':
             if self.mem_utils.isKernel(frame['param1']):
                 self.lgr.debug('winSyscall CreateFile internel to kernel')
@@ -887,24 +935,31 @@ class WinSyscall():
             exit_info.count = self.stackParam(6, frame) & 0xFFFFFFFF
 
             trace_msg = trace_msg+' Handle: 0x%x Operation: 0x%x Event_Handle: 0x%x' % (exit_info.old_fd, operation, event_handle)
+            self.lgr.debug('%s  cycle 0x%x' % (trace_msg, self.cpu.cycles))
             if pdata is not None and len_pdata > 0:
                 trace_msg = trace_msg+' pdata: %s' % pdata_hx
  
             if exit_info.count > 0:
                 trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
+           
+            do_async_io = False
 
             if op_cmd == 'BIND':
                 #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 sock_addr = pdata_addr+4
-                self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x' % (pdata_addr, sock_addr))
+                self.lgr.debug('winSyscall %s pdata_addr: 0x%x  sock_addr: 0x%x' % (op_cmd, pdata_addr, sock_addr))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
+                exit_info.sock_struct = sock_struct
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg + ' ' + to_string
                 for call_param in syscall_info.call_params:
+                    #self.lgr.debug('winSyscall subcall %s call_param.proc %s' % (call_param.subcall, call_param.proc))
                     if call_param.subcall == 'BIND' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                          if call_param.match_param is not None:
+                             #self.lgr.debug('winSyscall match_param is %s' % str(call_param.match_param))
                              go = None
                              if sock_struct.port is not None:
+                                 #self.lgr.debug('winSyscall sock_struct.port %s' % sock_struct.port)
                                  ''' look to see if this address matches a given pattern '''
                                  s = sock_struct.dottedPort()
                                  pat = call_param.match_param
@@ -998,13 +1053,7 @@ class WinSyscall():
                         else:
                             exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
                         self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_addr)
-                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_addr,
-                              self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
-                              exit_info.old_fd, exit_info.count, self.lgr)
-                    self.lgr.debug('doing win_delay.setDataWatch')
-                    if self.watchData(exit_info):
-                        exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-
+                    do_async = True
 
                 else:
                     trace_msg = trace_msg + ' failed to read count'
@@ -1014,12 +1063,13 @@ class WinSyscall():
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
-            #self.lgr.debug('winSyscall socket check call params')
+            self.lgr.debug('winSyscall socket check call params')
             for call_param in syscall_info.call_params:
-                #self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s call_list: %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name, str(self.call_list)))
+                self.lgr.debug('winSyscall %s op_cmd: %s subcall is %s handle is %s match_param is %s call_param.name is %s call_list: %s' % (self.name, op_cmd, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param), call_param.name, str(self.call_list)))
                 if self.call_list is not None and (op_cmd in self.call_list or call_param.subcall == op_cmd)  and type(call_param.match_param) is int and \
                              (call_param.match_param == -1 or call_param.match_param == exit_info.old_fd) and \
                              (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('winSyscall socket first if made it')
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
                         self.lgr.debug('syscall parse socket %s call_param.nth not none, is %d, count incremented to  %d' % (op_cmd, call_param.nth, call_param.count))
@@ -1044,7 +1094,13 @@ class WinSyscall():
                         self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
                         exit_info.call_params = call_param
 
-            if exit_info.asynch_handler is not None:
+            if do_async_io and exit_info is not None:
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_addr,
+                          self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
+                          exit_info.old_fd, exit_info.count, self.lgr)
+                self.lgr.debug('doing win_delay.setDataWatch')
+                if self.watchData(exit_info):
+                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
                 exit_info.asynch_handler.setExitInfo(exit_info)
  
         elif callname in ['CreateEvent', 'OpenProcess']:
@@ -1614,8 +1670,9 @@ class WinSyscall():
             if self.traceProcs is not None:
                 self.traceProcs.exit(tid)
             self.context_manager.stopWatchTid(tid)
-        print('exit process :%s' % proc_part)
-        SIM_run_alone(self.stopAlone, 'Terminate Process :%s' % proc_part)
+        if self.top.debugging():
+            print('exit process :%s' % proc_part)
+            SIM_run_alone(self.stopAlone, 'Terminate Process :%s' % proc_part)
 
     def addCallParams(self, call_params):
         gotone = False
