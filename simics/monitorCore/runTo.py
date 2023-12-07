@@ -15,9 +15,10 @@ class Prec():
         self.who = who
         self.debugging = False
 class RunTo():
-    def __init__(self, top, cpu, cell, task_utils, mem_utils, context_manager, so_map, trace_mgr, param, lgr):
+    def __init__(self, top, cpu, cell, cell_name, task_utils, mem_utils, context_manager, so_map, trace_mgr, param, lgr):
         self.top = top
         self.cell = cell
+        self.cell_name = cell_name
         self.cpu = cpu
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -123,12 +124,9 @@ class RunTo():
            return False
 
     def loadSkipList(self):
-        ''' TBD move to ini env variable '''
-        flist = glob.glob('*.dll_skip')
-        if len(flist) > 1:
-            self.lgr.error('Found multiple dll_skip files, only one supported')
-        elif len(flist) == 1:
-            with open(flist[0]) as fh:
+        dll_skip = self.top.getCompDict(self.cell_name, 'DLL_SKIP')
+        if dll_skip is not None:
+            with open(dll_skip) as fh:
                 for line in fh:
                     if line.startswith('#'):
                         continue
@@ -136,8 +134,8 @@ class RunTo():
                         self.skip_dll = line.strip()
                     else:
                         self.skip_dll_others.append(line.strip())
-            self.lgr.debug('runTo loadSkipList loaded %s with %d others' % (flist[0], len(self.skip_dll_others)))
-            print('Will attempt to skip syscalls from DLLs defined in %s' % (flist[0]))
+            self.lgr.debug('runTo loadSkipList loaded %s with %d others' % (dll_skip, len(self.skip_dll_others)))
+            print('Will attempt to skip syscalls from DLLs defined in %s' % (dll_skip))
 
     def watchSO(self):
         ''' Intended to be called prior to trace all starting in order to disable tracing of
