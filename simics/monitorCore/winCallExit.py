@@ -238,7 +238,9 @@ class WinCallExit():
                 self.lgr.debug('winCallExit '+trace_msg)
                 self.soMap.mapSection(tid, section_handle, load_address, size)
             else:
-                self.lgr.debug('winCallExit %s tid:%s (%s) returned bad load address or size?' % (callname, tid, comm))
+                #self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
+                trace_msg = trace_msg+' section_handle: 0x%x bad load address or size' % (section_handle)
+                self.lgr.debug('winCallExit '+trace_msg)
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
