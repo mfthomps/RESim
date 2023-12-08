@@ -296,6 +296,14 @@ class WinMonitor():
             self.terminate_syscall = self.syscallManager.watchSyscall(context, exit_calls, [], 'debugExit')
             self.lgr.debug('winMonitor debugExitHap')
 
+    def rmDebugExitHap(self, immediate=False, context=None):
+        ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
+            the contextManager and we do not want this rudundant stopage. '''
+        if self.terminate_syscall is not None:
+            self.lgr.debug('winMonitory rmDebugExitHap')
+            self.syscallManager.rmSyscall('debugExit', immediate=immediate, context=context)
+            self.terminate_syscall = None
+
     def getDbgFrames(self):
         ''' Get stack frames from kernel entries as recorded by the reverseToCall module 
             Do this for all siblings of the currently scheduled thread.
