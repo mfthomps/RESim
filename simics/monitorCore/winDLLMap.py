@@ -198,7 +198,7 @@ class WinDLLMap():
                 #del self.open_files[pid][fd]
                 
             else:                
-                self.lgr.warning('WinDLLMap createSection fd %d not defined for pid:%s' % (fd, pid))
+                self.lgr.warning('WinDLLMap createSection fd %d not defined for pid:%s section_handle 0x%x' % (fd, pid, section_handle))
         else:
             self.lgr.warning('WinDLLMap createSection pid:%s not defined ' % (pid))
 
@@ -216,9 +216,9 @@ class WinDLLMap():
         pid = self.pidFromTID(tid)
         if pid in self.sections:
             if section_handle in self.sections[pid]:
-                self.sections[pid][section_handle].addLoadAddress(load_addr, size)
-                self.lgr.debug('WinDLL mapSection did load address to 0x%x for %s' % (load_addr, self.sections[pid][section_handle].fname))
                 if self.isNew(self.sections[pid][section_handle]):
+                    self.sections[pid][section_handle].addLoadAddress(load_addr, size)
+                    self.lgr.debug('WinDLL mapSection did load address to 0x%x for %s' % (load_addr, self.sections[pid][section_handle].fname))
                     section_copy = DLLInfo.copy(self.sections[pid][section_handle])
                     self.section_list.append(section_copy)
                     debugging_pid, dumb = self.context_manager.getDebugTid()
