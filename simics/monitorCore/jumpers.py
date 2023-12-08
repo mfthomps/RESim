@@ -117,6 +117,7 @@ class Jumpers():
         self.lgr.debug('jumper doJump did it, eip now 0x%x' % eip)
 
     def removeOneBreak(self, addr):
+        self.lgr.debug('Jumpers removeOneBreak 0x%x' % addr)
         if addr not in self.hap:
             self.lgr.debug('jumpers removeOneBreak but addr 0x%x not in dict.' % addr)
             return
@@ -127,6 +128,7 @@ class Jumpers():
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[addr])
 
     def removeBreaks(self):
+        self.lgr.debug('Jumpers removeBreaks')
         for f in self.fromto:
             self.removeOneBreak(f)
         self.hap = {}
@@ -255,10 +257,12 @@ class Jumpers():
             self.break_simulation.append(from_addr) 
 
     def disableBreaks(self):
+        self.lgr.debug('Jumpers disableBreaks')
         for addr in self.breakpoints:
             SIM_disable_breakpoint(self.breakpoints[addr])
  
     def enableBreaks(self):
+        self.lgr.debug('Jumpers enableBreaks')
         for addr in self.breakpoints:
             SIM_enable_breakpoint(self.breakpoints[addr])
  
