@@ -649,7 +649,9 @@ class GenMonitor():
             f1 = stopFunction.StopFunction(stop_action.wrong_tid_action, [], nest=False, match_tid=True)
             new_stop_action = hapCleaner.StopAction(hap_clean, None, tid=stop_action.tid, wrong_tid_action=stop_action.wrong_tid_action)
             SIM_run_alone(self.revToTid, stop_action)
-            return
+        else:
+            self.lgr.debug('genMonitor stopHap enable-vmp')
+            SIM_run_command('enable-vmp')
 
     def revToTid(self, tid):
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
@@ -2228,6 +2230,7 @@ class GenMonitor():
     def revTaintSP(self):
         cpu = self.cell_config.cpuFromCell(self.target)
         value = self.mem_utils[self.target].getRegValue(cpu, 'sp')
+        self.lgr.debug('revTaintSP')
         self.revTaintAddr(value)
         
     def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None):
@@ -2240,6 +2243,8 @@ class GenMonitor():
         '''
         self.lgr.debug('revTaintAddr for 0x%x' % addr)
         if self.reverseEnabled():
+            self.lgr.debug('revTaintAddr disable vmp')
+            SIM_run_command('disable-vmp')
             self.removeDebugBreaks()
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             cell_name = self.getTopComponentName(cpu)
@@ -2269,6 +2274,8 @@ class GenMonitor():
 
     def revTaintReg(self, reg, kernel=False, no_increments=False):
         ''' back track the value in a given register '''
+        self.lgr.debug('revTaintReg disable vmp')
+        SIM_run_command('disable-vmp')
         self.reverseTrack[self.target].revTaintReg(reg, self.bookmarks, kernel=kernel, no_increments=no_increments)
 
     def satisfyCondition(self, pc):
@@ -2725,7 +2732,9 @@ class GenMonitor():
     def rmDebugExitHap(self):
         ''' Intended to be called if a SEGV or other cause of death occurs, in which case we assume that is caught by
             the contextManager and we do not want this rudundant stopage. '''
-        if self.target in self.exit_group_syscall:
+        if self.isWindows():
+            self.winMonitor[self.target].rmDebugExitHap()
+        elif self.target in self.exit_group_syscall:
             self.lgr.debug('rmDebugExit')
             self.syscallManager[self.target].rmSyscall('debugExit')
             #self.exit_group_syscall[self.target].stopTrace()
@@ -2800,6 +2809,7 @@ class GenMonitor():
                 #self.lgr.debug('restoreDebugBreaks set magic?')
                 self.magic_origin[self.target].setMagicHap()
             #self.lgr.debug('restoreDebugBreaks return')
+            self.jumperEnable()
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
@@ -2833,7 +2843,9 @@ class GenMonitor():
             self.rev_to_call[self.target].noWatchSysenter()
             if self.track_threads is not None and self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
-            if self.target in self.exit_group_syscall:
+            if self.isWindows:
+                self.winMonitor[self.target].rmDebugExitHap(immediate=immediate, context=self.context_manager[self.target].getRESimContextName()) 
+            elif self.target in self.exit_group_syscall:
                 self.syscallManager[self.target].rmSyscall('debugExit', immediate=immediate, context=self.context_manager[self.target].getRESimContextName())
                 self.lgr.debug('genMon removeDebugBreaks removed debugExit')
                 #self.exit_group_syscall[self.target].stopTrace(immediate=immediate)
@@ -2855,6 +2867,7 @@ class GenMonitor():
             if self.target in self.magic_origin:
                 #self.lgr.debug('genMon removeDebugBreaks magic')
                 self.magic_origin[self.target].deleteMagicHap()
+            self.jumperDisable()
         else:
             retval = False
         return retval
