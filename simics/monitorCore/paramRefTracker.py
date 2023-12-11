@@ -69,7 +69,6 @@ class ParamRefTracker():
             self.prev_wrote_addr = None
             self.read_sequence = 0
             self.prev_read_addr = None
-            self.pid_thread = self.task_utils.getPidAndThread()
 
         def toString(self):
             retval = 'call: %s rcx: 0x%x rdx: 0x%x r8: 0x%x r9: 0x%x sp: 0x%x cycles: 0x%x\n' % (self.call_name, self.rcx, self.rdx, self.r8, self.r9, self.rsp, self.start_cycle)
