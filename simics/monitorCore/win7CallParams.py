@@ -46,7 +46,8 @@ the param, using gs_base and logic to account for aslr.
 '''
 watch_stack_params = 6
 class Win7CallParams():
-    def __init__(self, top, cpu, cell, cell_name, mem_utils, task_utils, context_manager, current_task_phys, param, lgr, stop_on=None, only=None, only_proc=None, track_params=False):
+    def __init__(self, top, cpu, cell, cell_name, mem_utils, task_utils, context_manager, current_task_phys, 
+                 param, lgr, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False):
         self.top = top
         self.lgr = lgr
         self.param = param
@@ -86,7 +87,11 @@ class Win7CallParams():
         resim_dir = os.getenv('RESIM_DIR')
         ''' track parameters to different calls '''
         self.call_param_offsets = {}
-
+        if this_tid:
+            ''' only watch this thread '''
+            dumb_cpu, comm, self.this_tid = self.task_utils.curThread()
+        else:
+            self.this_tid = None
 
         context = 'RESim_%s' % self.cell_name
         try:
@@ -223,18 +228,23 @@ class Win7CallParams():
     def stoppedAtSyscall(self, stop_action, one, exception, error_string):
         ''' Should be stopped at the entry to the kernel'''
         dumb, comm, tid = self.task_utils.curThread()
-        if tid is None:
-            self.lgr.error('win7CallParams stoppedAtSyscall, tid is None?')
-            #self.lgr.debug('win7CallParams stoppedAtSyscall, TRIED again and tid is %s?' % tid)
-        else:
-            rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-            self.lgr.debug('win7CallParams stoppedAtSyscall tid:%s (%s) rip: 0x%x' % (tid,comm,rip))
-            SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
+        if self.this_tid is None or tid == self.this_tid:
+            if tid is None:
+                self.lgr.error('win7CallParams stoppedAtSyscall, tid is None?')
+                #self.lgr.debug('win7CallParams stoppedAtSyscall, TRIED again and tid is %s?' % tid)
+            else:
+                rip = self.mem_utils.getRegValue(self.cpu, 'rip')
+                self.lgr.debug('win7CallParams stoppedAtSyscall tid:%s (%s) rip: 0x%x' % (tid,comm,rip))
+                SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
 
     def oneCallHap(self, dumb, third, forth, memory):
         ''' Invoked when the "only" system call is hit at its computed entry '''
         #SIM_run_alone(SIM_run_command, 'enable-reverse-execution')
         dumb, comm, tid = self.task_utils.curThread()
+
+        if self.this_tid is not None and tid != self.this_tid:
+            return
+
         self.lgr.debug('oneCallHap only: %s tid:%s (%s)' % (self.only, tid, comm))
 
         if self.reverse_to_call:
@@ -304,7 +314,8 @@ class Win7CallParams():
         ''' hit when kernel is entered due to sysenter '''
         self.lgr.debug('win7CallParams syscallHap')
         dumb, comm, tid = self.task_utils.curThread()
-        tid = self.task_utils.curTID()
+        if self.this_tid is not None and tid != self.this_tid:
+            return
         #SIM_break_simulation(tid)
         #return
         #if pid is None:

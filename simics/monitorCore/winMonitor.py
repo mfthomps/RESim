@@ -72,12 +72,12 @@ class WinMonitor():
         self.w7_call_params = None
 
 
-    def getWin7CallParams(self, stop_on, only, only_proc, track_params):
+    def getWin7CallParams(self, stop_on, only, only_proc, track_params, this_tid=False):
         #self.top.allowReverse()
         current_task_phys = self.task_utils.getPhysCurrentTask()
         self.top.stopThreadTrack()
         self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, self.task_utils, self.context_manager, current_task_phys, self.param, self.lgr, 
-                stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params)
+                stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params, this_tid=this_tid)
 
     def rmCallParamBreaks(self):
         self.lgr.debug('winMonitor rmCallparamBreaks')
