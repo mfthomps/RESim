@@ -201,7 +201,7 @@ class WriteData():
             if self.top.isWindows() and self.dataWatch is not None:
                 self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
                 asynch_handler = winDelay.WinDelay(self.top, self.cpu, None, self.user_space_addr,
-                        self.mem_utils, self.context_manager, None, None, None, self.fd, self.cuser_space_count, self.lgr, watch_count_addr=False)
+                        self.mem_utils, self.context_manager, None, None, None, self.fd, self.user_space_count, self.lgr, watch_count_addr=False)
                 asynch_handler.setDataWatch(self.dataWatch, True)
                 asynch_handler.toUserAlone(None)
 
