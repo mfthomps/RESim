@@ -8,9 +8,9 @@ class CallMark():
     def __init__(self, msg, max_len, recv_addr, length, fd, is_lib=False):
         if recv_addr is not None:
             if max_len is not None:
-                self.msg = '%s addr: 0x%x  length: %d max_len: %d' % (msg, recv_addr, length, max_len)
+                self.msg = '%s addr: 0x%08x  length: %d max_len: %d' % (msg, recv_addr, length, max_len)
             else:
-                self.msg = '%s addr: 0x%x  length: %d' % (msg, recv_addr, length)
+                self.msg = '%s addr: 0x%08x  length: %d' % (msg, recv_addr, length)
              
         else:
             self.msg = msg
@@ -484,13 +484,14 @@ class CharPtrMark():
     def getMsg(self):
         msg = 'Char Ptr reference at 0x%08x, pointer to 0x%08x value: 0x%x' % (self.addr, self.ptr, self.value)
         return msg
-class UuidStringMark():
-    def __init__(self, src, dest, count, buf_start):
+class ToStringMark():
+    def __init__(self, fun, src, dest, count, buf_start):
+        self.fun = fun
         self.src = src
         self.dest = dest
         self.length = count
         offset = src - buf_start
-        self.msg = 'UuidToString from 0x%x (%d bytes into buffer at 0x%x) to 0x%x' % (src, offset, buf_start, dest)
+        self.msg = '%s from 0x%x (%d bytes into buffer at 0x%x) to 0x%x' % (fun, src, offset, buf_start, dest)
     def getMsg(self):
         return self.msg
 
@@ -1062,8 +1063,8 @@ class WatchMarks():
         cm = CharPtrMark(addr, ptr, value)
         self.addWatchMark(cm)
 
-    def uuidToString(self, src, dest, count, buf_start):
-        um = UuidStringMark(src, dest, count, buf_start)
+    def dataToString(self, fun, src, dest, count, buf_start):
+        um = ToStringMark(fun, src, dest, count, buf_start)
         self.addWatchMark(um)
         self.lgr.debug(um.getMsg())
         
