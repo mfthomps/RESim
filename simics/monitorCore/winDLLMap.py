@@ -194,7 +194,7 @@ class WinDLLMap():
                 if pid not in self.sections:
                     self.sections[pid] = {}
                 self.sections[pid][section_handle] = self.open_files[pid][fd]
-                self.lgr.debug('createSection pid:%s sec hand 0x%x' % (pid, section_handle))
+                self.lgr.debug('createSection pid:%s section handle 0x%x fname %s' % (pid, section_handle, self.open_files[pid][fd].fname))
                 #del self.open_files[pid][fd]
                 
             else:                
@@ -206,11 +206,22 @@ class WinDLLMap():
         retval = True
         for dll_info in self.section_list:
             if dll_info.match(new_dll):
-                #self.lgr.debug('WinDLLMap is new %s' % new_dll.toString())
-                #self.lgr.debug('already in list as %s' % dll_info.toString())
+                self.lgr.debug('already in list as %s' % dll_info.toString())
                 retval = False
                 break
         return retval
+
+    def findLoadAddr(self, pid, load_addr):
+        got_one = None
+        for section in self.section_list:
+            if section.pid == pid:
+                if section.addr == load_addr:
+                    self.lgr.debug('winDLL findLoadAddr found existing section for load addr 0x%x %s, remove it' % (load_addr, section.fname))
+                    got_one = section
+                    break
+        if got_one is not None:
+            self.section_list.remove(got_one)
+        
  
     def mapSection(self, tid, section_handle, load_addr, size):
         pid = self.pidFromTID(tid)
@@ -219,6 +230,7 @@ class WinDLLMap():
                 if self.isNew(self.sections[pid][section_handle]):
                     self.sections[pid][section_handle].addLoadAddress(load_addr, size)
                     self.lgr.debug('WinDLL mapSection did load address to 0x%x for %s' % (load_addr, self.sections[pid][section_handle].fname))
+                    self.findLoadAddr(pid, load_addr)
                     section_copy = DLLInfo.copy(self.sections[pid][section_handle])
                     self.section_list.append(section_copy)
                     debugging_pid, dumb = self.context_manager.getDebugTid()
@@ -440,6 +452,7 @@ class WinDLLMap():
         for section in self.section_list:
             if section.pid == pid:
                 end = section.addr+section.size
+                #self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.addr, end, addr_in))
                 if addr_in >= section.addr and addr_in <= end:
                     retval = section.fname, section.addr, end
                     break 
