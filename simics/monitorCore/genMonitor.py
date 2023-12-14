@@ -3652,7 +3652,13 @@ class GenMonitor():
     def addDataWatch(self, start, length):
         self.lgr.debug('genMonitory watchData 0x%x count %d' % (start, length))
         msg = "User range 0x%x count %d" % (start, length)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        self.dataWatch[self.target].enable()
+        self.dataWatch[self.target].resetOrigin(cpu.cycles)
         self.dataWatch[self.target].setRange(start, length, msg) 
+        self.dataWatch[self.target].setBreakRange()
+        self.dataWatch[self.target].watch(break_simulation=False)
+        self.dataWatch[self.target].setCallback(self.resetTrackIOBackstop)
 
     def watchData(self, start=None, length=None, show_cmp=False):
         self.lgr.debug('genMonitor watchData')
@@ -5491,9 +5497,9 @@ class GenMonitor():
         if self.fun_mgr is None:
             print('No function manager yet, are you debugging?')
             return
-        fname = self.fun_mgr.funFromAddr(addr)
-        if fname is not None:
-            print('Function for address 0x%x is %s' % (addr, fname))
+        fun_name = self.fun_mgr.funFromAddr(addr)
+        if fun_name is not None:
+            print('Function for address 0x%x is %s' % (addr, fun_name))
         else:
             so = self.soMap[self.target].getSOInfo(addr)
             if so is not None:
@@ -5620,13 +5626,13 @@ class GenMonitor():
             retval = True
         return retval
 
-    def getWin7CallParams(self, stop_on=None, only=None, only_proc=None, track_params=False):
+    def getWin7CallParams(self, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False):
         ''' Use breakpoints set on the user space to identify call parameter 
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
             self.rmDebugWarnHap()
             self.checkOnlyIgnore()
-            self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params)
+            self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params, this_tid=this_tid)
 
     def rmCallParamBreaks(self):
         self.lgr.debug('rmCallparamBreaks (genMonitor)')
