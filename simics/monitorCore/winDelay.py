@@ -91,8 +91,11 @@ class WinDelay():
             self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, self.return_count))
             if self.kbuffer is not None:
                 self.kbuffer.readReturn(self.return_count)
+            if self.trace_msg is None:
+                self.trace_msg = 'Injected data copied to 0x%x %d bytes' % (self.buffer_addr, self.return_count)
             self.data_watch.setRange(self.buffer_addr, self.return_count, msg=self.trace_msg, 
                        max_len=self.return_count, recv_addr=self.buffer_addr, fd=self.fd)
+
             self.data_watch.setRange(self.count_addr, 4, msg='read count')
             if self.sock_addr is not None:
                 self.data_watch.setRange(self.sock_addr, 8, msg='source address')
@@ -132,18 +135,9 @@ class WinDelay():
     #def writeBufferHap(self, dumb, third, forth, memory):
     #    SIM_break_simulation('wrote to buffer 0x%x' % self.buffer_addr)
 
-    def writeCountHap(self, dumb, third, forth, memory):
-        ''' Invoked when the count address is written to '''
-        if self.count_write_hap is None or self.context_manager.isReverseContext():
-            return
-        if not self.did_exit and self.hack_count < 1:
-            self.lgr.debug('winDelay writeCountHap skipping first kernel write to count address.  TBD if always needed.')
-            self.hack_count = self.hack_count + 1
-            return
-        return_count = SIM_get_mem_op_value_le(memory)
-
+    def getIOData(self, return_count):
         #return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
-        self.lgr.debug('winDelay writeCountHap read count from 0x%x got 0x%x did exit? %r' % (self.count_addr, return_count, self.did_exit))
+        self.lgr.debug('winDelay gitIOData read count from 0x%x got 0x%x did exit? %r' % (self.count_addr, return_count, self.did_exit))
         if return_count == 0:
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
@@ -160,13 +154,13 @@ class WinDelay():
                 read_data = '<< NOT MAPPED >>'
 
             if self.did_exit:
-                trace_msg = self.call_name+' completed from cycle: 0x%x count: 0x%x requested: 0x%x data: %s\n' % (self.cycles, return_count, 
-                   self.exit_info.count, repr(read_data))
+                trace_msg = self.call_name+' completed from cycle: 0x%x handle: 0x%x count: 0x%x into buffer: 0x%x requested: 0x%x data: %s\n' % (self.cycles, self.fd, return_count, 
+                   self.buffer_addr, self.exit_info.count, repr(read_data))
                 self.trace_mgr.write(trace_msg)
-                self.lgr.debug('winDelay writeCountHap already did exit so log the trace message %s' % trace_msg)
+                self.lgr.debug('winDelay gitIOData already did exit so log the trace message %s' % trace_msg)
             else:
-                trace_msg = self.call_name+' return count: 0x%x request: 0x%x data: %s\n' % (return_count, self.exit_info.count, repr(read_data))
-                self.lgr.debug('winDelay writeCountHap have not yet done exit so log SAVE the trace message %s' % trace_msg)
+                trace_msg = self.call_name+' handle: 0x%x return count: 0x%x request: 0x%x data: %s\n' % (self.fd, return_count, self.exit_info.count, repr(read_data))
+                self.lgr.debug('winDelay gitIOData have not yet done exit so log SAVE the trace message %s' % trace_msg)
             if self.call_name == 'RECV_DATAGRAM':
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
                 self.exit_info.sock_addr = self.sock_addr
@@ -191,13 +185,25 @@ class WinDelay():
                     else:
                         self.exit_info.call_params = None
 
-            #SIM_break_simulation('WinDelay')
-            # we are in the kernel at some arbitrary place.  run to user space
             self.return_count = return_count
             self.trace_msg = trace_msg
-            self.lgr.debug('winDelay writeCountHap trace_msg: %s' % trace_msg)
-            if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
-                SIM_run_alone(self.toUserAlone, None)
+            self.lgr.debug('winDelay gitIOData trace_msg: %s' % trace_msg)
+
+    def writeCountHap(self, dumb, third, forth, memory):
+        ''' Invoked when the count address is written to '''
+        if self.count_write_hap is None or self.context_manager.isReverseContext():
+            return
+        if not self.did_exit and self.hack_count < 1:
+            self.lgr.debug('winDelay writeCountHap skipping first kernel write to count address.  TBD if always needed.')
+            self.hack_count = self.hack_count + 1
+            return
+        return_count = SIM_get_mem_op_value_le(memory)
+
+        self.getIOData(return_count)
+        #SIM_break_simulation('WinDelay')
+        # we are in the kernel at some arbitrary place.  run to user space
+        if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
+            SIM_run_alone(self.toUserAlone, None)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
         SIM_run_alone(self.rmHap, hap) 
@@ -238,19 +244,25 @@ class WinDelay():
 
     def exitingKernel(self, trace_msg, not_ready):
         retval = False
-        if self.trace_msg is not None:
-            '''Data and count already written, log it '''
-            retval = True
-            if not_ready:
-                self.trace_msg = self.trace_msg+ ' Though kernel reported not ready.\n'
-            # hack to avoid repeating call name
-            self.trace_msg = self.trace_msg.split(' ', 1)[1]
-            combined_msg = trace_msg + ' '+self.trace_msg
-            self.trace_mgr.write(combined_msg)
-            self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % combined_msg)
-            if self.data_watch is not None or (self.exit_info is not None and self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation):
-                self.lgr.debug('winDelay exitingKernel do data watch or break simulation due to call params')
-                SIM_run_alone(self.toUserAlone, None)
+        if self.trace_msg is not None or not not_ready:
+            if self.trace_msg is None and not not_ready:
+                return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
+                self.lgr.debug('winDelay exitingKernel with no delay and no sign of data.  assume it is there, return count 0x%x' % return_count)
+                self.getIOData(return_count)
+                retval = True
+            else:
+                '''Data and count already written, log it '''
+                retval = True
+                if not_ready:
+                    self.trace_msg = self.trace_msg+ ' Though kernel reported not ready.\n'
+                # hack to avoid repeating call name
+                self.trace_msg = self.trace_msg.split(' ', 1)[1]
+                combined_msg = trace_msg + ' '+self.trace_msg
+                self.trace_mgr.write(combined_msg)
+                self.lgr.debug('winDelay exitingKernel already got data so log the trace message %s' % combined_msg)
+                if self.data_watch is not None or (self.exit_info is not None and self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation):
+                    self.lgr.debug('winDelay exitingKernel do data watch or break simulation due to call params')
+                    SIM_run_alone(self.toUserAlone, None)
         else:
             self.lgr.debug('winDelay exitingKernel did not yet see data')
             self.did_exit = True
