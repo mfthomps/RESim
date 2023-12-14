@@ -199,7 +199,6 @@ class WinCallExit():
             ''' fname_addr has address of return count'''
             if exit_info.fname_addr is None:
                 self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
-
             else:
                 # TBD hack to let prepInject get the exit info
                 self.matching_exit_info = exit_info
@@ -322,7 +321,9 @@ class WinCallExit():
                 trace_msg = trace_msg+' '+to_string+rand
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
+                
                 ''' fname_addr has address of return count'''
+                call_return_not_ready = not_ready
                 not_ready = False
                 trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                 if exit_info.fname_addr is None:
@@ -331,7 +332,8 @@ class WinCallExit():
                 else: 
                     if exit_info.asynch_handler is not None:
                         self.matching_exit_info = exit_info
-                        was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                        was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
+
                         ''' Call params satisfied in winDelay'''
                         exit_info.call_params = None
                         self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
