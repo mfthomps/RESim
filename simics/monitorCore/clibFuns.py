@@ -84,7 +84,9 @@ def adjustFunName(frame, fun_mgr, lgr):
                 pre_paren, in_paren = fun.split('(', 1)
                 fun = pre_paren.split('::')[-1]
                 if fun.startswith('allocator'):
-                    if in_paren.startswith('char'):
+                    lgr.debug('clibFuns windows fun %s looks like allocator pre_paren %s in_paran %s' % (fun, pre_paren, in_paren))
+                    #if in_paren.startswith('char'):
+                    if 'char' in in_paren:
                         lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
                         fun = 'string_win_basic_char' 
                       
