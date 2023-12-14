@@ -78,10 +78,11 @@ class Jumpers():
                     return
                 self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 self.hap[addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.doJump, addr, self.breakpoints[addr])
+                self.lgr.debug('jumper setBreaks set phys break on addr 0x%x (phys 0x%x)' % (addr, phys_block.address))
             else:
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
                 self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, addr, proc_break, 'jumper')
-            self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
+                self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
 
     def setBreaks(self):
         for f in self.fromto:
