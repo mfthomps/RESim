@@ -1508,15 +1508,14 @@ class reverseToCall():
         ret_cycles = None
         cur_cycles = self.cpu.cycles
         self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x' % (tid, cur_cycles))
+        cycles = None
         if tid in self.sysenter_cycles:
             got_it = None
             for cycles in sorted(self.sysenter_cycles[tid]):
                 if cycles > cur_cycles:
-                    self.lgr.debug('getPreviousCycleFrame found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
-                    got_it = prev_cycles
+                    self.lgr.debug('getPreviousCycleFrame found cycle between 0x%x and 0x%x' % (cur_cycles, cycles))
+                    got_it = cur_cycles
                     break
-                else:
-                    prev_cycles = cycles
 
             if got_it is not None:
                 frame = self.sysenter_cycles[tid][got_it] 
@@ -1524,6 +1523,7 @@ class reverseToCall():
             else:
                 frame = self.sysenter_cycles[tid][cycles] 
                 ret_cycles = cycles
+                self.lgr.debug('getPreviousCycleFrame did not find cycle greater than 0x%x, returning newest cycle 0x%x' % (cur_cycles, cycles))
         else:
             self.lgr.debug('getPreviousCycleFrame tid not in sysenter_cycles')
         return frame, ret_cycles
