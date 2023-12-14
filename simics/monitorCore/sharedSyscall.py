@@ -633,7 +633,7 @@ class SharedSyscall():
             else:
                 did_exit = self.handleExit(None, tid, comm)
         if did_exit:
-            self.lgr.debug('sharedSyscall exitHap remove exitHap for %s' % tid)
+            #self.lgr.debug('sharedSyscall exitHap remove exitHap for %s' % tid)
             self.rmExitHap(tid)
             if self.callback is not None:
                 self.lgr.debug('sharedSyscall exitHap call callback (dataWatch kernelReturnHap?)')
