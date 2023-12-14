@@ -49,6 +49,7 @@ class PrepInjectWatch():
         self.lgr.debug('prepInjectWatch doInject snap %s mark %d' % (snap_name, watch_mark))
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
+        self.dataWatch.stopWatch(immediate=True)
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
@@ -65,6 +66,7 @@ class PrepInjectWatch():
             if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
                 self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
                 return
+            self.lgr.debug('prepInjectWatch doInject jumped to kcycle just before buffer copy 0x%x' % kcycle)
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
 
