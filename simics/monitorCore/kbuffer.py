@@ -325,8 +325,6 @@ class Kbuffer():
         op2, op1 = decode.getOperands(instruct[1])
         self.lgr.debug('Kbuffer findWinBuf skipped back one, intruct: %s op1 is %s op2: %s' % (instruct[1], op1, op2))
         our_reg = op2
-        if self.kernel_cycle_of_write is None:
-            self.kernel_cycle_of_write = self.cpu.cycles - 1
         limit = 20
         gotit = False
         for i in range(limit):
@@ -334,14 +332,16 @@ class Kbuffer():
             resimUtils.skipToTest(self.cpu, prev, self.lgr)
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('Kbuffer findWinBuf prev instruct %s' % instruct[1])
+            self.lgr.debug('Kbuffer findWinBuf prev instruct %s  cycles: 0x%x' % (instruct[1], self.cpu.cycles))
             op2, op1 = decode.getOperands(instruct[1])
             if instruct[1].startswith('mov') and op1 == our_reg:
                 src = decode.getAddressFromOperand(self.cpu, op2, self.lgr)
-                self.lgr.debug('Kbuffer findWinBuf got it, src: 0x%x' % src)
+                self.lgr.debug('Kbuffer findWinBuf got it, src: 0x%x cycle: 0x%x' % (src, self.cpu.cycles))
                 self.updateBuffers(src)
                 self.context_manager.clearReverseContext() 
                 gotit = True
+                if self.kernel_cycle_of_write is None:
+                    self.kernel_cycle_of_write = self.cpu.cycles - 1
                 SIM_continue(0) 
                 break
         if not gotit:
