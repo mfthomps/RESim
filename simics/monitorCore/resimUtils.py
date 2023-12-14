@@ -87,7 +87,7 @@ def skipToTest(cpu, cycle, lgr):
         retval = True
         cli.quiet_run_command('pselect %s' % cpu.name)
         result=cli.quiet_run_command('disable-vmp')
-        lgr.debug('skipToTest disable-vmp result %s' % str(result))
+        #lgr.debug('skipToTest disable-vmp result %s' % str(result))
         already_disabled = False
         if 'VMP already disabled' in result[1]:
             already_disabled = True
