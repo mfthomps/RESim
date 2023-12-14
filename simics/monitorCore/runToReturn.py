@@ -73,7 +73,8 @@ class RunToReturn():
         tid = self.top.getTID()
         if tid != self.tid:
             return
-        self.lgr.debug('RunToReturn retHap calls:%d rets:%d' % (self.call_count, self.ret_count))
+        sp = self.top.getReg('rsp', self.cpu)
+        self.lgr.debug('RunToReturn retHap calls:%d rets:%d  sp: 0x%x' % (self.call_count, self.ret_count, sp))
         self.ret_count = self.ret_count+1
         if self.call_count == self.ret_count:
             SIM_run_alone(self.rmHaps, None)
