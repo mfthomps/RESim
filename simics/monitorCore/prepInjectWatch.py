@@ -42,6 +42,7 @@ class PrepInjectWatch():
         else:
             self.lgr.debug('PrepInjectWatch NO kbuffer')
 
+        self.read_count_addr = None
 
     def doInject(self, snap_name, watch_mark):
         ''' Find kernel buffer used for read/recv calls '''
@@ -66,6 +67,16 @@ class PrepInjectWatch():
                 return
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
+
+            ''' Get the read count address, e.g., if windows.  TBD linux?'''
+            next_mark = watch_mark+1
+            read_count_addr_maybe = self.dataWatch.getMarkFromIndex(next_mark)
+            if read_count_addr_maybe is not None:
+                self.lgr.debug('prepInjectWatch doInject read_count_addr_maybe %s' % read_count_addr_maybe.mark.getMsg())
+                if read_count_addr_maybe is not None and read_count_addr_maybe.mark.getMsg().startswith('read count'):
+                   self.read_count_addr = read_count_addr_maybe.mark.recv_addr 
+                   self.lgr.debug('prepInjectWatch doInject read_count_addr found 0x%x' % self.read_count_addr)
+            
             self.pickleit(kbufs[0])  
         else:
             if isinstance(mark.mark, watchMarks.CallMark):
@@ -201,6 +212,8 @@ class PrepInjectWatch():
                 self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  Orig buffer len %d' % (len(kbufs), k_buf_len, len(orig_buf)))
             else:
                 self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  ' % (len(kbufs), k_buf_len))
+        if self.top.isWindows():
+            pickDict['addr_of_count'] = self.read_count_addr
 
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
