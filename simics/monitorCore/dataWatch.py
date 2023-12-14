@@ -53,7 +53,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets']
+            'UuidToStringA', 'fgets', 'WSAAddressToStringA']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -446,31 +446,31 @@ class DataWatch():
                 #self.lgr.warning('dataWatch setRange NOT large length given %d, setting len of read buffer to that.' % (max_len)) 
                 my_len = max_len
 
-        #self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
-        #       my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
+        self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
+               my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
         end = start+(my_len-1)
         overlap = False
         if not no_extend:
             for index in range(len(self.start)):
                 if self.start[index] is not None:
                     this_end = self.start[index] + (self.length[index]-1)
-                    #self.lgr.debug('dataWatch setRange look for related start 0x%x end 0x%x this start 0x%x this end 0x%x' % (start, end, self.start[index], this_end))
+                    self.lgr.debug('dataWatch setRange look for related start 0x%x end 0x%x this start 0x%x this end 0x%x' % (start, end, self.start[index], this_end))
                     if self.start[index] <= start and this_end >= end:
                         overlap = True
-                        #self.lgr.debug('DataWatch setRange found overlap, skip it')
+                        self.lgr.debug('DataWatch setRange found overlap, skip it')
                         if start not in self.other_starts:
                             self.other_starts.append(start)
                             self.other_lengths.append(my_len)
                         break
                     elif self.start[index] >= start and this_end <= end:
-                        #self.lgr.debug('DataWatch setRange found subrange, replace it with start 0x%x len %d' % (start, my_len))
+                        self.lgr.debug('DataWatch setRange found subrange, replace it with start 0x%x len %d' % (start, my_len))
                         self.start[index] = start
                         self.length[index] = my_len
                         overlap = True
                         break
                     elif start == (this_end+1):
                         self.length[index] = self.length[index]+my_len
-                        #self.lgr.debug('DataWatch extending after end of range of index %d, len now %d' % (index, self.length[index]))
+                        self.lgr.debug('DataWatch extending after end of range of index %d, len now %d' % (index, self.length[index]))
                         overlap = True
                         self.stopWatch()
                         self.watch(i_am_alone=True)
@@ -478,12 +478,14 @@ class DataWatch():
                     elif(start >= self.start[index] and start <= this_end) and end > this_end:
                         ''' TBD combine with above?'''
                         self.length[index] = end - self.start[index]
-                        #self.lgr.debug('DataWatch extending range of index %d, len now %d' % (index, self.length[index]))
+                        self.lgr.debug('DataWatch extending range of index %d, len now %d' % (index, self.length[index]))
                         overlap = True
                         self.stopWatch()
                         self.watch(i_am_alone=True)
                         break
-        #self.lgr.debug('dataWatch overlap %r test if copymark %s' % (overlap, str(watch_mark)))
+        else:
+            self.lgr.debug('dataWatch setRange was no_extend')
+        self.lgr.debug('dataWatch overlap %r test if copymark %s' % (overlap, str(watch_mark)))
         #if not overlap or self.isCopyMark(watch_mark):
         # TBD why care if a copy mark?
         if not overlap:
@@ -527,7 +529,7 @@ class DataWatch():
                     self.lgr.debug('dataWatch setRange is stack buffer no return address, add index %d to failed stack buffers' % index)
                     self.stack_buffers[-1].append(index)
 
-            #self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x' % (start, length, self.cpu.cycles))
+            self.lgr.debug('DataWatch adding start 0x%x, len %d cycle 0x%x len of start now %d' % (start, length, self.cpu.cycles, len(self.start)))
         if msg is not None:
             if sys.version_info[0] >= 3:
                 fixed = msg
@@ -1494,12 +1496,17 @@ class DataWatch():
             #if self.mem_something.fun == 'charLookupY':
             #    SIM_break_simulation('remove this')
             #    return
-        elif self.mem_something.fun == 'UuidToStringA':
+        elif self.mem_something.fun.startswith('UuidToStringA'):
             self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, self.mem_something.ret_addr_addr, size=word_size)
             self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.dest, self.mem_something.count)
-            buf_start = self.findRange(self.mem_something.src)
-            wm = self.watchMarks.uuidToString(self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+            buf_index, buf_start, buf_length = self.findRangeIndexForRange(self.mem_something.src, self.mem_something.count)
+            wm = self.watchMarks.dataToString(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
             self.setRange(self.mem_something.dest, 16, watch_mark=wm)
+        elif self.mem_something.fun.startswith('WSAAddressToString'):
+            buf_index, buf_start, buf_length = self.findRangeIndexForRange(self.mem_something.src, self.mem_something.count)
+            wm = self.watchMarks.dataToString(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+            self.setRange(self.mem_something.dest, self.mem_something.count, watch_mark=wm)
+
             
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -1713,7 +1720,8 @@ class DataWatch():
             retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
-        elif self.top.isWindows(target=self.cell_name) and self.mem_utils.wordSize(self.cpu) == 8:
+        #elif self.top.isWindows(target=self.cell_name) and self.mem_utils.wordSize(self.cpu) == 8:
+        elif self.top.isWindows(target=self.cell_name) and word_size == 8:
             retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r8')
@@ -2048,6 +2056,9 @@ class DataWatch():
 
         elif self.mem_something.fun == 'string_win_basic_char':
             self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+            the_string = self.mem_utils.readString(self.cpu, self.mem_something.src, 1000)
+            # TBD some instances do not have a count.  See clibFuns signature, if char is first in parens, then there is a count?
+            self.mem_something.count = min(len(the_string), self.mem_something.count)
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
                  self.mem_something.count))
 
@@ -2149,7 +2160,12 @@ class DataWatch():
                  
         elif self.mem_something.fun == 'fgets':
             # TBD was commented out. 
-            self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp)
+            self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+
+        elif self.mem_something.fun.startswith('WSAAddressToString'):
+            self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp+3*word_size, size=word_size)
+            self.lgr.debug('dataWatch getMemParams %s src 0x%x dest 0x%x count %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count))
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -2989,9 +3005,9 @@ class DataWatch():
                 count = count - (self.start[index] - esi)
                 self.lgr.debug('dataWatch checkRep esi was before start of buffer, set start to start of buffer, count changed to %d' % count)
             wm = self.watchMarks.copy(start, edi, count, self.start[index], Sim_Trans_Load)
-            self.setRange(start, count)
-
+            self.setRange(edi, count)
             retval = wm.mark.getMsg()
+            self.move_cycle = self.cpu.cycles
         return retval
               
     def finishReadHap(self, op_type, trans_size, eip, addr, length, start, tid, index=None):
@@ -3020,6 +3036,8 @@ class DataWatch():
                     msg = rep_msg
                     self.lgr.debug(msg)
                     self.context_manager.setIdaMessage(msg)
+                    self.lgr.debug('dataWatch finishReadHap, found a rep move, call set break range')
+                    self.setBreakRange()
                 else: 
                     ad_hoc = False
                     ''' see if an ad-hoc move. checkMove will update watch marks '''
@@ -3212,7 +3230,7 @@ class DataWatch():
 
         self.prev_cycle = self.cpu.cycles
 
-        self.lgr.debug('**** dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context))
+        self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -3451,13 +3469,18 @@ class DataWatch():
                 print('%d start: 0x%x  length: 0x%x' % (index, self.start[index], self.length[index]))
  
     def setBreakRange(self, i_am_alone=False):
-        #self.lgr.debug('dataWatch setBreakRange')
-        ''' Set breakpoints for each range defined in self.start and self.length '''
+        # TBD i_am_alone only for diagnostics
+        self.lgr.debug('dataWatch setBreakRange')
+        ''' Set breakpoints for each range defined in self.start and self.length 
+            These are lists, as is self.read_hap.  Elements are never removed from
+            the list, they are set to None when the range is removed.
+        '''
         context = self.context_manager.getRESimContext()
         num_existing_haps = len(self.read_hap)
+        self.lgr.debug('DataWatch setBreakRange num_existing_haps %d, len of self.start %d' % (num_existing_haps, len(self.start)))
         for index in range(num_existing_haps, len(self.start)):
             if self.start[index] is None:
-                #self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
+                self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
                 self.read_hap.append(None)
                 continue
             ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_tid is not set while
@@ -4037,7 +4060,7 @@ class DataWatch():
         retval = None
         max_precidence = -1
         max_index = len(frames)-1
-        #self.lgr.debug('memsomething begin, max_index %d' % (max_index))
+        self.lgr.debug('memsomething begin, max_index %d op_type %s' % (max_index, str(op_type)))
         outer_index = None
         prev_fun = None
         #for i in range(max_index, -1, -1):
@@ -4063,7 +4086,7 @@ class DataWatch():
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                    #self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
                 elif frame.fun_addr is not None:
                     if frame.ip is not None and frame.sp is not None:
                         self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
@@ -4403,6 +4426,7 @@ class DataWatch():
             self.setRange(dest_addr, self.move_stuff.trans_size, watch_mark=wm)
             #self.lgr.debug('dataWatch memcpyCheck is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (self.move_stuff.addr, ad_hoc, dest_addr))
             self.setBreakRange()
+            self.move_cycle = self.cpu.cycles
 
     def stopForMemcpyCheck(self, dumb):
         if self.finish_check_move_hap is None:
@@ -4478,6 +4502,7 @@ class DataWatch():
                             self.watchMarks.rmLast(2)
                             mark = self.watchMarks.dataRead(source, source, 1, 1, ad_hoc=True, dest=dest, note='ringChar')
                             self.setRange(dest, 1, None, watch_mark=mark) 
+                            self.move_cycle = self.cpu.cycles
                             #self.setBreakRange()
                         else:
                             self.lgr.warning('dataWatch ringCharHap only arm is handled for now')
@@ -4499,6 +4524,7 @@ class DataWatch():
                     if self.findRange(self.mem_something.dest) is None:
                         self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
                         self.setBreakRange()
+                        self.move_cycle = self.cpu.cycles
                         self.lgr.debug('dataWatch oneByteCopy, set the range')
                 else:
                     self.lgr.debug('dataWatch oneByteCopy address 0x%x is not a known buffer, why are we here?  index %s' % (addr, index))
