@@ -890,7 +890,7 @@ class WinSyscall():
                 exit_info.retval_addr = frame['param1']
                 exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
                 trace_msg = trace_msg+' fname: %s fname_addr: 0x%x retval_addr: 0x%x (handle addr)' % (exit_info.fname, exit_info.fname_addr, exit_info.retval_addr)
-                
+                self.lgr.debug(trace_msg) 
                 # Permissions
                 accesses = []
                 access_mask = frame['param2']
@@ -1031,18 +1031,21 @@ class WinSyscall():
                 # data buffer address
                 exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
                 # the return count address --> this is where kernel will store count ACTUALLY sent/received
+                frame_string = taskUtils.stringFromFrame(frame)
                 if word_size == 4:
-                    #  Seems to be same for 32 and 64 bit? 
-                    exit_info.fname_addr = frame['param5'] + 8
+                    #  Seems to be same for 32 and 64 bit?   TBD is different for DATAGRAM, see below
+                    #exit_info.fname_addr = frame['param5'] + 8
+                    #exit_info.fname_addr = frame['param5'] + word_size
+                    # TBD confused
+                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                    self.lgr.debug('frames: %s' % frame_string)
                 else:
                     exit_info.fname_addr = frame['param5'] + word_size 
                 #SIM_break_simulation('in send/recv') 
                 value = self.paramOffPtr(7, [0, 0], frame, word_size) 
                 if value is not None:
+                    send_string = ''
                     exit_info.count = value & 0xFFFFFFFF
-
-                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr)
-                    self.lgr.debug(trace_msg)
 
                     if op_cmd == 'SEND_DATAGRAM':
                         if word_size == 8:
@@ -1051,14 +1054,25 @@ class WinSyscall():
                             sock_addr = self.paramOffPtr(7, [0x34], frame, word_size) 
                         self.lgr.debug('sock_addr: 0x%x' % (sock_addr))
                         sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
-                        to_string = sock_struct.getString()
-                        trace_msg = trace_msg+' '+to_string
+                        send_string = sock_struct.getString()
+                        ## TBD UDP has different params than TCP?
+                        exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
                     elif op_cmd == 'RECV_DATAGRAM':
                         if word_size == 8:
                             exit_info.sock_addr = self.paramOffPtr(7, [0x18], frame, word_size) 
                         else:
                             exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
-                        self.lgr.debug('winSyscall sock addr 0x%x' % exit_info.sock_addr)
+                        # TBD UDP has different params than TCP?
+                        exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+
+                        self.lgr.debug('winSyscall sock addr 0x%x returned length addr 0x%x' % (exit_info.sock_addr, exit_info.fname_addr))
+                        sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
+                        to_string = sock_struct.getString()
+                        self.lgr.debug('winSyscall sock %s' % to_string)
+                        #frame_string = taskUtils.stringFromFrame(frame)
+                        #SIM_break_simulation(trace_msg+' '+to_string+ ' '+frame_string)
+                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x %s' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr, send_string)
+                    self.lgr.debug(trace_msg)
                     do_async_io = True
 
                 else:
