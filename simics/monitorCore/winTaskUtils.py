@@ -264,12 +264,21 @@ class WinTaskUtils():
             retval = self.call_num_map[call]
         return retval 
 
-    def syscallName(self, call_num, dumb=None):
+    def syscallName(self, call_num_in, dumb=None):
         retval = None
-        if call_num not in self.call_map:
-            self.lgr.warning('winTaskUtils, no map for call number %d' % call_num)
+        if call_num_in >= 4096:
+           call_num = call_num_in & 0xfff 
+           if call_num not in self.call_map:
+               retval = 'gui_something'
+           else:
+               retval = self.call_map[call_num][2:]
+               self.lgr.debug('winTaskUtils syscallName, call num masked was 0x%x became 0x%x name %s' % (call_num_in, call_num, retval))
         else:
-            retval = self.call_map[call_num][2:]
+            call_num = call_num_in
+            if call_num not in self.call_map:
+                self.lgr.warning('winTaskUtils, no map for call number %d' % call_num)
+            else:
+                retval = self.call_map[call_num][2:]
         return retval 
 
     def getSyscallEntry(self, callnum, compat32=False):
