@@ -181,7 +181,7 @@ class WriteData():
                 self.user_space_addr, self.user_space_count = self.top.getReadAddr()
             #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
-            #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             #self.lgr.debug('writeData writeKdata, call setCallHap')
             if not self.no_call_hap:
                 self.setCallHap()
@@ -192,7 +192,7 @@ class WriteData():
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -200,8 +200,9 @@ class WriteData():
 
             if self.top.isWindows() and self.dataWatch is not None:
                 self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
-                asynch_handler = winDelay.WinDelay(self.top, self.cpu, None, self.user_space_addr,
+                asynch_handler = winDelay.WinDelay(self.top, self.cpu, self.addr_of_count, self.user_space_addr, None,
                         self.mem_utils, self.context_manager, None, None, None, self.fd, self.user_space_count, self.lgr, watch_count_addr=False)
+
                 asynch_handler.setDataWatch(self.dataWatch, True)
                 asynch_handler.toUserAlone(None)
 
