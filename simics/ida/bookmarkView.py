@@ -52,6 +52,17 @@ class bookmarkView(simplecustviewer_t):
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
+    class RefreshBookmarkHandler(idaapi.action_handler_t):
+        def __init__(self, bookmark_view):
+            idaapi.action_handler_t.__init__(self)
+            self.bookmark_view = bookmark_view
+
+        def activate(self, ctx):
+            self.bookmark_view.refreshBookmark()
+            return 1
+        def update(self, ctx):
+            return idaapi.AST_ENABLE_ALWAYS
+
     def Create(self, isim, title):
         self.isim = isim
 
@@ -64,14 +75,21 @@ class bookmarkView(simplecustviewer_t):
 
 
     def register(self):
+        form = idaversion.get_current_widget()
         add_bookmark_action = idaapi.action_desc_t(
             'add_bookmark:action',
             'Add bookmark', 
             self.AddBookmarkHandler(self), 
             None)
         idaapi.register_action(add_bookmark_action)
-        form = idaversion.get_current_widget()
         idaapi.attach_action_to_popup(form, None, 'add_bookmark:action')
+        refresh_bookmark_action = idaapi.action_desc_t(
+            'refresh_bookmark:action',
+            'Refresh bookmarks', 
+            self.RefreshBookmarkHandler(self), 
+            None)
+        idaapi.register_action(refresh_bookmark_action)
+        idaapi.attach_action_to_popup(form, None, 'refresh_bookmark:action')
         self.Show()
 
     def goToBookmarkRefresh(self, mark):
@@ -170,6 +188,9 @@ class bookmarkView(simplecustviewer_t):
             self.setBookmark(mark)
             print('do update of bookmark, go mark of %s' % mark)
             self.updateBookmarkView()
+
+    def refreshBookmark(self):
+        self.updateBookmarkView()
 
     def printBookmarks(self):
         #print('printBookmarks')
