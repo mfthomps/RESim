@@ -93,6 +93,18 @@ class WinTaskUtils():
         else:
             self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
             return
+        self.gui_call_map = {}
+        self.gui_call_num_map = {}
+        w7GUImapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
+        if os.path.isfile(w7GUImapfile):
+            cm = json.load(open(w7GUImapfile))     
+            for call in cm:
+                self.gui_call_map[int(call)] = cm[call] 
+                ''' drop Nt prefix'''
+                self.gui_call_num_map[cm[call][2:]] = int(call)
+        else:
+            self.lgr.error('WinTaskUtils cannot open %s' % w7GUImapfile)
+            return
 
         if run_from_snap is None:
             va = cpu.ia32_gs_base + self.param.current_task
@@ -264,17 +276,14 @@ class WinTaskUtils():
             retval = self.call_num_map[call]
         return retval 
 
-    def syscallName(self, call_num_in, dumb=None):
+    def syscallName(self, call_num, dumb=None):
         retval = None
-        if call_num_in >= 4096:
-           call_num = call_num_in & 0xfff 
-           if call_num not in self.call_map:
-               retval = 'gui_something'
+        if call_num  >= 4096:
+           if call_num not in self.gui_call_map:
+               self.lgr.warning('winTaskUtils, no gui map for call number %d' % call_num)
            else:
-               retval = self.call_map[call_num][2:]
-               self.lgr.debug('winTaskUtils syscallName, call num masked was 0x%x became 0x%x name %s' % (call_num_in, call_num, retval))
+               retval = self.gui_call_map[call_num][2:]
         else:
-            call_num = call_num_in
             if call_num not in self.call_map:
                 self.lgr.warning('winTaskUtils, no map for call number %d' % call_num)
             else:
