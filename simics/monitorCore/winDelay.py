@@ -125,19 +125,22 @@ class WinDelay():
         self.mode_hap = None
 
     def setCountWriteHap(self):
-        ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.count_addr, 1, 0)
-        self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
-        self.lgr.debug('winDelay setCountWriteHap to 0x%x' % self.count_addr)
-        #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.buffer_addr, self.count, 0)
-        #self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeBufferHap, None, proc_break, 'winDelayBufferHap')
+        if self.count_write_hap is None:
+            ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.count_addr, 1, 0)
+            self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
+            self.lgr.debug('winDelay setCountWriteHap to 0x%x hap %d module %s' % (self.count_addr, self.count_write_hap, str(self)))
+            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.buffer_addr, self.count, 0)
+            #self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeBufferHap, None, proc_break, 'winDelayBufferHap')
+        else:
+            self.lgr.warning('winDelay setCountWriteHap alread set!!!')
 
     #def writeBufferHap(self, dumb, third, forth, memory):
     #    SIM_break_simulation('wrote to buffer 0x%x' % self.buffer_addr)
 
     def getIOData(self, return_count):
         #return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
-        self.lgr.debug('winDelay gitIOData read count from 0x%x got 0x%x did exit? %r' % (self.count_addr, return_count, self.did_exit))
+        self.lgr.debug('winDelay getIOData read count from 0x%x got 0x%x did exit? %r' % (self.count_addr, return_count, self.did_exit))
         if return_count == 0:
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
@@ -185,9 +188,9 @@ class WinDelay():
                     else:
                         self.exit_info.call_params = None
 
-            self.return_count = return_count
             self.trace_msg = trace_msg
             self.lgr.debug('winDelay gitIOData trace_msg: %s' % trace_msg)
+        self.return_count = return_count
 
     def writeCountHap(self, dumb, third, forth, memory):
         ''' Invoked when the count address is written to '''
@@ -199,6 +202,7 @@ class WinDelay():
             return
         return_count = SIM_get_mem_op_value_le(memory)
 
+        self.lgr.debug('winDelay writeCountHap module %s' % str(self))
         self.getIOData(return_count)
         #SIM_break_simulation('WinDelay')
         # we are in the kernel at some arbitrary place.  run to user space
@@ -206,6 +210,7 @@ class WinDelay():
             SIM_run_alone(self.toUserAlone, None)
         ''' Remove the break/hap '''
         hap = self.count_write_hap
+        self.lgr.debug('winDelay writeCountHap removing count_write_hap %d' % hap)
         SIM_run_alone(self.rmHap, hap) 
         self.count_write_hap = None
 
@@ -233,7 +238,7 @@ class WinDelay():
         self.lgr.debug('winDelay rmHap removed hap %d' % hap)
 
     def rmAllHaps(self, immediate=False):
-        self.lgr.debug('winDelay rmAllHaps')
+        self.lgr.debug('winDelay rmAllHaps immediate: %r' % immediate)
         if self.count_write_hap is not None:
             hap = self.count_write_hap
             if immediate:
@@ -241,6 +246,7 @@ class WinDelay():
             else:
                 SIM_run_alone(self.rmHap, hap) 
             self.count_write_hap = None
+            self.lgr.debug('winDelay rmAllHaps removed count_write_hap')
 
     def exitingKernel(self, trace_msg, not_ready):
         retval = False
