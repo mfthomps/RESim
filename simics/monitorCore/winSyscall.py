@@ -384,7 +384,7 @@ class WinSyscall():
 
             return
 
-        if callnum > 0xfff:
+        if callnum > 0x1400:
             self.lgr.warning('syscallHap callnum is too big')
             #SIM_break_simulation('remove this call %d' % callnum)
             return
@@ -462,10 +462,13 @@ class WinSyscall():
                                             exit_info.call_params = cp
                                     self.lgr.debug('exit_info.call_params tid:%s is %s' % (tid, str(exit_info.call_params)))
 
-                                    if self.dataWatch is not None and not self.dataWatch.disabled:
+                                    if self.dataWatch is not None and not self.dataWatch.disabled and callname not in self.exit_calls:
                                         self.lgr.debug('winSyscall calling dataWatch to stop watch to ignore kernel fiddle with data')
                                         self.dataWatch.stopWatch()
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    #if callname == 'Close': 
+                                    #    SIM_break_simulation('is close')
+                                    #    return
                                 else:
                                     #self.lgr.debug('did not add exitHap')
                                     pass
@@ -662,7 +665,7 @@ class WinSyscall():
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('winSyscall %s call_param.subcall %s type %s value %s call_param.proc %s' % (callname, call_param.subcall, 
                                type(call_param.match_param), str(call_param.match_param), call_param.proc))
-                    if call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    if not self.linger and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                         self.lgr.debug('winSyscall closed fd 0x%x, stop trace' % exit_info.old_fd)
                         self.stopTrace()
                         exit_info.call_params = call_param
@@ -1493,7 +1496,7 @@ class WinSyscall():
                 for bp in self.stop_action.breakpoints:
                     self.context_manager.genDeleteBreakpoint(bp)
                 ''' check functions in list '''
-                self.lgr.debug('syscall stopHap call to rmExitHap')
+                self.lgr.debug('winSyscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
 
                 ''' TBD do this as a stop function? '''
@@ -1555,7 +1558,7 @@ class WinSyscall():
                 self.lgr.debug('setExits call_param is none')
 
     def stopTrace(self, immediate=False):
-        #self.lgr.debug('Winsyscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
+        self.lgr.debug('Winsyscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -1563,7 +1566,10 @@ class WinSyscall():
             self.proc_hap.remove(ph)
 
         #self.lgr.debug('winSyscall do call to stopTraceAlone alone')
-        SIM_run_alone(self.stopTraceAlone, None)
+        if immediate:
+            self.stopTraceAlone(None)
+        else:
+            SIM_run_alone(self.stopTraceAlone, None)
         #self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces(cell_name=self.cell_name):
             self.sharedSyscall.stopTrace()
@@ -1599,6 +1605,7 @@ class WinSyscall():
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
+        self.lgr.debug('winSyscall stopTraceAlone, call to remove exit')
         self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
 
         if self.cur_task_hap is not None:
