@@ -24,7 +24,7 @@
 '''
 
 from simics import *
-modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul']
+modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul', 'sub']
 ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
 ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
@@ -44,6 +44,8 @@ def regIsPart(reg1, reg2):
     if reg2.endswith('x') and reg2[1] == reg1[0]:
         return True
     if len(reg1) == 2 and len(reg2) == 2 and reg1[0] == reg2[0]:
+        return True
+    if len(reg1) == 3 and len(reg2) == 3 and reg1.endswith('x') and reg2.endswith('x') and reg1[1] == reg2[1]:
         return True
     return False
 
@@ -201,11 +203,16 @@ def getValue(s, cpu, lgr=None):
     return retval
 
         
-def addressFromExpression(cpu, exp, lgr):
+def addressFromExpression(cpu, exp, lgr, reg_values={}):
     address = None
     if isReg(exp):
-        reg_num = cpu.iface.int_register.get_number(exp)
-        address = cpu.iface.int_register.read(reg_num)
+        keys = reg_values.keys()
+        lgr.debug('decode addressFromExpression is %s in %s' % (exp, str(keys)))
+        if exp in reg_values:
+            address = reg_values[exp]
+        else: 
+            reg_num = cpu.iface.int_register.get_number(exp)
+            address = cpu.iface.int_register.read(reg_num)
     else:
         parts = None
         if '+' in exp:
@@ -226,12 +233,12 @@ def addressFromExpression(cpu, exp, lgr):
     return address
 
 
-def getAddressFromOperand(cpu, operand, lgr):
+def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
     #lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
-        address = addressFromExpression(cpu, bracketed, lgr)
+        address = addressFromExpression(cpu, bracketed, lgr, reg_values=reg_values)
         if address is not None:
             #lgr.debug('bracketed value was %x' % address)
             offset = 0
@@ -256,7 +263,10 @@ def getAddressFromOperand(cpu, operand, lgr):
             #lgr.debug('could not get reg number from %s' % bracketed)
             pass
     else:
-        pass
+        try:
+            address = int(operand, 16)
+        except:
+            pass
         ''' TBDF Where did this come from?
         if isIndirect(operand):
             reg_num = cpu.iface.int_register.get_number(operand)
