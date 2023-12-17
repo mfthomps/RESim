@@ -2831,13 +2831,13 @@ class GenMonitor():
     def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
         ''' return true if breaks were set and we removed them '''
         self.lgr.debug('genMon removeDebugBreaks was set: %r' % self.debug_breaks_set)
+        if not keep_watching:
+            if immediate:
+                self.context_manager[self.target].stopWatchTasksAlone(None)
+            else:
+                self.context_manager[self.target].stopWatchTasks()
         if self.debug_breaks_set:
             retval = True
-            if not keep_watching:
-                if immediate:
-                    self.context_manager[self.target].stopWatchTasksAlone(None)
-                else:
-                    self.context_manager[self.target].stopWatchTasks()
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.stopWatchPageFaults(tid)
             self.rev_to_call[self.target].noWatchSysenter()
@@ -4118,7 +4118,7 @@ class GenMonitor():
     def stopTrackIO(self, immediate=False, check_crash=True):
         self.lgr.debug('stopTrackIO immediate %r' % immediate)
         if immediate:
-            self.stopTrackIOAlone(immediate, check_crash=check_crash)
+            self.stopTrackIOAlone(immediate=immediate, check_crash=check_crash)
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
@@ -4152,6 +4152,7 @@ class GenMonitor():
         self.stopDataWatch(immediate=immediate)
         self.dataWatch[self.target].rmBackStop()
         self.dataWatch[self.target].setRetrack(False)
+        self.dataWatch[self.target].removeExternalHaps(immediate=immediate)
         if self.coverage is not None:
             self.coverage.saveCoverage()
         if self.injectIOInstance is not None:
