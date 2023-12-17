@@ -895,7 +895,7 @@ class reverseToCall():
             else:
                 cur_val = self.cpu.iface.int_register.read(self.reg_num)
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('crm compare %x to %x eip: %x' % (cur_val, self.reg_val, eip))
+                self.lgr.debug('crm compare %x (value of self.reg_num) to %x (self.reg_val) eip: %x' % (cur_val, self.reg_val, eip))
                 '''
                 if cur_val != self.reg_val: 
                     eip = self.top.getEIP(self.cpu)
