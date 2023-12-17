@@ -387,7 +387,7 @@ def findListFrom(pattern, from_dir):
             retval.append(f)
     return retval
 
-def getfileInsensitive(path, root_prefix, lgr):
+def getfileInsensitive(path, root_prefix, lgr, force_look=False):
     got_it = False
     retval = root_prefix
     cur_dir = root_prefix
@@ -411,15 +411,16 @@ def getfileInsensitive(path, root_prefix, lgr):
                 got_it = True
                 break
     else:
-        if lgr is not None:
-             lgr.warning('getfileInsensitive RELATIVE %s root: %s   NOT LOOKING, return none' % (path, root_prefix))
-
-        #for root, dirs, files in os.walk(root_prefix):
-        #    for f in files:
-        #        if f.upper() == path.upper():
-        #            retval = os.path.join(root_prefix, root, f)
-        #            abspath = os.path.abspath(retval)
-        #            return abspath
+        if not force_look:
+            if lgr is not None:
+                 lgr.warning('getfileInsensitive RELATIVE %s root: %s   NOT LOOKING, return none' % (path, root_prefix))
+        else:
+            for root, dirs, files in os.walk(root_prefix):
+                for f in files:
+                    if f.upper() == path.upper():
+                        retval = os.path.join(root_prefix, root, f)
+                        abspath = os.path.abspath(retval)
+                        return abspath
         return None
 
 
@@ -542,7 +543,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
             #lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
-            retval = getfileInsensitive(with_funs, top_dir, lgr)
+            retval = getfileInsensitive(with_funs, top_dir, lgr, force_look=True)
             if retval is not None:
                 #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
