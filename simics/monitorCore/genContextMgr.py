@@ -492,9 +492,9 @@ class GenContextMgr():
                 #self.restoreDefaultContext()
             context = SIM_object_name(self.cpu.current_context)
             #self.lgr.debug('contextManager rmSuspendWatch for rec 0x%x context now %s' % (rec, context))
-        else:
-            #self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
-            SIM_break_simulation('fix this')
+        #else:
+        #    #self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
+        #    SIM_break_simulation('fix this')
         #SIM_run_alone(self.clearAllHap, True)
 
     def addNoWatch(self):
@@ -954,7 +954,7 @@ class GenContextMgr():
 
         
     def stopWatchTasks(self):
-        self.lgr.debug('stopWatchTasks')
+        self.lgr.debug('genContextManager stopWatchTasks')
         #self.stopWatchTasksAlone(None)
         SIM_run_alone(self.stopWatchTasksAlone, None)
 
@@ -962,7 +962,7 @@ class GenContextMgr():
         if self.task_break is None:
             #self.lgr.debug('stopWatchTasks already stopped')
             return
-        self.lgr.debug('stopWatchTasksAlone delete hap')
+        self.lgr.debug('genContextManager stopWatchTasksAlone delete hap')
         RES_delete_breakpoint(self.task_break)
         if self.task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -977,7 +977,7 @@ class GenContextMgr():
         ''' stop watching for death of tasks ''' 
         for tid in self.task_rec_bp:    
             if self.task_rec_bp[tid] is not None:
-                #self.lgr.debug('stopWatchTasks delete bp %d' % self.task_rec_bp[tid])
+                self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
                 if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
                     RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[tid])        
