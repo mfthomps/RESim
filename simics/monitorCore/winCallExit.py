@@ -306,6 +306,10 @@ class WinCallExit():
             atom_hex = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
             trace_msg = trace_msg+' atom hex: 0x%x' % atom_hex
 
+        elif callname == 'Close': 
+            if exit_info.call_params is not None and self.dataWatch is not None:
+                   self.dataWatch.close(exit_info.old_fd)
+
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
 
