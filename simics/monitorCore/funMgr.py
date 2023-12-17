@@ -29,6 +29,8 @@ import resimUtils
 import winProg
 import os
 import json
+import decode
+import decodeArm
 class FunMgr():
     def __init__(self, top, cpu, mem_utils, lgr):
         self.relocate_funs = {}
@@ -41,9 +43,11 @@ class FunMgr():
         if cpu.architecture == 'arm':
             self.callmn = 'bl'
             self.jmpmn = 'bx'
+            self.decode = decodeArm
         else:
             self.callmn = 'call'
             self.jmpmn = 'jmp'
+            self.decode = decode
 
     def getFun(self, addr):
         return self.ida_funs.getFun(addr)
@@ -189,9 +193,29 @@ class FunMgr():
                 for fun in new_relocate_funs:
                     self.relocate_funs[fun] = new_relocate_funs[fun]
                 self.lgr.warning('funMgr setRelocateFuns no file at %s, revert to elf parse got %d new relocate funs' % (relocate_path, len(new_relocate_funs)))
+         
+    def getCallRegValue(self, reg, recent_instructs):
+        retval = None
+        for instruct in reversed(recent_instructs):
+            if instruct.startswith('mov'):
+                op2, op1 = self.decode.getOperands(instruct)
+                if op1 == reg:
+                    try:
+                        #value = int(op2, 16) 
+                        value = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                        retval = value
+                        self.lgr.debug('funMgr getCallRegValue got address mov to %s 0x%x' % (reg, retval))
+                    except:
+                        self.lgr.debug('funMgr getCallRegValue failed getting address for %s' % instruct)
+                        break
+                        pass
+        if retval is None:
+            retval = self.mem_utils.getRegValue(self.cpu, reg)
+            self.lgr.debug('funMgr getCallRegValue failed getting address mov to %s from recent instructs, use reg value: 0x%x' % (reg, retval))
           
+        return retval
 
-    def getFunNameFromInstruction(self, instruct, eip):
+    def getFunNameFromInstruction(self, instruct, eip, recent_instructs=[], check_reg=False):
         ''' get the called function address and its name, if known '''
         # TBD duplicates much of resolveCall.  merge?
         #self.lgr.debug('funMgr getFunNameFromInstruct insturct: %s' % instruct[1])
@@ -224,11 +248,15 @@ class FunMgr():
                 call_addr, fun = self.indirectCall(instruct, eip)
           
             elif len(parts) == 2:
-                try:
-                    call_addr = int(parts[1],16)
-                except ValueError:
-                    #self.lgr.debug('getFunName, %s not a hex' % parts[1])
-                    pass
+                if check_reg and self.mem_utils.isReg(parts[1]): 
+                    #call_addr = self.mem_utils.getRegValue(self.cpu, parts[1])
+                    call_addr = self.getCallRegValue(parts[1], recent_instructs)
+                else:
+                    try:
+                        call_addr = int(parts[1],16)
+                    except ValueError:
+                        #self.lgr.debug('getFunName, %s not a hex' % parts[1])
+                        pass
                 if call_addr is not None:
                     fun = self.funFromAddr(call_addr)
                     #self.lgr.debug('funMgr getFunNameFromInstruction call_addr 0x%x got %s' % (call_addr, fun))
