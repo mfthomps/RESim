@@ -496,12 +496,12 @@ class ToStringMark():
         return self.msg
 
 class MscMark():
-    def __init__(self, fun, addr):
+    def __init__(self, fun, addr, msg_append):
         self.addr = addr
         if addr is not None:
-            self.msg = '%s read 0x%08x' % (fun, addr)
+            self.msg = '%s read 0x%08x %s' % (fun, addr, msg_append)
         else:
-            self.msg = '%s read None' % (fun)
+            self.msg = '%s read None %s' % (fun, msg_append)
     def getMsg(self):
         return self.msg
 
@@ -1068,8 +1068,8 @@ class WatchMarks():
         self.addWatchMark(um)
         self.lgr.debug(um.getMsg())
         
-    def mscMark(self, fun, src):
-        fm = MscMark(fun, src)
+    def mscMark(self, fun, src, msg_append=''):
+        fm = MscMark(fun, src, msg_append)
         self.addWatchMark(fm)
         self.lgr.debug(fm.getMsg())
 
