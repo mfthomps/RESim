@@ -119,7 +119,7 @@ class findKernelWrite():
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys_block.address, self.num_bytes, 0)
 
-        self.lgr.debug('added rev_write_hap kernel break %d' % self.kernel_write_break)
+        self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
@@ -213,13 +213,20 @@ class findKernelWrite():
             self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             self.vt_handler(my_memory)
-        else:
+        elif self.cpu.cycles < self.start_cycles:
             location = memory.logical_address
             phys = memory.physical_address
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             VT_in_time_order(self.vt_handler, my_memory)
+        else:
+            location = memory.logical_address
+            phys = memory.physical_address
+            eip = self.top.getEIP(self.cpu)
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
 
     def addStopHapForWriteAlone(self, offset):
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
