@@ -1530,11 +1530,11 @@ class Syscall():
 
             for call_param in syscall_info.call_params:
                 if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    ida_msg = 'Closed FD %d' % fd
+                    exit_info.call_params = call_param
                     if not self.linger:
                         self.lgr.debug('closed fd %d, stop trace' % fd)
                         self.stopTrace()
-                        ida_msg = 'Closed FD %d' % fd
-                        exit_info.call_params = call_param
                         break 
                 elif call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
                     self.lgr.debug('sysall close Dmod, tid and fd match')

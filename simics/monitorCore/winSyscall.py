@@ -665,11 +665,12 @@ class WinSyscall():
                 for call_param in syscall_info.call_params:
                     self.lgr.debug('winSyscall %s call_param.subcall %s type %s value %s call_param.proc %s' % (callname, call_param.subcall, 
                                type(call_param.match_param), str(call_param.match_param), call_param.proc))
-                    if not self.linger and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                        self.lgr.debug('winSyscall closed fd 0x%x, stop trace' % exit_info.old_fd)
-                        self.stopTrace()
+                    if call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                         exit_info.call_params = call_param
-                        break 
+                        if not self.linger:
+                            self.lgr.debug('winSyscall closed fd 0x%x, stop trace' % exit_info.old_fd)
+                            self.stopTrace()
+                            break 
                     elif call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
                         self.lgr.debug('winSyscall close Dmod, tid and fd match')
                         exit_info.call_params = call_param
@@ -1558,7 +1559,7 @@ class WinSyscall():
                 self.lgr.debug('setExits call_param is none')
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('Winsyscall stopTrace call_list %s immediat: %r' % (str(self.call_list), immediate))
+        self.lgr.debug('Winsyscall stopTrace call_list %s immediate: %r' % (str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
@@ -1606,7 +1607,7 @@ class WinSyscall():
             self.background_break = None
             self.background_hap = None
         self.lgr.debug('winSyscall stopTraceAlone, call to remove exit')
-        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
+        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell, immediate=True)
 
         if self.cur_task_hap is not None:
             rmNewProcHap(self.cur_task_hap)
