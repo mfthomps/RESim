@@ -132,7 +132,7 @@ class SharedSyscall():
                 else:
                     print('\t%s' % (tid))
 
-    def rmExitHap(self, tid, context=None):
+    def rmExitHap(self, tid, context=None, immediate=False):
         if context is not None:
             use_context = context
         else:
@@ -162,7 +162,7 @@ class SharedSyscall():
                         self.exit_tids[use_context][eip].append(-1)
                     else:
                         #self.lgr.debug('rmExitHap len of exit_tids[0x%x] is zero, delete exit hap context: %s hap %d' % (eip, use_context, self.exit_hap[eip]))
-                        self.context_manager.genDeleteHap(self.exit_hap[eip])
+                        self.context_manager.genDeleteHap(self.exit_hap[eip], immediate=immediate)
 
         else:
             ''' assume the exitHap was for a one-off syscall such as execve that
@@ -173,7 +173,7 @@ class SharedSyscall():
                 my_exit_tids[eip] = []
                 if eip in self.exit_hap:
                     self.lgr.debug('sharedSyscall rmExitHap, call contextManager to delete exit hap %d' % self.exit_hap[eip])
-                    self.context_manager.genDeleteHap(self.exit_hap[eip])
+                    self.context_manager.genDeleteHap(self.exit_hap[eip], immediate=immediate)
                     del self.exit_hap[eip]
                 #self.lgr.debug('sharedSyscall rmExitHap, assume one-off syscall, cleared exit hap')
         #self.lgr.debug('sharedSyscall rmExitHap done')
@@ -1264,8 +1264,8 @@ class SharedSyscall():
             self.top.writeRegValue('syscall_ret', eax, alone=True)
             self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)
 
-    def rmExitBySyscallName(self, name, cell):
-        #self.lgr.debug('rmExitBySyscallName %s' % name)
+    def rmExitBySyscallName(self, name, cell, immediate=False):
+        self.lgr.debug('rmExitBySyscallName %s immediate: %r' % (name, immediate))
         exit_name = '%s-exit' % name
         rmlist = []
         if name is None or name == 'None':
@@ -1276,7 +1276,7 @@ class SharedSyscall():
             if the_name.endswith(exit_name):
                 rmlist.append(tid)
                 #self.lgr.debug('sharedSyscall rmExitBySyscallName tid:%s removing: %s context %s' % (tid, name, str(cell))) 
-                self.rmExitHap(tid, context=cell)
+                self.rmExitHap(tid, context=cell, immediate=immediate)
                 if tid in self.exit_info and the_name in self.exit_info[tid]:
                     del self.exit_info[tid][the_name]
         for tid in rmlist:
@@ -1285,6 +1285,7 @@ class SharedSyscall():
         #self.lgr.debug('rmExitBySyscallName return from %s' % name)
 
     def setcallback(self, callback, param):
+        self.lgr.debug('sharedSyscall setcallback to %s' % str(callback))
         self.callback = callback
         self.callback_param = param
 

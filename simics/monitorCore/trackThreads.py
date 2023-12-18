@@ -60,7 +60,7 @@ class TrackThreads():
         pass
 
     def stopTrack(self, immediate=False):
-        self.lgr.debug('TrackThreads, stop tracking for %s' % self.cell_name)
+        self.lgr.debug('TrackThreads, stop tracking for %s immediate: %r' % (self.cell_name, immediate))
         self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
         self.call_hap = None
         if self.execve_hap is not None:
@@ -76,9 +76,9 @@ class TrackThreads():
         self.stopTrackClone(immediate)
         ''' try deleting both contexts '''
         resim_context = self.context_manager.getRESimContextName()
-        self.syscallManager.rmSyscall('trackSO', context=resim_context)
+        self.syscallManager.rmSyscall('trackSO', context=resim_context, immediate=immediate)
         default_context = self.context_manager.getDefaultContextName()
-        self.syscallManager.rmSyscall('trackSO', context=default_context)
+        self.syscallManager.rmSyscall('trackSO', context=default_context, immediate=immediate)
         #self.so_track.stopTrace()
 
 

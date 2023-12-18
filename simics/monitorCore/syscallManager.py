@@ -285,8 +285,8 @@ class SyscallManager():
                     self.lgr.debug('syscallManager rmSyscall context %s.  Removed call params %s, syscall remains, must be other params' % (context, call_param_name))
             else:
                 ''' Other syscalls.  Delete and recreate with other syscalls. '''
-                self.lgr.debug('syscallManager rmSyscall call to stopTrace will stop and delete syscall instance %s (%s) other_calls is %s' % (call_instance.name, 
-                    call_instance.syscall.name, str(other_calls)))
+                self.lgr.debug('syscallManager rmSyscall call to stopTrace will stop and delete syscall instance %s (%s) other_calls is %s immediate: %r' % (call_instance.name, 
+                    call_instance.syscall.name, str(other_calls), immediate))
                 call_instance.stopTrace(immediate=immediate) 
                 del self.syscall_dict[context][call_instance.name]
                 ''' TBD what about the flist? '''
