@@ -1280,7 +1280,7 @@ class GenMonitor():
                 self.lgr.warning('debug: not in user space, x86 32-bit compat mode may miss clones')
 
 
-            self.syscallManager[self.target].rmSyscall('runToText')
+            self.syscallManager[self.target].rmSyscall('runToText', immediate=True)
             #if 'open' in self.call_traces[self.target]:
             #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
             self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
@@ -2125,11 +2125,11 @@ class GenMonitor():
         self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32)
         #self.lgr.debug('genMonitor watchPageFaults back')
 
-    def stopWatchPageFaults(self, tid=None, target=None):
+    def stopWatchPageFaults(self, tid=None, target=None, immediate=False):
         if target is None:
             target = self.target
         self.lgr.debug('genMonitor stopWatchPageFaults')
-        self.page_faults[target].stopWatchPageFaults(tid)
+        self.page_faults[target].stopWatchPageFaults(tid, immediate=immediate)
         self.page_faults[target].stopPageFaults()
 
     def catchCorruptions(self):
@@ -2830,7 +2830,7 @@ class GenMonitor():
 
     def removeDebugBreaks(self, keep_watching=False, keep_coverage=True, immediate=False):
         ''' return true if breaks were set and we removed them '''
-        self.lgr.debug('genMon removeDebugBreaks was set: %r' % self.debug_breaks_set)
+        self.lgr.debug('genMon removeDebugBreaks was set: %r immediate: %r' % (self.debug_breaks_set, immediate))
         if not keep_watching:
             if immediate:
                 self.context_manager[self.target].stopWatchTasksAlone(None)
@@ -2839,7 +2839,7 @@ class GenMonitor():
         if self.debug_breaks_set:
             retval = True
             tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.stopWatchPageFaults(tid)
+            self.stopWatchPageFaults(tid, immediate=immediate)
             self.rev_to_call[self.target].noWatchSysenter()
             if self.track_threads is not None and self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
@@ -4124,7 +4124,7 @@ class GenMonitor():
 
     def stopTrackIOAlone(self, immediate=False, check_crash=True):
         thread_tids = self.context_manager[self.target].getThreadTids()
-        self.lgr.debug('stopTrackIO got %d thread_tids' % len(thread_tids))
+        self.lgr.debug('stopTrackIO got %d thread_tids immediate: %r' % (len(thread_tids), immediate))
         crashing = False 
         if check_crash:
             for tid in thread_tids:
@@ -4141,7 +4141,7 @@ class GenMonitor():
                         print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                         self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                
-        self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing) 
+        self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
@@ -4159,6 +4159,7 @@ class GenMonitor():
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
         self.dataWatch[self.target].pickleFunEntries(self.run_from_snap)
 
+        self.jumperStop()
         self.lgr.debug('stopTrackIO return')
 
     def clearWatches(self, cycle=None):
@@ -5275,10 +5276,11 @@ class GenMonitor():
         self.lgr.debug('jumper set')
 
     def jumperStop(self, target=None):
+        self.lgr.debug('jumperStop')
         if target is None:
             target = self.target
         if target in self.jumper_dict:
-            self.jumper_dict[target].removeBreaks()
+            self.jumper_dict[target].removeBreaks(immediate=True)
 
     def jumperDisable(self, target=None):
         if target is None:
