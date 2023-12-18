@@ -582,10 +582,16 @@ class WatchMarks():
             self.prev_ip.pop(0)
 
     def markCall(self, msg, max_len, recv_addr=None, length=None, fd=None, is_lib=False):
+        ''' remove previous mark if a kernel mod of same address'''
+        prev_mark = self.getRecentMark()
+        if prev_mark is not None:
+            self.lgr.debug('watchMarks markCall prev mark type %s ' % (type(prev_mark.mark)))
+        if prev_mark is not None and type(prev_mark.mark) == KernelModMark and recv_addr is not None and recv_addr == prev_mark.mark.addr:
+            self.rmLast(1) 
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cm = CallMark(msg, max_len, recv_addr, length, fd, is_lib=is_lib)
         cycles = self.cpu.cycles
-        self.addWatchMark(cm, cycles=cycles)
+        self.addWatchMark(cm)
         if recv_addr is None:
             self.lgr.debug('watchMarks markCall ip: 0x%x cycles: 0x%x %s' % (ip, cycles, msg))
         else:
@@ -614,7 +620,9 @@ class WatchMarks():
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
     def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None): 
-        if ip is None:
+        if ip is None and cycles is not None:
+            self.lgr.error('watchMarks dataRead cycles given but not ip')
+        elif ip is None:
             ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         wm = None
         # start with an empty one so toString does not die
