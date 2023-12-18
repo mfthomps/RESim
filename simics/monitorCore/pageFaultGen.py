@@ -419,10 +419,10 @@ class PageFaultGen():
         # record cycle and eip for reversing back to user space    
         self.recordFault(tid, eip)
 
-    def stopWatchPageFaults(self, tid = None):
+    def stopWatchPageFaults(self, tid = None, immediate=False):
         if self.fault_hap is not None:
             #self.lgr.debug('stopWatchPageFaults delete fault_hap')
-            self.context_manager.genDeleteHap(self.fault_hap)
+            self.context_manager.genDeleteHap(self.fault_hap, immediate=immediate)
             self.fault_hap = None
         if self.fault_hap1 is not None:
             #self.lgr.debug('stopWatchPageFaults delete fault_hap1')
@@ -435,8 +435,8 @@ class PageFaultGen():
         if tid is not None:
             if tid in self.exit_hap: 
                 #self.lgr.debug('stopWatchPageFaults delete exit_hap')
-                self.context_manager.genDeleteHap(self.exit_hap[tid])
-                self.context_manager.genDeleteHap(self.exit_hap2[tid])
+                self.context_manager.genDeleteHap(self.exit_hap[tid], immediate=immediate)
+                self.context_manager.genDeleteHap(self.exit_hap2[tid], immediate=immediate)
                 del self.exit_break[tid]
                 del self.exit_hap[tid]
                 del self.exit_hap2[tid]
