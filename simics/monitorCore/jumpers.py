@@ -117,21 +117,21 @@ class Jumpers():
             self.lgr.debug('jumper doJump did break_simulation')
         self.lgr.debug('jumper doJump did it, eip now 0x%x' % eip)
 
-    def removeOneBreak(self, addr):
+    def removeOneBreak(self, addr, immediate=False):
         self.lgr.debug('Jumpers removeOneBreak 0x%x' % addr)
         if addr not in self.hap:
             self.lgr.debug('jumpers removeOneBreak but addr 0x%x not in dict.' % addr)
             return
         if not self.physical:
-            self.context_manager[self.target].genDeleteHap(self.hap[addr])
+            self.context_manager.genDeleteHap(self.hap[addr], immediate=immediate)
         else:
             SIM_delete_breakpoint(self.breakpoints[addr])
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[addr])
 
-    def removeBreaks(self):
+    def removeBreaks(self, immediate=False):
         self.lgr.debug('Jumpers removeBreaks')
         for f in self.fromto:
-            self.removeOneBreak(f)
+            self.removeOneBreak(f, immediate=immediate)
         self.hap = {}
         self.breakpoints = {}
 
