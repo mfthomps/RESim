@@ -202,6 +202,8 @@ class RunTo():
                continue
            if section.size is None:
                self.lgr.debug('runto setSkipList size of section %s is None' % section.fname)
+           if section.addr is None:
+               self.lgr.debug('runto setSkipList addr of section %s is None' % section.fname)
            else:
                end = section.addr+section.size
                proc_break = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
