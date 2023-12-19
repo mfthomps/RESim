@@ -200,19 +200,25 @@ class WinDelay():
             self.lgr.debug('winDelay writeCountHap skipping first kernel write to count address.  TBD if always needed.')
             self.hack_count = self.hack_count + 1
             return
-        return_count = SIM_get_mem_op_value_le(memory)
-
-        self.lgr.debug('winDelay writeCountHap module %s' % str(self))
-        self.getIOData(return_count)
-        #SIM_break_simulation('WinDelay')
-        # we are in the kernel at some arbitrary place.  run to user space
-        if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
-            SIM_run_alone(self.toUserAlone, None)
-        ''' Remove the break/hap '''
-        hap = self.count_write_hap
-        self.lgr.debug('winDelay writeCountHap removing count_write_hap %d' % hap)
-        SIM_run_alone(self.rmHap, hap) 
-        self.count_write_hap = None
+        if memory.size > 8:
+            self.lgr.error('winDelay writeCountHap memory size > 8: %d  ???? module %s' % (memory.size, str(self)))
+            return
+        else:
+            return_count = SIM_get_mem_op_value_le(memory)
+        if return_count > 0: 
+            self.lgr.debug('winDelay writeCountHap module %s' % str(self))
+            self.getIOData(return_count)
+            #SIM_break_simulation('WinDelay')
+            # we are in the kernel at some arbitrary place.  run to user space
+            if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
+                SIM_run_alone(self.toUserAlone, None)
+            ''' Remove the break/hap '''
+            hap = self.count_write_hap
+            self.lgr.debug('winDelay writeCountHap removing count_write_hap %d' % hap)
+            SIM_run_alone(self.rmHap, hap) 
+            self.count_write_hap = None
+        else:
+            self.lgr.debug('winDelay writeCountHap got count of zero, assume kernel init')
 
     def toUserAlone(self, dumb):
         tid = self.top.getTID()
