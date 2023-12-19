@@ -271,9 +271,15 @@ class WinProg():
         SIM_run_alone(self.top.debug, False)
 
     def textHap(self, tid, third, forth, memory):
+        if self.text_hap is None:
+            return
+        cpu, comm, this_tid = self.task_utils.curThread() 
+        if this_tid != tid:
+            return
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         self.lgr.debug('winProg textHap record stack base tid:%s sp 0x%x' % (tid, sp))
         self.top.recordStackBase(tid, sp)
         self.context_manager.genDeleteHap(self.text_hap)
-        self.lgr.debug('winProg textHap call stopAndAction')
-        SIM_run_alone(self.top.stopAndGo, self.debugAlone)
+        self.lgr.debug('winProg textHap call stopAndGo')
+        #SIM_run_alone(self.top.stopAndGo, self.debugAlone)
+        self.top.stopAndGo(self.debugAlone)
