@@ -202,7 +202,7 @@ class RunTo():
                continue
            if section.size is None:
                self.lgr.debug('runto setSkipList size of section %s is None' % section.fname)
-           if section.addr is None:
+           elif section.addr is None:
                self.lgr.debug('runto setSkipList addr of section %s is None' % section.fname)
            else:
                end = section.addr+section.size
