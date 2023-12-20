@@ -122,6 +122,7 @@ import traceBuffer
 import dmodMgr
 import runToReturn
 import recordLogEvents
+import pageCallbacks
 
 #import fsMgr
 import json
@@ -323,6 +324,8 @@ class GenMonitor():
         self.no_gdb = False
 
         self.afl_instance= None
+
+        self.page_callbacks = {}
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -798,6 +801,8 @@ class GenMonitor():
                                                self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.rev_to_call[cell_name], self.lgr)
 
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
+
+            self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(cpu, self.mem_utils[cell_name], self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
@@ -1366,7 +1371,7 @@ class GenMonitor():
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
                 self.jumper_dict[self.target].loadJumpers(jumper_file)
         if self.target in self.read_replace:
              self.read_replace[self.target].swapContext()
@@ -4159,7 +4164,7 @@ class GenMonitor():
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
         self.dataWatch[self.target].pickleFunEntries(self.run_from_snap)
 
-        self.jumperStop()
+        #self.jumperStop()
         self.lgr.debug('stopTrackIO return')
 
     def clearWatches(self, cycle=None):
@@ -5154,11 +5159,13 @@ class GenMonitor():
         ''' Will stop simulation and invoke the given callback once stopped.
             It also calls our stopHap, which 
         '''
-
+        cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        self.lgr.debug('stopAndGo tid %s cycle 0x%x' % (this_tid, cpu.cycles))
         SIM_run_alone(self.stopAndGoAlone, callback)
 
     def stopAndGoAlone(self, callback, param=None):
-        self.lgr.debug('stopAndGoAlone')
+        cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        self.lgr.debug('stopAndGoAlone tid %s cycle 0x%x' % (this_tid, cpu.cycles))
         cpu = self.cell_config.cpuFromCell(self.target)
         if param is None:
             call_params = []
@@ -5271,7 +5278,7 @@ class GenMonitor():
         ''' Set a control flow jumper '''
         if self.target not in self.jumper_dict:
             cpu = self.cell_config.cpuFromCell(self.target)
-            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
+            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
         self.jumper_dict[self.target].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
 
@@ -5387,13 +5394,13 @@ class GenMonitor():
         cmd = 'run count = %d unit = ms' % (int(ms))
         SIM_run_command(cmd)
         
-    def loadJumpers(self, physical=False):    
+    def loadJumpers(self):    
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             if self.target not in self.jumper_dict:
                 cpu = self.cell_config.cpuFromCell(self.target)
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], cpu, self.lgr)
-            self.jumper_dict[self.target].loadJumpers(jumper_file, physical=physical)
+                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
+            self.jumper_dict[self.target].loadJumpers(jumper_file)
             print('Loaded jumpers from %s' % jumper_file)
         else:
             print('No jumper file defined.')
@@ -5893,6 +5900,9 @@ class GenMonitor():
         fname = 'logs/%s.log' % obj
         cpu = self.cell_config.cpuFromCell(self.target)
         rle = recordLogEvents.RecordLogEvents(fname, obj, 4, cpu, self.lgr)
+
+    def pageCallback(self, addr, callback):
+        self.page_callbacks[self.target].setCallback(addr, callback)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
