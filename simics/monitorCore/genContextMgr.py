@@ -617,8 +617,9 @@ class GenContextMgr():
             retval = True 
             
             if tid is not None and self.catch_tid is not None:
+                #self.lgr.debug('contextManager onlyOrIgnore self.catch_tid %s  tid %s' % (self.catch_tid, tid))
                 if (self.catch_tid == tid or (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0])):
-                    self.lgr.debug('contextManager onlyOrIgnore thread do catch_callback for tid %s' % tid)
+                    #self.lgr.debug('contextManager onlyOrIgnore thread do catch_callback for tid %s' % tid)
                     #SIM_break_simulation('in tid %s' % tid)
                     if self.catch_callback is not None: 
                         SIM_run_alone(self.catch_callback, None)
@@ -739,7 +740,9 @@ class GenContextMgr():
             self.watchExit(new_addr, tid)
             self.top.recordStackClone(tid, leader_tid)
         if self.catch_tid is not None:
-            if self.catch_tid == tid or (self.catch_tid == -1 and tid in self.tid_cache) or (self.catch_tid == -2 and tid != 0) or \
+            self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
+            #if self.catch_tid == tid or (self.catch_tid == '-1' and tid in self.tid_cache) or (self.catch_tid == '-2' and tid != '0') or \
+            if self.catch_tid == tid or (self.catch_tid == '-1' and self.amWatching(tid)) or (self.catch_tid == '-2' and tid != '0') or \
                                         (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0]):
                 self.lgr.debug('contextManager changedThread do catch_callback for tid %s' % tid)
                 if self.catch_callback is not None: 
