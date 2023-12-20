@@ -24,9 +24,9 @@
 '''
 '''
 Manage execution jumpers to cause execution to jump to a selcted destination address
-when a given source address is hit. Physical address breakpoints are set on the
-source address.  As a result, jumpers can only be set while the target process is
-executing.
+when a given source address is hit. The module attempts to set breakpoints on 
+physical addresses.  If not mapped, a break is set on the page table with a callback
+to set the jumper break when the code is mapped.
 
 Format has two forms.  Each includes an optional comm paramter that names the process,
 which is intended to differentiate processes that share a library containing the jump 
@@ -38,6 +38,7 @@ Provide load addresses (implies you know the load address of source and destinat
 Provide original addresses (i.e., per the binary file).  Provide "prog" as either the
 program name or the SO/DLL basename and the addr as the original address.
     prog:addr addr [comm] [break]
+You can see original addresses via the cgc.getSO(addr, show_orig=True)
 
 '''
 from simics import *
@@ -46,10 +47,11 @@ import ntpath
 import winProg
 
 class Jumpers():
-    def __init__(self, top, context_manager, so_map, cpu, lgr):
+    def __init__(self, top, context_manager, so_map, mem_utils, cpu, lgr):
         self.top = top
         self.lgr = lgr
         self.cpu = cpu
+        self.mem_utils = mem_utils
         self.cell_name = self.top.getTopComponentName(cpu)
         self.context_manager = context_manager
         self.so_map = so_map
@@ -59,7 +61,6 @@ class Jumpers():
         self.hap = {}
         self.breakpoints = {}
         self.reverse_enabled = None
-        self.physical = True
         ''' The simulation would stop at destinations corresponding to these source addresses.  '''
         self.break_simulation = []
         self.pending_libs = {}
@@ -71,24 +72,30 @@ class Jumpers():
         self.setOneBreak(from_addr)
 
     def setOneBreak(self, addr):
-            if self.physical:
-                phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Execute)
-                if phys_block.address == 0 or phys_block.address is None:
-                    self.lgr.error('jumper setOneBreak, memory not yet mapped.  No jumper set.')
-                    return
-                self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-                self.hap[addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.doJump, addr, self.breakpoints[addr])
-                self.lgr.debug('jumper setBreaks set phys break on addr 0x%x (phys 0x%x)' % (addr, phys_block.address))
-            else:
-                proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-                self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, addr, proc_break, 'jumper')
-                self.lgr.debug('jumper setBreaks set break on addr 0x%x' % addr)
+        #phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Execute)
+        phys_addr = self.mem_utils.v2p(self.cpu, addr)
+        #if phys_block.address == 0 or phys_block.address is None:
+        if phys_addr is None or phys_addr == 0:
+            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+            #self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, addr, proc_break, 'jumper')
+            #self.lgr.debug('jumper setBreaks set break on linear addr 0x%x' % addr)
+            #self.want_phys.append(addr)
+            self.lgr.debug('jumper setOneBreak call pageCallback for addr 0x%x' % addr)
+            self.top.pageCallback(addr, self.pagedIn)
+        else:
+            self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+            self.hap[addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.doJump, addr, self.breakpoints[addr])
+            self.lgr.debug('jumper setBreaks set phys break on addr 0x%x (phys 0x%x)' % (addr, phys_addr))
+
+    def pagedIn(self, addr):
+        self.lgr.debug('jumpers pagedIn addr 0x%x' % addr)
+        self.setOneBreak(addr)
 
     def setBreaks(self):
         for f in self.fromto:
             self.setOneBreak(f)
     
-    def doJump(self, addr, third, forth, memory):
+    def doJump(self, addr, an_object, break_num, memory):
         #print('doJump')
         #self.lgr.debug('doJump')
         ''' callback when jumper breakpoint is hit'''
@@ -122,11 +129,8 @@ class Jumpers():
         if addr not in self.hap:
             self.lgr.debug('jumpers removeOneBreak but addr 0x%x not in dict.' % addr)
             return
-        if not self.physical:
-            self.context_manager.genDeleteHap(self.hap[addr], immediate=immediate)
-        else:
-            SIM_delete_breakpoint(self.breakpoints[addr])
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[addr])
+        SIM_delete_breakpoint(self.breakpoints[addr])
+        SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.hap[addr])
 
     def removeBreaks(self, immediate=False):
         self.lgr.debug('Jumpers removeBreaks')
@@ -135,11 +139,10 @@ class Jumpers():
         self.hap = {}
         self.breakpoints = {}
 
-    def loadJumpers(self, fname, physical=True):
-        self.physical = physical
+    def loadJumpers(self, fname):
         from_addr = None
         to_addr = None
-        self.lgr.debug('jumpers loadJumper, physical: %r' % (physical))
+        self.lgr.debug('jumpers loadJumper')
         if not os.path.isfile(fname):
             self.lgr.error('No jumper file found at %s' % fname)
         else:
