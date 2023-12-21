@@ -1627,15 +1627,23 @@ class DataWatch():
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
         word_size = self.top.wordSize(tid, target=self.cell_name)
-        self.lgr.debug('********* memSomethingEntry, tid:%s fun %s eip 0x%x cycle: 0x%x context: %s' % (tid, fun, eip, self.cpu.cycles, self.cpu.current_context))
+        self.lgr.debug('********* memSomethingEntry, tid:%s fun %s eip 0x%x cycle: 0x%x context: %s word_size %d' % (tid, fun, eip, self.cpu.cycles, self.cpu.current_context, word_size))
         if fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[fun] or self.mem_fun_entries[fun][eip].hap is None:
             self.lgr.debug('memSomethingEntry, fun %s eip 0x%x not in mem_fun_entries haps' % (fun, eip))
             return
 
-        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp') 
+        if self.top.isWindows():
+            # stack cookies?  TBD fix this
+            param_sp = sp + word_size
+        else:
+            param_sp = sp
+        self.mem_something.fun = fun
         # special case check for memcpy of 1 byte
         if self.mem_something.fun in mem_copyish_functions:
-            self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp, word_size)
+
+            self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(param_sp, word_size)
+
             if self.mem_something.count == 1:
                 self.lgr.debug('dataWatch memSomethingEntry size one, src 0x%x dest 0x%x let it go.  Will catch special case in readHap' % (self.mem_something.src, self.mem_something.dest))
                 return
@@ -2409,6 +2417,12 @@ class DataWatch():
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr:
             self.lgr.warning('dataWatch handleMemStuff but entry for fun %s already in mem_fun_entires addr 0x%x' % (self.mem_something.fun, self.mem_something.fun_addr))
+
+            # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?
+            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.memstuffStopHap, None)
+            self.lgr.debug('handleMemStuff now stop')
+            SIM_break_simulation('handle memstuff')
 
         elif self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
