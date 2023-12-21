@@ -41,7 +41,7 @@ class PrepInject():
 
     def prepInject(self):
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
-        self.lgr.debug('prepInject snap %s' % self.snap_name)
+        self.lgr.debug('prepInject snap %s FD: %d (0x%x)' % (self.snap_name, self.fd, self.fd))
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
         self.top.stopWatchPageFaults()
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
@@ -78,8 +78,9 @@ class PrepInject():
         self.prepInject()
 
     def finishNoCall(self, read_original=True):
-        syscall = self.top.getSyscall(self.cell_name, 'runToIO')
-        if syscall is not None:
+        # TBD point of runToIO check?
+        #syscall = self.top.getSyscall(self.cell_name, 'runToIO')
+        if True or syscall is not None:
             if read_original:
                 length = self.getLength()
                 ''' TBD if this falls on a page boundary, cannot get all original bytes?  be sure to run the service first!'''
@@ -90,8 +91,8 @@ class PrepInject():
                     self.lgr.error('prepInject instrumentAlone failed to get orig buffer from syscall') 
                 resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
-        else:
-            self.lgr.error('prepInject finishNoCall falled to get syscall ?')
+        #else:
+        #    self.lgr.error('prepInject finishNoCall falled to get syscall ?')
 
     def tidScheduled(self, dumb):
         self.lgr.debug('prepInject tidScheduled')
@@ -118,17 +119,19 @@ class PrepInject():
         #self.top.removeDebugBreaks(keep_watching=True, keep_coverage=True)
         self.top.stopTracking(keep_watching=True, keep_coverage=True)
         current_ip = self.top.getEIP(self.cpu)
+        tid = self.top.getTID()
         if self.mem_utils.isKernel(current_ip): 
             ''' go forward one to user space and record the return IP '''
             SIM_run_command('pselect %s' % self.cpu.name)
             SIM_run_command('si')
             self.return_ip = self.top.getEIP(self.cpu)
+            self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x tid:%s cycle is 0x%x' % (self.snap_name, self.return_ip, 
+                  current_ip, tid, self.cpu.cycles))
         else:
             self.return_ip = current_ip
+            self.lgr.debug('instrument snap_name %s landed in user space. return IP: 0x%x entry ip: 0x%x tid:%s cycle is 0x%x' % (self.snap_name, self.return_ip, 
+                  current_ip, tid, self.cpu.cycles))
         self.ret_cycle = self.cpu.cycles
-        tid = self.top.getTID()
-        self.lgr.debug('instrument snap_name %s stepped to return IP: 0x%x entry ip: 0x%x tid:%s cycle is 0x%x' % (self.snap_name, self.return_ip, 
-              current_ip, tid, self.cpu.cycles))
 
         ''' Find the exit info from the system call that did the read.'''
         self.exit_info = self.top.getMatchingExitInfo()
@@ -138,29 +141,37 @@ class PrepInject():
 
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
-        self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
+        call = self.top.syscallName(frame['syscall_num'])
+        self.lgr.debug('prepInject instrumentAlone origin 0x%x recent call cycle 0x%x tid:%s call %s' % (origin, cycle, tid, call))
         if cycle <= origin:
-            self.lgr.debug('Entry into kernel is prior to first cycle, cannot record call_ip')
+            self.lgr.debug('prepInject instrumentAlone Entry into kernel is prior to first cycle, cannot record call_ip')
             if self.top.didMagicOrigin():
+                self.lgr.debug('prepInject instrumentAlone go to origin')
                 self.top.goToOrigin()
-                self.top.totid(tid, callback = self.tidScheduled)
+                self.lgr.debug('prepInject instrumentAlone back from go to origin, do toTid')
+                self.top.toTid(tid, callback = self.tidScheduled)
             else:
                 print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
                 print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
                 self.finishNoCall(read_original=False)          
         else: 
+            if self.exit_info.retval_addr is None:
+                self.lgr.error('prepInject instrumentAlone, retval_addr is None')
+                return
+            orig_buffer = None
             ''' return to the call to record that IP and original data in the buffer'''
             previous = cycle - 1
-            resimUtils.skipToTest(self.cpu, previous, self.lgr)
-            self.call_ip = self.top.getEIP(self.cpu)
-            if self.exit_info.retval_addr is None:
-                self.lgr.error('instrumentAlone, retval_addr is None')
-                return
+            self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
 
-            ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
-            orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
-            self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
+            if resimUtils.skipToTest(self.cpu, previous, self.lgr):
+                self.call_ip = self.top.getEIP(self.cpu)
+                ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
+                orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
+                self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
+            else:
+                self.lgr.error('prepInject instrument failed skip to syscall')
             ''' skip back to return so the snapshot is ready to inject input '''
+            self.lgr.debug('prepInjectInstrument skip back to ret_cycle 0x%x' % self.ret_cycle)
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
             current_ip = self.top.getEIP(self.cpu)
             self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
