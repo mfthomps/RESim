@@ -358,7 +358,7 @@ class WinDLLMap():
             got_unknown = False
             for section in self.section_list:
                 if section.addr is None:
-                    self.lgr.debug('getSOFile got no addr for section %s' % section.fname)
+                    #self.lgr.debug('getSOFile got no addr for section %s' % section.fname)
                     continue
                 if section.pid == pid:
                     if section.size is not None:
