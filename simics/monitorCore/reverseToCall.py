@@ -1514,7 +1514,7 @@ class reverseToCall():
             for cycles in sorted(self.sysenter_cycles[tid]):
                 if cycles > cur_cycles:
                     self.lgr.debug('getPreviousCycleFrame found cycle between 0x%x and 0x%x' % (cur_cycles, cycles))
-                    got_it = cur_cycles
+                    got_it = cycles
                     break
 
             if got_it is not None:
