@@ -529,13 +529,13 @@ class WatchMarks():
             i = 1
             for mark in self.stale_marks:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x cycle: 0x%x\n' % (i, the_str, mark.ip, mark.cycle))
+                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x\n' % (i, the_str, mark.ip, mark.tid, mark.cycle))
                 i += 1
             fh.write('\n\nBegin active watch marks.\n\n')
             i = 1
             for mark in self.mark_list:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x cycle: 0x%x\n' % (i, the_str, mark.ip, mark.cycle))
+                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x\n' % (i, the_str, mark.ip, mark.tid, mark.cycle))
                 i += 1
 
     def showMarks(self, old=False, verbose=False):
