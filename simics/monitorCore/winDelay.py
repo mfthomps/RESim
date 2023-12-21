@@ -34,7 +34,7 @@ import resimUtils
 import net
 class WinDelay():
     def __init__(self, top, cpu, count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, 
-                  call_name, kbuffer, fd, count, lgr, watch_count_addr=True):
+                  call_name, kbuffer, fd, count, stop_action, lgr, watch_count_addr=True):
         self.top = top
         self.cpu = cpu
         self.count_addr = count_addr
@@ -44,7 +44,7 @@ class WinDelay():
         self.context_manager = context_manager
         self.trace_mgr = trace_mgr
         self.call_name = call_name
-        ''' used for prep inject watch to locate kernel buffers for data injection. '''
+        ''' used for prepInjectWatch to locate kernel buffers for data injection. '''
         self.kbuffer = kbuffer
 
         self.lgr = lgr
@@ -59,6 +59,8 @@ class WinDelay():
         self.return_count = None
         self.trace_msg = None
         self.count = count
+        # used for prepInject
+        self.stop_action = stop_action
 
         ''' Control when to generate watch marks and trace messages'''
         self.did_exit = False
@@ -87,6 +89,7 @@ class WinDelay():
             self.data_watch.registerHapForRemoval(self)
 
     def doDataWatch(self, dumb=None):
+        self.lgr.debug('winDelay doDataWatch')
         if self.data_watch is not None:
             self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, self.return_count))
             if self.kbuffer is not None:
@@ -107,18 +110,19 @@ class WinDelay():
             #if not self.top.isRunning():
             #    SIM_continue(0)
         else:
-            ''' assume we got here due to call parameters '''
+            ''' assume we got here due to call parameters or stop_action'''
+            self.lgr.debug('winDelay doDataWatch stop_action is %s' % str(self.stop_action))
             my_syscall = self.exit_info.syscall_instance
             #if not my_syscall.linger: 
             #    self.stopTrace()
             if my_syscall is None:
-                self.lgr.error('winCallExit could not get syscall for %s' % self.call_name)
+                self.lgr.error('winDelay doDataWatch could not get syscall for %s' % self.call_name)
             else:
                 #if eax != 0:
                 #    new_msg = exit_info.trace_msg + ' ' + trace_msg
                 #    self.context_manager.setIdaMessage(new_msg)
                 self.context_manager.setIdaMessage('%s %s' % (self.call_name, self.trace_msg))
-                self.lgr.debug('winCallExit call stopAlone of syscall')
+                self.lgr.debug('winDelay doDataWatch call stopAlone of syscall')
                 SIM_run_alone(my_syscall.stopAlone, self.call_name)
                 self.top.idaMessage() 
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
@@ -210,7 +214,7 @@ class WinDelay():
             self.getIOData(return_count)
             #SIM_break_simulation('WinDelay')
             # we are in the kernel at some arbitrary place.  run to user space
-            if (self.data_watch is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
+            if (self.data_watch is not None or self.stop_action is not None or (self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation)) and self.did_exit:
                 SIM_run_alone(self.toUserAlone, None)
             ''' Remove the break/hap '''
             hap = self.count_write_hap

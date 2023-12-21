@@ -737,7 +737,7 @@ class WinSyscall():
             if not skip_this:
                 self.lgr.debug('winSyscall ReadFile set asynch_handler')
                 exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, None,
-                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.lgr)
+                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 if self.watchData(exit_info):
                     self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
@@ -1124,7 +1124,7 @@ class WinSyscall():
             if do_async_io and exit_info is not None:
                 exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_addr,
                           self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
-                          exit_info.old_fd, exit_info.count, self.lgr)
+                          exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 self.lgr.debug('doing winDelay.setDataWatch')
                 if self.watchData(exit_info):
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
