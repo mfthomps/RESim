@@ -877,6 +877,7 @@ The default value is 900,000,000, which is too large for some ARM implementation
 \item {\tt ALWAYS\_SCRIPT} Simics command script to be run on each startup, reqardless of whether the run is from a snapshot.
 \item {\tt ONLY\_PROGS} Optional name of a file that lists the programs that are to be watched or traced.  All others are ignored.
 \item {\tt SKIP\_PROGS} Optional name of a file that lists the programs that ignored.
+\item {\tt DLL\_SKIP} Optional name of a file that identifes DLLs whose system calls are to be skipped.  See \ref{dll_skip} in the Windows discussion.
 \end{itemize}
 
 \subsection{Target platforms}
@@ -1251,7 +1252,13 @@ gdb to display responses from gdb "monitor" commands using the same FD as used
 for other gdb command results.  This is needed for Ghidra to see the results of monitor commands, which the plugin
 uses to interact with RESim.
 
-Once the RESimGhidraPlugins extension is installed, start the debugger and organize the RESim windows
+Ghidra also requires a modified version of the Simics gdb-remote program.  Run the script at
+\begin{verbatim}
+  $RESIM_DIR/simics/setup/add-gdb.sh
+\end{verbatim}
+to add the modified package to your Simics installation.
+
+Once the RESimGhidraPlugins extension is installed (per the repo README), start the debugger and organize the RESim windows
 as desired, e.g., by dragging them to other tabbed windows.
 
 Use the RESim / Configure menu options to set the path to your customized gdb; the path to
@@ -1262,9 +1269,16 @@ The windows described for the IDA plugin are duplicated within the Ghidra plugin
 Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
 the source of a memory location, put the cursor over the operand and right click...
 
-Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_10.3\_DEV/application.log
+%Ghidra provdes logs, typically at \$HOME/.config/ghidra/ghidra\_11xx/application.log
+Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_11xx\_PUBLIC/application.log
+Or, if a dev build of Ghidra the logs may be in HOME/.config/ghidra...
 
 Ghidra stores its analysis in "project" directories, typically in home.
+
+To rebase Ghidra programs, open the Memory Map windows and press the house icon at the upper right.
+
+The RESim plugin for Ghidra includes \textit{Memory reference Operand Hover}, which displays addresses
+and their content when hovering over an operand.
 
 TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
 at the tunnel (or do copy as part of creating tunnel?.  
@@ -1310,7 +1324,7 @@ configuration files.  It is therefore sometimes preferable to dynamically augmen
 There are two mechanisms for dynamic memory modifications: one that modifies system memory content the first time an address is
 read (known as a \textit{ReadReplace}; and a \textit{Dmod} that modifies results of file read, write or open operations.
 
-The \textit{RegSet} function sets a register to a given value whenever an execution address is hit.
+The \textit{regSet} function sets a register to a given value whenever an execution address is hit.
 
 Additionally, there is an experimental {\tt modFunction} to write a given word at an offset from the start of a named function.  
 Intended for use in setting return values, e.g., force eax to zero upon return.  Bring your own machine code.  
@@ -2781,8 +2795,8 @@ understanding and debugging of \textit{known} software, i.e., programs for which
 engineer unknown software, and thus does not assume possession of source code or specifications.
 
 \section{IDA Pro issues and work arounds}
-The IDA debugger in 7.2 requests more registers than Simics knows about.  The Simics gdb-remote has been modified
-to simply return the value of the highest numbered register that it knows about.  An alternative is to modify
+The IDA debugger in 7.2 requests more registers than Simics knows about.  The Simics gdb-remote could be modified
+to simply return the value of the highest numbered register that it knows about.  The suggested alternative is to modify
 xml files in ~/ida-7.2/cfg to only include desired registers.   For ARM (the qsp-arm), the arm-fpa.xml (from gdb source
 tree) needs to be added to the arm-with-neon.xml file in ida/cfg.  The cpsr register (number 25) is not updated by IDA
 unless registers are defined for each register value returned by Simics in the 'g' packet.
@@ -3345,9 +3359,9 @@ the system call parameters.
 
 \item runTo32 Intended to run a 32-bit application forward from some 64bit syscall library until the processsor is restored to 32-bit mode.
 \end{itemize}
-
+\label{dll_skip}
 Windows applications can be very system call intensive.  Use of crypto DLLs seems to generate many system calls.  A new function was introduced to suspend 
-system call tracing while executing from selected DLLs. A file with a suffix of {\tt .dll\_skip} contains, as the first non-comment line, the name of the DLL whose system calls are to be 
+system call tracing while executing from selected DLLs. A file named by the {\tt DLL\_SKIP} environment variable in the ini file contains, as the first non-comment line, the name of the DLL whose system calls are to be 
 skipped. System call tracing will stop when that DLL is entered.  That name is then followed by a list of other DLL names, one per line.  
 System call tracing will recommence when any DLL \textit{other} than those in the list are entered.
 
@@ -3378,6 +3392,8 @@ These offsets are currently hard-coded.
 \item THREAD\_NEXT within ETHREAD to pointer to next record.
 \item ACTIVE\_THREADS within EPROCESS of count of active threads.
 \item PEB\_ADDR Offset within EPROCESS of the address of the process envrionment block (PEB).
+\item PROC\_CREATE\_OFFSET Offset within the stack of the address of the process creation block for the CreateUserProcess call.
+\item PROG\_NAME\_OFFSET Offset within the process creation block of the path to the executable program.
 \end{itemize}
 
 These values are derived by getKernelParameters.py
