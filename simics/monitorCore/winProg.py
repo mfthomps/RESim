@@ -247,17 +247,18 @@ class WinProg():
             return 
         text_addr = load_addr + text_offset
         self.lgr.debug('winProg runToText got size 0x%x' % size)
-        self.so_map.addText(self.prog_string, want_tid, load_addr, size, machine, image_base, text_offset)
+        self.so_map.addText(self.prog_string, want_tid, load_addr, size, machine, image_base, text_offset, full_path)
         self.top.trackThreads()
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
-        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_tid, proc_break, 'text_hap')
+        want_pid = want_tid.split('-')[0]
+        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
 
     def findText(self, want_tid, one, old, new):
         if self.mode_hap is None:
             return
         cpu, comm, this_tid = self.task_utils.curThread() 
         if want_tid != this_tid:
-            self.lgr.debug('findText, mode changed but wrong tid, wanted %s got %s' % (want_tid, this_tid))
+            #self.lgr.debug('findText, mode changed but wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         self.lgr.debug('winProg findText tid %s' % this_tid)
         SIM_run_alone(self.rmFindTextHap, None)
@@ -270,15 +271,17 @@ class WinProg():
         self.lgr.debug('winMonitor debugAlone, call top debug')
         SIM_run_alone(self.top.debug, False)
 
-    def textHap(self, tid, third, forth, memory):
+    def textHap(self, pid, third, forth, memory):
         if self.text_hap is None:
             return
         cpu, comm, this_tid = self.task_utils.curThread() 
-        if this_tid != tid:
+        this_pid = this_tid.split('-')[0]
+        
+        if this_pid != pid:
             return
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        self.lgr.debug('winProg textHap record stack base tid:%s sp 0x%x' % (tid, sp))
-        self.top.recordStackBase(tid, sp)
+        self.lgr.debug('winProg textHap record stack base tid:%s sp 0x%x' % (this_tid, sp))
+        self.top.recordStackBase(this_tid, sp)
         self.context_manager.genDeleteHap(self.text_hap)
         self.lgr.debug('winProg textHap call stopAndGo')
         #SIM_run_alone(self.top.stopAndGo, self.debugAlone)
