@@ -1,8 +1,15 @@
-/* This Software is part of Wind River Simics. The rights to copy, distribute,
-   modify, or otherwise make use of this Software may be licensed only
-   pursuant to the terms of an applicable license agreement.
- 
-   Copyright 2010-2019 Intel Corporation */
+/*
+  © 2010 Intel Corporation
+
+  This software and the related documents are Intel copyrighted materials, and
+  your use of them is governed by the express license under which they were
+  provided to you ("License"). Unless the License provides otherwise, you may
+  not use, modify, copy, publish, distribute, disclose or transmit this software
+  or the related documents without Intel's prior written permission.
+
+  This software and the related documents are provided as is, with no express or
+  implied warranties, other than those that are expressly stated in the License.
+*/
 
 #include "gdb-remote.h"
 #include <simics/model-iface/int-register.h>
@@ -161,7 +168,7 @@ v8_read_register_window_shadow(gdb_remote_t *gdb, conf_object_t *cpu,
                                            : i0_index + reg - 8);
                                 uint32 r = iface->read_window_register(
                                         cpu, cwp, idx);
-                                gdb_print_hex32_be(buf, r);
+                                gdb_print_hex(buf, r, true, 32);
                                 buf += 8;
                                 ++reg;
                                 len -= 4;

@@ -1,7 +1,7 @@
 /*
-  communication.h - Remote GDB connectivity via TCP/IP
+  gdb-recording.h
 
-  © 2010 Intel Corporation
+  © 2021 Intel Corporation
 
   This software and the related documents are Intel copyrighted materials, and
   your use of them is governed by the express license under which they were
@@ -13,17 +13,14 @@
   implied warranties, other than those that are expressly stated in the License.
 */
 
-#ifndef COMMUNICATION_H
-#define COMMUNICATION_H
+#ifndef GDB_RECORDING_H
+#define GDB_RECORDING_H
 
 #include "gdb-remote.h"
 
-int socket_write(gdb_remote_t *gdb, const void *buf, int len);
-void deactivate_gdb_notifier(gdb_remote_t *gdb);
-void activate_gdb_notifier(gdb_remote_t *gdb);
-void gdb_disconnect(gdb_remote_t *gdb);
-void send_packet(gdb_remote_t *gdb, const char *cmd);
-void send_packet_no_log(gdb_remote_t *gdb, const char *cmd);
-void read_gdb_data(void *param);
+void init_gdb_recording(conf_class_t *cl);
+
+void record_data_from_gdb(gdb_remote_t *gdb, const char *buf, int len);
+void record_data_to_gdb(gdb_remote_t *gdb, const char *buf, int len);
 
 #endif

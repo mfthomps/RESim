@@ -1,26 +1,24 @@
 /*
   communication.c - Remote GDB connectivity via TCP/IP
 
-  This Software is part of Wind River Simics. The rights to copy, distribute,
-  modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable license agreement.
-  
-  Copyright 2010-2019 Intel Corporation
+  © 2010 Intel Corporation
+
+  This software and the related documents are Intel copyrighted materials, and
+  your use of them is governed by the express license under which they were
+  provided to you ("License"). Unless the License provides otherwise, you may
+  not use, modify, copy, publish, distribute, disclose or transmit this software
+  or the related documents without Intel's prior written permission.
+
+  This software and the related documents are provided as is, with no express or
+  implied warranties, other than those that are expressly stated in the License.
 */
 
 #include "communication.h"
 
-#include <errno.h>
-#ifdef _WIN32
- #include <winsock2.h>
- #include <windows.h>
-#else
- #include <sys/types.h>
- #include <sys/socket.h>
-#endif
-
 #include <simics/util/os.h>
 #include <simics/util/vect.h>
+
+#include "gdb-recording.h"
 
 /* Return the length of the packet at the head of the queue, or -1 if the
    packet isn't complete. */
@@ -66,6 +64,16 @@ parse_hex(const char *s, int len)
         return result;
 }
 
+int 
+socket_write(gdb_remote_t *gdb, const void *buf, int len)
+{
+        int sent_len = CALL(gdb->server, write)(
+                gdb, (bytes_t){.data = buf, .len = len});
+        if (sent_len == len)
+                record_data_to_gdb(gdb, buf, len);
+        return sent_len;
+}
+
 /* Given a gdb command packet, execute it if it's well-formed and has a correct
    checksum; log a warning otherwise. */
 static void
@@ -81,10 +89,10 @@ parse_packet(gdb_remote_t *gdb, char *buf, size_t len)
         payload[payload_len] = '\0';
         int checksum_expected = packet_checksum(payload, payload_len);
         if (checksum_expected == checksum_recvd) {
-                os_socket_write(gdb->fd, "+", 1);
+                socket_write(gdb, "+", 1);
                 gdb_serial_command(gdb, payload);
         } else {
-                os_socket_write(gdb->fd, "-", 1);
+                socket_write(gdb, "-", 1);
                 SIM_LOG_INFO(1, &gdb->obj, 0,
                              "Got packet \"%s\" of length %llu with bad"
                              " checksum. Expected checksum 0x%x, received"
@@ -100,24 +108,22 @@ static bool
 fill_buffer(gdb_remote_t *gdb)
 {
         while (true) {
-                char buf[4096];
+                uint8 buf[4096];
 
-                /* This call can't block, since gdb->fd is set to
-                   nonblocking. */
-                ssize_t len = recv(gdb->fd, buf, sizeof buf, 0);
+                /* This call can't block. */
+                ssize_t len = CALL(gdb->server, read)(
+                        gdb, (buffer_t){.data = buf, .len = sizeof buf});
 
                 if (len == 0) {
                         /* We were disconnected. */
                         return true;
                 } else if (len < 0) {
-                        if (errno == EAGAIN)
+                        if (len == -2)
                                 return false; /* no more data available yet */
-                        else if (errno == EINTR)
-                                continue; /* more data may be available */
 
                         /* Some kind of error occurred. */
-                        SIM_LOG_INFO(1, &gdb->obj, 0, "Lost connection to gdb (%s)",
-                                     strerror(errno));
+                        SIM_LOG_INFO(1, &gdb->obj, 0,
+                                     "Lost connection to gdb");
                         return true;
                 }
 
@@ -129,7 +135,7 @@ fill_buffer(gdb_remote_t *gdb)
 
 /* Read command data from gdb, parse the packets, and carry out the commands in
    them. */
-static void
+void
 read_gdb_data(void *param)
 {
         gdb_remote_t *gdb = param;
@@ -143,6 +149,7 @@ read_gdb_data(void *param)
                         char buf[len];
                         for (int i = 0; i < len; i++)
                                 buf[i] = QREMOVE(gdb->received);
+                        record_data_from_gdb(gdb, buf, len);
                         parse_packet(gdb, buf, len);
                 } else {
                         QDROP(gdb->received, 1);
@@ -159,13 +166,13 @@ read_gdb_data(void *param)
 void
 deactivate_gdb_notifier(gdb_remote_t *gdb)
 {
-        SIM_notify_on_socket(gdb->fd, Sim_NM_Read, 0, NULL, NULL);
+        CALL(gdb->server, notify)(gdb, Sim_NM_Read, Sim_EM_Global, false);
 }
 
 void
 activate_gdb_notifier(gdb_remote_t *gdb)
 {
-        SIM_notify_on_socket(gdb->fd, Sim_NM_Read, 0, read_gdb_data, gdb);
+        CALL(gdb->server, notify)(gdb, Sim_NM_Read, Sim_EM_Global, true);
 }
 
 static void
@@ -178,7 +185,7 @@ send_packet_common(gdb_remote_t *gdb, const char *cmd, bool do_log)
         char buf[packet_len + 1];
         snprintf(buf, sizeof buf, "$%s#%02x", cmd,
                  (int)packet_checksum(cmd, cmd_len));
-        size_t sent_packet_len = os_socket_write(gdb->fd, buf, packet_len);
+        size_t sent_packet_len = socket_write(gdb, buf, packet_len);
         if (do_log && sent_packet_len != packet_len) {
                 SIM_LOG_INFO(1, &gdb->obj, 0,
                              "Failed to send packet \"%s\" of length %llu to"

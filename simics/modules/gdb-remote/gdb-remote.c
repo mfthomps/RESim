@@ -1,46 +1,29 @@
 /*
   gdb-remote.c - Remote GDB connectivity via TCP/IP
 
-  This Software is part of Wind River Simics. The rights to copy, distribute,
-  modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable license agreement.
-  
-  Copyright 2010-2019 Intel Corporation
+  © 2010 Intel Corporation
 
+  This software and the related documents are Intel copyrighted materials, and
+  your use of them is governed by the express license under which they were
+  provided to you ("License"). Unless the License provides otherwise, you may
+  not use, modify, copy, publish, distribute, disclose or transmit this software
+  or the related documents without Intel's prior written permission.
+
+  This software and the related documents are provided as is, with no express or
+  implied warranties, other than those that are expressly stated in the License.
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 
-#ifdef _WIN32
- #include <winsock2.h>
- #include <windows.h>
- #include <ws2tcpip.h>
-#else
- #include <unistd.h>
- #include <sys/time.h>
- #include <sys/types.h>
- #include <sys/socket.h>
- #include <sys/stat.h>
- #include <netinet/in.h>
- #include <netinet/tcp.h>
- #include <sys/un.h>
- #include <arpa/inet.h>
- #include <netdb.h>
-#endif
-
 #include <simics/simulator-api.h>
 #include <simics/util/os.h>
-#include <simics/arch/sparc.h>
 #include <simics/model-iface/int-register.h>
 #include <simics/simulator-iface/context-tracker.h>
 #include <simics/arch/x86.h>
 
 #include "gdb-remote.h"
+#include "gdb-recording.h"
 #include "communication.h"
 
 enum { Sig_int = 2, Sig_trap = 5 };
@@ -57,115 +40,102 @@ static event_class_t *step_event;
 
 static const char hexchar[] = "0123456789abcdef";
 
-static struct gdb_breakpoint *breakpoint_get(gdb_remote_t *gdb, int bp_number);
-
-/*
- * This is weird; we send data bytewise, least significant byte first
- * (most significant first in each byte), but we receive nibblewise,
- * most significant first
- */
-
-#define GDB_IO_HEX(bits)                                                 \
-void                                                                     \
-gdb_print_hex ## bits ## _le(char *p, uint ## bits value)                \
-{                                                                        \
-        for (int i = 0; i < sizeof value; ++i) {                         \
-                *p++ = hexchar[(value >> 4) & 0xf];                      \
-                *p++ = hexchar[value & 0xf];                             \
-                value >>= 4;                                             \
-                value >>= 4;                                             \
-        }                                                                \
-}                                                                        \
-                                                                         \
-void                                                                     \
-gdb_print_hex ## bits ## _be(char *p, uint ## bits value)                \
-{                                                                        \
-        for (int i = 0; i < sizeof value; ++i) {                         \
-                *p++ = hexchar[(value >> (sizeof value * 8 - 4)) & 0xf]; \
-                *p++ = hexchar[(value >> (sizeof value * 8 - 8)) & 0xf]; \
-                value <<= 4;                                             \
-                value <<= 4;                                             \
-        }                                                                \
-}                                                                        \
-                                                                         \
-static uint ## bits                                                      \
-gdb_read_hex ## bits ## _le(const char *_p)                              \
-{                                                                        \
-        const unsigned char *p = (const unsigned char *)_p;              \
-        uint ## bits res = 0;                                            \
-        for (int i = 0; i < sizeof res; ++i, p += 2) {                   \
-                uint ## bits v = (HEXVAL(*p) << 4) | HEXVAL(*(p + 1));   \
-                v <<= sizeof res * 8 - 8;                                \
-                res = (res >> 8) | v;                                    \
-        }                                                                \
-        return res;                                                      \
-}                                                                        \
-                                                                         \
-static uint ## bits                                                      \
-gdb_read_hex ## bits ## _be(const char *_p)                              \
-{                                                                        \
-        const unsigned char *p = (const unsigned char *)_p;              \
-        uint ## bits res = 0;                                            \
-        for (int i = 0; i < sizeof res; ++i, p += 2) {                   \
-                uint8 v = (HEXVAL(*p) << 4) | HEXVAL(*(p + 1));          \
-                res = (res << 8) | v;                                    \
-        }                                                                \
-        return res;                                                      \
+// Will write 2 chars at p, so p must be at least 2 bytes allocated.
+static void
+write_byte_as_hex(char *p, uint8 byteval)
+{
+        *p = hexchar[byteval >> 4];
+        *(p + 1) = hexchar[byteval & 0xf];
 }
 
-/* coverity[result_independent_of_operands] */
-GDB_IO_HEX(8)
-GDB_IO_HEX(16)
-GDB_IO_HEX(32)
-GDB_IO_HEX(64)
+static uint64
+gdb_read_hex_le(const char *_p, uint8 bits)
+{
+        const unsigned char *p = (const unsigned char *)_p;
+        uint64 res = 0;
+        for (int i = 0; i < bits / 8; ++i, p += 2) {
+                uint8 v = (HEXVAL(*p) << 4) | HEXVAL(*(p + 1));
+                uint16 bitpos = i * 8;
+                res |= (uint64)v << bitpos;
+        }
+        return res;
+}
 
 static uint64
-gdb_read_hex(const char **buf, bool is_be, int bits)
+gdb_read_hex_be(const char *_p, uint8 bits)
 {
+        const unsigned char *p = (const unsigned char *)_p;
+        uint64 res = 0;
+        for (int i = 0; i < bits / 8; ++i, p += 2) {
+                uint8 v = (HEXVAL(*p) << 4) | HEXVAL(*(p + 1));
+                uint16 bitpos = bits - (i + 1) * 8;
+                res |= (uint64)v << bitpos;
+        }
+        return res;
+}
+
+static void
+advance_buffer(const char **buf, uint8 bits)
+{
+        *buf += bits / 4;
+}
+
+static uint64
+gdb_read_hex(const char **buf, bool is_be, uint8 bits)
+{
+        ASSERT(bits % 8 == 0);
+        ASSERT(bits <= 64);
         uint64 v;
         if (is_be) {
-                switch (bits) {
-                case 8: v = gdb_read_hex8_be(*buf); break;
-                case 16: v = gdb_read_hex16_be(*buf); break;
-                case 32: v = gdb_read_hex32_be(*buf); break;
-                case 64: v = gdb_read_hex64_be(*buf); break;
-                default: ASSERT(0);  return 0;
-                }
+                v = gdb_read_hex_be(*buf, bits);
         } else {
-                switch (bits) {
-                case 8: v = gdb_read_hex8_le(*buf); break;
-                case 16: v = gdb_read_hex16_le(*buf); break;
-                case 32: v = gdb_read_hex32_le(*buf); break;
-                case 64: v = gdb_read_hex64_le(*buf); break;
-                default: ASSERT(0); return 0;
-                }
+                v = gdb_read_hex_le(*buf, bits);
         }
-        *buf += bits/4;
+        advance_buffer(buf, bits);
         return v;
 }
 
 static void
-gdb_write_hex(strbuf_t *buf, uint64 val, bool is_be, int bits)
+gdb_print_hex_le(char *p, uint64 value, uint8 bits)
 {
-        char b[17];
-        memset(b, 0, sizeof(b));
-        if (is_be) {
-                switch (bits) {
-                case 8: gdb_print_hex8_be(b, val); break;
-                case 16: gdb_print_hex16_be(b, val); break;
-                case 32: gdb_print_hex32_be(b, val); break;
-                case 64: gdb_print_hex64_be(b, val); break;
-                default: ASSERT(0); break;
-                }
-        } else {
-                switch (bits) {
-                case 8: gdb_print_hex8_le(b, val); break;
-                case 16: gdb_print_hex16_le(b, val); break;
-                case 32: gdb_print_hex32_le(b, val); break;
-                case 64: gdb_print_hex64_le(b, val); break;
-                default: ASSERT(0); break;
-                }
+        for (int i = 0; i < bits / 8; i++) {
+                uint8 byteval = (value >> (i * 8)) & 0xff;
+                write_byte_as_hex(p + i * 2, byteval);
         }
+}
+
+static void
+gdb_print_hex_be(char *p, uint64 value, uint8 bits)
+{
+        for (int i = 0; i < bits / 8; i++) {
+                uint8 byteval = value >> (i * 8);
+                write_byte_as_hex(p + bits / 4 - 2 * (i + 1), byteval);
+        }
+}
+
+void
+gdb_print_hex(char *buf, uint64 val, bool is_be, uint8 bits)
+{
+        ASSERT(bits % 8 == 0);
+        if (bits > 64) {
+                ASSERT(val == 0);
+        }
+        if (is_be) {
+                gdb_print_hex_be(buf, val, bits);
+        } else {
+                gdb_print_hex_le(buf, val, bits);
+        }
+}
+
+static void
+gdb_write_hex(strbuf_t *buf, uint64 val, bool is_be, uint8 bits)
+{
+        if (bits > 64) {
+                ASSERT(val == 0);
+        }
+        char b[(bits / 4) + 1];
+        memset(b, 0, sizeof(b));
+        gdb_print_hex(b, val, is_be, bits);
         sb_addstr(buf, b);
 }
 
@@ -212,6 +182,63 @@ hexstrtoull(const char *buf, const char **endp, bool bit_extend)
                 *endp = adr;
 
         return hex_number;
+}
+
+static uint64
+reg_read_zero(conf_object_t *cpu, register_description_t *rd)
+{
+        return 0;
+}
+
+static uint64
+reg_read_int(conf_object_t *cpu, register_description_t *rd)
+{
+        const int_register_interface_t *const iface =
+                SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
+        ASSERT(iface);
+        return iface->read(cpu, rd->regnum);
+}
+
+static uint64
+reg_read_int32l(conf_object_t *cpu, register_description_t *rd)
+{
+        return (uint32)reg_read_int(cpu, rd);
+}
+
+static uint64
+reg_read_int32h(conf_object_t *cpu, register_description_t *rd)
+{
+        return reg_read_int(cpu, rd) >> 32;
+}
+
+static bool
+reg_write_ignore(conf_object_t *cpu, register_description_t *rd, uint64 val)
+{
+        return false;
+}
+
+static bool
+reg_write_int(conf_object_t *cpu, register_description_t *rd, uint64 val)
+{
+        const int_register_interface_t *const iface =
+                SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
+        ASSERT(iface);
+        iface->write(cpu, rd->regnum, val);
+        return true;
+}
+
+static bool
+reg_write_int32l(conf_object_t *cpu, register_description_t *rd, uint64 val)
+{
+        return reg_write_int(cpu, rd,
+                             reg_read_int32h(cpu, rd) << 32 | (uint32)val);
+}
+
+static bool
+reg_write_int32h(conf_object_t *cpu, register_description_t *rd, uint64 val)
+{
+        return reg_write_int(cpu, rd,
+                             val << 32 | reg_read_int32l(cpu, rd));
 }
 
 static bool
@@ -267,7 +294,7 @@ is_current_thread(gdb_remote_t *gdb, int64 thread, conf_object_t *cpu)
 static conf_object_t **
 gdb_all_processors(gdb_remote_t *gdb)
 {
-        attr_value_t cpus = default_processor_list(&gdb->obj);
+        attr_value_t cpus = default_processor_list(to_obj(gdb));
         conf_object_t **result = MM_MALLOC(SIM_attr_list_size(cpus) + 1,
                                            conf_object_t *);
         for (int i = 0; i < SIM_attr_list_size(cpus); i++)
@@ -288,22 +315,16 @@ gdb_any_processor(gdb_remote_t *gdb)
 }
 
 static conf_object_t *
-get_context_attr(gdb_remote_t *gdb, conf_object_t *cpu)
+cpu_context_obj(gdb_remote_t *gdb, conf_object_t *cpu)
 {
         conf_object_t *ctx =
                 context_handler_iface(cpu)->get_current_context(cpu);
-        if (ctx) {
-                return ctx;
-        } else {
-                SIM_LOG_ERROR(&gdb->obj, 0,
-                              "reading the current-context attribute"
-                              " of %s: %s",
-                              SIM_object_name(cpu),
-                              SIM_clear_exception()
-                              ? SIM_last_error()
-                              : "is not a conf object");
-                return NULL;
+        if (!ctx) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Failed reading the current context of %s",
+                              SIM_object_name(cpu));
         }
+        return ctx;
 }
 
 static conf_object_t *
@@ -311,10 +332,7 @@ gdb_context_object(gdb_remote_t *gdb)
 {
         if (gdb->context_object)
                 return gdb->context_object;
-        else if (gdb->processor)
-                return get_context_attr(gdb, gdb->processor);
-        else
-                return NULL;
+        return NULL;
 }
 
 /* Return the processor where the given thread is currently active, or NULL if
@@ -322,10 +340,14 @@ gdb_context_object(gdb_remote_t *gdb)
 static conf_object_t *
 find_cpu_for_active_thread(gdb_remote_t *gdb, int64 thread)
 {
+        if (gdb->processor) {
+                return is_current_thread(gdb, thread, gdb->processor) ?
+                        gdb->processor : NULL;
+        }
         conf_object_t **cpus = gdb_all_processors(gdb);
         conf_object_t *result = NULL;
         for (int i = 0; cpus[i]; i++) {
-                if (get_context_attr(gdb, cpus[i]) == gdb_context_object(gdb)
+                if (cpu_context_obj(gdb, cpus[i]) == gdb_context_object(gdb)
                     && is_current_thread(gdb, thread, cpus[i])) {
                         result = cpus[i];
                         break;
@@ -348,13 +370,16 @@ simics_current_processor(void)
 static conf_object_t *
 gdb_current_processor(gdb_remote_t *gdb)
 {
+        if (gdb->processor)
+                return gdb->processor;
+
         conf_object_t *result = NULL;
         conf_object_t **cpus = gdb_all_processors(gdb);
         conf_object_t *scp = simics_current_processor();
 
   again:
         for (int i = 0; cpus[i]; i++) {
-                if (get_context_attr(gdb, cpus[i]) == gdb_context_object(gdb)
+                if (cpu_context_obj(gdb, cpus[i]) == gdb_context_object(gdb)
                     && (!scp || scp == cpus[i])) {
                         result = cpus[i];
                         goto done;
@@ -450,7 +475,7 @@ send_signal(gdb_remote_t *gdb, int sig, struct gdb_breakpoint *bp)
 static void
 do_signal(gdb_remote_t *gdb, int sig)
 {
-        SIM_LOG_INFO(3, &gdb->obj, 0, "do_signal(sig = %d), is running %d",
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "do_signal(sig = %d), is running %d",
                      sig, gdb->is_running);
 
         /* GDB expects that the stopping thread becomes current */
@@ -480,6 +505,12 @@ send_ok(gdb_remote_t *gdb) {
 
 static void
 send_unsupported(gdb_remote_t *gdb)
+{
+        send_packet(gdb, "");
+}
+
+static void
+send_unsupported_with_args(gdb_remote_t *gdb, const char *suffix)
 {
         send_packet(gdb, "");
 }
@@ -535,8 +566,8 @@ lookup_address(gdb_remote_t *gdb, conf_object_t *cpu,
                 *pa = logical_to_physical(cpu, Sim_DI_Instruction,
                                           la, &error_flag);
                 if (error_flag) {
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
-                                     "Failed looking up XXX address %#llx", la);
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
+                                     "Failed looking up address %#llx", la);
                         return 1;
                 }
         }
@@ -552,7 +583,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
 
         la = hexstrtoull(adr, &endp, gdb->arch->bit_extend);
         if (*endp != ',' || *(endp + 1) == 0) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Badly formatted memory address/length/data: %s",
                               adr);
                 send_error(gdb, EINVAL);
@@ -562,7 +593,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
 
         len = hexstrtoull(endp + 1, &endp, gdb->arch->bit_extend);
         if (*endp != ':') {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Badly formatted memory address/length/data: %s",
                               adr);
                 send_error(gdb, EINVAL);
@@ -570,7 +601,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
         }
 
         if (!cpu) {
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Cannot write memory, because process is"
                              " not active");
                 send_error(gdb, EACCES);
@@ -588,7 +619,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
 
                 for (int i = 0; i < len; ++i) {
                         if (*endp == 0) {
-                                SIM_LOG_ERROR(&gdb->obj, 0,
+                                SIM_LOG_ERROR(to_obj(gdb), 0,
                                               "Not enough data for memory "
                                               "write: %s", adr);
                                 send_error(gdb, EINVAL);
@@ -618,7 +649,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
                 SIM_write_phys_memory(cpu, pa, data, len);
                 if (SIM_clear_exception()) {
                         SIM_LOG_ERROR(
-                                &gdb->obj, 0,
+                                to_obj(gdb), 0,
                                 "Failed writing memory to la: %#llx  pa: %#llx "
                                 "len: %lld", la, pa, len);
                         send_error(gdb, EACCES);
@@ -634,7 +665,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
 
                 if (*endp == 0 || *(endp + 1) == 0) {
                         SIM_LOG_ERROR(
-                                &gdb->obj, 0,
+                                to_obj(gdb), 0,
                                 "Not enough data for memory write: %s", adr);
                         send_error(gdb, EINVAL);
                         return;
@@ -650,7 +681,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
 
                 SIM_write_phys_memory(cpu, pa, data, 1);
                 if (SIM_clear_exception()) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Failed writing memory to la: "
                                       "%#llx  pa: %#llx", la, pa);
                         send_error(gdb, EACCES);
@@ -661,7 +692,7 @@ write_memory(gdb_remote_t *gdb, const char *adr)
         }
 
         if (*endp) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Too much data in memory write: adr");
         }
 
@@ -686,7 +717,7 @@ send_memory(gdb_remote_t *gdb, const char *adr)
 
         la = hexstrtoull(adr, &endp, gdb->arch->bit_extend);
         if (*endp != ',' || *(endp + 1) == 0) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Badly formatted memory address/length: %s",
                               adr);
                 send_error(gdb, EINVAL);
@@ -696,7 +727,7 @@ send_memory(gdb_remote_t *gdb, const char *adr)
 
         len = hexstrtoull(endp + 1, &endp, gdb->arch->bit_extend);
         if (*endp) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Badly formatted memory address/length: %s",
                               adr);
                 send_error(gdb, EINVAL);
@@ -706,7 +737,7 @@ send_memory(gdb_remote_t *gdb, const char *adr)
         char buf[len * 2 + 1];
         char *p = buf;
         if (!cpu) {
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Cannot read memory, because process is"
                              " not active");
                 /* coverity[bad_memset] */
@@ -732,7 +763,7 @@ send_memory(gdb_remote_t *gdb, const char *adr)
                 } else {
                         value = SIM_read_phys_memory(cpu, pa, len);
                         if (SIM_clear_exception()) {
-                                SIM_LOG_INFO(1, &gdb->obj, 0,
+                                SIM_LOG_INFO(1, to_obj(gdb), 0,
                                              "Failed reading from la: %#llx"
                                              " pa: %#llx len: %lld",
                                              la, pa, len);
@@ -740,17 +771,16 @@ send_memory(gdb_remote_t *gdb, const char *adr)
                         }
                 }
 
-                /* Since the gdb remote protocol is seriously weird,
-                 * it reads data in target byte order, but writes in
-                 * big-endian. */
                 if (gdb->arch->is_be) {
                         for (int i = len-1; i >= 0; i--) {
-                                gdb_print_hex8_le(p, value >> (i*8) & 0xff);
+                                gdb_print_hex(p, value >> (i*8) & 0xff,
+                                              true, 8);
                                 p += 2;
                         }
                 } else {
                         for (int i = 0; i < len; i++) {
-                                gdb_print_hex8_le(p, value >> (i*8) & 0xff);
+                                gdb_print_hex(p, value >> (i*8) & 0xff,
+                                              false, 8);
                                 p += 2;
                         }
                 }
@@ -767,14 +797,14 @@ send_memory(gdb_remote_t *gdb, const char *adr)
                 } else {
                         value = SIM_read_phys_memory(cpu, pa, 1);
                         if (SIM_clear_exception()) {
-                                SIM_LOG_INFO(1, &gdb->obj, 0,
+                                SIM_LOG_INFO(1, to_obj(gdb), 0,
                                              "Failed reading from la:"
                                              " %#llx  pa: %#llx",
                                              la, pa);
                                 break;
                         }
                 }
-                gdb_print_hex8_le(p, value);
+                gdb_print_hex(p, value, false, 8);
                 p += 2;
                 --len;
                 ++la;
@@ -799,47 +829,38 @@ send_memory(gdb_remote_t *gdb, const char *adr)
 static void
 stop_simulation(gdb_remote_t *gdb)
 {
-        SIM_LOG_INFO(3, &gdb->obj, 0, "breaking simulation");
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "breaking simulation");
         if (gdb->is_running && !gdb->stop_in_progress) {
-                SIM_LOG_INFO(3, &gdb->obj, 0, "setting stop in progress");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "setting stop in progress");
                 deactivate_gdb_notifier(gdb);
                 gdb->stop_in_progress = true;
         }
 }
 
-/*
- * For some targets gdb adjusts pc after hitting the breakpoint to compensate
- * for target breakpoint implementations which insert breakpoint instructions
- * and stops after the instruction which caused the breakpoint.
- * In Simics breakpoints takes place before the instruction to break on.
- * Here we adjust pc to counteract gdb's later adjustment if needed.
- */
-static void
-counteract_decr_pc_after_break(gdb_remote_t *gdb, conf_object_t *cpu)
+static struct gdb_breakpoint *
+breakpoint_get_by_id(gdb_remote_t *gdb, int bp_number)
 {
-        if (gdb->arch->decr_pc_after_break)
-                processor_iface(cpu)->set_program_counter(
-                        cpu, (processor_iface(cpu)->get_program_counter(cpu)
-                              + gdb->arch->decr_pc_after_break));
+        int i;
+        for (i = 0; i < gdb->breakpoints.used; ++i) {
+                struct gdb_breakpoint *bp = gdb->breakpoints.entries + i;
+                if (bp->bp_data.bp_type != Simics_Gdb_Bp_Hap)
+                        continue;
+                if (bp->bp_data.bp_id == bp_number)
+                        return bp;
+        }
+        return NULL;
 }
 
 static void
-ordered_breakpoint_handler(conf_object_t *obj, int64 bp_number, void *data)
+bp_handler_common(gdb_remote_t *gdb, logical_address_t addr,
+                 struct gdb_breakpoint *bp)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
-        generic_transaction_t *memop = (generic_transaction_t *)data;
-
-        SIM_LOG_INFO(3, &gdb->obj, 0, "inside breakpoint handler %d",
-                     (int)bp_number);
-
-        VT_stop_message(&gdb->obj, "Hit breakpoint set by remote gdb");
+        VT_stop_message(to_obj(gdb), "Hit breakpoint set by remote gdb");
         stop_simulation(gdb);
 
-        gdb->bp = breakpoint_get(gdb, (int)bp_number);
-        if (gdb->bp)
-                gdb->access_address = memop->logical_address;
-
-        counteract_decr_pc_after_break(gdb, gdb_cont(gdb).cpu);
+        gdb->bp = bp;
+        if (bp)
+                gdb->access_address = addr;
 
         if (VT_is_reversing()) {
                 return;
@@ -847,9 +868,23 @@ ordered_breakpoint_handler(conf_object_t *obj, int64 bp_number, void *data)
 
         if (gdb->step_handler_cpu)
                 SIM_event_cancel_step(gdb->step_handler_cpu, step_event,
-                                      &gdb->obj, 0, NULL);
+                                      to_obj(gdb), 0, NULL);
 
         SIM_register_work(send_sigtrap, gdb);
+}
+
+static void
+ordered_breakpoint_handler(conf_object_t *obj, int64 bp_number, void *data)
+{
+        gdb_remote_t *gdb = gdb_of_obj(obj);
+        generic_transaction_t *memop = (generic_transaction_t *)data;
+        logical_address_t addr = SIM_get_mem_op_virtual_address(memop);
+        struct gdb_breakpoint *bp = breakpoint_get_by_id(gdb, bp_number);
+
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "inside breakpoint handler %d",
+                     (int)bp_number);
+
+        bp_handler_common(gdb, addr, bp);
 }
 
 
@@ -871,7 +906,7 @@ post_continue2(void *data)
 
         if (SIM_simics_is_running()) {
                 SIM_LOG_ERROR(
-                        &gdb->obj, 0,
+                        to_obj(gdb), 0,
                         "About to call SIM_continue() but Simics is already"
                         " running");
                 // TODO: if running in wrong direction?
@@ -898,10 +933,10 @@ post_continue2(void *data)
                 }
         } else {
                 SIM_continue(0);
-                exception_type_t ex = SIM_clear_exception();
+                sim_exception_t ex = SIM_clear_exception();
                 if (ex != SimExc_No_Exception && ex != SimExc_Break) {
                         SIM_LOG_ERROR(
-                                &gdb->obj, 0,
+                                to_obj(gdb), 0,
                                 "Unexpected exception from SIM_continue(). "
                                 "Error message: %s", SIM_last_error());
                 }
@@ -917,9 +952,8 @@ post_continue(gdb_remote_t *gdb)
 static bool
 follow_context(gdb_remote_t *gdb)
 {
-        /* Always follow context if the user explicitly asked for it. */
-        if (gdb->follow_context)
-                return true;
+        if (gdb->processor)
+                return false;
 
         /* If the user has explicitly given us a context, follow it. */
         if (gdb->context_object)
@@ -938,7 +972,7 @@ gdb_step_handler(conf_object_t *gdb_obj, void *_gdb)
         gdb_remote_t *gdb = (gdb_remote_t *)_gdb;
 
         gdb->step_handler_cpu = NULL;
-        SIM_LOG_INFO(3, &gdb->obj, 0, "gdb_step_handler()");
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "gdb_step_handler()");
 
         if (follow_context(gdb)
             && !find_cpu_for_active_thread(gdb, gdb->cont_thread)) {
@@ -958,10 +992,10 @@ do_step(gdb_remote_t *gdb, conf_object_t *cpu)
 {
         if (gdb->step_handler_cpu)
                 SIM_event_cancel_step(gdb->step_handler_cpu, step_event,
-                                      &gdb->obj, 0, NULL);
+                                      to_obj(gdb), 0, NULL);
         gdb->step_handler_cpu = cpu;
         SIM_event_post_step(gdb->step_handler_cpu, step_event,
-                            &gdb->obj, 1, gdb);
+                            to_obj(gdb), 1, gdb);
         post_continue(gdb);
 }
 
@@ -994,24 +1028,9 @@ do_reverse(gdb_remote_t *gdb)
         SIM_register_work(post_reverse2, gdb);
 }
 
-static struct gdb_breakpoint *
-breakpoint_get(gdb_remote_t *gdb, int bp_number)
-{
-        int i;
-
-        for (i = 0; i < gdb->breakpoints.used; ++i) {
-                struct gdb_breakpoint *bp = gdb->breakpoints.entries + i;
-
-                if (bp->bp_id == bp_number)
-                        return bp;
-        }
-
-        return NULL;
-}
-
 static int
 breakpoint_lookup(gdb_remote_t *gdb, logical_address_t la,
-                  logical_address_t len, enum gdb_breakpoint_type type)
+                  logical_address_t len, gdb_breakpoint_type_t type)
 {
         for (int i = 0; i < gdb->breakpoints.used; ++i) {
                 struct gdb_breakpoint *bp = gdb->breakpoints.entries + i;
@@ -1023,78 +1042,388 @@ breakpoint_lookup(gdb_remote_t *gdb, logical_address_t la,
         return -1;
 }
 
-static void
-do_handle_breakpoint(gdb_remote_t *gdb, const char *args, bool shall_set)
+typedef struct {
+        logical_address_t la;
+        logical_address_t len;
+        gdb_breakpoint_type_t type;
+        bool valid;
+} bp_args_t;
+
+static access_t
+type_to_access(gdb_breakpoint_type_t type)
 {
-        enum gdb_breakpoint_type gdb_type;
-        access_t              sim_type = 0;
-        logical_address_t     la, len;
-        breakpoint_id_t       bp_id;
-        hap_handle_t          hap_id;
-        int                   bp_idx;
-        const char           *endp;
+        switch (type) {
+        case Gdb_Bp_Software:
+                return Sim_Access_Execute;
+        case Gdb_Bp_Hardware:
+                return Sim_Access_Execute;
+        case Gdb_Bp_Write:
+                return Sim_Access_Write;
+        case Gdb_Bp_Read:
+                return Sim_Access_Read;
+        case Gdb_Bp_Access:
+                return Sim_Access_Read | Sim_Access_Write;
+        }
+        ASSERT(0);
+}
 
+static bp_args_t
+parse_breakpoint_args(gdb_remote_t *gdb, const char *args)
+{
+        bp_args_t invalid_args = {.valid = false};
         if (args[0] < '0' || args[0] > '0' + Gdb_Bp_Access || args[1] != ',')
-                goto syntax_error;
+                return invalid_args;
 
-        gdb_type = args[0] - '0';
+        gdb_breakpoint_type_t type = args[0] - '0';
 
-        la = hexstrtoull(args + 2, &endp, gdb->arch->bit_extend);
+        const char *endp;
+        logical_address_t la = hexstrtoull(args + 2, &endp,
+                                           gdb->arch->bit_extend);
         if (endp[0] != ',' || endp[1] == 0)
-                goto syntax_error;
+                return invalid_args;
 
         /* Add an offset which was set by the custom 'segment' command. */
         la += gdb->segment_linear_base;
 
-        len = hexstrtoull(endp + 1, &endp, false);
+        logical_address_t len = hexstrtoull(endp + 1, &endp, false);
         if (endp[0])
-                goto syntax_error;
+                return invalid_args;
 
-        switch (gdb_type) {
-        case Gdb_Bp_Software:
-                sim_type = Sim_Access_Execute;
+        return (bp_args_t){.la = la, .len = len, .type = type, .valid = true};
+}
+
+static void
+cancel_virtual_insn_bp(struct gdb_breakpoint *bp)
+{
+        gdb_remote_t *gdb = bp->gdb;
+        ASSERT(gdb->processor);
+        const virtual_instruction_breakpoint_interface_t *virt_insn_iface =
+                SIM_C_GET_INTERFACE(gdb->processor,
+                                    virtual_instruction_breakpoint);
+        ASSERT(virt_insn_iface);
+        ASSERT(bp->bp_data.valid);
+        virt_insn_iface->remove(gdb->processor, bp->bp_data.virt_insn);
+        bp->bp_data.valid = false;
+}
+
+static void
+cancel_virtual_data_bp(struct gdb_breakpoint *bp)
+{
+        gdb_remote_t *gdb = bp->gdb;
+        ASSERT(gdb->processor);
+        const virtual_data_breakpoint_interface_t *virt_data_iface =
+                SIM_C_GET_INTERFACE(gdb->processor, virtual_data_breakpoint);
+        ASSERT(virt_data_iface);
+        ASSERT(bp->bp_data.valid);
+        if (bp->bp_data.virt_data_read) {
+                SIM_LOG_INFO(4, to_obj(gdb), 0,
+                             "Cancelling virtual data read breakpoint %p",
+                             bp->bp_data.virt_data_read);
+                virt_data_iface->remove(gdb->processor,
+                                        bp->bp_data.virt_data_read);
+        }
+        if (bp->bp_data.virt_data_write) {
+                SIM_LOG_INFO(4, to_obj(gdb), 0,
+                             "Cancelling virtual data write breakpoint %p",
+                             bp->bp_data.virt_data_write);
+                virt_data_iface->remove(gdb->processor,
+                                        bp->bp_data.virt_data_write);
+        }
+        bp->bp_data.valid = false;
+}
+
+static void
+cancel_sim_breakpoint(struct gdb_breakpoint *bp)
+{
+        SIM_delete_breakpoint(bp->bp_data.bp_id);
+        SIM_hap_delete_callback_id("Core_Breakpoint_Memop", bp->bp_data.hap_id);
+}
+
+static void
+cancel_breakpoint(struct gdb_breakpoint *bp)
+{
+        switch (bp->bp_data.bp_type) {
+        case Simics_Gdb_Bp_Hap:
+                cancel_sim_breakpoint(bp);
                 break;
-        case Gdb_Bp_Hardware:
-                sim_type = Sim_Access_Execute;
+        case Simics_Gdb_Virt_Insn:
+                cancel_virtual_insn_bp(bp);
                 break;
+        case Simics_Gdb_Virt_Data:
+                cancel_virtual_data_bp(bp);
+                break;
+        }
+}
+
+static bool
+use_virtual_bp_iface(gdb_remote_t *gdb)
+{
+        return !gdb->context_object;
+}
+
+static void
+virtual_insn_bp_cb(cbdata_call_t cb_data, conf_object_t *cpu,
+                   generic_address_t addr, unsigned size)
+{
+        struct gdb_breakpoint *bp = SIM_cbdata_data(&cb_data);
+        SIM_LOG_INFO(4, to_obj(bp->gdb), 0,
+                     "Virtual insn breakpoint hit at 0x%llx on '%s', data: %p",
+                     addr, SIM_object_name(cpu), bp);
+        bp_handler_common(bp->gdb, addr, bp);
+}
+
+static void
+virtual_data_read_bp_cb(cbdata_call_t cb_data, conf_object_t *cpu,
+                        generic_address_t addr, unsigned size)
+{
+        struct gdb_breakpoint *bp = SIM_cbdata_data(&cb_data);
+        SIM_LOG_INFO(4, to_obj(bp->gdb), 0,
+                     "Virtual data read breakpoint hit at 0x%llx on '%s',"
+                     " data: %p", addr, SIM_object_name(cpu), bp);
+        bp_handler_common(bp->gdb, addr, bp);
+}
+
+static void
+virtual_data_write_bp_cb(cbdata_call_t cb_data, conf_object_t *cpu,
+                        generic_address_t addr, bytes_t value)
+{
+        struct gdb_breakpoint *bp = SIM_cbdata_data(&cb_data);
+        SIM_LOG_INFO(4, to_obj(bp->gdb), 0,
+                     "Virtual data write breakpoint hit at 0x%llx on '%s',"
+                     " data: %p", addr, SIM_object_name(cpu), bp);
+        bp_handler_common(bp->gdb, addr, bp);
+}
+
+static bool
+is_x86(conf_object_t *cpu)
+{
+        return !!SIM_C_GET_INTERFACE(cpu, x86);
+}
+
+static bool
+virt_bp_planter_error_checker(gdb_remote_t *gdb, bp_args_t *bp_args,
+                              bool iface_exists, const char *bp_type)
+{
+        if (!iface_exists) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "cpu '%s' lacks virtual %s breakpoint interface",
+                              SIM_object_name(gdb->processor), bp_type);
+                return false;
+        }
+        if (bp_args->len == 0) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Failed setting virtual %s breakpoint: zero"
+                              " length", bp_type);
+                return false;
+        }
+        if (bp_args->la + bp_args->len - 1 < bp_args->la) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Failed setting virtual %s breakpoint: range"
+                              " wraps", bp_type);
+                return false;
+        }
+        return true;
+}
+
+static installed_bp_data_t
+plant_virtual_insn_bp(gdb_remote_t *gdb, bp_args_t *bp_args,
+                      void *bp_data)
+{
+        const virtual_instruction_breakpoint_interface_t *virt_insn_iface =
+                SIM_C_GET_INTERFACE(gdb->processor,
+                                    virtual_instruction_breakpoint);
+        if (!virt_bp_planter_error_checker(gdb, bp_args, !!virt_insn_iface,
+                                           "instruction")) {
+                return (installed_bp_data_t){.valid = false};
+        }
+        uint32 linear_flag = is_x86(gdb->processor) ?
+                Virtual_Breakpoint_Flag_Linear : 0;
+        virtual_instr_bp_handle_t *bp_handle = virt_insn_iface->add(
+                gdb->processor,
+                bp_args->la, bp_args->la + bp_args->len - 1, NULL,
+                SIM_make_simple_cbdata(NULL), virtual_insn_bp_cb,
+                SIM_make_simple_cbdata(bp_data), linear_flag);
+        if (!bp_handle) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Failed adding virtual instruction breakpoint");
+                return (installed_bp_data_t){.valid = false};
+        }
+        SIM_LOG_INFO(4, to_obj(gdb), 0,
+                     "Virtual insn breakpoint installed on '%s', handle: %p, "
+                     " data: %p",
+                     SIM_object_name(gdb->processor), bp_handle, bp_data);
+        return (installed_bp_data_t){
+                .virt_insn = bp_handle,
+                .bp_type = Simics_Gdb_Virt_Insn,
+                .valid = true,
+        };
+}
+
+static installed_bp_data_t
+plant_virtual_data_bp(gdb_remote_t *gdb, bp_args_t *bp_args,
+                      void *bp_data)
+{
+        const virtual_data_breakpoint_interface_t *virt_data_iface =
+                SIM_C_GET_INTERFACE(gdb->processor,
+                                    virtual_data_breakpoint);
+        if (!virt_bp_planter_error_checker(gdb, bp_args, !!virt_data_iface,
+                                           "data")) {
+                return (installed_bp_data_t){.valid = false};
+        }
+        uint32 linear_flag = is_x86(gdb->processor) ?
+                Virtual_Breakpoint_Flag_Linear : 0;
+        virtual_data_bp_handle_t *read_bp_handle = NULL;
+        virtual_data_bp_handle_t *write_bp_handle = NULL;
+
+        bool is_write = false;
+        bool is_read = false;
+        switch(bp_args->type) {
         case Gdb_Bp_Write:
-                sim_type = Sim_Access_Write;
+                is_write = true;
                 break;
         case Gdb_Bp_Read:
-                sim_type = Sim_Access_Read;
+                is_read = true;
                 break;
         case Gdb_Bp_Access:
-                sim_type = Sim_Access_Read | Sim_Access_Write;
+                is_read = true;
+                is_write = true;
                 break;
         default:
-                ASSERT(0);
+                ASSERT_FMT(0, "Bad virt data breakpoint type: %d",
+                           bp_args->type);
+        }
+        if (is_read) {
+                read_bp_handle = virt_data_iface->add_read(
+                        gdb->processor, bp_args->la,
+                        bp_args->la + bp_args->len - 1,
+                        virtual_data_read_bp_cb,
+                        SIM_make_simple_cbdata(bp_data), linear_flag);
+                if (!read_bp_handle) {
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
+                                      "Failed adding virtual data read"
+                                      " breakpoint");
+                        return (installed_bp_data_t){.valid = false};
+                }
+                SIM_LOG_INFO(4, to_obj(gdb), 0,
+                             "Installed virtual data read breakpoint, handle:"
+                             " %p, data: %p", read_bp_handle, bp_data);
+        }
+        if (is_write) {
+                write_bp_handle = virt_data_iface->add_write(
+                        gdb->processor, bp_args->la,
+                        bp_args->la + bp_args->len - 1,
+                        virtual_data_write_bp_cb,
+                        SIM_make_simple_cbdata(bp_data), linear_flag);
+                if (!write_bp_handle) {
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
+                                      "Failed adding virtual data write"
+                                      " breakpoint");
+                        if (read_bp_handle) {
+                                virt_data_iface->remove(gdb->processor,
+                                                        read_bp_handle);
+                        }
+                        return (installed_bp_data_t){.valid = false};
+                }
+                SIM_LOG_INFO(4, to_obj(gdb), 0,
+                             "Installed virtual data write breakpoint,"
+                             " handle: %p, data: %p", write_bp_handle, bp_data);
+        }
+        return (installed_bp_data_t){
+                .virt_data_read = read_bp_handle,
+                .virt_data_write = write_bp_handle,
+                .bp_type = Simics_Gdb_Virt_Data,
+                .valid = true,
+        };
+}
+
+static installed_bp_data_t
+plant_virtual_bp(gdb_remote_t *gdb, bp_args_t *bp_args, void *bp_data)
+{
+        ASSERT(gdb->processor);
+        switch (bp_args->type) {
+        case Gdb_Bp_Software:
+        case Gdb_Bp_Hardware:
+                return plant_virtual_insn_bp(gdb, bp_args, bp_data);
+        case Gdb_Bp_Write:
+        case Gdb_Bp_Read:
+        case Gdb_Bp_Access:
+                return plant_virtual_data_bp(gdb, bp_args, bp_data);
+        }
+        ASSERT_FMT(0, "Bad breakpoint type %d", bp_args->type);
+}
+
+static installed_bp_data_t
+plant_sim_breakpoint(gdb_remote_t *gdb, bp_args_t bp_args)
+{
+        breakpoint_id_t bp_id = SIM_breakpoint(
+                gdb_context_object(gdb), Sim_Break_Virtual,
+                type_to_access(bp_args.type), bp_args.la, bp_args.len,
+                Sim_Breakpoint_Simulation);
+        if (SIM_clear_exception()) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Failed setting breakpoint: %s",
+                              SIM_last_error());
+                send_error(gdb, EINVAL);
+                return (installed_bp_data_t){.valid = false};
         }
 
-        bp_idx = breakpoint_lookup(gdb, la, len, gdb_type);
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "Set breakpoint id %d at %#llx",
+                     bp_id, bp_args.la);
+
+        hap_handle_t hap_id = SIM_hap_add_callback_index(
+                "Core_Breakpoint_Memop", gdb_breakpoint_handler,
+                gdb, bp_id);
+        return (installed_bp_data_t){
+                .bp_id = bp_id,
+                .bp_type = Simics_Gdb_Bp_Hap,
+                .hap_id = hap_id,
+                .valid = true,
+        };
+}
+
+static const char *
+describe_bp_type(gdb_breakpoint_type_t type)
+{
+        switch (type) {
+        case Gdb_Bp_Software:
+                return "software";
+        case Gdb_Bp_Hardware:
+                return "hardware";
+        case Gdb_Bp_Write:
+                return "write";
+        case Gdb_Bp_Read:
+                return "read";
+        case Gdb_Bp_Access:
+                return "access";
+        }
+        return "<unknown>";
+}
+
+static void
+do_handle_breakpoint(gdb_remote_t *gdb, const char *args, bool shall_set)
+{
+        bp_args_t bp_args = parse_breakpoint_args(gdb, args);
+        if (!bp_args.valid) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Badly formatted breakpoint: \"%s\"", args);
+                send_error(gdb, EINVAL);
+                return;
+        }
+        SIM_LOG_INFO(4, to_obj(gdb), 0, "Breakpoint 0x%llx-0x%llx type: %s",
+                     (uint64)bp_args.la, (uint64)bp_args.la + bp_args.len - 1,
+                     describe_bp_type(bp_args.type));
+        int bp_idx = breakpoint_lookup(gdb, bp_args.la, bp_args.len,
+                                       bp_args.type);
 
         struct gdb_breakpoints *b = &gdb->breakpoints;
         if (shall_set) {
                 if (bp_idx >= 0) {
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
                                      "Setting identical breakpoint");
                         ++b->entries[bp_idx].count;
                         send_ok(gdb);
                         return;
                 }
-
-                bp_id = SIM_breakpoint(gdb_context_object(gdb), Sim_Break_Virtual,
-                                       sim_type, la, len,
-                                       Sim_Breakpoint_Simulation);
-                if (SIM_clear_exception()) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
-                                      "Failed setting breakpoint: %s",
-                                      SIM_last_error());
-                        send_error(gdb, EINVAL);
-                        return;
-                }
-
-                SIM_LOG_INFO(3, &gdb->obj, 0, "Set breakpoint id %d at %#llx",
-                             bp_id, la);
 
                 if (b->used >= b->size) {
                         b->size = b->size ? b->size * 2 : 16;
@@ -1102,50 +1431,48 @@ do_handle_breakpoint(gdb_remote_t *gdb, const char *args, bool shall_set)
                                                 struct gdb_breakpoint);
                 }
 
-                hap_id = SIM_hap_add_callback_index(
-                        "Core_Breakpoint_Memop",
-                        (obj_hap_func_t)gdb_breakpoint_handler,
-                        gdb, bp_id);
-                b->entries[b->used].la = la;
-                b->entries[b->used].len = len;
-                b->entries[b->used].type = gdb_type;
-                b->entries[b->used].bp_id = bp_id;
-                b->entries[b->used].hap_id = hap_id;
+                installed_bp_data_t bp_data;
+                if (use_virtual_bp_iface(gdb)) {
+                        bp_data = plant_virtual_bp(gdb, &bp_args,
+                                                   &b->entries[b->used]);
+                } else {
+                        bp_data = plant_sim_breakpoint(gdb, bp_args);
+                }
+                if (!bp_data.valid)
+                        return;
+
+                b->entries[b->used].gdb = gdb;
+                b->entries[b->used].la = bp_args.la;
+                b->entries[b->used].len = bp_args.len;
+                b->entries[b->used].type = bp_args.type;
+                b->entries[b->used].bp_data = bp_data;
                 b->entries[b->used].count = 1;
                 b->used++;
 
         } else {
                 if (bp_idx < 0) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Could not find breakpoint to remove");
                         send_error(gdb, EINVAL);
                         return;
                 }
 
                 if (--b->entries[bp_idx].count) {
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
                                      "removing multibreakpoint");
                         send_ok(gdb);
                         return;
                 }
 
-                SIM_delete_breakpoint(b->entries[bp_idx].bp_id);
-                SIM_hap_delete_callback_id("Core_Breakpoint_Memop",
-                                           b->entries[bp_idx].hap_id);
+                cancel_breakpoint(&b->entries[bp_idx]);
 
                 if (--b->used > 0) {
                         b->entries[bp_idx] = b->entries[b->used];
                 }
         }
 
-
         send_ok(gdb);
         return;
-
- syntax_error:
-        SIM_LOG_ERROR(&gdb->obj, 0,
-                      "Badly formatted breakpoint: \"%s\"", args);
-        send_error(gdb, EINVAL);
 }
 
 static void
@@ -1153,7 +1480,7 @@ gdb_simulation_stopped_hap(void *_gdb, conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *)_gdb;
 
-        SIM_LOG_INFO(3, &gdb->obj, 0,
+        SIM_LOG_INFO(3, to_obj(gdb), 0,
                      "Core_Simulation_Stopped hap; running %d",
                      gdb->is_running);
 
@@ -1161,7 +1488,7 @@ gdb_simulation_stopped_hap(void *_gdb, conf_object_t *obj)
 
         if (gdb->stop_in_progress) {
                 /* re-enable requests from gdb now that we have stopped */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "clearing stop in progress");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "clearing stop in progress");
                 gdb->stop_in_progress = false;
                 activate_gdb_notifier(gdb);
         } else {
@@ -1175,7 +1502,7 @@ gdb_continuation_hap(void *_gdb, conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *)_gdb;
 
-        SIM_LOG_INFO(3, &gdb->obj, 0,
+        SIM_LOG_INFO(3, to_obj(gdb), 0,
                      "Core_Continuation hap; running %d", gdb->is_running);
         gdb->is_running = true;
 }
@@ -1190,7 +1517,7 @@ vcont_parse(gdb_remote_t *gdb, const char *buffer, const char *rest,
         rest++;
         if (isupper((unsigned char)rest[0])) {
                 SIM_LOG_UNIMPLEMENTED(
-                        1, &gdb->obj, 0,
+                        1, to_obj(gdb), 0,
                         "vCont: step or continue with signal: \"%s\"."
                         " Ignoring the signal part.",
                         buffer);
@@ -1200,7 +1527,7 @@ vcont_parse(gdb_remote_t *gdb, const char *buffer, const char *rest,
         if (action == 'c') {
                 if (*c_found) {
                         SIM_LOG_UNIMPLEMENTED(
-                                1, &gdb->obj, 0,
+                                1, to_obj(gdb), 0,
                                 "vCont packet with multiple continue actions,"
                                 " ignoring all but the first action: \"%s\"",
                                 buffer);
@@ -1209,7 +1536,7 @@ vcont_parse(gdb_remote_t *gdb, const char *buffer, const char *rest,
         } else if (action == 's') {
                 if (*s_found) {
                         SIM_LOG_UNIMPLEMENTED(
-                                1, &gdb->obj, 0,
+                                1, to_obj(gdb), 0,
                                 "vCont packet with multiple step actions,"
                                 " ignoring all but the last action: \"%s\"",
                                 buffer);
@@ -1237,7 +1564,7 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
                 rest = vcont_parse(gdb, buffer, rest, &c_found,
                                    &c_thread, &s_found, &s_thread);
                 if (rest == NULL) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Malformed vCont packet \"%s\", ignoring",
                                       buffer);
                         return;
@@ -1250,6 +1577,11 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
                         gdb, gdb->cont_thread);
                 if (cpu) {
                         do_step(gdb, cpu);
+                } else if (gdb->processor) {
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
+                                      "Step on thread %lld which is not active"
+                                      " on %s", s_thread,
+                                      SIM_object_name(gdb->processor));
                 } else {
                         gdb->on_thread_change = OTC_Single_Step;
                         post_continue(gdb);
@@ -1258,7 +1590,7 @@ handle_vcont(gdb_remote_t *gdb, const char *buffer)
                 gdb->cont_thread = c_thread;
                 post_continue(gdb);
         } else {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "vCont packet without action, ignoring");
         }
 }
@@ -1271,7 +1603,7 @@ handle_verbose_packet(gdb_remote_t *gdb, const char *buffer)
         } else if (strncmp(buffer + 1, "MustReplyEmpty", 14) == 0) {
                 send_packet(gdb, "");
         } else {
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "verbose packet: [%s]\n",
                                       buffer);
         }
@@ -1280,10 +1612,10 @@ handle_verbose_packet(gdb_remote_t *gdb, const char *buffer)
 void
 gdb_disconnect(gdb_remote_t *gdb)
 {
-        if (gdb->fd != OS_INVALID_SOCKET) {
+        if (gdb->connected) {
                 deactivate_gdb_notifier(gdb);
-                os_socket_close(gdb->fd);
-                gdb->fd = -1;
+                CALL(gdb->server, close)(gdb);
+                gdb->connected = false;
         }
 
         if (gdb->sim_stopped_hap_handle >= 0)
@@ -1294,15 +1626,12 @@ gdb_disconnect(gdb_remote_t *gdb)
                                            gdb->continuation_hap_handle);
 
         for (int i = 0; i < gdb->breakpoints.used; ++i) {
-                SIM_delete_breakpoint(gdb->breakpoints.entries[i].bp_id);
-                SIM_hap_delete_callback_id("Core_Breakpoint_Memop",
-                                        gdb->breakpoints.entries[i].hap_id);
+                cancel_breakpoint(&gdb->breakpoints.entries[i]);
         }
 
         gdb->breakpoints.used = 0;
 
-        SIM_LOG_INFO(2, &gdb->obj, 0, "Disconnected");
-        gdb->fd = OS_INVALID_SOCKET;
+        SIM_LOG_INFO(2, to_obj(gdb), 0, "Disconnected");
 }
 
 static void
@@ -1384,11 +1713,11 @@ gdb_arch_name(gdb_remote_t *gdb)
         const char *attr_name = target_is_ppc64(gdb)
                 ? "gdb_remote_architecture_64" : "gdb_remote_architecture";
         conf_object_t *cpu = gdb_any_processor(gdb);
-        if (read_opt_attr(&gdb->obj, cpu, attr_name, &attr)) {
+        if (read_opt_attr(to_obj(gdb), cpu, attr_name, &attr)) {
                 if (SIM_attr_is_string(attr)) {
                         return SIM_attr_string_detach(&attr);
                 }
-                SIM_LOG_ERROR(&gdb->obj, 0, "Illegal type for attribute '%s'"
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Illegal type for attribute '%s'"
                               " in object '%s'", attr_name,
                               SIM_object_name(cpu));
                 SIM_attr_free(&attr);
@@ -1404,7 +1733,7 @@ static char *
 target_xml(gdb_remote_t *gdb)
 {
         char *arch_name = gdb_arch_name(gdb);
-        SIM_LOG_INFO(3, &gdb->obj, 0, "arch name is %s",
+        SIM_LOG_INFO(3, to_obj(gdb), 0, "arch name is %s",
                      arch_name ? arch_name : "NULL");
         if (arch_name == NULL)
                 return NULL;
@@ -1467,11 +1796,11 @@ static void
 get_register_descriptions(gdb_remote_t *gdb, conf_object_t *cpu)
 {
         attr_value_t attr;
-        if (!read_opt_attr(&gdb->obj, cpu, "gdb_remote_registers", &attr)) {
+        if (!read_opt_attr(to_obj(gdb), cpu, "gdb_remote_registers", &attr)) {
                 return;
         }
         if (DBG_check_typing_system("[[s[[siisb]*]]*]", &attr) != Sim_Set_Ok) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "bad gdb_remote_registers value");
+                SIM_LOG_ERROR(to_obj(gdb), 0, "bad gdb_remote_registers value");
                 goto end;
         }
         for (unsigned i = 0; i < SIM_attr_list_size(attr); i++) {
@@ -1497,6 +1826,24 @@ get_register_descriptions(gdb_remote_t *gdb, conf_object_t *cpu)
                         .write = SIM_attr_boolean(SIM_attr_list_item(reg, 4))
                         ? reg_write_ignore
                         : reg_write_int };
+                    if (rd.size > 64) {
+                            SIM_LOG_ERROR(to_obj(gdb), 0, "Register '%s' from"
+                                          "'gdb_remote_registers' attribute has"
+                                          " size > 64. Changing class so that"
+                                          " reads and writes are ignored.",
+                                          rd.name);
+                            rd.read = reg_read_zero;
+                            rd.write = reg_write_ignore;
+                    }
+                    if (rd.size % 8 != 0) {
+                            int new_size = (rd.size + 7) / 8;
+                            SIM_LOG_ERROR(to_obj(gdb), 0,
+                                          "Register '%s' size (%d) from"
+                                          " 'gdb_remote_registers' is not 8"
+                                          " bits aligned, changing size to %d",
+                                          rd.name, rd.size, new_size);
+                            rd.size = new_size;
+                    }
 
                     VADD(gdb->register_descriptions, rd);
                 }
@@ -1511,7 +1858,7 @@ read_query(gdb_remote_t *gdb, const char *buffer, const char *object,
 {
         if (strcmp(object, "features") != 0
             && strcmp(annex, "target.xml") != 0) {
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "unsupported read query: \"%s\"",
                                       buffer);
                 send_unsupported(gdb);
@@ -1550,7 +1897,7 @@ parse_read_query(gdb_remote_t *gdb, const char *buffer,
         read_query(gdb, buffer, object, annex, offs, len);
         goto end;
   error:
-        SIM_LOG_ERROR(&gdb->obj, 0, "malformed offset,length specification"
+        SIM_LOG_ERROR(to_obj(gdb), 0, "malformed offset,length specification"
                       " in read query: \"%s\"", buffer);
         send_unsupported(gdb);
   end:
@@ -1565,13 +1912,34 @@ handle_qxfer(gdb_remote_t *gdb, const char *cmd) {
                 parse_read_query(gdb, cmd, VGET(strings, 0),
                                  VGET(strings, 2), VGET(strings, 3));
         } else {
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "qXfer query \"%s\"",
                                       cmd);
                 send_unsupported(gdb);
         }
         free_vect_str(strings);
 }
+
+static void
+handle_get_tib_addr(gdb_remote_t *gdb, const char *cmd) {
+        const char *endp;
+        int64 tid = hexstrtoull(cmd, &endp, false);
+        if (*endp != '\0')
+                goto error;
+        attr_value_t tib = SIM_run_command("@cgc.getTIB()");
+        int64 ival = SIM_attr_integer(tib);
+        char buf[8];
+        sprintf(buf, "0x%x", ival);
+        send_packet(gdb, buf);
+        //send_packet(gdb, "0xdeadbeef");
+        goto end;
+  error:
+        SIM_LOG_ERROR(to_obj(gdb), 0, "bad get_tib_addr specification"
+                      " in get_tib_addr query: \"%s\"", cmd);
+        send_unsupported(gdb);
+  end:
+}
+
 
 static void
 supported_query_arg(gdb_remote_t *gdb, const char *args)
@@ -1599,7 +1967,7 @@ supported_query_arg(gdb_remote_t *gdb, const char *args)
         for (char *arg = strtok(args_copy, ";"); arg != NULL;
              arg = strtok(NULL, ";")) {
                 SIM_LOG_UNIMPLEMENTED(
-                        3, &gdb->obj, 0,
+                        3, to_obj(gdb), 0,
                         "qSupported GDB feature: \"%s\" (ignoring)", arg);
         }
         MM_FREE(args_copy);
@@ -1656,7 +2024,7 @@ handle_qp(gdb_remote_t *gdb, const char *arg)
                      TAG_MOREDISPLAY = 16 };
 
         if (strlen(arg) <= 8) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Too short qP packet");
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Too short qP packet");
                 send_error(gdb, EINVAL);
         }
 
@@ -1723,14 +2091,14 @@ handle_qattached(gdb_remote_t *gdb)
 static void
 goto_bookmark(gdb_remote_t *gdb, const char *bookmark)
 {
-        SIM_LOG_INFO(2, &gdb->obj, 0, "Skipping to bookmark %s", bookmark);
+        SIM_LOG_INFO(2, to_obj(gdb), 0, "Skipping to bookmark %s", bookmark);
 
         strbuf_t cmd = sb_newf("skip-to %s", bookmark);
         SIM_run_command(sb_str(&cmd));
         sb_free(&cmd);
 
         if (SIM_clear_exception()) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Failed skipping to bookmark %s",
                               SIM_last_error());
                 send_error(gdb, EINVAL);
@@ -1752,11 +2120,11 @@ create_bookmark(void *arg)
         sb_free(&cmd);
 
         if (SIM_clear_exception()) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Failed creating bookmark: %s",
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Failed creating bookmark: %s",
                               SIM_last_error());
                 send_error(gdb, EINVAL);
         } else if (!SIM_attr_is_string(ret)) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Non-string value returned from"
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Non-string value returned from"
                               " set-bookmark command.");
                 send_error(gdb, EINVAL);
         } else {
@@ -1802,6 +2170,8 @@ general_query(gdb_remote_t *gdb, const char *buffer)
                 {"P", handle_qp},
                 {"Xfer:", handle_qxfer},
                 {"Supported:", supported_query_arg},
+                {"GetTIBAddr:", handle_get_tib_addr},
+                {"L", send_unsupported_with_args} // to avoid warning
         };
 
         for (int i = 0; i < ALEN(cmds_without_arg); i++) {
@@ -1818,7 +2188,7 @@ general_query(gdb_remote_t *gdb, const char *buffer)
                 }
         }
 
-        SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+        SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                               "general query \"%s\"", buffer);
         send_unsupported(gdb);
 }
@@ -1839,7 +2209,7 @@ read_single_register(gdb_remote_t *gdb, const char *buffer)
         const char *endp;
         size_t idx = hexstrtoull(buffer + 1, &endp, 0);
         if (*endp != '\0') {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Malformed p packet: \"%s\"",
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Malformed p packet: \"%s\"",
                               buffer + 1);
                 send_error(gdb, EINVAL);
                 return;
@@ -1848,29 +2218,40 @@ read_single_register(gdb_remote_t *gdb, const char *buffer)
         reg_desc_vect_t *rds = VLEN(gdb->register_descriptions) > 0
                 ? &gdb->register_descriptions
                 : &gdb->default_register_descriptions;
-        if (idx >= VLEN(*rds)) {
-                SIM_LOG_INFO(2, &gdb->obj, 0,
-                             "Bad index in single-register read: %zu"
-                             " (there are only %d registers)",
-                             idx, VLEN(*rds));
 
-                /* GDB seems to think we have more registers than we think we
-                   have, and will ask for them with a 'p' query. Returning
-                   unsupported seems to be the right thing to do here,
-                   according to the gdb-serial protocol reference. */
-                send_unsupported(gdb);
-                return;
+        register_description_t *rd;
+        if (gdb->arch->reg_mapper) {
+                rd = gdb->arch->reg_mapper(gdb, rds, idx);
+        } else  {
+                /* Register index is the index in our register VECT */
+                if (idx >= VLEN(*rds)) {
+                        SIM_LOG_INFO(2, to_obj(gdb), 0,
+                                     "Bad index in single-register read: %zu"
+                                     " (there are only %d registers)",
+                                     idx, VLEN(*rds));
+
+                        /* GDB seems to think we have more registers than we
+                           think we have, and will ask for them with a 'p'
+                           query. Returning unsupported seems to be the right
+                           thing to do here, according to the gdb-serial
+                           protocol reference. */
+                        send_unsupported(gdb);
+                        return;
+                }
+                rd = &VGET(*rds, idx);
         }
 
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu)
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Reading register: Thread %lld not active,"
                              " pretending all registers are zero", ct.thread);
 
-        register_description_t *rd = &VGET(*rds, idx);
+
+
         uint64 val = ct.cpu ? rd->read(ct.cpu, rd) : 0;
-        SIM_LOG_INFO(3, &gdb->obj, 0,
+
+        SIM_LOG_INFO(3, to_obj(gdb), 0,
                      "Reading 0x%llx from register %s", val, rd->name);
         strbuf_t buf = SB_INIT;
         gdb_write_hex(&buf, val, gdb->arch->is_be, rd->size);
@@ -1883,7 +2264,7 @@ write_single_register(gdb_remote_t *gdb, const char *buffer)
 {
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu) {
-                SIM_LOG_INFO(1, &gdb->obj, 0,
+                SIM_LOG_INFO(1, to_obj(gdb), 0,
                              "Writing register: Thread %lld not active,"
                              " ignoring write", ct.thread);
                 return;
@@ -1905,13 +2286,26 @@ write_single_register(gdb_remote_t *gdb, const char *buffer)
         reg_desc_vect_t *rds = VLEN(gdb->register_descriptions) > 0
                 ? &gdb->register_descriptions
                 : &gdb->default_register_descriptions;
-        if (idx >= VLEN(*rds)) {
-                sb_fmt(&err, "Illegal register ID (%llu) in P packet", idx);
-                goto error;
+
+        register_description_t *rd;
+        if (gdb->arch->reg_mapper) {
+                rd = gdb->arch->reg_mapper(gdb, rds, idx);
+        } else {
+                if (idx >= VLEN(*rds)) {
+                        sb_fmt(&err, "Illegal register ID (%llu) in P packet", idx);
+                        goto error;
+                }
+                rd = &VGET(*rds, idx);
         }
 
-        register_description_t *rd = &VGET(*rds, idx);
         const char *val_str = VGET(idx_val, 1);
+        if (rd->size > 64) {
+                SIM_LOG_INFO(1, to_obj(gdb), 0,
+                             "Writing to '%s which is > 64 bits', ignoring",
+                             rd->name);
+                send_error(gdb, EACCES);
+                goto error;
+        }
         uint64 val = gdb_read_hex(&val_str, gdb->arch->is_be, rd->size);
         if (*val_str != '\0') {
                 sb_set(&err, "Malformed register value in P packet");
@@ -1920,11 +2314,11 @@ write_single_register(gdb_remote_t *gdb, const char *buffer)
 
         bool success = rd->write(ct.cpu, rd, val);
         if (success) {
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Writing 0x%llx to register %s", val, rd->name);
                 send_ok(gdb);
         } else {
-                SIM_LOG_INFO(1, &gdb->obj, 0,
+                SIM_LOG_INFO(1, to_obj(gdb), 0,
                              "Failed writing 0x%llx to register %s", val,
                              rd->name);
                 send_error(gdb, EACCES);
@@ -1932,7 +2326,7 @@ write_single_register(gdb_remote_t *gdb, const char *buffer)
 
   error:
         if (sb_len(&err)) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "%s: %s", sb_str(&err), buffer);
+                SIM_LOG_ERROR(to_obj(gdb), 0, "%s: %s", sb_str(&err), buffer);
                 sb_free(&err);
                 send_error(gdb, EINVAL);
         }
@@ -1944,7 +2338,7 @@ read_registers(gdb_remote_t *gdb, strbuf_t *buf)
 {
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu)
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Reading registers: Thread %lld not active,"
                              " pretending all registers are zero", ct.thread);
 
@@ -1962,7 +2356,7 @@ write_registers(gdb_remote_t *gdb, const char *buf)
 {
         cpu_thread_t ct = gdb_other(gdb);
         if (!ct.cpu) {
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "Writing registers: Thread %lld not active,"
                              " ignoring write", ct.thread);
                 return;
@@ -1972,8 +2366,16 @@ write_registers(gdb_remote_t *gdb, const char *buf)
                 ? &gdb->register_descriptions
                 : &gdb->default_register_descriptions;
         VFOREACH_T(*rds, register_description_t, rd) {
-                uint64 val = gdb_read_hex(&buf, gdb->arch->is_be, rd->size);
-                rd->write(ct.cpu, rd, val);
+                if (rd->size > 64) {
+                        SIM_LOG_INFO(1, to_obj(gdb), 0,
+                                     "Writing to '%s' which is > 64 bits,"
+                                     " ignoring", rd->name);
+                        advance_buffer(&buf, rd->size);
+                } else {
+                        uint64 val = gdb_read_hex(&buf, gdb->arch->is_be,
+                                                  rd->size);
+                        rd->write(ct.cpu, rd, val);
+                }
         }
 }
 
@@ -1993,7 +2395,7 @@ handle_reset(gdb_remote_t *gdb, const char *buf)
         SIM_reset_processor(cpu, hard_reset);
         if (SIM_clear_exception())
                 SIM_LOG_ERROR(
-                        &gdb->obj, 0,
+                        to_obj(gdb), 0,
                         "Failed to reset processor: %s", SIM_last_error());
 }
 
@@ -2012,12 +2414,12 @@ handle_segment(gdb_remote_t *gdb, const char *buf)
         const char *endp;
         uint64 new_segm = hexstrtoull(buf, &endp, false);
         if (*endp != '"') {
-                SIM_LOG_INFO(1, &gdb->obj, 0,
+                SIM_LOG_INFO(1, to_obj(gdb), 0,
                              "Badly formatted segment command");
                 send_error(gdb, EINVAL);
         } else {
                 gdb->segment_linear_base = new_segm;
-                SIM_LOG_INFO(3, &gdb->obj, 0, "Segment updated to 0x%x",
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "Segment updated to 0x%x",
                              gdb->segment_linear_base);
                 send_ok(gdb);
         }
@@ -2042,9 +2444,9 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
 {
         unsigned char ch = cmd[0];
         if (ch == 3)
-                SIM_LOG_INFO(4, &gdb->obj, 0, "got message: \"^C\"");
+                SIM_LOG_INFO(4, to_obj(gdb), 0, "got message: \"^C\"");
         else
-                SIM_LOG_INFO(4, &gdb->obj, 0, "got message: \"%s\"", cmd);
+                SIM_LOG_INFO(4, to_obj(gdb), 0, "got message: \"%s\"", cmd);
 
         switch (ch) {
         case 3:
@@ -2052,11 +2454,11 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case '!':       /* extended ops */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "! = Extended ops");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "! = Extended ops");
                 break;
 
         case '?': {      /* last signal */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "? = last signal");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "? = last signal");
                 strbuf_t buf = SB_INIT;
                 stop_reply_packet(gdb, &buf, Sig_trap);
                 send_packet(gdb, sb_str(&buf));
@@ -2065,7 +2467,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
         }
 
         case 'D':       /* detach */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "D = detach");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "D = detach");
                 send_packet(gdb, "OK");
                 gdb_disconnect(gdb);
                 break;
@@ -2074,7 +2476,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 switch (cmd[1])
                 {
                 case 'g':
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
                                      "Hg = last signal, thread used in"
                                      " other operations");
                         gdb->other_thread =
@@ -2082,7 +2484,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                         send_ok(gdb);
                         break;
                 case 'c':
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
                                      "Hc = last signal, thread used in"
                                      " step/continue");
                         gdb->cont_thread = hexstrtoll(cmd + 2, NULL);
@@ -2096,7 +2498,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'g': {     /* read registers */
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "g = read registers"
                              " (current thread = %lld)",
                              gdb_other(gdb).thread);
@@ -2108,7 +2510,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
         }
 
         case 'G':       /* write regs */
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "G = write regs"
                              " (current thread = %lld",
                              gdb_other(gdb).thread);
@@ -2117,30 +2519,30 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'm':       /* read mem */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "m = read mem");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "m = read mem");
                 send_memory(gdb, cmd + 1);
                 break;
 
         case 'M':       /* write mem */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "M = write mem");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "M = write mem");
                 write_memory(gdb, cmd + 1);
                 break;
 
         case 'C':       /* continue with signal */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "C = continue with signal");
                 unhandled_command(gdb, cmd);
                 break;
 
         case 'S':       /* step with signal */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "S = step with signal");
                 unhandled_command(gdb, cmd);
                 break;
 
         case 'b':
                 if (cmd[1] == 's') {
-                        SIM_LOG_INFO(3, &gdb->obj, 0,
+                        SIM_LOG_INFO(3, to_obj(gdb), 0,
                                      "a = reverse step");
                         do_reverse (gdb);
                         break;
@@ -2150,7 +2552,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                         post_continue(gdb);
                         break;
                 } else {
-                        SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                        SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                               "unsupported backwards "
                                               "continue arg");
                         unhandled_command(gdb, cmd);
@@ -2158,24 +2560,24 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 }
 
         case 'c':       /* continue */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "c = continue");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "c = continue");
                 if (cmd[1]) {
                         /* can't continue with address */
-                        SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                        SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                               "unsupported continue "
                                               "arg");
                         unhandled_command(gdb, cmd);
                         break;
                 }
 
-                SIM_LOG_INFO(3, &gdb->obj, 0, "Continue");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "Continue");
                 post_continue(gdb);
                 break;
 
         case 's':       /* step */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "s = step");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "s = step");
                 if (cmd[1]) {
-                        SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                        SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                               "unsupported step arg");
                         unhandled_command(gdb, cmd);
                         break;
@@ -2184,11 +2586,11 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'k':       /* kill */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0, "k = kill");
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0, "k = kill");
                 unhandled_command(gdb, cmd);
                 break;
         case 'T':       /* thread alive */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "T = thread alive");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "T = thread alive");
                 handle_thread_alive(gdb, cmd + 1);
                 break;
 
@@ -2197,17 +2599,17 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'r':       /* reset */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0, "r = reset");
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0, "r = reset");
                 unhandled_command(gdb, cmd);
                 break;
 
         case 'q':       /* general query */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "q = general query");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "q = general query");
                 general_query(gdb, cmd);
                 break;
 
         case 'p': /* read single register */
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "p = read single register"
                              " (thread = %lld)",
                              gdb_other(gdb).thread);
@@ -2215,7 +2617,7 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'P': /* write single register */
-                SIM_LOG_INFO(3, &gdb->obj, 0,
+                SIM_LOG_INFO(3, to_obj(gdb), 0,
                              "P = write single register"
                              " (thread = %lld)",
                              gdb_other(gdb).thread);
@@ -2223,34 +2625,34 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 break;
 
         case 'Q':       /* general set */
-                SIM_LOG_INFO(3, &gdb->obj, 0, "Q = general set");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "Q = general set");
                 if (strlen(cmd) >= 10 && strncmp(cmd, "QBookmark:", 10) == 0) {
                         goto_bookmark(gdb, cmd + 10);
                 } else {
-                        SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                        SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                               "Q = general set (%s)", cmd);
                         unhandled_command(gdb, cmd);
                 }
                 break;
 
         case 'Z':
-                SIM_LOG_INFO(3, &gdb->obj, 0, "Z = set breakpoint");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "Z = set breakpoint");
                 do_handle_breakpoint(gdb, cmd + 1, true);
                 break;
 
         case 'z':
-                SIM_LOG_INFO(3, &gdb->obj, 0, "z = remove breakpoint");
+                SIM_LOG_INFO(3, to_obj(gdb), 0, "z = remove breakpoint");
                 do_handle_breakpoint(gdb, cmd + 1, false);
                 break;
 
         case 'X': /* write binary memory */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "X = write binary memory");
                 unhandled_command(gdb, cmd);
                 break;
 
         case 'e': /* undocumented step range thingie */
-                SIM_LOG_UNIMPLEMENTED(1, &gdb->obj, 0,
+                SIM_LOG_UNIMPLEMENTED(1, to_obj(gdb), 0,
                                       "e = step thingie");
                 unhandled_command(gdb, cmd);
                 break;
@@ -2267,11 +2669,11 @@ gdb_serial_command(gdb_remote_t *gdb, const char *cmd)
                 /* Fall-through */
         default:        /* unknown protocol */
                 if (isprint(ch)) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "%#2.2x (%c) = unknown request",
                                       ch, ch);
                 } else {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "%#2.2x = unknown request", ch);
                 }
                 unhandled_command(gdb, cmd);
@@ -2332,7 +2734,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
               const char *name, regclass_t regclass)
 {
         if (SIM_clear_exception()) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "arch_reg_init() called with"
+                SIM_LOG_ERROR(to_obj(gdb), 0, "arch_reg_init() called with"
                               " pending exception: %s",
                               SIM_last_error());
         }
@@ -2340,10 +2742,24 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
         const int_register_interface_t *const ir =
                 SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
         if (ir == NULL) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "cannot find %s interface in CPU %s",
                               INT_REGISTER_INTERFACE, SIM_object_name(cpu));
                 return false;
+        }
+
+        if (bits > 64 && regclass != regclass_unused) {
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Register '%s' has size > 64 bits,"
+                              " but wrong class. Changing class so that"
+                              " reads and writes are ignored.", name);
+                regclass = regclass_unused;
+        }
+        if (bits % 8 != 0) {
+                int new_bits = (bits + 7) / 8;
+                SIM_LOG_ERROR(to_obj(gdb), 0,
+                              "Register '%s' size (%d) is not 8 bits aligned,"
+                              " changing size to %d", name, bits, new_bits);
+                            bits = new_bits;
         }
 
         register_description_t rd = {
@@ -2356,7 +2772,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
                 rd.regnum = ir->get_number(cpu, name);
                 if (rd.regnum < 0) {
                         if (regclass != regclass_i_opt) {
-                                SIM_LOG_ERROR(&gdb->obj, 0, "cannot find"
+                                SIM_LOG_ERROR(to_obj(gdb), 0, "cannot find"
                                               " register %s in CPU %s",
                                               name, SIM_object_name(cpu));
                                 return false;
@@ -2376,9 +2792,6 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
                 }
                 break;
         case regclass_v9_f:
-                rd.regnum = atoi(name + 1);
-                rd.read = reg_read_v9f;
-                rd.write = reg_write_v9f;
                 break;
         case regclass_unused:
                 rd.regnum = 0;
@@ -2390,6 +2803,7 @@ arch_reg_init(gdb_remote_t *gdb, conf_object_t *cpu, int bits,
         return true;
 }
 
+
 static bool
 init_regs(gdb_remote_t *gdb, conf_object_t *cpu, const gdb_arch_t *arch)
 {
@@ -2400,6 +2814,7 @@ init_regs(gdb_remote_t *gdb, conf_object_t *cpu, const gdb_arch_t *arch)
             || !VEMPTY(gdb->register_descriptions))
                 return true;                 /* already initialised */
 
+        /* Try to get the registers from the gdb_remote_registers attribute */
         get_register_descriptions(gdb, cpu);
         if (!VEMPTY(gdb->register_descriptions))
             return true;
@@ -2424,7 +2839,7 @@ setup_architecture(gdb_remote_t *gdb)
         if (!gdb->architecture) {
                 attr_value_t arch_attr = SIM_get_attribute(cpu, "architecture");
                 if (SIM_clear_exception()) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Error reading attribute"
                                       " architecture from"
                                       " object %s: %s",
@@ -2432,7 +2847,7 @@ setup_architecture(gdb_remote_t *gdb)
                                       SIM_last_error());
                         return false;
                 } else if (!SIM_attr_is_string(arch_attr)) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Failed getting architecture from %s.",
                                       SIM_object_name(cpu));
                         return false;
@@ -2450,14 +2865,14 @@ setup_architecture(gdb_remote_t *gdb)
                 if (SIM_attr_is_string(attr)) {
                         variant = SIM_attr_string_detach(&attr);
                 } else if (SIM_clear_exception()) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Error reading attribute"
                                       " gdb_remote_variant from"
                                       " object %s: %s",
                                       SIM_object_name(gdb_context_object(gdb)),
                                       SIM_last_error());
                 } else if (!SIM_attr_is_nil(attr)) {
-                        SIM_LOG_ERROR(&gdb->obj, 0,
+                        SIM_LOG_ERROR(to_obj(gdb), 0,
                                       "Unexpected type of attribute "
                                       " gdb_remote_variant in"
                                       " object %s",
@@ -2470,13 +2885,13 @@ setup_architecture(gdb_remote_t *gdb)
         MM_FREE(variant);
 
         if (arch == NULL) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Unsupported CPU architecture: %s",
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Unsupported CPU architecture: %s",
                               gdb->architecture);
                 return false;
         }
 
         if (!gdb->arch) {
-                SIM_LOG_INFO(2, &gdb->obj, 0, "Attached to %s", 
+                SIM_LOG_INFO(2, to_obj(gdb), 0, "Attached to %s",
                              SIM_object_name(gdb->context_object
                                              ? gdb->context_object
                                              : cpu));
@@ -2484,7 +2899,7 @@ setup_architecture(gdb_remote_t *gdb)
 
         /* FIXME jrydberg 2006-02-09: Why shouldn't this be possible? */
         if (gdb->arch && gdb->arch != arch) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "Cannot change CPU architecture.");
                 return false;
         }
@@ -2492,8 +2907,8 @@ setup_architecture(gdb_remote_t *gdb)
         gdb->arch = arch;
 
         attr_value_t queue_attr = SIM_make_attr_object(SIM_object_clock(cpu));
-        if (SIM_set_attribute(&gdb->obj, "queue", &queue_attr) != Sim_Set_Ok) {
-                SIM_LOG_ERROR(&gdb->obj, 0,
+        if (SIM_set_attribute(to_obj(gdb), "queue", &queue_attr) != Sim_Set_Ok) {
+                SIM_LOG_ERROR(to_obj(gdb), 0,
                               "error setting queue from CPU %s: %s",
                               SIM_object_name(cpu), SIM_last_error());
                 return false;
@@ -2502,7 +2917,7 @@ setup_architecture(gdb_remote_t *gdb)
         if (!init_regs(gdb, cpu, arch)) {
                 gdb->arch = NULL;
                 queue_attr = SIM_make_attr_nil();
-                SIM_set_attribute(&gdb->obj, "queue", &queue_attr);
+                SIM_set_attribute(to_obj(gdb), "queue", &queue_attr);
                 return false;
         }
 
@@ -2533,7 +2948,7 @@ gdb_connected(void *gdb_ptr)
                                        gdb_continuation_hap, gdb);
 
         if (SIM_simics_is_running()) {
-                VT_stop_message(&gdb->obj, "Remote GDB connected");
+                VT_stop_message(to_obj(gdb), "Remote GDB connected");
                 /*  Just connected, so cannot call stop_simulation(). Still
                     want to disable sending async stop that may be received by
                     GDB while waiting for a command reply. */
@@ -2541,161 +2956,110 @@ gdb_connected(void *gdb_ptr)
         }
 }
 
+static void
+external_connection_events_on_input(
+        conf_object_t *obj,
+        void *cookie)
+{
+        read_gdb_data(cookie);
+}
+
 /* A remote GDB has requested to connect to this GDB stub.  Accept it
    and fetch GDB stub architecture (done in set_gdb_cpu.)  */
 static void
-gdb_accept(void *gdb_ptr)
+external_connection_events_on_accept(
+        conf_object_t *obj,
+        conf_object_t *server,
+        uint64 id)
 {
-        gdb_remote_t *gdb = gdb_ptr;
-        struct sockaddr inet_addr;
-        socklen_t len;
-        int true_arg = 1;
-
-        len = sizeof inet_addr;
-        socket_t fd = accept(gdb->server_fd, &inet_addr, &len);
-        if (fd == OS_INVALID_SOCKET) {
-                if (errno != EAGAIN)
-                        pr("[gdb-remote] accept() failed: %s\n",
-                           os_describe_last_socket_error());
-                return;
-        }
+        gdb_remote_t *gdb = gdb_of_obj(obj);
 
         /* Only accept one connection per gdb-remote object, otherwise
            we might end up in tricky situations.  */
-        if (gdb->fd != OS_INVALID_SOCKET) {
-                os_socket_close(fd);
+        if (gdb->connected) {
+                CALL(gdb->server, accept)(id, NULL, false);
                 return;
         }
 
-        if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY,
-                       (char *)&true_arg, 4) < 0) {
-                pr("[gdb-remote] setsockopt(): %s\n", 
-                   os_describe_last_socket_error());
-        }
-        SIM_LOG_INFO(3, &gdb->obj, 0, "New GDB connection established");
-
-        os_set_socket_non_blocking(fd);
-
-        gdb->fd = fd;
-        if (os_socket_write(gdb->fd, "+", 1) != 1)
-                SIM_LOG_INFO(1, &gdb->obj, 0,
+        INIT_REQUIRED_IFACE(&gdb->server, external_connection_ctl, server);
+        gdb->connected = true;
+        CALL(gdb->server, accept)(id, gdb, false);
+        SIM_LOG_INFO(3, obj, 0, "New GDB connection established");
+        if (socket_write(gdb, "+", 1) != 1) {
+                SIM_LOG_INFO(1, obj, 0,
                              "Connection successful but failed to respond"
-                             " with a '+'");	
+                             " with a '+'");
+        }
         /* Make sure we have halted simulation before continuing */
         SIM_register_work(gdb_connected, gdb);
 }
 
-/* Sets up a listen sockets allowing GDB clients to connect to Simics.
-   Simics will listen on LISTEN_PORT.  */
+enum {
+        Server_TCP,
+        Server_UNIX,
+        Server_Pipe,
+};
 
-static void
-setup_listen_socket(gdb_remote_t *gdb, int listen_port)
-{
-        int dummy = 1;
-        socket_t fd;
+typedef struct {
+        const char *port;
+        const char *class;
+        const char *desc;
+} server_info_t;
 
-        gdb->server_port = 0;
-
-        if (!os_socket_isvalid(fd = socket(PF_INET, SOCK_STREAM, 0))) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "socket(): %s",
-                              os_describe_last_socket_error());
-                return;
-        }
-
-/* To prevent opening a port that someone else is already listening to.
-   See discussion in bug 7633. */
 #ifdef _WIN32
- #define LISTEN_SOCKOPT SO_EXCLUSIVEADDRUSE
+static const server_info_t servers[] = {
+        [Server_TCP] = {.port = "tcp", .class = "tcp-server",
+                        .desc = "gdb-remote TCP server"},
+        [Server_Pipe] = {.port = "named_pipe",
+                         .class = "named-pipe-server",
+                         .desc = "gdb-remote Windows named pipe server"},
+};
 #else
- #define LISTEN_SOCKOPT SO_REUSEADDR
+static const server_info_t servers[] = {
+        [Server_TCP] = {.port = "tcp", .class = "tcp-server",
+                        .desc = "gdb-remote TCP server"},
+        [Server_UNIX] = {.port = "unix_socket",
+                         .class = "unix-socket-server",
+                         .desc = "gdb-remote Unix domain socket server"},
+};
 #endif
 
-        if (setsockopt(fd, SOL_SOCKET, LISTEN_SOCKOPT, (void *)&dummy, 4) < 0)
-                SIM_LOG_ERROR(&gdb->obj, 0, "setsockopt(): %s",
-                              os_describe_last_socket_error());
-
-        struct sockaddr_in inet_addr = {
-                .sin_family = AF_INET,
-                .sin_port = htons(listen_port),
-                .sin_addr.s_addr = htonl(INADDR_ANY)
-        };
-
-        /* bind address to socket */
-        if (bind(fd, (struct sockaddr *)&inet_addr, sizeof(inet_addr)) < 0) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "bind(): %s",
-                              os_describe_last_socket_error());
-                os_socket_close(fd);
-                return;
-        }
-
-        /* now listen for incoming connections */
-        if (listen(fd, 5) < 0) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "listen(): %s",
-                              os_describe_last_socket_error());
-                os_socket_close(fd);
-                return;
-        }
-
-        /* get the actual port used */
-        socklen_t len = sizeof(inet_addr);
-        if (getsockname(fd, (struct sockaddr *)&inet_addr, &len) == -1) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "getsockname failed: %s",
-                              os_describe_last_socket_error());
-                os_socket_close(fd);
-                return;
-        }
-        gdb->server_port = ntohs(inet_addr.sin_port);
-
-        gdb->server_fd = fd;
-        os_set_socket_non_blocking(fd);
-
-        SIM_notify_on_socket(fd, Sim_NM_Read, 0, gdb_accept, gdb);
-        SIM_LOG_INFO(2, &gdb->obj, 0,
-                     "Awaiting GDB connections on port %d.", gdb->server_port);
-        SIM_LOG_INFO(2, &gdb->obj, 0, "Connect from GDB using: \"target "
-                     "remote localhost:%d\"", gdb->server_port);
-
-        if (gdb->architecture) {
-                setup_architecture(gdb);
-        }
-}
-
 static attr_value_t
-get_processor(void *arg, conf_object_t *obj, attr_value_t *idx)
+get_processor(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         return SIM_make_attr_object (gdb->processor);
 }
 
 static set_error_t
-set_processor(void *dummy, conf_object_t *obj, attr_value_t *val,
-              attr_value_t *idx)
+set_processor(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         conf_object_t *cpu = SIM_attr_is_nil(*val) ? NULL : SIM_attr_object(*val);
-        if (cpu && (!processor_iface(cpu) || !context_handler_iface(cpu))) {
+        if (cpu && !processor_iface(cpu)) {
                 SIM_LOG_ERROR(
-                        &gdb->obj, 0,
-                        "Failed getting " PROCESSOR_INFO_INTERFACE " or "
-                        CONTEXT_HANDLER_INTERFACE " interface from CPU %s.",
+                        to_obj(gdb), 0,
+                        "Failed getting " PROCESSOR_INFO_INTERFACE
+                        " interface from CPU %s.",
                         SIM_object_name(cpu));
                 return Sim_Set_Interface_Not_Found;
         } else {
                 gdb->processor = cpu;
-                if (cpu)
-                        SIM_LOG_INFO(2, &gdb->obj, 0, "Attached to CPU: %s",
+                if (cpu) {
+                        SIM_LOG_INFO(2, to_obj(gdb), 0, "Attached to CPU: %s",
                                      SIM_object_name(cpu));
-                else
-                        SIM_LOG_INFO(2, &gdb->obj, 0, "Not attached to a CPU");
+                } else {
+                        SIM_LOG_INFO(2, to_obj(gdb), 0,
+                                     "Not attached to a CPU");
+                }
                 return Sim_Set_Ok;
         }
 }
 
 static set_error_t
-set_signal(void *dummy, conf_object_t *obj, attr_value_t *val,
-           attr_value_t *idx)
+set_signal(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
 
         int64 ival = SIM_attr_integer(*val);
         if (ival <= 0 || ival > 255) {
@@ -2708,10 +3072,9 @@ set_signal(void *dummy, conf_object_t *obj, attr_value_t *val,
 }
 
 static set_error_t
-set_send_packet(void *dummy, conf_object_t *obj, attr_value_t *val,
-                attr_value_t *idx)
+set_send_packet(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
 
         const char *str = SIM_attr_string(*val);
         send_packet(gdb, str);
@@ -2720,41 +3083,39 @@ set_send_packet(void *dummy, conf_object_t *obj, attr_value_t *val,
 }
 
 static set_error_t
-set_large_operations(void *dummy, conf_object_t *obj, attr_value_t *val,
-                     attr_value_t *idx)
+set_large_operations(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb->large_operations = !!SIM_attr_integer(*val);
         return Sim_Set_Ok;
 }
 
 static attr_value_t
-get_large_operations(void *dont_care, conf_object_t *obj, attr_value_t *idx)
+get_large_operations(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         return SIM_make_attr_uint64(gdb->large_operations);
 }
 
 static set_error_t
-set_disconnect(void *dummy, conf_object_t *obj, attr_value_t *val,
-               attr_value_t *idx)
+set_disconnect(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb_disconnect(gdb);
         return Sim_Set_Ok;
 }
 
 static attr_value_t
-get_connected(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_connected(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
-
-        return SIM_make_attr_boolean(gdb->fd != OS_INVALID_SOCKET);
+        gdb_remote_t *gdb = gdb_of_obj(obj);
+        return SIM_make_attr_boolean(gdb->connected);
 }
 
 static bool
 is_cont_thread(gdb_remote_t *gdb, conf_object_t *ctx, conf_object_t *cpu)
 {
+        ASSERT(!gdb->processor);
         return ctx == gdb_context_object(gdb)
                 && is_current_thread(gdb, gdb->cont_thread, cpu);
 }
@@ -2762,6 +3123,10 @@ is_cont_thread(gdb_remote_t *gdb, conf_object_t *ctx, conf_object_t *cpu)
 static void
 thread_change(gdb_remote_t *gdb, conf_object_t *ctx, conf_object_t *cpu)
 {
+        if (gdb->processor) {
+                ASSERT(gdb->on_thread_change == OTC_Do_Nothing);
+                return;
+        }
         switch (gdb->on_thread_change) {
         case OTC_Do_Nothing:
                 break;
@@ -2791,10 +3156,8 @@ context_change(void *_gdb, conf_object_t *ctx_obj, conf_object_t *cpu)
 }
 
 static void
-thread_active(void *_gdb, conf_object_t *tracker, int64 tid,
-              conf_object_t *cpu, bool active)
+thread_active(gdb_remote_t *gdb, conf_object_t *cpu, bool active)
 {
-        gdb_remote_t *gdb = _gdb;
         if (active)
                 thread_change(gdb, gdb_context_object(gdb), cpu);
 }
@@ -2805,38 +3168,34 @@ context_updated(void *_gdb, conf_object_t *ctx_obj)
 {
         gdb_remote_t *gdb = _gdb;
 
-        attr_value_t cpus = default_processor_list(&gdb->obj);
+        attr_value_t cpus = default_processor_list(to_obj(gdb));
         for (int i = 0; i < SIM_attr_list_size(cpus); i++) {
                 conf_object_t *cpu
                         = SIM_attr_object(SIM_attr_list_item(cpus, i));
-                thread_active(gdb, &gdb->obj,
-                              default_thread_id,
-                              cpu, true);
+                thread_active(gdb, cpu, true);
         }
         SIM_attr_free(&cpus);
 }
 
 static attr_value_t
-get_architecture(void *arg, conf_object_t *obj, attr_value_t *idx)
+get_architecture(conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
         return SIM_make_attr_string(gdb->architecture);
 }
 
 static set_error_t
-set_architecture(void *arg, conf_object_t *obj, attr_value_t *val,
-                 attr_value_t *idx)
+set_architecture(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb->architecture = MM_STRDUP(SIM_attr_string(*val));
         return Sim_Set_Ok;
 }
 
 static set_error_t
-set_extender(void *arg, conf_object_t *obj, attr_value_t *val,
-                 attr_value_t *idx)
+set_extender(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         conf_object_t *extender = SIM_attr_object_or_nil(*val);
 
         if (extender) {
@@ -2853,17 +3212,17 @@ set_extender(void *arg, conf_object_t *obj, attr_value_t *val,
 }
 
 static attr_value_t
-get_extender(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_extender(conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
         return SIM_make_attr_object(gdb->extender);
 }
 
 static attr_value_t
-get_listen(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_listen(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *) obj;
-        return SIM_make_attr_uint64(gdb->server_port);
+        return SIM_get_attribute(
+                SIM_object_descendant(obj, servers[Server_TCP].port), "port");
 }
 
 /* Called when the ``listen'' attribute of the object is set to a
@@ -2871,29 +3230,50 @@ get_listen(void *dummy, conf_object_t *obj, attr_value_t *idx)
    connections to the specified port.  */
 
 static set_error_t
-set_listen(void *ignore, conf_object_t *obj, attr_value_t *val,
-           attr_value_t *idx)
+set_listen(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        // Do not trigger connection change if restoring micro checkpoint
+        if (SIM_is_loading_micro_checkpoint(obj))
+                return Sim_Set_Ok;
 
-        if (SIM_attr_integer(*val) < 0)
-                return Sim_Set_Illegal_Value;
-
+        gdb_remote_t *gdb = gdb_of_obj(obj);
+#if !defined(SIMICS_4_8_API) && !defined(SIMICS_5_API)
+        if (!SIM_is_restoring_state(obj)) {
+                SIM_LOG_INFO(
+                        1, obj, 0,
+                        "The <" DEVICE_NAME ">->listen attribute is deprecated."
+                        " Use <" DEVICE_NAME ">.%s->port instead.",
+                        servers[Server_TCP].port);
+        }
+#endif
         conf_object_t *cpu = gdb_any_processor(gdb);
         if (!cpu) {
-                SIM_LOG_ERROR(&gdb->obj, 0, "Not connected to processor.");
+                SIM_LOG_ERROR(to_obj(gdb), 0, "Not connected to processor.");
                 return Sim_Set_Ok;
         }
+        conf_object_t *server = SIM_object_descendant(
+                obj, servers[Server_TCP].port);
+        set_error_t ret = SIM_set_attribute(server, "port", val);
+        (void)SIM_clear_exception();
 
-        setup_listen_socket(gdb, SIM_attr_integer(*val));
-        return Sim_Set_Ok;
+        if (ret == Sim_Set_Ok) {
+                attr_value_t attr = SIM_get_attribute(server, "port");
+                uint16 port = SIM_attr_integer(attr);
+                SIM_LOG_INFO(2, obj, 0,
+                             "Awaiting GDB connections on port %d.", port);
+                SIM_LOG_INFO(2, obj, 0, "Connect from GDB using: \"target "
+                             "remote localhost:%d\"", port);
+                SIM_free_attribute(attr);
+        }
+        if (gdb->architecture)
+                setup_architecture(gdb);
+        return ret;
 }
 
 static set_error_t
-set_context_object(void *dummy, conf_object_t *obj, attr_value_t *val,
-                   attr_value_t *idx)
+set_context_object(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb->context_object = SIM_attr_is_nil(*val) ? NULL : SIM_attr_object(*val);
         if (gdb->context_change_hap_handle >= 0)
                 SIM_hap_delete_callback_id("Core_Context_Change",
@@ -2915,15 +3295,14 @@ set_context_object(void *dummy, conf_object_t *obj, attr_value_t *val,
 }
 
 static attr_value_t 
-get_context_object(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_context_object(conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
         return SIM_make_attr_object(gdb->context_object);
 }
 
 static set_error_t
-set_send_target_xml(void *dummy, conf_object_t *obj, attr_value_t *val,
-                   attr_value_t *idx)
+set_send_target_xml(conf_object_t *obj, attr_value_t *val)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
 
@@ -2935,15 +3314,14 @@ set_send_target_xml(void *dummy, conf_object_t *obj, attr_value_t *val,
 }
 
 static attr_value_t 
-get_send_target_xml(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_send_target_xml(conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
         return SIM_make_attr_boolean(gdb->send_target_xml);
 }
 
 static set_error_t
-set_follow_context(void *dummy, conf_object_t *obj, attr_value_t *val,
-                   attr_value_t *idx)
+set_follow_context(conf_object_t *obj, attr_value_t *val)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
 
@@ -2956,58 +3334,82 @@ set_follow_context(void *dummy, conf_object_t *obj, attr_value_t *val,
 }
 
 static attr_value_t
-get_follow_context(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_follow_context(conf_object_t *obj)
 {
         gdb_remote_t *gdb = (gdb_remote_t *) obj;
         return SIM_make_attr_uint64(gdb->follow_context);
 }
 
 static set_error_t
-set_inject_serial_command(void *data, conf_object_t *obj, attr_value_t *val,
-                          attr_value_t *idx)
+set_inject_serial_command(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb_serial_command(gdb, SIM_attr_string(*val));
         return Sim_Set_Ok;
 }
 
 static set_error_t
-set_allow_remote_commands(void *dummy, conf_object_t *obj, attr_value_t *val,
-                          attr_value_t *idx)
+set_allow_remote_commands(conf_object_t *obj, attr_value_t *val)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb->allow_remote_commands = SIM_attr_boolean(*val);
         return Sim_Set_Ok;
 }
 
 static attr_value_t
-get_allow_remote_commands(void *dummy, conf_object_t *obj, attr_value_t *idx)
+get_allow_remote_commands(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         return SIM_make_attr_boolean(gdb->allow_remote_commands);
 }
 
+static attr_value_t
+get_use_ipv4(conf_object_t *obj)
+{
+        return SIM_make_attr_boolean(VT_use_ipv4());
+}
+
+static set_error_t
+set_use_ipv4(conf_object_t *obj, attr_value_t *val)
+{
+        // Output deprecation warning on manual access only
+#if !defined(SIMICS_4_8_API) && !defined(SIMICS_5_API)
+        if (SIM_object_is_configured(obj)
+            && !SIM_is_restoring_state(obj))
+                SIM_LOG_ERROR(obj, 0,
+                           "The <" DEVICE_NAME ">->use_ipv4 attribute"
+                           " is deprecated. Use sim->force_ipv4 or"
+                           " prefs->force_ipv4 instead.");
+#endif
+        return SIM_set_attribute(SIM_get_object("sim"), "force_ipv4", val);
+}
+
 static conf_object_t *
-gdb_remote_alloc_object(void *data)
+gdb_remote_alloc_object(conf_class_t *cls)
 {
         gdb_remote_t *gdb = MM_ZALLOC(1, gdb_remote_t);
-        return &gdb->obj;
+        return to_obj(gdb);
 }
 
 /* Construct new instance of gdb-remote class.
    This does not cause any ports to be listened to. */
 static void *
-gdb_remote_init_object(conf_object_t *obj, void *data)
+gdb_remote_init_object(conf_object_t *obj)
 {
-        gdb_remote_t *gdb = (gdb_remote_t *)obj;
-        gdb->fd = OS_INVALID_SOCKET;
-        gdb->server_port = 0;
+        gdb_remote_t *gdb = gdb_of_obj(obj);
         gdb->send_target_xml = 1;
         gdb->cont_thread = gdb->other_thread = -1;
         gdb->context_change_hap_handle = gdb->context_updated_hap_handle = -1;
         gdb->sim_stopped_hap_handle = gdb->continuation_hap_handle = -1;
         gdb->segment_linear_base = 0;
         gdb->allow_remote_commands = true;
+        for (int i = 0; i < ALEN(servers); i++) {
+                if (servers[i].port) {
+                        SIM_set_attribute_default(
+                                SIM_object_descendant(obj, servers[i].port),
+                                "client", SIM_make_attr_object(obj));
+                }
+        }
         return obj;
 }
 
@@ -3052,109 +3454,127 @@ init_local(void)
                 "Note that these <tt>--target</tt> flags are not the only"
                 " ones that will work, just examples of ones that do work.");
 
-        const class_data_t class_data = {
-                .alloc_object = gdb_remote_alloc_object,
-                .init_object = gdb_remote_init_object,
+        const class_info_t class_data = {
+                .alloc = gdb_remote_alloc_object,
+                .init = gdb_remote_init_object,
                 .description = sb_str(&desc),
+                .short_desc = "gdb remote debugger",
                 .kind = Sim_Class_Kind_Pseudo
         };
 
-        conf_class_t *gdb_remote_class = SIM_register_class("gdb-remote",
-                                                            &class_data);
+        conf_class_t *gdb_remote_class = SIM_create_class("gdb-remote",
+                                                          &class_data);
 
-        SIM_register_typed_attribute(
+        for (int i = 0; i < ALEN(servers); i++) {
+                if (servers[i].port) {
+                        SIM_register_port(gdb_remote_class, servers[i].port,
+                                          SIM_get_class(servers[i].class),
+                                          servers[i].desc);
+                }
+        }
+
+        SIM_register_attribute(
+                gdb_remote_class, "use_ipv4",
+                get_use_ipv4,
+                set_use_ipv4,
+                Sim_Attr_Pseudo,
+                "b",
+                "Determines if connections should be restricted to IPv4."
+                " Default is FALSE");
+
+        SIM_register_attribute(
                 gdb_remote_class, "listen",
-                get_listen, 0, set_listen, 0,
+                get_listen, set_listen,
                 Sim_Attr_Pseudo | Sim_Init_Phase_1,
-                "i", NULL,
+                "i",
                 "Set to start listening for incoming GDB connections on the"
                 " specified port. If 0 is specified, an arbitrary available"
                 " port will be used. Read to get the port currently listened"
                 " on, or 0 if none.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "processor",
-                get_processor, 0, set_processor, 0,
+                get_processor, set_processor,
                 Sim_Attr_Pseudo,
-                "o|n", NULL, "Processor to connect the GDB stub to.");
-        SIM_register_typed_attribute(
+                "o|n", "Processor to connect the GDB stub to.");
+        SIM_register_attribute(
                 gdb_remote_class, "architecture",
-                get_architecture, 0, set_architecture, 0,
+                get_architecture, set_architecture,
                 Sim_Attr_Pseudo,
-                "s", NULL, "Architecture of target.");
-        SIM_register_typed_attribute(
+                "s", "Architecture of target.");
+        SIM_register_attribute(
                 gdb_remote_class, "extender",
-                get_extender, 0, set_extender, 0,
+                get_extender, set_extender,
                 Sim_Attr_Pseudo | Sim_Attr_Internal,
-                "o|n", NULL, "Experimental protocol extender object.");
-        SIM_register_typed_attribute(
+                "o|n", "Experimental protocol extender object.");
+        SIM_register_attribute(
                 gdb_remote_class, "disconnect",
-                0, 0, set_disconnect, 0,
+                0, set_disconnect,
                 Sim_Attr_Pseudo,
-                "b", NULL, "Disconnects the remote GDB");
-        SIM_register_typed_attribute(
+                "b", "Disconnects the remote GDB");
+        SIM_register_attribute(
                 gdb_remote_class, "connected",
-                get_connected, NULL, 0, NULL,
-                Sim_Attr_Pseudo, "b", NULL,
+                get_connected, 0,
+                Sim_Attr_Pseudo, "b",
                 "Returns true if the gdb-remote object is connected to a"
                 " GDB session, false if not.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "signal",
-                0, 0, set_signal, 0,
+                0, set_signal,
                 Sim_Attr_Pseudo,
-                "i", NULL,
+                "i",
                 "Sends a signal to the remote GDB. This makes GDB think the"
                 " program it is debugging has received a signal."
                 " See the <tt>signal(7)</tt> man page for a list of"
                 " signal numbers.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "send_packet",
-                0, 0, set_send_packet, 0, Sim_Attr_Pseudo, "s", NULL,
+                0, set_send_packet, Sim_Attr_Pseudo, "s",
                 "Sends a raw packet from gdb-remote to GDB. The string that"
                 " this attribute is written with will be sent as a packet to"
                 " GDB.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "large_operations",
-                get_large_operations, 0,
-                set_large_operations, 0,
+                get_large_operations,
+                set_large_operations,
                 Sim_Attr_Optional,
-                "i", NULL,
+                "i",
                 "Set to non-zero if memory operations received from GDB"
                 " should be performed as single operations instead of"
                 " bytewise");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "follow_context",
-                get_follow_context, 0, 
-                set_follow_context, 0,
-                Sim_Attr_Pseudo, "i", NULL,
+                get_follow_context,
+                set_follow_context,
+                Sim_Attr_Pseudo, "i",
                 "Set to non-zero if context should be followed.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "context_object",
-                get_context_object, 0, 
-                set_context_object, 0,
+                get_context_object,
+                set_context_object,
                 Sim_Attr_Optional,
-                "o|n", NULL,
+                "o|n",
                 "Context object that this GDB session is attached to.");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "send_target_xml",
-                get_send_target_xml, 0, 
-                set_send_target_xml, 0,
+                get_send_target_xml,
+                set_send_target_xml,
                 Sim_Attr_Optional,
-                "b", NULL,
+                "b",
                 "Should an XML target description be sent to GDB, "
                 "default is true, but can be disabled since it can confuse "
                 "some clients (e.g. Eclipse on a Linux host).");
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "inject_serial_command",
-                0, NULL, set_inject_serial_command, NULL,
-                Sim_Attr_Pseudo | Sim_Attr_Internal, "s", NULL,
+                0, set_inject_serial_command,
+                Sim_Attr_Pseudo | Sim_Attr_Internal, "s",
                 "Inject a GDB serial command as if the remote gdb"
                 " process had sent it.");
 
-        SIM_register_typed_attribute(
+        SIM_register_attribute(
                 gdb_remote_class, "allow_remote_commands",
-                get_allow_remote_commands, NULL,
-                set_allow_remote_commands, NULL,
-                Sim_Attr_Pseudo | Sim_Attr_Internal, "b", NULL,
+                get_allow_remote_commands,
+                set_allow_remote_commands,
+                Sim_Attr_Pseudo | Sim_Attr_Internal, "b",
                 "When set to true, allow qRcmd command which allows any Simics"
                 " commands to be executed from remote connection. This will"
                 " allow a gdb remote client to do anything that can be done"
@@ -3164,7 +3584,14 @@ init_local(void)
             "singlestep breakpoint", gdb_remote_class, Sim_EC_Notsaved,
             gdb_step_handler, 0, 0, 0, 0);
 
-        os_initialize_sockets();
+        static const external_connection_events_interface_t ext_iface = {
+                .on_accept = external_connection_events_on_accept,
+                .on_input = external_connection_events_on_input,
+        };
+        SIM_REGISTER_INTERFACE(gdb_remote_class,
+                               external_connection_events, &ext_iface);
+
+        init_gdb_recording(gdb_remote_class);
 }
 
 bool
@@ -3183,91 +3610,5 @@ read_opt_attr(conf_object_t *log_obj, conf_object_t *obj, const char *attr_name,
                 return false;
         }
         *attr = local_attr;
-        return true;
-}
-
-uint64
-reg_read_zero(conf_object_t *cpu, register_description_t *rd)
-{
-        return 0;
-}
-
-uint64
-reg_read_int(conf_object_t *cpu, register_description_t *rd)
-{
-        const int_register_interface_t *const iface =
-                SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
-        ASSERT(iface);
-        return iface->read(cpu, rd->regnum);
-}
-
-uint64
-reg_read_int32l(conf_object_t *cpu, register_description_t *rd)
-{
-        return (uint32)reg_read_int(cpu, rd);
-}
-
-uint64
-reg_read_int32h(conf_object_t *cpu, register_description_t *rd)
-{
-        return reg_read_int(cpu, rd) >> 32;
-}
-
-uint64
-reg_read_v9f(conf_object_t *cpu, register_description_t *rd)
-{
-        const sparc_v9_interface_t *const iface
-                = SIM_c_get_interface(cpu, SPARC_V9_INTERFACE);
-        ASSERT(iface);
-        if (rd->size == 32)
-                return iface->read_fp_register_i(cpu, rd->regnum);
-        else if (rd->size == 64)
-                return iface->read_fp_register_x(cpu, rd->regnum);
-        else
-                ASSERT(false);
-}
-
-bool
-reg_write_ignore(conf_object_t *cpu, register_description_t *rd, uint64 val)
-{
-        return false;
-}
-
-bool
-reg_write_int(conf_object_t *cpu, register_description_t *rd, uint64 val)
-{
-        const int_register_interface_t *const iface =
-                SIM_c_get_interface(cpu, INT_REGISTER_INTERFACE);
-        ASSERT(iface);
-        iface->write(cpu, rd->regnum, val);
-        return true;
-}
-
-bool
-reg_write_int32l(conf_object_t *cpu, register_description_t *rd, uint64 val)
-{
-        return reg_write_int(cpu, rd,
-                             reg_read_int32h(cpu, rd) << 32 | (uint32)val);
-}
-
-bool
-reg_write_int32h(conf_object_t *cpu, register_description_t *rd, uint64 val)
-{
-        return reg_write_int(cpu, rd,
-                             val << 32 | reg_read_int32l(cpu, rd));
-}
-
-bool
-reg_write_v9f(conf_object_t *cpu, register_description_t *rd, uint64 val)
-{
-        const sparc_v9_interface_t *const iface
-                = SIM_c_get_interface(cpu, SPARC_V9_INTERFACE);
-        ASSERT(iface);
-        if (rd->size == 32)
-                iface->write_fp_register_i(cpu, rd->regnum, val);
-        else if (rd->size == 64)
-                iface->write_fp_register_x(cpu, rd->regnum, val);
-        else
-                ASSERT(false);
         return true;
 }

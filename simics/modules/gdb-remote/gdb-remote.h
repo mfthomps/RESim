@@ -1,12 +1,16 @@
 /*
   gdb-remote.h
 
-  This Software is part of Wind River Simics. The rights to copy, distribute,
-  modify, or otherwise make use of this Software may be licensed only
-  pursuant to the terms of an applicable license agreement.
-  
-  Copyright 2010-2019 Intel Corporation
+  © 2010 Intel Corporation
 
+  This software and the related documents are Intel copyrighted materials, and
+  your use of them is governed by the express license under which they were
+  provided to you ("License"). Unless the License provides otherwise, you may
+  not use, modify, copy, publish, distribute, disclose or transmit this software
+  or the related documents without Intel's prior written permission.
+
+  This software and the related documents are provided as is, with no express or
+  implied warranties, other than those that are expressly stated in the License.
 */
 
 #ifndef GDB_REMOTE_H
@@ -14,24 +18,50 @@
 
 #include <simics/simulator-api.h>
 #include <simics/util/vect.h>
+#include <simics/base/iface-call.h>
 
+#include <simics/model-iface/external-connection.h>
 #include <simics/model-iface/processor-info.h>
 #include <simics/simulator-iface/context-tracker.h>
 #include "gdb-extender-iface.h"
-
+#include "gdb-record.h"
+ 
 #define GDB_MAX_PACKET_SIZE 8192
 
-enum gdb_breakpoint_type { 
-        Gdb_Bp_Software, Gdb_Bp_Hardware, 
-        Gdb_Bp_Write, Gdb_Bp_Read, Gdb_Bp_Access 
-};
+typedef enum {
+        Gdb_Bp_Software, Gdb_Bp_Hardware,
+        Gdb_Bp_Write, Gdb_Bp_Read, Gdb_Bp_Access
+} gdb_breakpoint_type_t;
+
+typedef enum {
+        Simics_Gdb_Bp_Hap,
+        Simics_Gdb_Virt_Insn,
+        Simics_Gdb_Virt_Data,
+} simics_bp_type_t;
+
+typedef struct {
+        union {
+                struct {
+                        breakpoint_id_t bp_id;
+                        hap_handle_t hap_id;
+                };
+                virtual_instr_bp_handle_t *virt_insn;
+                struct {
+                        virtual_data_bp_handle_t *virt_data_write;
+                        virtual_data_bp_handle_t *virt_data_read;
+                };
+        };
+        simics_bp_type_t bp_type;
+        bool valid;
+} installed_bp_data_t;
 
 struct gdb_breakpoint {
-        enum gdb_breakpoint_type type;
-        logical_address_t        la, len;
-        breakpoint_id_t          bp_id;
-        hap_handle_t             hap_id;
-        int                      count;
+        struct gdb_remote *gdb;
+        gdb_breakpoint_type_t type;
+        logical_address_t la;
+        logical_address_t len;
+        installed_bp_data_t bp_data;
+        int count;
 };
 
 struct gdb_server {
@@ -66,11 +96,6 @@ typedef QUEUE(char) char_queue_t;
 
 struct gdb_remote {
         conf_object_t obj;
-
-        socket_t server_fd;
-        socket_t fd;            /* the socket file descriptor */
-
-        int server_port;        /* port we are listening for connections on */
 
         char_queue_t received; /* characters received from gdb */
 
@@ -128,7 +153,7 @@ struct gdb_remote {
            some clients (e.g. Eclipse). */
         bool send_target_xml;
 
-        /* Hardcoded registers. */
+        /* Hardcoded registers or Xtensa specific */
         reg_desc_vect_t default_register_descriptions;
 
         /* Runtime defined registers. */
@@ -142,6 +167,14 @@ struct gdb_remote {
            from remote. This will allow a gdb remote connection to do anything
            that can be done from CLI. */
         bool allow_remote_commands;
+
+        IFACE_OBJ(external_connection_ctl) server;
+        bool connected;
+
+        struct {
+                bool enabled;
+                VECT(gdb_record_t) records;
+        } record_socket;
 };
 
 typedef enum {
@@ -179,7 +212,14 @@ struct gdb_arch {
         int (*read_register_window_shadow)(
                 gdb_remote_t *gdb, conf_object_t *cpu,
                 logical_address_t la, logical_address_t len, char *buf);
-        int decr_pc_after_break;
+
+        /* Optional way to get hold of the target registers */
+        bool (*get_register_descriptions)(gdb_remote_t *gdb, conf_object_t *cpu);
+
+        /* Optional mapper from another register number to the correct 
+           register_description_t */
+        register_description_t *(*reg_mapper)(
+                gdb_remote_t *gdb, reg_desc_vect_t *rds, int idx);
 
         const regspec_t *regs;
         int nregs;                           /* size of regs array */
@@ -188,34 +228,24 @@ struct gdb_arch {
 /* Generated table; terminated by NULL */
 extern const gdb_arch_t *const gdb_archs[];
 
-#define GDB_PRINT_HEX_HEADER(bits)                              \
-void gdb_print_hex ## bits ## _le(char *p, uint ## bits value); \
-void gdb_print_hex ## bits ## _be(char *p, uint ## bits value)
-
-GDB_PRINT_HEX_HEADER(8);
-GDB_PRINT_HEX_HEADER(16);
-GDB_PRINT_HEX_HEADER(32);
-GDB_PRINT_HEX_HEADER(64);
+void gdb_print_hex(char *buf, uint64 val, bool is_be, uint8 bits);
 
 bool read_opt_attr(conf_object_t *log_obj, conf_object_t *obj,
                    const char *attr_name, attr_value_t * const attr);
-uint64 reg_read_zero(conf_object_t *cpu, register_description_t *rd);
-uint64 reg_read_int(conf_object_t *cpu, register_description_t *rd);
-uint64 reg_read_int32l(conf_object_t *cpu, register_description_t *rd);
-uint64 reg_read_int32h(conf_object_t *cpu, register_description_t *rd);
-uint64 reg_read_v9f(conf_object_t *cpu, register_description_t *rd);
-bool reg_write_ignore(conf_object_t *cpu, register_description_t *rd,
-                      uint64 val);
-bool reg_write_int(conf_object_t *cpu, register_description_t *rd,
-                   uint64 val);
-bool reg_write_int32l(conf_object_t *cpu, register_description_t *rd,
-                      uint64 val);
-bool reg_write_int32h(conf_object_t *cpu, register_description_t *rd,
-                      uint64 val);
-bool reg_write_v9f(conf_object_t *cpu, register_description_t *rd,
-                   uint64 val);
 
 void handle_ctrl_c(gdb_remote_t *gdb);
 void gdb_serial_command(gdb_remote_t *gdb, const char *cmd);
+
+FORCE_INLINE gdb_remote_t *
+gdb_of_obj(conf_object_t *obj)
+{
+        return (gdb_remote_t *)obj;
+}
+
+FORCE_INLINE conf_object_t *
+to_obj(gdb_remote_t *gdb)
+{
+        return &gdb->obj;
+}
 
 #endif /* GDB_REMOTE_H */
