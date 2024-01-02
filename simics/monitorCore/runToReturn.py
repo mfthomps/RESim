@@ -24,6 +24,7 @@
 '''
 '''
 Run forward until a ret instruction is hit (adjusted by any calls).
+NOTE: this is not reliable because compilers do not always have a return for every call.
 
 '''
 from simics import *
@@ -64,7 +65,8 @@ class RunToReturn():
         tid = self.top.getTID()
         if tid != self.tid:
             return
-        self.lgr.debug('RunToReturn callHap calls:%d rets:%d' % (self.call_count, self.ret_count))
+        eip = self.top.getEIP()
+        self.lgr.debug('RunToReturn callHap calls:%d rets:%d eip: 0x%x' % (self.call_count, self.ret_count, eip))
         self.call_count = self.call_count+1
 
     def retHap(self, dumb, context, break_num, memory):
@@ -74,7 +76,8 @@ class RunToReturn():
         if tid != self.tid:
             return
         sp = self.top.getReg('rsp', self.cpu)
-        self.lgr.debug('RunToReturn retHap calls:%d rets:%d  sp: 0x%x' % (self.call_count, self.ret_count, sp))
+        eip = self.top.getEIP()
+        self.lgr.debug('RunToReturn retHap calls:%d rets:%d  sp: 0x%x eip: 0x%x' % (self.call_count, self.ret_count, sp, eip))
         self.ret_count = self.ret_count+1
         if self.call_count == self.ret_count:
             SIM_run_alone(self.rmHaps, None)
