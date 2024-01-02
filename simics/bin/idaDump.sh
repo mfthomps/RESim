@@ -67,7 +67,7 @@ fi
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path"
 
-if [ ! -f $target ]; then
+if [[ ! -f $target ]]; then
     echo "***ERROR:   No file found at $target"
     exit 1
 fi
