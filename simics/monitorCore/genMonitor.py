@@ -1186,7 +1186,7 @@ class GenMonitor():
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
         #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
-        elif self.isWindows:
+        elif self.isWindows(self.target):
             machine_size = self.soMap[self.target].getMachineSize(tid)
             self.lgr.debug('doDebugCmd machine_size got %s' % machine_size)
             if machine_size is None:
@@ -1306,7 +1306,7 @@ class GenMonitor():
                     self.lgr.debug('debug, set target fs, progname is %s  full: %s' % (prog_name, self.full_path))
                     real_path = resimUtils.realPath(self.full_path)
                     ''' this is not actually the text segment, it is the entire range of main program sections ''' 
-                    if self.isWindows():
+                    if self.isWindows(self.target):
                         ''' Assumes winProg has already populated soMap'''
                         # Note this call will add the text section after getting the load address from the peb
                         elf_info = self.soMap[self.target].getText(tid)
@@ -2848,7 +2848,7 @@ class GenMonitor():
             self.rev_to_call[self.target].noWatchSysenter()
             if self.track_threads is not None and self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
-            if self.isWindows:
+            if self.isWindows():
                 self.winMonitor[self.target].rmDebugExitHap(immediate=immediate, context=self.context_manager[self.target].getRESimContextName()) 
             elif self.target in self.exit_group_syscall:
                 self.syscallManager[self.target].rmSyscall('debugExit', immediate=immediate, context=self.context_manager[self.target].getRESimContextName())
@@ -4488,7 +4488,16 @@ class GenMonitor():
         self.lgr.debug('genMonitor toTid %s' % tid)
         if callback is None and tid != '-2' and tid !='0':
             callback = self.toUser
-        self.context_manager[self.target].catchTid(tid, callback)
+        if tid == '-1':
+            cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
+            self.lgr.debug('genMonitor toTid run to any tid that we are watching. cur_tid %s' % cur_tid)
+            if self.amWatching(cur_tid):
+                self.lgr.debug('genMonitor toTid watching cur tid, just do callback')
+                callback() 
+            else:
+                self.context_manager[self.target].catchTid(tid, callback)
+        else:
+            self.context_manager[self.target].catchTid(tid, callback)
         if run:
             SIM_continue(0)
 
@@ -4789,7 +4798,7 @@ class GenMonitor():
             if debug_tid is None:
                 cpu, comm, tid = self.task_utils[self.target].curThread() 
                 self.debugTidGroup(tid)
-            print('fd is %d' % fd)
+            print('fd is %d (0x%x)' % (fd, fd))
             prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr, commence=commence) 
         else:
             print('Reverse execution must be enabled to run prepInject')
@@ -5903,6 +5912,9 @@ class GenMonitor():
 
     def pageCallback(self, addr, callback):
         self.page_callbacks[self.target].setCallback(addr, callback)
+
+    def getTIB(self):
+        return self.task_utils[self.target].getTIB()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

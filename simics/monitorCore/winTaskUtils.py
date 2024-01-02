@@ -882,3 +882,9 @@ class WinTaskUtils():
                retval = ts
                break
         return retval
+
+    def getTIB(self):
+        va = self.cpu.ia32_gs_base + 0x30
+        retval = self.mem_utils.readWord(self.cpu, va)
+        self.lgr.debug('winTaskUtils getTIB gs_base is 0x%x  tib addr 0x%x' % (self.cpu.ia32_gs_base, va, retval))
+        return va

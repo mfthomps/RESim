@@ -1159,3 +1159,7 @@ class TaskUtils():
             self.exec_addrs[new_tid] = self.exec_addrs[parent_tid]
             self.lgr.debug('taskUtils didClone recorded clone of new tid %s in exec_addres' % (new_tid))
             
+    def getTIB(self):
+        va = 0xdeadbeef
+        self.lgr.debug('taskUtils getTIB TBD fix this')
+        return va
