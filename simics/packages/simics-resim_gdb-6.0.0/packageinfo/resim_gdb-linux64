@@ -1,0 +1,15 @@
+name: gdb for Ghidra
+package-name: resim_gdb
+package-name-full: resim_gdb-linux64
+package-number: 200000
+version: 6.0.0
+extra-version:
+type: addon
+host: linux64
+build-id: 6191
+build-id-namespace: customer
+files:
+    simics-resim_gdb-6.0.0/packageinfo/resim_gdb-linux64
+    simics-resim_gdb-6.0.0/linux64/lib/gdb-remote.so
+    simics-resim_gdb-6.0.0/linux64/lib/python-py3/simmod/gdb_remote/simics_start.py
+    simics-resim_gdb-6.0.0/linux64/lib/python-py3/simmod/gdb_remote/module_load.py
