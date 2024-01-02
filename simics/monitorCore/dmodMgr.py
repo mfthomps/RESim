@@ -58,6 +58,7 @@ class DmodMgr():
                     # previously loaded, so do not load again (unless in snapshot)
                     if 'removed_dmods' in dmod_dict:
                         self.removed_dmods = dmod_dict['removed_dmods']
+                        self.lgr.debug('dmodMgr handleDmods loaded removed_dmods from pickle %s' % (str(self.removed_dmods)))
                     else:
                         legacy = True
                         # TBD this is broken nonsense. remove it after old snapshots wither
@@ -100,7 +101,7 @@ class DmodMgr():
                             print('Dmod is missing, cannot continue.')
                             self.top.quit()
                 else:
-                    self.lgr.debug('dmodMgr target: %s now load any dmods from ini that were not removed.' % self.cell_name)
+                    self.lgr.debug('dmodMgr target: %s now load any dmods from ini that were not removed, this dmod %s.' % (self.cell_name, dmod))
                     if dmod not in self.removed_dmods:
                         self.loaded_dmods.append(dmod)
                         if self.top.runToDmod(dmod, cell_name=self.cell_name):
