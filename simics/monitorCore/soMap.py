@@ -34,6 +34,7 @@ class SOMap():
         self.prog_text_start = {}
         self.prog_text_end = {}
         self.prog_text_offset = {}
+        self.prog_local_path = {}
         self.hap_list = []
         self.stop_hap = None
         self.fun_mgr = None
@@ -56,6 +57,8 @@ class SOMap():
             if 'prog_start' in so_pickle:
                 self.prog_start = so_pickle['prog_start']
                 self.prog_end = so_pickle['prog_end']
+                if 'prog_local_path' in so_pickle:
+                    self.prog_local_path = so_pickle['prog_local_path']
             else:
                 self.lgr.debug('soMap loadPickle old format, find text info')
                 self.prog_start = so_pickle['text_start']
@@ -122,6 +125,7 @@ class SOMap():
         so_pickle['prog_start'] = self.prog_start
         so_pickle['prog_end'] = self.prog_end
         so_pickle['text_prog'] = self.text_prog
+        so_pickle['prog_local_path'] = self.prog_local_path
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
         self.lgr.debug('SOMap pickleit to %s ' % (somap_file))
@@ -191,7 +195,7 @@ class SOMap():
             retval = False
         return retval
 
-    def setElfInfo(self, tid, elf_info, prog):
+    def setElfInfo(self, tid, elf_info, prog, path):
         self.prog_start[tid] = elf_info.address
         self.prog_end[tid] = elf_info.address+elf_info.size
         if elf_info.text_start is not None:
@@ -199,6 +203,7 @@ class SOMap():
             self.prog_text_end[tid] = elf_info.text_start + elf_info.text_size
             self.prog_text_offset[tid] = elf_info.text_offset
         self.text_prog[tid] = prog
+        self.prog_local_path[tid] = path
         if tid not in self.so_addr_map:
             self.so_addr_map[tid] = {}
             self.so_file_map[tid] = {}
@@ -215,17 +220,17 @@ class SOMap():
                 self.lgr.debug('soMap addText tid:%s old prog %s does not match new %s' % (tid, self.text_prog[tid], prog))
                 if tid_in != tid:
                     self.lgr.debug('soMap addText, tid_in not same as tid, setting elf info for tid_in %s' % tid_in)
-                    self.setElfInfo(tid_in, elf_info, prog)
+                    self.setElfInfo(tid_in, elf_info, prog, path)
                 else:
                     self.lgr.debug('soMap addText, tid_in is the tid TBD reassign TID if multiple threads?  for now, pave it over')
                     self.text_prog[tid] = {}
                     self.so_addr_map[tid] = {}
                     self.so_file_map[tid] = {}
-                    self.setElfInfo(tid, elf_info, prog)
+                    self.setElfInfo(tid, elf_info, prog, path)
 
         elif elf_info is not None:
             self.lgr.debug('soMap addText, prog %s tid:%s' % (prog, tid))
-            self.setElfInfo(tid, elf_info, prog)
+            self.setElfInfo(tid, elf_info, prog, path)
         return elf_info
 
     def noText(self, prog, tid):
@@ -360,6 +365,10 @@ class SOMap():
                 retval['prog_start'] = self.prog_start[tid]
                 retval['prog_end'] = self.prog_end[tid]
                 retval['prog'] = self.text_prog[tid]
+                if tid in self.prog_local_path:
+                    retval['prog_local_path'] = self.prog_local_path[tid]
+                else:
+                    retval['prog_local_path'] = self.top.getFullPath()
             else:
                 self.lgr.debug('tid:%s not in text sections' % tid)
             sort_map = {}

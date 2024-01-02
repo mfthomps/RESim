@@ -21,6 +21,7 @@ class Text():
 class DLLInfo():
     def __init__(self, pid, fname, fd):
         self.fname = fname
+        self.local_path = None
         self.fd = fd
         self.pid = pid
         self.section_handle = None
@@ -174,7 +175,7 @@ class WinDLLMap():
         dll_info = DLLInfo(pid, fname, fd)
         self.open_files[pid][fd] = dll_info
 
-    def addText(self, fname, tid, addr, size, machine, image_base, text_offset):
+    def addText(self, fname, tid, addr, size, machine, image_base, text_offset, local_path):
         pid = self.pidFromTID(tid)
         dll_info = DLLInfo(pid, fname, None)
         dll_info.addr = addr
@@ -182,6 +183,7 @@ class WinDLLMap():
         dll_info.size = size
         dll_info.machine = machine
         dll_info.image_base = image_base
+        dll_info.local_path = local_path
         self.section_list.append(dll_info)
         self.text[pid] = dll_info
         self.lgr.debug('winDLL addText for pid:%s %s' % (pid, fname))
@@ -251,7 +253,7 @@ class WinDLLMap():
                                 full_path = self.top.getFullPath(fname=pp)
                                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                                 self.addText(pp, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
-                                            win_prog_info.image_base, win_prog_info.text_offset)
+                                            win_prog_info.image_base, win_prog_info.text_offset, full_path)
                                 if win_prog_info.text_size is None:
                                     self.lgr.error('WinDLLMap mapSection text_size is None for %s' % comm)
                                 if win_prog_info.load_addr is None:
@@ -487,7 +489,7 @@ class WinDLLMap():
                 win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                 self.top.setFullPath(full_path)
                 if win_prog_info.load_addr is not None:
-                    self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset)
+                    self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
                     retval = Text(win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.image_base)
                 else:
                     self.lgr.debug('winDLL getText, NO LOAD ADDR for  %s' % prog_name)
@@ -527,6 +529,7 @@ class WinDLLMap():
                 section.image_base = image_base
                 section.text_offset = text_offset
                 section.size = size
+                section.local_path = full_path
           
             else:
                 image_base = section.image_base
@@ -547,11 +550,12 @@ class WinDLLMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         pid = self.pidFromTID(tid)
-        retval['group_leader'] = pid
+        retval['group_leader'] = str(pid)
         if pid in self.text and self.text[pid].addr is not None:
                 retval['prog_start'] = self.text[pid].addr
                 retval['prog_end'] = self.text[pid].addr + self.text[pid].size - 1
                 retval['prog'] = self.top.getProgName(pid)
+                retval['prog_local_path'] = self.top.getFullPath()
         else:
             self.lgr.debug('winDLL getSO pid:%s not in text sections' % pid)
         sort_map = {}
@@ -572,6 +576,7 @@ class WinDLLMap():
             section['offset'] = text_seg.addr
             section['size'] = text_seg.size
             section['file'] = text_seg.fname
+            section['local_path'] = text_seg.local_path
             retval['sections'].append(section)
 
         ret_json = json.dumps(retval) 
