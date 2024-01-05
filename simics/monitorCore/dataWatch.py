@@ -2584,7 +2584,7 @@ class DataWatch():
                 return 'addr: 0x%x trans_size: %d start: 0x%x len: %d' % (self.addr, self.trans_size, self.start, self.length)
 
     def isDataTransformCall(self, instruct, call_instr, recent_instructs=[]):
-        fun_list = ['ntohl', 'htonl', 'tolower', 'toupper']
+        fun_list = ['ntohl', 'htonl', 'tolower', 'toupper', 'ordinal_']
         retval = None
         if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
             fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr, recent_instructs=recent_instructs, check_reg=True)
@@ -2595,7 +2595,7 @@ class DataWatch():
 
             if fun is not None:
                 for tform in fun_list:
-                    if tform in fun:
+                    if tform in fun.lower():
                         retval = fun
                         break
         return retval
