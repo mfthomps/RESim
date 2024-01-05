@@ -321,11 +321,30 @@ class StackTrace():
         return retval
 
     def funMatch(self, fun1, fun2):
+        ''' ad hoc hacks to match 2 function signatures '''
         if fun1 is None or fun2 is None:
             self.lgr.debug('dataWatch funMatch called with fun of None')
             return False
         # TBD make data files for libc fu?
         retval = False
+
+        if '(' in fun1 and '(' in fun2:
+            fun1 = fun1.split('(')[0]
+            fun2 = fun2.split('(')[0]
+
+        fun1 = fun1.replace('struct_std::','')
+        fun2 = fun2.replace('struct_std::','')
+        fun1 = fun1.replace('class_std::','')
+        fun2 = fun2.replace('class_std::','')
+        fun1 = fun1.replace('std::','')
+        fun2 = fun2.replace('std::','')
+        # how ugly can it get?
+        fun1 = fun1.replace('>_>', '>>')
+        fun2 = fun2.replace('>_>', '>>')
+        #if 'basic_string' in fun1 and 'basic_string' in fun2:
+        #    self.lgr.debug('does  %s' % fun1)
+        #    self.lgr.debug('match %s' % fun2)
+
         if fun1.startswith(fun2) or fun2.startswith(fun1):
             retval = True
         else:
@@ -774,7 +793,7 @@ class StackTrace():
                 elif cur_fun_name.startswith('_'):
                     cur_fun_name = cur_fun_name[1:]
                 prev_ip = eip
-                #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
+                self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
 
         if self.cpu.architecture != 'arm':
             # TBD need way to indicate whether bp register is used
@@ -918,6 +937,8 @@ class StackTrace():
                         if prev_ip is not None:
                             cur_fun_name = self.fun_mgr.getFunName(prev_ip)
                             #self.lgr.debug('StackTrace prev_ip 0x%x, fun %s' % (prev_ip, cur_fun_name))
+                        #else:
+                        #    self.lgr.debug('StackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
                         if fun is not None:
                             if cur_fun_name is not None:
                                 if not self.funMatch(fun, cur_fun_name): 
@@ -956,10 +977,12 @@ class StackTrace():
                             if not self.top.isWindows():
                                 self.soCheck(fun_hex)
                         else:
+                            #self.lgr.debug('stackTrace fun_hex none')
                             if prev_ip is None:
                                 #self.lgr.debug('stackTrace fun_hex is none and no prev_ip??? but ip is 0x%x, use that to get fun_hex' % eip)
                                 use_ip = eip
                             else:
+                                #self.lgr.debug('stackTrace fun_hex none, use_ip from prev_ip 0x%x' % prev_ip)
                                 use_ip = prev_ip
                             if self.fun_mgr is not None:
                                 fun_hex = self.fun_mgr.getFun(use_ip)
@@ -968,6 +991,8 @@ class StackTrace():
                                     #self.lgr.debug('stackTrace fun_hex hacked to 0x%x using prev_ip and fun to %s.  TBD generalize this' % (fun_hex, fun))
                                     instruct_str = '%s   %s' % (self.callmn, fun)
                                     pass
+                                #else:
+                                #    self.lgr.debug('stackTrace fun_hex hack failed fun_hex still none')
                                 
                         fname = self.soMap.getSOFile(val)
                         if been_in_main and resimUtils.isClib(fname):
