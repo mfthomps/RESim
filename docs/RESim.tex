@@ -131,7 +131,7 @@ Simics “OS Awareness” or Eclipse-based interfaces.
 \begin{itemize}
 \item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
 \url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}  RESim has be exended to work with this
-free versoin.
+free version.
 
 \item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
 \url{https://github.com/mfthomps/RESim/simics/ida}  
@@ -1152,32 +1152,27 @@ the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PAR
 
 \subsection{IDA Pro}
 \label{ida}
-Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro at the location relative to the 
-{\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration (ini) file.  
+Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro as described below.
+Alternately, use Ghidra as described in \ref{ghidra}.
 
-Use the {\tt idaDump.sh <path to program>} script (which should be in your path) from a shell to create the IDA database and dump function and block information.  
-Run this script before rebasing programs in IDA because the function/block data must reflect the original program offsets per the binary file.
-(Alternately use the TBD Ghidra script.)  If you are running in a shared environment, e.g., at NPS with analysis artifacts on a shared drive, then 
-check that path to see if the fuction, block, imports and mangle artifacts were already created.
+Get a separate terminal shell and cd to the location named by the {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration (ini) file.  
+If you will run IDA on a different computer than the one running Simics, you will need access to that directory or a copy of it.
 
-Start ida using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).  Start IDA from the
+Use the {\tt idaDump.sh <path to program>} script (which should be in your path) from a shell to create the IDA database and dump function and block information
+needed by RESim.  Those artifacts will be stored in a directory relative to your {\tt IDA\_ANALYSIS} environment variable.
+If you are running in a shared environment, e.g., at NPS with analysis artifacts on a shared drive, then 
+check that path to see if the fuction, block, imports and mangle artifacts were already created.  If they were, you need not create them again.
+
+Start IDA using the {\tt runIda.sh} command (the path to which should be part of your PATH environment variable).  Start IDA from the
 {\tt RESIM\_ROOT\_PREFIX} directory, providing the path to the executable realative to that root prefix directory.
 
 If IDA will run on a different computer than where Simics is running, and that remote computer can only be reached via SSH, include the host 
-name as a command line option.  See section \ref{ida-install} for additional information.
+name as a command line option to open a ssh tunnel.  See section \ref{ida-install} for additional information.
 
 The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is either localhost, or the name of the remote host
 on which Simics is running, and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
 and to only log the exception.  Save the settings.  You should only need to do this step once.
-
-If you've not run the idaDump.sh, then the first time you open a given program in IDA, run this script (from File / Script file):
-\begin{verbatim}
-$RESIM_DIR/simics/ida/dumpFuns.py 
-\end{verbatim}
-\noindent This will create a data file used by RESim when generating stack traces.
-And then run the {\tt findBlocks.py} script to generate a database of basic blocks that will be used by RESim for tracking code
-coverage and to instrument RESim for use with AFL.  Both of these scripts are run by the idaDump.sh script.
 
 From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc$<$program$>$} command, naming the program of interest.
 RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
@@ -1252,37 +1247,55 @@ gdb to display responses from gdb "monitor" commands using the same FD as used
 for other gdb command results.  This is needed for Ghidra to see the results of monitor commands, which the plugin
 uses to interact with RESim.
 
-Ghidra also requires a modified version of the Simics gdb-remote program.  Run the script at
+Ghidra also requires a modified version of the Simics gdb-remote program if Windows targets are to be
+analyzed.  Run the script at
 \begin{verbatim}
   $RESIM_DIR/simics/setup/add-gdb.sh
 \end{verbatim}
 to add the modified package to your Simics installation.
 
-Once the RESimGhidraPlugins extension is installed (per the repo README), start the debugger and organize the RESim windows
+Once the RESimGhidraPlugins extension is installed (per the repo README): 
+\begin{itemize}
+\item Start Ghidra using runGhidra.sh script from a shell while in the target application root 
+per the RESim ini file.
+
+\item Create a Ghidra project and import the target binary into the project.
+
+\item Start the Ghidra debugger and open the project module.
+
+\item Click the menu item at {\tt RESim / Dump artifacts}  to dump function and block information
+needed by RESim.  Those artifacts will be stored in a directory relative to your {\tt IDA\_ANALYSIS} environment variable.
+If you are running in a shared environment, e.g., at NPS with analysis artifacts on a shared drive, then 
+check that path to see if the fuction, block, imports artifacts were already created.  If they were, you need not create them again.
+
+\item Organize the RESim windows
 as desired, e.g., by dragging them to other tabbed windows.
 
-Use the RESim / Configure menu options to set the path to your customized gdb; the path to
+\item Use the RESim / Configure menu options to set the path to your customized gdb; the path to
 the file system root of the target binary, the host:port of your Simics host, and to set the ARM architecture if needed.
 
-The windows described for the IDA plugin are duplicated within the Ghidra plugin.
+\item Assuming you have the target debugging in RESim, attach to the GDB server by clicking the menu item at {\tt RESim / Attach Simulation}.
 
-Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
+\item The windows described for the IDA plugin are duplicated within the Ghidra plugin.
+
+\item Navigation and functions are available in the RESim menu, and by right clicking.  For example, to reverse track
 the source of a memory location, put the cursor over the operand and right click...
 
 %Ghidra provdes logs, typically at \$HOME/.config/ghidra/ghidra\_11xx/application.log
-Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_11xx\_PUBLIC/application.log
+\item Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_11xx\_PUBLIC/application.log
 Or, if a dev build of Ghidra the logs may be in HOME/.config/ghidra...
 
-Ghidra stores its analysis in "project" directories, typically in home.
+\item Ghidra stores its analysis in "project" directories, typically in home.
 
-To rebase Ghidra programs, open the Memory Map windows and press the house icon at the upper right.
+\item To rebase Ghidra programs, open the Memory Map windows and press the house icon at the upper right.
 
-The RESim plugin for Ghidra includes \textit{Memory reference Operand Hover}, which displays addresses
+\item The RESim plugin for Ghidra includes \textit{Memory reference Operand Hover}, which displays addresses
 and their content when hovering over an operand.
 
-TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
-at the tunnel (or do copy as part of creating tunnel?.  
+%TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
+%at the tunnel (or do copy as part of creating tunnel?.  
 
+\end{itemize}
 
 \subsection{Dynamic changes to execution control flow}
 \label{dynamic_control_flow}
@@ -1625,9 +1638,11 @@ The associated hueristic is intended to catch reuse of stack buffers to avoid fa
 may miss accesses to buffers.  And beware of missed removals, i.e., you may spend time trying to account for access to data within memory
 no longer retaining any semblance of your input data.
 
-Tracking data read via kernel system calls, e.g., {\tt recv} only works if when RESim has recorded the system call, e.g., while debugging a process.
-If a process enters the kernel, e.g, via select, during a period in which the process is not being debugged, then RESim will not note its return
-to user space and thus will not track associated data.
+Tracking data read via kernel system calls, e.g., {\tt recv} only works if RESim has recorded the system call, e.g., while debugging a process.
+If a process enters the kernel, e.g, via a blocking recv, during a period in which the process is not being debugged, then RESim will not note its return
+to user space and thus will not track associated data.  One alternative is to send two packets with the intent of tracking references to the 2nd.
+This issue can also arise when handling asynchronous IO in Windows, but can usually be solved by either sending two packets, or ensuring that debugging
+is applied when the targeted recv call is made.
 
 \subsubsection{Watch Marks}
 \label{watch-marks}
