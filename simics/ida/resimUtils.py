@@ -66,7 +66,14 @@ def dumpFuns(fname=None):
                 fun_end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)-1
                 funs[function_ea]['start'] = function_ea
                 funs[function_ea]['end'] = fun_end
-                funs[function_ea]['name'] = idaversion.get_func_name(function_ea)
+                function_name = idaversion.get_func_name(function_ea)
+                demangled = idc.demangle_name(
+                    function_name,
+                    idc.get_inf_attr(idc.INF_SHORT_DN)
+                )
+                if demangled is not None:
+                    function_name = demangled
+                funs[function_ea]['name'] = function_name
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
                 pass
@@ -166,9 +173,6 @@ class ImportNames():
             #print "%08x: ord#%d" % (ea, ord)
             pass
         else:
-            # ad hoc pain
-            if '@@' in name:
-                name = name.split('@@')[0]
             demangled = idc.demangle_name(
                 name,
                 idc.get_inf_attr(idc.INF_SHORT_DN)
@@ -179,6 +183,9 @@ class ImportNames():
             else:
                 self.imports[ea] = demangled 
                 print('was demangled %s to %s ea: 0x%x ' % (name, demangled, ea))
+            # ad hoc pain
+            if '@@' in name:
+                name = name.split('@@')[0]
             #print "%08x: %s (ord#%d)" % (ea, name, ord)
         return True
     def printit(self):
