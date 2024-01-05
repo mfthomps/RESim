@@ -22,12 +22,12 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_']
+mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_', 'std::']
 def adjustFunName(frame, fun_mgr, lgr): 
         fun = None
         if frame.fun_name is not None:
             fun = frame.fun_name.strip()
-            #lgr.debug('dataWatch adjustFunName fun starts as %s' % fun)
+            lgr.debug('clibFuns adjustFunName fun starts as %s' % fun)
             if '@' in frame.fun_name:
                 fun = frame.fun_name.split('@')[0]
                 try:
@@ -35,7 +35,7 @@ def adjustFunName(frame, fun_mgr, lgr):
                     fun_hex = int(fun, 16) 
                     if fun_mgr is not None:
                         fun_name = fun_mgr.getName(fun_hex)
-                        lgr.debug('clib adjustFunName looked for fun for 0x%x got %s from fun_name %s' % (fun_hex, fun_name, frame.fun_name))
+                        lgr.debug('clibFuns adjustFunName looked for fun for 0x%x got %s from fun_name %s' % (fun_hex, fun_name, frame.fun_name))
                         if fun_name is not None:
                             fun = fun_name
                     else:
@@ -45,9 +45,9 @@ def adjustFunName(frame, fun_mgr, lgr):
             for pre in mem_prefixes:
                 if fun.startswith(pre):
                     fun = fun[len(pre):]
-                    lgr.debug('found memsomething prefix %s, fun now %s' % (pre, fun))
-            if fun.startswith('std::string::'):
-                fun = fun[len('std::string::'):]
+                    lgr.debug('clibFuns found memsomething prefix %s, fun now %s' % (pre, fun))
+            if fun.startswith('string::'):
+                fun = fun[len('string::'):]
                 if '(' in fun:
                     ''' TBD generalize/test for ghidra? '''
                     fun, param1 = fun.split('(',1)
@@ -79,7 +79,7 @@ def adjustFunName(frame, fun_mgr, lgr):
                         if 'char' in param1:
                             fun = 'compare_chr'
 
-            elif fun.startswith('std::basic_string'):
+            elif fun.startswith('basic_string'):
                 lgr.debug('clibFuns windows fun %s' % fun)
                 pre_paren, in_paren = fun.split('(', 1)
                 fun = pre_paren.split('::')[-1]
@@ -90,8 +90,8 @@ def adjustFunName(frame, fun_mgr, lgr):
                         lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
                         fun = 'string_win_basic_char' 
                       
-            elif fun.startswith('std::__cxx11::'):
-                fun = fun[len('std::__cxx11::'):]
+            elif fun.startswith('__cxx11::'):
+                fun = fun[len('__cxx11::'):]
                 if '(' in fun:
                     ''' TBD generalize/test for ghidra? '''
                     fun, params = fun.split('(',1)
@@ -151,6 +151,8 @@ def adjustFunName(frame, fun_mgr, lgr):
       
             if fun.startswith('_Rep::_'):
                 fun = fun[len('_Rep::_'):]
+            if '(' in fun:
+                fun = fun.split('(')[0]
             
         else:
             #lgr.debug('clibFuns fun name was none')
