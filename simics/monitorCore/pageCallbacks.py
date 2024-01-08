@@ -27,9 +27,10 @@ import pageUtils
 import resimUtils
 from resimHaps import *
 class PageCallbacks():
-    def __init__(self, cpu, mem_utils, lgr):
+    def __init__(self, top, cpu, mem_utils, lgr):
         self.cpu = cpu
         self.lgr = lgr
+        self.top = top
         self.mem_utils = mem_utils
         self.callbacks = {}
         self.unmapped_addrs = []
@@ -44,7 +45,7 @@ class PageCallbacks():
         phys_addr = self.mem_utils.v2p(self.cpu, addr)
         if phys_addr is None or phys_addr == 0:
             self.callbacks[addr] = callback
-            #self.lgr.debug('pageCallbacks setCallback for 0x%x' % addr)
+            self.lgr.debug('pageCallbacks setCallback for 0x%x' % addr)
             pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
             if pt.page_addr is not None:
                 if pt.page_addr not in self.missing_pages:
@@ -60,7 +61,7 @@ class PageCallbacks():
                 if pt.page_base_addr not in self.missing_page_bases:
                     self.missing_page_bases[pt.page_base_addr] = []
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_base_addr, 1, 0)
-                    #self.lgr.debug('coverage no physical address for 0x%x, set break %d on page_base_addr 0x%x' % (addr, break_num, pt.page_base_addr))
+                    self.lgr.debug('pageCallbacks no physical address for 0x%x, set break %d on page_base_addr 0x%x' % (addr, break_num, pt.page_base_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageBaseHap, 
                           None, break_num)
@@ -155,7 +156,8 @@ class PageCallbacks():
         op_type = SIM_get_mem_op_type(memory)
         type_name = SIM_get_mem_op_type_name(op_type)
         physical = memory.physical_address
-        self.lgr.debug('pageCalbacks pageBaseHap phys 0x%x len %d  type %s' % (physical, length, type_name))
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('pageCalbacks pageBaseHap phys 0x%x len %d  type %s tid:%s (%s)' % (physical, length, type_name, tid, comm))
         if break_num in self.missing_haps:
             if True or length == 4:
                 if op_type is Sim_Trans_Store:
@@ -198,7 +200,7 @@ class PageCallbacks():
                             self.lgr.debug('coverage pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                             continue
                         phys_addr = pt.page_addr | (addr & 0x00000fff)
-                        print('would do callback here')
+                        #print('would do callback here')
                         self.doCallback(addr)
             else:
                 self.lgr.error('coverage pageBaseUpdated for 64 bits not yet handled')
