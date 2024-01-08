@@ -802,7 +802,7 @@ class GenMonitor():
 
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
 
-            self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(cpu, self.mem_utils[cell_name], self.lgr)
+            self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
@@ -3016,18 +3016,6 @@ class GenMonitor():
             cell_name = self.target
         return self.syscallManager[cell_name].remainingCallTraces(exception=exception)
 
-    def remainingCallTracesXXXXXXXXX(self, exception=None):
-        for cell_name in self.call_traces:
-            if len(self.call_traces[cell_name]) > 0:
-                #for ct in self.call_traces[cell_name]:
-                #    self.lgr.debug('remainingCallTraces found remain for cell %s call %s' % (cell_name, ct))
-                if len(self.call_traces[cell_name]) == 1 and exception in self.call_traces[cell_name]:
-                    self.lgr.debug('remainingCallTraces ignoring exception %s' % exception)
-                    pass
-                else:
-                    return True
-        return False
-
 
     def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
@@ -3135,14 +3123,15 @@ class GenMonitor():
         self.lgr.debug('runToWrite to %s' % substring)
 
     def runToOpen(self, substring):
-        if self.track_threads is not None and self.target in self.track_threads:
-            self.track_threads[self.target].stopSOTrack()
-        else:
-            ''' do not hook mmap calls to track SO maps '''
-            self.sharedSyscall[self.target].trackSO(False)
-        print('warning, SO tracking has stopped')
+        #if self.track_threads is not None and self.target in self.track_threads:
+        #    self.track_threads[self.target].stopSOTrack()
+        #else:
+        #    ''' do not hook mmap calls to track SO maps '''
+        #    self.sharedSyscall[self.target].trackSO(False)
+        #print('warning, SO tracking has stopped')
         if self.isWindows():
-            open_call_list = ['OpenFile']
+            # TBD distinguish true creates from windows hacked overload of create file
+            open_call_list = ['OpenFile', 'CreateFile']
         else:
             open_call_list = ['open']
         call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
@@ -5895,8 +5884,13 @@ class GenMonitor():
             self.afl_instance.saveThisData()
             self.quit() 
 
-    def curThread(self):
-        self.task_utils[self.target].curThread()
+    def curThread(self, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        cpu, comm, this_tid = self.task_utils[target].curThread() 
+        return cpu, comm, this_tid
 
     def runToReturn(self):
         cpu = self.cell_config.cpuFromCell(self.target)

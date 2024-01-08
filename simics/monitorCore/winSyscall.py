@@ -154,12 +154,14 @@ class WinSyscall():
             flist = [f1]
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
-        else:
+        elif not self.linger:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
+        else:
+            self.lgr.debug('Syscall cell %s name: %s linger is true, and no flist or other reason to stop, so no stop action' % (name, self.cell_name))
 
         self.exit_calls = ['TerminateProcess', 'TerminateThread']
         
@@ -454,7 +456,7 @@ class WinSyscall():
                             if self.top is not None:
                                 tracing_all = self.top.tracingAll(self.cell_name, tid)
                             if self.callback is None:
-                                if not syscall.hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all:
+                                if not syscall.hasParamMatchRequest(syscall_info) or exit_info.call_params is not None or tracing_all or self.trackingSO(callname, syscall_info):
 
                                     if self.stop_on_call:
                                         if exit_info.call_params is None or exit_info.call_params.name != 'runToCall':
@@ -502,6 +504,13 @@ class WinSyscall():
             else:
                 self.lgr.debug('winSyscall syscallHap tid:%s trace all got exit_info of none' % tid)
 
+    def trackingSO(self, callname, syscall_info):
+        retval = False
+        if callname in ['CreateSection', 'MapViewOfSection']:
+            for param in syscall_info.call_params:
+                if param.name == 'trackSO':
+                    retval = True
+        return retval
 
     def syscallParse(self, callnum, callname, frame, cpu, tid, comm, syscall_info, quiet=False):
         '''
@@ -529,7 +538,7 @@ class WinSyscall():
         #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
 
-        #self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
+        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
             if call_param.match_param.__class__.__name__ == 'TidFilter':
                 if tid != call_param.match_param.tid:
@@ -804,6 +813,7 @@ class WinSyscall():
                     trace_msg = trace_msg+' fname address is None' 
                     self.lgr.debug(trace_msg)
                 else:
+                    param_callname = callname 
                     exit_info.fname = self.mem_utils.readWinString(self.cpu, exit_info.fname_addr, str_size)
                     # TBD better approach?
                     exit_info.retval_addr = frame['param1']
@@ -838,7 +848,8 @@ class WinSyscall():
                     disposition = 'UNKNOWN'
                     if create_disposition in winFile.disposition_map:
                         disposition = winFile.disposition_map[create_disposition]
-                    
+                        if disposition.startswith('FILE_OPEN'):
+                            param_callname = 'OpenFile'
 
                     trace_msg = trace_msg+' access: 0x%x (%s) file_attributes: 0x%x (%s) share_access: 0x%x (%s) create_disposition: 0x%x (%s)' % (access_mask, ', '.join(accesses), file_attributes, ', '.join(attributes), share_access, ', '.join(share), create_disposition, disposition)
 
@@ -868,7 +879,7 @@ class WinSyscall():
                                     extended_hx = binascii.hexlify(extended)
                                     sock_type = net.socktype[b36]
                                     trace_msg = trace_msg + ' - socket() call socket type: %s\n AFD extended: %s' % (sock_type, extended_hx)
-                    exit_info = self.genericCallParams(syscall_info, exit_info, callname)
+                    exit_info = self.genericCallParams(syscall_info, exit_info, param_callname)
 
         elif callname == 'QueryAttributesFile':
             object_attr = frame['param1']
@@ -919,8 +930,7 @@ class WinSyscall():
                         trace_msg = trace_msg + 'failed reading stack param 1 '
 
                 
-                if True:
-                    exit_info = self.genericCallParams(syscall_info, exit_info, callname)
+                exit_info = self.genericCallParams(syscall_info, exit_info, callname)
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
         elif callname == 'DeviceIoControlFile':
@@ -1300,7 +1310,7 @@ class WinSyscall():
         else:
             #self.lgr.debug(trace_msg)
             pass
-        #self.lgr.debug('winSyscall syscallParse %s cycles:0x%x' % (trace_msg, self.cpu.cycles))
+        self.lgr.debug('winSyscall syscallParse %s cycles:0x%x' % (trace_msg, self.cpu.cycles))
         #else:
         #    self.lgr.debug('Windows syscallParse, not looking for <%s>, remove exit info.' % callname)
         #    exit_info = None
@@ -1829,7 +1839,7 @@ class WinSyscall():
     def genericCallParams(self, syscall_info, exit_info, callname):
         retval = exit_info
         for call_param in syscall_info.call_params:
-            #self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
+            self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
             if call_param.match_param.__class__.__name__ == 'Dmod':
                  retval = None
                  mod = call_param.match_param
@@ -1843,12 +1853,18 @@ class WinSyscall():
             if type(call_param.match_param) is str: 
                 if ((call_param.subcall is None or call_param.subcall.startswith(callname) or callname.startswith(call_param.subcall)) \
                          and (call_param.proc is None or call_param.proc == self.comm_cache[tid])):
+                    if call_param.subcall in ['OpenFile', 'CreateFile'] and exit_info.fname is not None and ntpath.basename(exit_info.fname) != call_param.match_param:
+                        self.lgr.debug('winSyscall genericCallParams, fname found but does not match string param')
+                        continue
                     self.lgr.debug('syscall %s, found match_param %s param.subcall %s' % (callname, call_param.match_param, call_param.subcall))
                     exit_info.call_params = call_param
                     retval = exit_info
                     break
                 else:
+                    self.lgr.debug('winSyscall genericCallParams match_param is str, no match, set retval to None')
                     retval = None
+            elif call_param.name == 'trackSO':
+                exit_info.call_params = call_param
         return retval
 
     def resetHackCycle(self):

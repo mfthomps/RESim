@@ -111,7 +111,7 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
@@ -147,17 +147,19 @@ class WinCallExit():
             exit_info.call_params = None
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
+            self.lgr.debug('winCallExit is %s' % callname)
             if exit_info.retval_addr is not None:
+                self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is None:
-                     self.lgr.error('bad fd read from 0x%x' % exit_info.retval_addr)
+                     self.lgr.error('winCallExit bad fd read from 0x%x' % exit_info.retval_addr)
                      SIM_break_simulation('bad fd read from 0x%x' % exit_info.retval_addr)
                      return
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
                 if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
-                    self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
+                    self.lgr.debug('winCallExit adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                     self.soMap.addFile(exit_info.fname, fd, tid)
 
                     if callname == 'OpenSection':
@@ -166,7 +168,7 @@ class WinCallExit():
                 self.openCallParams(exit_info)
             else:
                 exit_info.call_params = None
-                self.lgr.debug('%s retval addr is none' % trace_msg)
+                self.lgr.debug('winCallExit %s retval addr is none' % trace_msg)
             
 
         elif callname == 'CreateFile':
