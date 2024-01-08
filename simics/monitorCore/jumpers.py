@@ -72,15 +72,10 @@ class Jumpers():
         self.setOneBreak(from_addr)
 
     def setOneBreak(self, addr):
-        #phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Execute)
+
         phys_addr = self.mem_utils.v2p(self.cpu, addr)
-        #if phys_block.address == 0 or phys_block.address is None:
         if phys_addr is None or phys_addr == 0:
-            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-            #self.hap[addr] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.doJump, addr, proc_break, 'jumper')
-            #self.lgr.debug('jumper setBreaks set break on linear addr 0x%x' % addr)
-            #self.want_phys.append(addr)
-            self.lgr.debug('jumper setOneBreak call pageCallback for addr 0x%x' % addr)
+            self.lgr.debug('jumper setOneBreak address not yet mapped, call pageCallback for addr 0x%x' % addr)
             self.top.pageCallback(addr, self.pagedIn)
         else:
             self.breakpoints[addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
@@ -88,7 +83,8 @@ class Jumpers():
             self.lgr.debug('jumper setBreaks set phys break on addr 0x%x (phys 0x%x)' % (addr, phys_addr))
 
     def pagedIn(self, addr):
-        self.lgr.debug('jumpers pagedIn addr 0x%x' % addr)
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('jumpers pagedIn tid:%s (%s) addr 0x%x' % (tid, comm, addr))
         self.setOneBreak(addr)
 
     def setBreaks(self):
@@ -105,7 +101,7 @@ class Jumpers():
             self.lgr.debug('jumper doJump addr 0x%x not in haps' % addr)
             return
         if addr in self.comm_name:
-            cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu)
+            cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
             if comm != self.comm_name[addr]:
                 self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, self.comm_name[addr]))
                 return
@@ -220,8 +216,8 @@ class Jumpers():
         if len(parts) > 3 and parts[3] == 'break':
             break_at_dest = True
 
-        cpu, this_comm, pid = self.top.getCurrentProc(target_cpu=self.cpu)
-        prog_info = self.so_map.getSOAddr(prog, pid)
+        tid = self.top.getTID(target=self.cell_name)
+        prog_info = self.so_map.getSOAddr(prog, tid)
         if prog_info is None:
             self.lgr.debug('jumpers handleOrig, no prog info for %s, set callback with soMap' % prog)
             jump_rec = self.JumperRec(prog, from_addr, to_addr, comm, break_at_dest) 
@@ -235,7 +231,8 @@ class Jumpers():
 
     def libLoadCallback(self, section):
         ''' TBD fix and test for Linux '''
-        self.lgr.debug('jumpers libLoadCallback')
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('jumpers libLoadCallback tid:%s (%s)' % (tid, comm))
         basename = ntpath.basename(section.fname)
         if basename in self.pending_libs:
             if section.image_base is None:
@@ -244,7 +241,10 @@ class Jumpers():
                 self.lgr.debug('jumpers loadLibCallback got %s from getFullPath' % full_path)
                 size, machine, section.image_base, section.text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
             delta = (section.addr - section.image_base) 
-            offset = delta + section.text_offset
+            # delta already incorporates text offset
+            #offset = delta + section.text_offset
+            offset = delta 
+            #self.lgr.debug('jumpers loadLibCallback delta 0x%x section.text_offset 0x%x offset 0x%x' % (delta, section.text_offset, offset))
             from_addr = self.pending_libs[basename].from_addr 
             to_addr = self.pending_libs[basename].to_addr
             comm = self.pending_libs[basename].comm
