@@ -196,7 +196,7 @@ class WinDLLMap():
                 if pid not in self.sections:
                     self.sections[pid] = {}
                 self.sections[pid][section_handle] = self.open_files[pid][fd]
-                self.lgr.debug('createSection pid:%s section handle 0x%x fname %s' % (pid, section_handle, self.open_files[pid][fd].fname))
+                self.lgr.debug('winDLL createSection pid:%s section handle 0x%x fname %s' % (pid, section_handle, self.open_files[pid][fd].fname))
                 #del self.open_files[pid][fd]
                 
             else:                
