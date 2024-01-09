@@ -390,6 +390,8 @@ class LaunchRESim():
                 if 'genx86' in script and not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
+            if did_net_create:
+                self.comp_dict[section]['ETH0_SWITCH'] = 'NONE' 
    
             if self.SIMICS_VER.startswith('4'):
                 cmd='run-command-file "./targets/%s"' % (script)
