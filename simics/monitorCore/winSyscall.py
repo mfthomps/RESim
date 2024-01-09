@@ -63,7 +63,7 @@ class WinSyscall():
         self.stop_on_call = stop_on_call
         if tid is not None:
             self.debugging = True
-            #self.lgr.debug('Syscall is debugging cell %s' % cell_name)
+            #self.lgr.debug('winSyscall is debugging cell %s' % cell_name)
         self.cpu = cpu
         ''' Note cell may be None, leaving it up to the context manager '''
         self.cell_name = cell_name
@@ -144,7 +144,7 @@ class WinSyscall():
             #    self.lgr.debug('winSyscall proc hap %s adding to hap cleander' % str(ph))
             #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
+            self.lgr.debug('winSyscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif (self.break_simulation or self.debugging) and not self.breakOnProg() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
@@ -153,15 +153,15 @@ class WinSyscall():
             f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
             flist = [f1]
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
+            self.lgr.debug('winSyscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         elif not self.linger:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
             self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
+            self.lgr.debug('winSyscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
         else:
-            self.lgr.debug('Syscall cell %s name: %s linger is true, and no flist or other reason to stop, so no stop action' % (name, self.cell_name))
+            self.lgr.debug('winSyscall cell %s name: %s linger is true, and no flist or other reason to stop, so no stop action' % (name, self.cell_name))
 
         self.exit_calls = ['TerminateProcess', 'TerminateThread']
         
@@ -205,7 +205,7 @@ class WinSyscall():
             self.syscall_info = syscall.SyscallInfo(self.cpu, None, None, None, self.trace)
             if self.cpu.architecture == 'arm':
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
-                #self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
+                #self.lgr.debug('winSyscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 if self.syscall_context is None:
                     self.syscall_context = self.context_manager.getBPContext(proc_break)
@@ -220,17 +220,17 @@ class WinSyscall():
                     break_list.append(proc_break)
                     if self.param.sys_entry is not None and self.param.sys_entry != 0:
                         ''' Has sys_entry as well. '''
-                        #self.lgr.debug('Syscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
-                        self.lgr.debug('Syscall no callnum, set sys_entry break at 0x%x ' % (self.param.sys_entry))
+                        #self.lgr.debug('winSyscall no callnum, set sysenter and sys_entry break at 0x%x & 0x%x' % (self.param.sysenter, self.param.sys_entry))
+                        self.lgr.debug('winSyscall no callnum, set sys_entry break at 0x%x ' % (self.param.sys_entry))
                         proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                         break_addrs.append(self.param.sys_entry)
                         break_list.append(proc_break1)
                         self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, proc_break1, 'syscall'))
                     else:
-                        self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
+                        self.lgr.debug('winSyscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
                 elif self.param.sys_entry is not None and self.param.sys_entry != 0:
-                        #self.lgr.debug('Syscall no callnum, set sys_entry break at 0x%x' % (self.param.sys_entry))
+                        #self.lgr.debug('winSyscall no callnum, set sys_entry break at 0x%x' % (self.param.sys_entry))
                         proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                         break_addrs.append(self.param.sys_entry)
                         break_list.append(proc_break1)
@@ -250,7 +250,7 @@ class WinSyscall():
                 if callnum is not None:
                     self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
                 if callnum is not None and callnum < 0:
-                    self.lgr.error('Syscall bad call number %d for call <%s>' % (callnum, call))
+                    self.lgr.error('winSyscall bad call number %d for call <%s>' % (callnum, call))
                     return None, None
                 entry = self.task_utils.getSyscallEntry(callnum)
                 if entry is None:
@@ -1016,9 +1016,10 @@ class WinSyscall():
                 #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
                 sock_type = self.sharedSyscall.win_call_exit.getSockType(tid, exit_info.old_fd)
                 if sock_type is not None:
-                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type: 0x%x ' % (pdata_addr, sock_addr, sock_type))
+                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type: 0x%x word_size %d' % (pdata_addr, sock_addr, sock_type, word_size))
                 else:
-                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type unknown  ' % (pdata_addr, sock_addr))
+                    sock_addr = pdata_addr+12
+                    self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type unknown word_size %d ' % (pdata_addr, sock_addr, word_size))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
                 to_string = sock_struct.getString()
                 trace_msg = trace_msg+' '+to_string
@@ -1477,7 +1478,7 @@ class WinSyscall():
             self.stop_action.setExitAddr(eip)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
             	     self.stopHap, msg)
-        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+        self.lgr.debug('winSyscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
     def stopHap(self, msg, one, exception, error_string):
@@ -1639,12 +1640,12 @@ class WinSyscall():
 
     def stopForMazeAlone(self, syscall):
         self.stop_maze_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopMazeHap, syscall)
-        self.lgr.debug('Syscall added stopMazeHap Now stop, syscall: %s' % (syscall))
+        self.lgr.debug('winSyscall added stopMazeHap Now stop, syscall: %s' % (syscall))
         SIM_break_simulation('automaze')
 
     def checkMaze(self, syscall):
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('Syscall checkMaze tid:%s in timer loop' % tid)
+        self.lgr.debug('winSyscall checkMaze tid:%s in timer loop' % tid)
         #maze_exit = self.top.checkMazeReturn()
         #if False and maze_exit is not None:
         #    self.lgr.debug('mazeExit checkMaze tid:%s found existing maze exit that matches' % tid)
