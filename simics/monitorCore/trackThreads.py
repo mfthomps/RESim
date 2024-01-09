@@ -157,7 +157,7 @@ class TrackThreads():
                 call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
-        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False)
+        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False, linger=True)
         self.lgr.debug('TrackThreads trackSO')
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
 
