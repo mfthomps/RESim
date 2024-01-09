@@ -40,6 +40,7 @@ def main():
     parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
     parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
     parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file')
+    parser.add_argument('-o', '--sudo', action='store_true', help='Run the command as sudo.')
     args = parser.parse_args()
     sshport = args.port
     print('Drive driver')
@@ -157,7 +158,10 @@ def main():
                 for f in file_list:
                     full = '/tmp/%s' % os.path.basename(f)
                     flist = flist + full + ' '
-                directive = '/tmp/%s  %s %s %s %s %s' % (client_cmd, ip, port, local_ip, header, flist)
+                if args.sudo:
+                    directive = 'sudo /tmp/%s  %s %s %s %s %s' % (client_cmd, ip, port, local_ip, header, flist)
+                else:
+                    directive = '/tmp/%s  %s %s %s %s %s' % (client_cmd, ip, port, local_ip, header, flist)
                 driver_file.write(directive+'\n')
                 cmd = 'scp -P %d %s  mike@localhost:/tmp/' % (sshport, iofile)
                 os.system(cmd)
