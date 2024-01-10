@@ -104,7 +104,6 @@ class reverseToCall():
             self.x_pages = None
             self.the_breaks = []
             self.reg = None
-            self.reg_num = None
             self.reg_val = None
             self.prev_reg_val = None
             self.stop_hap = None
@@ -138,6 +137,8 @@ class reverseToCall():
             ''' registers that contribute to a register value of type RegisterToTrack '''
             self.reg_queue = []
 
+            self.lgr.debug('__init__ bookmarks is %s' % self.bookmarks)
+
     def getStartCycles(self):
         return self.start_cycles
 
@@ -146,7 +147,7 @@ class reverseToCall():
 
     def noWatchSysenter(self):
         if self.sysenter_hap is not None:
-            self.lgr.debug('noWatchSystenter, remove sysenter breaks and hap handle %d' % self.sysenter_hap)
+            self.lgr.debug('reverseToCall noWatchSystenter, remove sysenter breaks and hap handle %d' % self.sysenter_hap)
             self.context_manager.genDeleteHap(self.sysenter_hap, immediate=True)
             self.sysenter_hap = None
         else:
@@ -201,6 +202,7 @@ class reverseToCall():
                 self.loadPickle(self.run_from_snap)
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
+                self.lgr.debug('reverseToCall setup bookmarks set to %s' % str(bookmarks))
             if (hasattr(self.param, 'sysenter') and self.param.sysenter is not None) or \
                (hasattr(self.param, 'sys_entry') and self.param.sys_entry is not None) or \
                (hasattr(self.param, 'arm_entry') and self.param.arm_entry is not None):
@@ -740,12 +742,7 @@ class reverseToCall():
         self.reg = reg
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
-        self.reg_num = self.cpu.iface.int_register.get_number(reg.upper())
-        try:
-            self.reg_val = self.cpu.iface.int_register.read(self.reg_num)
-        except:
-            self.lgr.error('doRevToModReg got bad regnum %d for reg <%s>' % (self.reg_num, reg))
-            return
+        self.reg_val = self.mem_utils.getRegValue(self.cpu, reg)
         self.prev_reg_val = self.reg_val
         self.lgr.debug('doRevToModReg starting at PC %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         done = False
@@ -762,11 +759,11 @@ class reverseToCall():
                     if True:
                         kjump = self.jumpOverKernel(tid)
                         if kjump is None:
-                            self.lgr.debug('doRevModReg must be reversing to point kernel entry via asynch interrupt')
+                            self.lgr.debug('doRevToModReg must be reversing to point kernel entry via asynch interrupt')
                             done = True
                         elif not kjump:
                             eip = self.top.getEIP(self.cpu)
-                            self.lgr.debug('doRevModReg kernel changed register? eip now 0x%x' % eip)
+                            self.lgr.debug('doRevToModReg kernel changed register? eip now 0x%x' % eip)
                             rval = self.top.getReg(self.reg, self.cpu) 
                             ida_message = 'Kernel modified register %s to 0x%x' % (self.reg, rval)
                             bm = "eip:0x%x follows kernel modification of reg:%s to 0x%x" % (eip, self.reg, rval)
@@ -793,7 +790,7 @@ class reverseToCall():
                         self.lgr.debug('reverseToModReg, did reverse')
                         done=True
                 else:
-                    ida_message = 'doRevModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles)
+                    ida_message = 'doRevToModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles)
                     self.lgr.debug(ida_message)
                     self.context_manager.setIdaMessage(ida_message)
                     self.cleanup(None)
@@ -839,9 +836,9 @@ class reverseToCall():
                             self.followTaint(reg_mod_type)
                             
                     else:
-                        self.lgr.debug('doRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
+                        self.lgr.debug('doToRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
             else:
-                self.lgr.debug('doRevModReg bailed, maybe trying uncall')
+                self.lgr.debug('doRevToModReg bailed, maybe trying uncall')
                 done=True
 
     def rmBreaks(self):
@@ -873,7 +870,7 @@ class reverseToCall():
         '''
         retval = None
         done = False
-        cur_val = self.cpu.iface.int_register.read(self.reg_num)
+        cur_val = self.mem_utils.getRegValue(self.cpu, self.reg)
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('cycleRegisterMod start eip: 0x%x for %s value 0x%x cur_val 0x%x' % (eip, self.reg, self.reg_val, cur_val))
         while not done:
@@ -893,9 +890,9 @@ class reverseToCall():
                 self.lgr.debug('cycleRegisterMod entered kernel')
                 done = True
             else:
-                cur_val = self.cpu.iface.int_register.read(self.reg_num)
+                cur_val = self.mem_utils.getRegValue(self.cpu, self.reg)
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('crm compare %x (value of self.reg_num) to %x (self.reg_val) eip: %x' % (cur_val, self.reg_val, eip))
+                self.lgr.debug('crm compare %x (value of self.reg) to %x (self.reg_val) eip: %x' % (cur_val, self.reg_val, eip))
                 '''
                 if cur_val != self.reg_val: 
                     eip = self.top.getEIP(self.cpu)
