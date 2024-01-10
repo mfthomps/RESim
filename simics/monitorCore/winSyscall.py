@@ -1008,17 +1008,20 @@ class WinSyscall():
 
             elif op_cmd == 'CONNECT':
 
+                sock_addr = pdata_addr+12
+                '''
                 if word_size == 8:
                     # TBD not right yet. fix this
                     sock_addr = self.paramOffPtr(7, [16], frame, word_size) 
                 else:
                     sock_addr = self.paramOffPtr(7, [8], frame, word_size) 
                 #sock_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
+                '''
                 sock_type = self.sharedSyscall.win_call_exit.getSockType(tid, exit_info.old_fd)
                 if sock_type is not None:
                     self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type: 0x%x word_size %d' % (pdata_addr, sock_addr, sock_type, word_size))
                 else:
-                    sock_addr = pdata_addr+12
+                    #sock_addr = pdata_addr+12
                     self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type unknown word_size %d ' % (pdata_addr, sock_addr, word_size))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
                 to_string = sock_struct.getString()
