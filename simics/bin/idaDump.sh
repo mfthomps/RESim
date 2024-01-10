@@ -52,10 +52,6 @@ if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
     exit
 fi
 
-export ida_target_path=$(realpath "$target")
-ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
-other_ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.idb
-
 if [ -z "$IDA_ANALYSIS" ]; then
     export IDA_ANALYSIS=/mnt/resim_eems/resim/archive/analysis
 fi
@@ -63,6 +59,12 @@ if [[ $target = $here/* ]]; then
     target=$(realpath --relative-to="${PWD}" "$target")
     echo "full path given to runIda, truncate it to $target"
 fi
+
+export ida_target_path=$(realpath "$target")
+ida_db_path=$RESIM_IDA_DATA/$root_dir/$target.$ida_suffix
+other_ida_db_path=$RESIM_IDA_DATA/$root_dir/$target.idb
+parent="$(dirname "$ida_db_path")"
+mkdir -p "$parent"
 
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path"

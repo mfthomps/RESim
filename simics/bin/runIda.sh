@@ -94,9 +94,6 @@ if [ ! -z "$remote" ]; then
     fi
 fi
 
-target_path=$(realpath "$target")
-ida_db_path=$RESIM_IDA_DATA/$root_dir/$target_base/$target_base.$ida_suffix
-
 if [ -z "$IDA_ANALYSIS" ]; then
     export IDA_ANALYSIS=/mnt/resim_eems/resim/archive/analysis
 fi
@@ -104,6 +101,11 @@ if [[ $target = $here/* ]]; then
     target=$(realpath --relative-to="${PWD}" "$target")
     echo "full path given to runIda, truncate it to $target"
 fi
+
+target_path=$(realpath "$target")
+ida_db_path=$RESIM_IDA_DATA/$root_dir/$target.$ida_suffix
+parent="$(dirname "$ida_db_path")"
+mkdir -p "$parent"
 
 export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path" > /dev/null 2>&1
@@ -128,10 +130,10 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
     #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
-    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
+    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" "$ida_db_path"
     #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
-    $idacmd -o$ida_db_path -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
+    $idacmd -o"$ida_db_path" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
 fi
