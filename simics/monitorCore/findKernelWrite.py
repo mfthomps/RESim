@@ -688,11 +688,11 @@ class findKernelWrite():
             self.lgr.debug('backOneAlone cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
                  op0, op1, actual_addr, self.addr, offset))
             if self.decode.isIndirect(op1):
-                reg_num = self.cpu.iface.int_register.get_number(op1)
-                address = self.cpu.iface.int_register.read(reg_num)
+                #reg_num = self.cpu.iface.int_register.get_number(op1)
+                #address = self.cpu.iface.int_register.read(reg_num)
+                address = self.mem_utils.getRegValue(op1)
                 new_address = address+offset
-                #if not self.top.isProtectedMemory(new_address):
-                if not self.top.isProtectedMemory(new_address) and not '[' in op0:
+                if not '[' in op0:
                     self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
                     self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel)
                 else:
@@ -700,9 +700,19 @@ class findKernelWrite():
                     self.rev_to_call.doRevToModReg(op1, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
  
             elif self.decode.isReg(op1):
-                reg_num = self.cpu.iface.int_register.get_number(op1)
-                value = self.cpu.iface.int_register.read(reg_num)
+                if op1.startswith('xmm'):
+                    if offset >= 16:
+                        suffix = 'H'
+                    else:
+                        suffix = 'L'
+                    op1 = op1+suffix
+                value = self.mem_utils.getRegValue(self.cpu, op1)
+                #reg_num = self.cpu.iface.int_register.get_number(op1)
+                #value = self.cpu.iface.int_register.read(reg_num)
                 self.lgr.debug('backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                #if op1.startswith('xmm'):
+                #    SIM_break_simulation('remove this')
+                #    return
                 self.rev_to_call.doRevToModReg(op1, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
             else:
                 value = None
@@ -711,15 +721,10 @@ class findKernelWrite():
                 except:
                    pass
                 if value is not None:
-                    if self.top.isProtectedMemory(value):
-                        self.lgr.debug('backOneAlone, found protected memory %x ' % value)
-                        SIM_run_alone(self.cleanup, False)
-                        self.top.skipAndMail()
-                    else:
-                        ''' stumped, constant loaded into memory '''
-                        self.lgr.debug('backOneAlone, found constant %x, stumped' % value)
-                        SIM_run_alone(self.cleanup, False)
-                        self.top.skipAndMail()
+                    ''' stumped, constant loaded into memory '''
+                    self.lgr.debug('backOneAlone, found constant %x, stumped' % value)
+                    SIM_run_alone(self.cleanup, False)
+                    self.top.skipAndMail()
         elif instruct[1].startswith('rep movs'):
             src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
             if self.prev_buffer:

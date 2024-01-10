@@ -47,6 +47,9 @@ def regIsPart(reg1, reg2):
         return True
     if len(reg1) == 3 and len(reg2) == 3 and reg1.endswith('x') and reg2.endswith('x') and reg1[1] == reg2[1]:
         return True
+    # we hack a L or H suffix to xmm regs
+    if reg1.startswith('xmm') and reg2.startswith(reg1):
+        return True
     return False
 
 def regIsPartList(reg1, reg2_list):
@@ -65,7 +68,7 @@ def isReg(reg):
     if reg.startswith('r') and (reg.endswith('b') or reg.endswith('w') or reg.endswith('d')):
         return True
 
-    if reg.startswith('xmm'):
+    if reg.startswith('xmm') and not reg.startswith('xmmword'):
         return True
 
     if (len(reg) == 3 and reg.endswith('x')) or (len(reg) == 2 and reg[0] != '0'):
