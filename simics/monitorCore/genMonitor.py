@@ -584,7 +584,7 @@ class GenMonitor():
             if want_tid is None and this_tid is not None:
                 SIM_break_simulation('mode changed, tid was None, now is not none.')
                 
-            self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+            #self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         cpl = memUtils.getCPL(cpu)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
@@ -675,7 +675,7 @@ class GenMonitor():
         self.lgr.debug('stopAndAction set stop_hap is now %d  now stop' % self.stop_hap)
         SIM_break_simulation('stopAndAction')
 
-    def run2Kernel(self, cpu):
+    def run2Kernel(self, cpu, flist=None):
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
             dumb, comm, tid = self.task_utils[self.target].curThread() 
@@ -683,12 +683,19 @@ class GenMonitor():
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
-            stop_action = hapCleaner.StopAction(hap_clean, None)
+            stop_action = hapCleaner.StopAction(hap_clean, None, flist)
             self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
             SIM_continue(0)
         else:
             self.lgr.debug('run2Kernel, already in kernel')
+            if flist is not None: 
+                #if len(flist) == 1:
+                for fun_item in flist:
+                    if len(fun_item.args) ==  0:
+                        fun_item.fun()
+                    else:
+                        fun_item.fun(fun_item.args)
 
     def run2User(self, cpu, flist=None):
         cpl = memUtils.getCPL(cpu)
@@ -1238,8 +1245,6 @@ class GenMonitor():
         cell_name = self.getTopComponentName(cpu)
         if self.target not in self.magic_origin:
             self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
-        if not self.disable_reverse:
-            self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -1363,6 +1368,10 @@ class GenMonitor():
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
             self.context_manager[self.target].setDebugTid()
+
+        if not self.disable_reverse:
+            self.lgr.debug('debug call rev_to_call.setup with bookmarks %s' % self.bookmarks)
+            self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
         self.task_utils[self.target].clearExitTid()
         ''' Otherwise not cleared when pageFaultGen is stopped/started '''
         self.page_faults[self.target].clearFaultingCycles()
@@ -1736,9 +1745,9 @@ class GenMonitor():
         f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
         self.toUser([f1])
 
-    def toKernel(self): 
+    def toKernel(self, flist=None): 
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.run2Kernel(cpu)
+        self.run2Kernel(cpu, flist=flist)
 
     def toProcTid(self, tid):
         self.lgr.debug('toProcTid %s' % tid)
@@ -5771,6 +5780,7 @@ class GenMonitor():
         return self.track_started
 
     def runToSO(self, file):
+        self.rmDebugWarnHap()
         self.run_to[self.target].runToSO(file)
 
     def skipToCycle(self, cycle):
