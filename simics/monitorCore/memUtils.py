@@ -513,12 +513,26 @@ class memUtils():
             return None
 
     def getRegValue(self, cpu, reg):
-        if reg in self.regs:
-            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-            #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
-        else:
-            reg_num = cpu.iface.int_register.get_number(reg)
-        reg_value = cpu.iface.int_register.read(reg_num)
+        reg_value = None
+        if reg.startswith('xmm'):
+            h_l = None
+            if reg.endswith('L'):
+                h_l = 0
+            elif reg.endswith('H'):
+                h_l = 1
+            if h_l is None:
+                self.lgr.error('memUtils getRegValue xmm register but no High/Low suffix %s' % reg)
+            else:
+                index = int(reg[3:-1])
+                reg_value = cpu.xmm[index][h_l]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
+        else:     
+            if reg in self.regs:
+                reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+                #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
+            else:
+                reg_num = cpu.iface.int_register.get_number(reg)
+            reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
 
     def kernelArch(self, cpu):
