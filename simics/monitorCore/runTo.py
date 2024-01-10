@@ -1,5 +1,6 @@
 from simics import *
 from resimHaps import *
+import cli
 import soMap
 import stopFunction
 import hapCleaner
@@ -348,13 +349,14 @@ class RunTo():
        for section in code_section_list:
            if section.addr in self.skip_list:
                continue
-           if section.fname.endswith(fname):
+           if section.fname.lower().endswith(fname.lower()):
                self.setRunToSOBreak(section.addr, section.size)
                self.lgr.debug('runTo runToSO set break on 0x%x size 0x%x' % (section.addr, section.size))
                got_one = True
                SIM_continue(0)
                break
        if not got_one:
+           self.lgr.debug('runTo runToSO did not find SO %s, addSOWatch' % fname)
            self.so_map.addSOWatch(fname, self.soLoaded)    
            SIM_continue(0)
                 
@@ -376,22 +378,31 @@ class RunTo():
         if self.cpu.architecture != 'x86-64':
             self.lgr.error('runTo runTo32 only supported on x86-64')
             return
+        max_loops = 10000
+        loops = 0
         while not done:
+            loops += 1
             ws = self.mem_utils.wordSize(self.cpu)
             if ws == 4:
                 self.lgr.debug('runTo runTo32 ws is 4, done')
+                print('Now in 32 bit mode')
+                self.top.show()
                 break
-            cpl = memUtils.getCPL(self.cpu)
-            if cpl == 0:
-                self.lgr.debug('runTo runTo32 in kernel, run to user')
-                f1 = stopFunction.StopFunction(self.runTo32, [], nest=False)
-                self.top.toUser([f1])
-                done = True
             else:
-                next_cycle = self.cpu.cycles+1  
-                #self.lgr.debug('runTo runTo32 skip to 0x%x' % next_cycle)
-                resimUtils.skipToTest(self.cpu, next_cycle, self.lgr)
-                
+                cpl = memUtils.getCPL(self.cpu)
+                if cpl == 0:
+                    self.lgr.debug('runTo runTo32 in kernel, run to user')
+                    f1 = stopFunction.StopFunction(self.runTo32, [], nest=False)
+                    self.top.toUser([f1])
+                    done = True
+                else:
+                    #next_cycle = self.cpu.cycles+1  
+                    #self.lgr.debug('runTo runTo32 skip to 0x%x' % next_cycle)
+                    #resimUtils.skipToTest(self.cpu, next_cycle, self.lgr)
+                    cli.quiet_run_command('si')
+            if loops > max_loops:
+                self.lgr.error('runTo32 exceeded max of %d loops' % max_loops)
+                break
 
     def runToWriteNotZero(self, addr):
        cpu, comm, cur_tid = self.task_utils.curThread() 
