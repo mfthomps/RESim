@@ -109,10 +109,12 @@ class WinTaskUtils():
         if run_from_snap is None:
             va = cpu.ia32_gs_base + self.param.current_task
             phys = self.mem_utils.v2p(self.cpu, va)
-            self.lgr.debug('winTaskUtils current task 0x%x, phys 0x%x' % (va, phys))
+            self.lgr.debug('winTaskUtils cell %s current task 0x%x, phys 0x%x now save cr3' % (self.cell_name, va, phys))
             self.mem_utils.saveKernelCR3(self.cpu)
             self.phys_current_task = phys
-            self.phys_saved_cr3 = self.mem_utils.getKernelSavedCR3()
+            self.savePhysCR3Addr()
+            #self.phys_saved_cr3 = self.mem_utils.getKernelSavedCR3()
+            self.lgr.debug('winTaskUtils cell %s got phys_saved_cr3 of 0x%x' % (self.cell_name, self.phys_saved_cr3))
            
         else:
             phys_current_task_file = os.path.join('./', run_from_snap, cell_name, 'phys_current_task.pickle')
@@ -120,9 +122,8 @@ class WinTaskUtils():
                 value = pickle.load( open(phys_current_task_file, 'rb') ) 
                 if type(value) is int:
                     self.phys_current_task = value
-                    gs_base = self.cpu.ia32_gs_base
-                    self.phys_saved_cr3 = gs_base+self.param.saved_cr3
-                    self.lgr.debug('winTaskUtils, snapshop lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
+                    self.savePhysCR3Addr()
+                    self.lgr.debug('winTaskUtils, cell %s snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.cell_name, self.param.saved_cr3, self.phys_saved_cr3))
                 else:
                     self.phys_current_task = value['current_task_phys']
                     self.phys_saved_cr3 = value['saved_cr3_phys']
@@ -133,13 +134,12 @@ class WinTaskUtils():
                         if self.system_proc_rec is None:
                             self.lgr.error('WinTaskUtils failed to get system thread record')
                         else:
-                            self.lgr.debug('winTaskUtils, snapshop lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
-                    self.lgr.debug('winTaskUtils, snapshop had saved cr3, value 0x%x' % self.phys_saved_cr3)
+                            self.lgr.debug('winTaskUtils, snapshot lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
+                    self.lgr.debug('winTaskUtils, cell %s snapshot had saved phys addr of cr3, value 0x%x' % (self.cell_name, self.phys_saved_cr3))
                 #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                self.mem_utils.saveKernelCR3(self.cpu, self.phys_saved_cr3)
+                self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
 
-                self.lgr.debug('loaded phys_current_task from %s' % phys_current_task_file)
-                self.lgr.debug('value 0x%x' % self.phys_current_task)
+                self.lgr.debug('windTaskUtils cell %s loaded phys_current_task from %s value 0x%x' % (self.cell_name, phys_current_task_file, self.phys_current_task))
             else:
                 ''' temporary hack TBD '''
                 self.lgr.debug('winTaskUtils, no phys_current_task.pickle file, temporary hack.  fix this')
@@ -150,7 +150,7 @@ class WinTaskUtils():
                         self.phys_current_task = value
                         gs_base = self.cpu.ia32_gs_base
                         self.phys_saved_cr3 = gs_base+self.param.saved_cr3
-                        self.lgr.debug('winTaskUtils, hacked snapshop lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
+                        self.lgr.debug('winTaskUtils, hacked snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
                         self.lgr.debug('winTaskUtils loaded only phys_current_task, value 0x%x' % value)
                     else:
                         self.phys_current_task = value['current_task_phys']
@@ -162,11 +162,11 @@ class WinTaskUtils():
                             if self.system_proc_rec is None:
                                 self.lgr.error('WinTaskUtils temp hack failed to get system thread record')
                             else:
-                                self.lgr.debug('winTaskUtils, hacked snapshop lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
+                                self.lgr.debug('winTaskUtils, hacked snapshot lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
                         self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
                            self.phys_saved_cr3))
                     #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                    self.mem_utils.saveKernelCR3(self.cpu, self.phys_saved_cr3)
+                    self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
                 else:
                     self.lgr.error('winTaskUtils did not find %s' % pfile)
                     return
@@ -332,27 +332,27 @@ class WinTaskUtils():
 
     def curThread(self):
         ''' Return tuple of cpu, comm and tid '''
-        #self.lgr.debug('taskUtils curThread')
+        #self.lgr.debug('winTaskUtils curThread')
         cur_proc_rec = self.getCurProcRec()
-        #self.lgr.debug('taskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
+        #self.lgr.debug('winTaskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
         if cur_proc_rec is None:
             return None, None, None
-        #self.lgr.debug('taskUtils curThread get comm')
+        #self.lgr.debug('winTaskUtils curThread get comm')
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
-        #self.lgr.debug('taskUtils curThread comm %s' % comm)
-        #self.lgr.debug('taskUtils curThread get pid')
+        #self.lgr.debug('winTaskUtils curThread comm %s' % comm)
+        #self.lgr.debug('winTaskUtils curThread get pid')
         pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
-        #self.lgr.debug('taskUtils curThread pid %s' % pid)
+        #self.lgr.debug('winTaskUtils curThread pid %s' % pid)
         thread = self.getThreadId()
         if pid is None:
             pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
-            self.lgr.debug('taskUtils curThread tried again, pid %s' % pid)
+            self.lgr.debug('winTaskUtils curThread tried again, pid %s' % pid)
         if pid is None or thread is None:
             self.lgr.error('winTaskUtils curThread pid %s thread %s cur_proc_rec 0x%x' % (pid, thread, cur_proc_rec))
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         pid_thread = '%d-%d' % (pid, thread)
-        #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
+        #self.lgr.debug('winTaskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_proc_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid_thread
@@ -799,7 +799,7 @@ class WinTaskUtils():
     def setExitTid(self, tid):
         self.exit_tid = tid
         self.exit_cycles = self.cpu.cycles
-        self.lgr.debug('taskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
+        self.lgr.debug('winTaskUtils setExitTid tid:%s cycles 0x%x' % (tid, self.exit_cycles))
 
     def clearExitTid(self):
         self.exit_tid = None
@@ -888,3 +888,8 @@ class WinTaskUtils():
         retval = self.mem_utils.readWord(self.cpu, va)
         self.lgr.debug('winTaskUtils getTIB gs_base is 0x%x  tib addr 0x%x' % (self.cpu.ia32_gs_base, va, retval))
         return va
+
+    def savePhysCR3Addr(self):
+        gs_base = self.cpu.ia32_gs_base
+        self.phys_saved_cr3 = self.mem_utils.v2p(self.cpu, gs_base+self.param.saved_cr3)
+        self.lgr.debug('winTaskUtils saved phys_saved_cr3 value 0x%x' % self.phys_saved_cr3)

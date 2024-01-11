@@ -275,6 +275,8 @@ class WinProg():
         if self.text_hap is None:
             return
         cpu, comm, this_tid = self.task_utils.curThread() 
+        if this_tid is None:
+            return
         this_pid = this_tid.split('-')[0]
         
         if this_pid != pid:

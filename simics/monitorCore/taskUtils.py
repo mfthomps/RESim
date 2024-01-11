@@ -120,7 +120,7 @@ class TaskUtils():
                         self.phys_current_task = value['current_task_phys']
                         saved_cr3 = value['saved_cr3']
                         if saved_cr3 is not None:
-                            self.lgr.debug('taskUtils, snapshop had saved cr3, value 0x%x' % saved_cr3)
+                            self.lgr.debug('taskUtils, cell %s snapshot had saved cr3, value 0x%x' % (self.cell_name, saved_cr3))
                             #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
                             self.mem_utils.saveKernelCR3(self.cpu, saved_cr3=saved_cr3)
                 else:

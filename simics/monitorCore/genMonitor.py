@@ -945,10 +945,20 @@ class GenMonitor():
                                 done = False
                         
                             else:
-                                self.task_utils[cell_name] = task_utils
                                 saved_cr3 = self.mem_utils[cell_name].getKernelSavedCR3()
-                                if saved_cr3 is not None:
-                                    self.lgr.debug('doInit saved_cr3 is 0x%x' % saved_cr3)
+                                if saved_cr3 is not None and self.isWindows(cell_name):
+                                    self.lgr.debug('doInit %s saved_cr3 is 0x%x' % (cell_name, saved_cr3))
+                                    reg_num = cpu.iface.int_register.get_number("cr3")
+                                    current_cr3 = cpu.iface.int_register.read(reg_num)
+                                    if saved_cr3 != current_cr3:
+                                        self.lgr.debug('doInit saved_cr3 of 0x%x is not the current cr3 value 0x%x.  Not done yet' % (saved_cr3, cr3_val, current_cr3))
+                                        done = False
+                                        continue
+                                    else:
+                                        task_utils.savePhysCR3Addr()
+                                self.task_utils[cell_name] = task_utils
+                                # adjust kernel params for aslr
+                                self.mem_utils[cell_name].adjustParam(cpu)
                                 self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
                                 self.finishInit(cell_name)
                                 run_cycles = self.getBootCycleChunk()
