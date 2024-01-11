@@ -607,12 +607,16 @@ class memUtils():
             return
 
         if self.WORD_SIZE == 4:
+            if self.param.fs_base is None:
+                self.lgr.debug('memUtils adjustParam no fs_base in parms, bail')
+                return
             param_xs_base = self.param.fs_base
             new_xs_base = cpu.ia32_fs_base
         else:
             param_xs_base = self.param.gs_base
             new_xs_base = cpu.ia32_gs_base
             self.lgr.debug('memUtils adjustParam current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
+   
 
         delta = param_xs_base - new_xs_base
         self.lgr.debug('memUtils adjustParam word size %d delta 0x%x' % (self.WORD_SIZE, delta))
