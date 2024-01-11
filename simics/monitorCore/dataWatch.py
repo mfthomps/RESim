@@ -2526,7 +2526,7 @@ class DataWatch():
                 f = self.frames[1]
                 self.mem_something = MemSomething(f.fun_name, f.fun_addr, self.move_stuff.start, f.ret_addr, self.move_stuff.start, dest_addr, None, 
                       f.ip, None, self.move_stuff.length, self.move_stuff.start, ret_addr_addr=f.ret_to_addr)
-                self.lgr.debug('dataWatch finishCheckMoveHap may be a memcpy with no fun name')
+                self.lgr.debug('dataWatch finishCheckMoveHap may be a memcpy with no fun name trans_size 0x%x' % self.move_stuff.trans_size)
                 SIM_run_alone(self.stopForMemcpyCheck, None)
                 return 
             wm = self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, 
@@ -3137,9 +3137,12 @@ class DataWatch():
             else:   
                 self.context_manager.setIdaMessage('Data written to 0x%x within buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
                 #self.lgr.debug('Data written to 0x%x within buffer (offset of %d into %d bytes starting at 0x%x) eip: 0x%x' % (addr, offset, length, start, eip))
-                ''' TBD move to separate function.  ad-hoc check for mmx based buffer clear.  prehaps too crude.'''
+                ''' TBD move to separate function.  ad-hoc check for xmm based buffer clear.  prehaps too crude.'''
                 if instruct[1].startswith('movdqa xmmword'):
-                    xmm0 = self.mem_utils.getRegValue(self.cpu, 'xmm0') 
+                    self.lgr.debug('dataWatch finishReadHap is xmm instruct %s' % instruct[1])
+                    xmm0 = self.mem_utils.getRegValue(self.cpu, 'xmm0L') 
+                    if xmm0 is not None:
+                        self.lgr.debug('dataWatch finishReadHap xmm0L value 0x%x' % xmm0)
                     if xmm0 == 0 and index is not None:
                         ''' assume the whole fbuffer will go '''
                         start = self.start[index]
