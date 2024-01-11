@@ -33,10 +33,13 @@ if [ "$1" == "-e" ]; then
     cp $RESIM_DIR/simics/workspace/mapdriver.simics .
 fi
 here=`pwd`
-echo "Workspace setup at $here."
 if [ ! -d ./targets/qsp-x86 ]; then
 #
 #   Configure for use with Free Simics
 #
     $RESIM_DIR/simics/bin/free-ws.sh
+else
+    cd targets/x58-ich10
+    ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
 fi
+echo "Workspace setup at $here."
