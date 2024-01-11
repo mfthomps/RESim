@@ -493,7 +493,7 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
     cat foo.io > /dev/udp/127.0.0.1/6060 
 \end{verbatim}
 \noindent Note that sending multiple packets via real networks will cause the origin to reset on each packet, thereby limiting the range of reverse execution.  It is generally simpler
-to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py}.  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
+to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py} (see \ref{drive-driver}).  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
@@ -677,7 +677,7 @@ Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
 It is important that received data all appears within the kernel buffer before the application is returned to from its recv call.  Otherwise, injectIO and AFL sessions
-will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command.
+will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command as described in \ref{drive-driver}.
 
 \item{\tt prepInjectAddr(addr, configfile)} -- For use when preparing to inject data directly into arbitrary application memory, e.g., when fuzzing argv parameters
 to a program.  Consider priming the prepInject state with enough data to cross any page boundaries that might be part of the buffer.
@@ -848,7 +848,9 @@ to this section.
 \item {\tt \$mac\_address\_3} Enclose in double quotes
 \item {\tt \$eth\_device} Alternet ethernet device, see \ref{networks} below.
 \item {\tt \$create\_network} Create a network service node and attach it to the named switch, intended
-to provide DHCP services to targets that requrire it. See \ref{DHCP}.
+to provide DHCP services to targets that requrire it. This overwrites any connections to ETH0.  See \ref{DHCP}.
+\item {\tt \$service\_note\_ip\_address} If service node creation is requested, assign the node this ip address, which
+should be the gateway address and/or dhcp server address used by the target.
 
 \item {\tt SIMICS\_SCRIPT} Path to the Simics script file that defines the target system.  This path is relative to the {\tt target} directory
 of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targets}.  For example, 
@@ -958,11 +960,12 @@ By default, the Simics {\tt connect-real-network} command creates a service
 node that provides NAPT forwarding of traffic from targets that can reach the service node.  Unless you want the target to be able to
 reach external networks (e.g., to install packages), consider using {\tt service\_node.sn->napt\_enable = 0} to disable NAPT.
 
-\subsection{DHCP}
+\subsubsection{DHCP}
 \label{DHCP}
 If you have an x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
 naming one of the switches to which a service node will be created.  The first IP address by default to the device will be 10.10.0.100.
-That service node will have NAPT disabled.  Note you must set the switch value to NONE for the named switch (TBD automate that.)
+That service node will have NAPT disabled.  Note you must set the switch value to NONE for the named switch.  An alternative is to add
+a DHCP server to the driver.
 
 \subsubsection{Configurting VLANs}
 Create a VLAN switch by adding a {VLAN\_N} to the ENV section of the ini file, where N identifies the switch.  For example:
@@ -1033,7 +1036,7 @@ non-interactive return so they are picked up by ssh):
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
 \item RESIM\_IMAGES Path to directory containing disk images.  This is a convenience for canned example ini files,
-\item IDA\_ANALYSIS Path to where IDA will store analysis artifacts, and where RESim will look for them.
+\item IDA\_ANALYSIS Path to where IDA (or Ghidra) will store analysis artifacts, and where RESim will look for them.
 you may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
 wish to download and place in this directory.
 \end{itemize}
@@ -1545,6 +1548,7 @@ It is often preferable to send data via a driver computer. Driver computers are 
 {\tt drive-driver.py} script provides a convenient way to send data from your host to the target via a driver.
 
 \subsubsection{Using drive-driver.py}
+\label{drive-driver}
 The {\tt drive-driver.py} utility uses command line options and \textit{directive} files to control the transmission of input 
 data from the Simics host to a driver computer and from there to the target.  Use of {\tt drive-driver.py} requires:
 \begin{itemize}
@@ -1588,7 +1592,8 @@ address is used to identify the device on the driver computer from which the bro
 an IP address on the driver computer.
 
 \item The driver can run a TCP server by providing the {\tt -s} option.  In this case, the server will listen on the IP and port named in the directive.
-When the server accepts a connection, it will send the IO file content and then preform a receive.
+When the server accepts a connection, it will send the IO file content and then preform a receive.  Use the {\tt -o} option to run as sudo, e.g., if
+the server is to bind to a protected port number.
 
 \item TCP replay of a PCAP file occurs using the {\tt -r} option.  The IO field (first field) of the directive names a PCAP and the second field names the
 ethernet device on the driver from which the data should be sent.  The Unix {\tt tcpreplay} utility is then invoked on the driver.
@@ -2366,6 +2371,18 @@ back to AFL.
 
 \end{itemize}
 
+\subsection{Find source of log messages}
+Reviewing results of traceAll, you find and interesting message output from Write or WriteFile that looks like a log entry.
+You believe the thread that did the write is simply a logging thread, and thus it is not the
+source of the message. Use runToWrite to get to the execution point of the write while in debugging.  Then use revTaintAddr 
+to reverse to the source of the output buffer.  Provide the address of log content that
+is interesting, e.g., if you supply the address of a timestamp or other boilerplate, it may simple reverse to part of the logging thread.
+
+View the resulting bookmarks (listBookmarks()) and go to the first bookmark that reflects a data move (goToDebugBookmark(num)).
+Note that the TID of the current thread should be different than the TID of the thread that generated the log message.
+Use stackTrace to find the DLL that generated the content of the log message, e.g., via an sprintf type of function.
+Open that DLL in IDA or Ghidra and explore.
+
 \subsection{Observe changes in outputs}
 Use {\tt traceAll} followed by {\tt traceFD} to observe program output in respones to varying inputs injected
 via {\tt injectIO} with {\tt stay=True}. TBD, combine commands or make modal? -- for now, must repeat: injectIO;
@@ -2508,29 +2525,32 @@ and look at the logs to see if some Hap is defined for that breakpoint.  Use sho
 managed by the genContextManager.  It may be an ad-hock break/hap, such as those used by the writeData module.
 
 \section{Data Stores}
-This section describes how RESim stores and accesses different data stores.
+This section describes how RESim names and accesses different data stores.
 
 \section{IDA data and hits files}
 One goal is to simplify sharing between the RESim platform and the IDA platform,
-which may be the same, or different.
-
-IDA and RESim need to share binary files; function and block lists; and hit lists.
-
+which may be the same, or different.  IDA and RESim need to share binary files; function and block lists; and hit lists.
 To avoid NFS conflicts, only read-only files should be on NFS. We trade this off against
 the desire to share basic data such as IDA's functions and blocks lists.  
 
-The binary and the .funs and .blocks files will be stored in the at locations defined
-by the {\tt RESIM\_ROOT\_PREFIX} value in RESim ini files.  The intent is for these to
-be on an NFS share so that the same ini file can be used on multiple RESim platforms.
+\begin{itemize}
 
-The idb and hits files will be per-user, stored in a local writable directory relative to path 
-named by the {\tt RESIM\_IDA\_DATA} environment varible.  Files will be copied between IDA
-and RESim platforms using scp. Each analyzed program has a subdirectory relative to the {\tt RESIM\_IDA\_DATA}
-directory, under a directory whose name matches the {\tt RESIM\_ROOT\_PREFIX} directory
-named in the ini file.  Within that subdirectory is the IDA idb file and the hits file.  It also contains
-a file with a ".prog" extension that identifies the path to program that was analyzed. 
-(The extra {\tt RESIM\_ROOT\_PREFIX} subdirectory is intended to avoid name collisions, e.g., for libc libraries from
-different systems.)
+\item Binaries are stored relative to {\tt RESIM\_IMAGE}.  The RESim ini file defines a {\tt RESIM\_ROOT\_PREFIX} value
+that typically begins with {\tt RESIM\_IMAGE}. 
+
+\item The .funs and .blocks files generated by IDA or Ghidra are stored relative to {\tt IDA\_ANALYIS} in a subdirectory
+named by the root of the {\tt RESIM\_ROOT\_PREFIX} value, and extended by the subpath of the binary relative to 
+{\tt RESIM\_ROOT\_PREFIX}.  These analysis artifacts are on an NFS share so that the same ini file can be used on multiple RESim platforms
+without recreating function and block artifacts.
+
+\item The subpath described above avoids name conflicts, e.g., for systems that may have multiple DLLs having the same name at different paths.
+
+\item The IDA idb and hits files will be per-user, stored in a local writable directory relative to path 
+named by the {\tt RESIM\_IDA\_DATA} environment variable, using the same subpath as that used for .funs and .blocks artifacts.  
+Ghidra databases are stored where ever Ghidra put them.
+
+\item Files will be copied between IDA and RESim platforms using scp. 
+\end{itemize}
 
 If IDA and Simics run on different computers, and the {\tt runIDA.py} command is given the name of a remote 
 computer, i.e., the IDA computer and the Simics computer communicate via an SSH tunnel, 
@@ -3440,6 +3460,19 @@ All module interfaces will expect tids, and will sort them out from there if nee
 The Context Manager must be able to distinguish between threads of a process, e.g., for trace maze management.
 
 If traceAll while debugging, the all threads of the process must be traced.
+
+\section{CADET01 networking}
+The cadet01 example can serve as a rapid prototyping testbed to explore Simics networking and RESim functions.
+The networking used in the example is described below.
+\begin{itemize}
+\item The driver has address 10.20.200.91 on switch0 via ens11.  
+\item The mapdriver.simics script forwards port 4022 to
+port 22 on that interface.  
+\item The driver also has 10.0.0.140 via ens25, which is on the subnet containing the
+"ubuntu" server, which has IP of 10.0.0.91 on ens11.  
+\item Everthing goes through switch0.
+\end{itemize}
+
 
 \end{appendices}
 \end{document}
