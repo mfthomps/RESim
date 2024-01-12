@@ -641,7 +641,16 @@ class memUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
             else:
-                self.param.sysexit = self.param.sysexit - delta
+                self.param.sysexit = self.param.sysexit + delta
+
+        if self.param.sysret64 is not None:
+            if self.WORD_SIZE == 4:
+                self.param.sysret64 = self.param.sysret64 + delta
+            else:
+                self.lgr.debug('sysret64 was 0x%x' % self.param.sysret64)
+                self.param.sysret64 = self.param.sysret64 - delta
+                self.lgr.debug('sysret64 now 0x%x' % self.param.sysret64)
+
         if self.WORD_SIZE == 4:
             self.param.iretd = self.param.iretd + delta
             self.param.page_fault = self.param.page_fault + delta
@@ -652,8 +661,11 @@ class memUtils():
             self.param.syscall_jump = self.param.syscall_jump - delta
             self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
-            self.param.iretd = self.param.iretd - delta
+            self.param.iretd = self.param.iretd + delta
+            self.lgr.debug('page_fault was 0x%x' % self.param.page_fault)
             self.param.page_fault = self.param.page_fault - delta
+            self.lgr.debug('page_fault now 0x%x' % self.param.page_fault)
+
             self.param.syscall_compute = self.param.syscall_compute - delta
 
             ''' This value seems to get adjusted the other way.  TBD why? '''
@@ -816,7 +828,7 @@ class memUtils():
             else:
                 phys = self.v2p(cpu, curr_addr)
             if phys is None:
-                self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
+                #self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
             #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
@@ -867,7 +879,7 @@ class memUtils():
             else:
                 phys = self.v2p(cpu, curr_addr)
             if phys is None:
-                self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
+                #self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
             #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
