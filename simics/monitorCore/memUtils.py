@@ -236,7 +236,7 @@ class memUtils():
                 exec_mode_word_size = self.wordSize(cpu)
                 if v < self.param.kernel_base and exec_mode_word_size == 8 and cpl > 0:
                     phys_addr = v & ~self.param.kernel_base 
-                    self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x exec_mode_word_size %d' % (cpl, v, exec_mode_word_size))
+                    #self.lgr.debug('memUtils v2p memUtils ptable fu2 cpl %d get unsigned of 0x%x exec_mode_word_size %d' % (cpl, v, exec_mode_word_size))
                     retval = self.getUnsigned(phys_addr)
                 else:
                     if self.WORD_SIZE == 8 and ptable_info.page_exists:
