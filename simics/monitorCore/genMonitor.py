@@ -1236,11 +1236,16 @@ class GenMonitor():
             self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
 
     def setPathToProg(self, tid):
-        prog_name = self.getProgName(tid)
-        if self.targetFS[self.target] is not None and prog_name is not None:
-            full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
-            self.full_path = full_path
-            self.lgr.debug('setPathToProg tid:%s set full_path to %s' % (tid, full_path))
+        local_path = self.soMap[self.target].getLocalPath(tid)
+        if local_path is None:
+            prog_name = self.getProgName(tid)
+            if self.targetFS[self.target] is not None and prog_name is not None:
+                full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
+                self.full_path = full_path
+                self.lgr.debug('setPathToProg tid:%s set full_path to %s' % (tid, full_path))
+        else:
+            self.full_path = local_path
+            self.lgr.debug('setPathToProg tid:%s set full_path to local path gotten from SO map %s' % (tid, local_path))
 
     def debug(self, group=False):
         '''
@@ -1261,7 +1266,7 @@ class GenMonitor():
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
-                self.lgr.debug('debug called setPathToProg full_path now %s' % self.full_path)
+                self.lgr.debug('debug called setPathToProg for tid %s full_path now %s' % (tid, self.full_path))
             # TBD already called in debugTidList.  Does a group==True cover it?
             if not group or self.bookmarks is None:
                 if not self.no_gdb and self.bookmarks is None:
@@ -1291,8 +1296,8 @@ class GenMonitor():
                 leader_tid = self.task_utils[self.target].getGroupLeaderTid(tid)
                 tid_list = self.task_utils[self.target].getGroupTids(leader_tid)
                 self.lgr.debug('genManager debug, will debug entire process group under leader %s %s' % (leader_tid, str(tid_list)))
-                for tid in tid_list:
-                    self.context_manager[self.target].addTask(tid)
+                for tmp_tid in tid_list:
+                    self.context_manager[self.target].addTask(tmp_tid)
 
             ''' keep track of threads within our process that are created during debug session '''
             cpl = memUtils.getCPL(cpu)
@@ -5353,7 +5358,7 @@ class GenMonitor():
         if prog_name is None or prog_name == 'unknown':
             #prog_name = self.soMap[target].getProg(tid)
             #if True or prog_name is None:
-            self.lgr.debug('getProgName call to get from soMap failed, try taskUtils')
+            self.lgr.debug('getProgName call to get from traceProcs failed, try taskUtils')
             prog_name, dumb = self.task_utils[target].getProgName(tid) 
             self.lgr.debug('genMonitor getProgName tid:%s NOT in traceProcs task_utils got %s' % (tid, prog_name))
             if prog_name is None:
