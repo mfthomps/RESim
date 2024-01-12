@@ -541,7 +541,7 @@ class WinSyscall():
         #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
 
-        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
+        #self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(syscall_info.call_params)))
         for call_param in syscall_info.call_params:
             if call_param.match_param.__class__.__name__ == 'TidFilter':
                 if tid != call_param.match_param.tid:
