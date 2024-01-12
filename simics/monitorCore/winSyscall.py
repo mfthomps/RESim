@@ -286,6 +286,9 @@ class WinSyscall():
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('winSyscall syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
+        if tid.startswith('4-'):
+            # TBD allow switch to override?
+            return
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if syscall_info.cpu != cpu:
@@ -388,7 +391,6 @@ class WinSyscall():
 
         if callnum > 0x1400:
             self.lgr.warning('syscallHap callnum is too big')
-            #SIM_break_simulation('remove this call %d' % callnum)
             return
         
         if self.sharedSyscall.isPendingExecve(tid):
@@ -467,6 +469,7 @@ class WinSyscall():
                                     if self.dataWatch is not None and not self.dataWatch.disabled and callname not in self.exit_calls:
                                         self.lgr.debug('winSyscall calling dataWatch to stop watch to ignore kernel fiddle with data')
                                         self.dataWatch.stopWatch()
+                                    #self.lgr.debug('winSyscall call sharedSyscall.addExit')
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                     #if callname == 'Close': 
                                     #    SIM_break_simulation('is close')
