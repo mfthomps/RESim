@@ -679,3 +679,9 @@ class SOMap():
             if base.startswith(comm):
                 retval = self.text_prog[pid]
         return retval
+
+    def getLocalPath(self, tid):
+        retval = None
+        if tid in self.prog_local_path:
+            retval = self.prog_local_path[tid]
+        return retval

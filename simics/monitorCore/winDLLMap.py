@@ -647,6 +647,14 @@ class WinDLLMap():
             retval = dll_info.fname
         return retval
 
+    def getLocalPath(self, tid):
+        retval = None
+        pid = self.pidFromTID(tid)
+        if pid in self.text:
+            dll_info = self.text[pid]
+            retval = dll_info.local_path
+        return retval
+
     def getFullPath(self, comm):
         retval = None
         for pid in self.text:
