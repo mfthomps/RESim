@@ -111,7 +111,7 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
