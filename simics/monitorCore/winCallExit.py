@@ -93,6 +93,7 @@ class WinCallExit():
         '''
         if exit_info is None:
             ''' TBD why does this get called, windows and linux?'''
+            #self.lgr.debug('winCallExit cell %s exit_info is None' % (self.cell_name))
             return False
         if tid == 0:
             #self.lgr.debug('winCallExit cell %s tid is zero' % (self.cell_name))
@@ -111,7 +112,7 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
@@ -198,8 +199,8 @@ class WinCallExit():
                 exit_info.call_params = None
 
         elif callname == 'ReadFile':
-            ''' fname_addr has address of return count'''
-            if exit_info.fname_addr is None:
+            ''' delay_count_addr has address of return count'''
+            if exit_info.delay_count_addr is None:
                 self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
             else:
                 # TBD hack to let prepInject get the exit info
@@ -328,11 +329,11 @@ class WinCallExit():
 
             elif exit_info.socket_callname in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
                 
-                ''' fname_addr has address of return count'''
+                ''' delay_count_addr has address of return count'''
                 call_return_not_ready = not_ready
                 not_ready = False
                 trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
-                if exit_info.fname_addr is None:
+                if exit_info.delay_count_addr is None:
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
                 
                 else: 
@@ -355,6 +356,19 @@ class WinCallExit():
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
                 trace_msg = trace_msg+' bind socket: 0x%x connect socket: 0x%x' % (exit_info.old_fd, exit_info.new_fd)
+
+            elif exit_info.socket_callname in ['GET_PEER_NAME']:
+                count = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
+                trace_msg = trace_msg+' count 0x%x from addr 0x%x fd: 0x%x' % (count, exit_info.retval_addr, exit_info.old_fd)
+                self.lgr.debug(trace_msg)
+                if exit_info.call_params is not None and type(exit_info.call_params.match_param) is int and exit_info.call_params.match_param == exit_info.old_fd:
+                    self.lgr.debug('winCallExit %s doDataWatch call setRange for 0x%x count 0x%x' % (exit_info.socket_callname, exit_info.retval_addr, count))
+                    self.dataWatch.setRange(exit_info.retval_addr, word_size, msg=trace_msg, 
+                           max_len=word_size, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd, ignore_commence=True)
+                    my_syscall = exit_info.syscall_instance
+                    if my_syscall.linger: 
+                        self.dataWatch.stopWatch() 
+                        self.dataWatch.watch(break_simulation=False, i_am_alone=True)
 
             else:
                 max_count = min(exit_info.count, 100)
