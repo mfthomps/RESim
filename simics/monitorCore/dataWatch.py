@@ -383,10 +383,11 @@ class DataWatch():
             self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, 
-                 watch_mark=None, fd=None, is_lib=False, no_extend=False):
+                 watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
         if self.disabled:
+            self.lgr.debug('dataWatch setRange disabled')
             return
         if fd is not None and self.readLib is not None and self.readLib.inFun():
             ''' Within a read lib, ignore '''
@@ -394,7 +395,7 @@ class DataWatch():
         if length == 0:
             self.lgr.error('dataWatch setRange called with length of zero')
             return
-        if self.commence_with is not None:
+        if self.commence_with is not None and not ignore_commence:
             match = True
             addr = start
             for c in self.commence_with:
