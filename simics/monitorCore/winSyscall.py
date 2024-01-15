@@ -716,10 +716,10 @@ class WinSyscall():
             #else:
             #    exit_info.fname_addr = frame['param5'] + word_size
             # So far we have only seen a pointer to a 64-bit IO_CTRL_BLOCK structure so just do 64 bit way for now
-            exit_info.fname_addr = frame['param5'] + 8
+            exit_info.delay_count_addr = frame['param5'] + 8
             exit_info.count = self.stackParam(3, frame) & 0xFFFFFFFF 
              
-            trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.fname_addr, exit_info.count) 
+            trace_msg = trace_msg+' Handle: 0x%x buf_addr: 0x%x RetCount_addr: 0x%x requested_count: %d' % (exit_info.old_fd, exit_info.retval_addr, exit_info.delay_count_addr, exit_info.count) 
             #SIM_break_simulation('starting Read')
             skip_this = False
             for call_param in syscall_info.call_params:
@@ -748,7 +748,7 @@ class WinSyscall():
                         skip_this = True
             if not skip_this:
                 self.lgr.debug('winSyscall ReadFile set asynch_handler')
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, None,
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.count_addr, exit_info.delay_count_addr, exit_info.retval_addr, None,
                         self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 if self.watchData(exit_info):
                     self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
@@ -963,9 +963,6 @@ class WinSyscall():
             if pdata is not None and len_pdata > 0:
                 trace_msg = trace_msg+' pdata: %s' % pdata_hx
  
-            if exit_info.count > 0:
-                trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
-           
             do_async_io = False
 
             if op_cmd == 'BIND':
@@ -1050,19 +1047,26 @@ class WinSyscall():
                             break
 
             elif op_cmd in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
+                if exit_info.count > 0:
+                    trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
+           
                 # data buffer address
                 exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
                 # the return count address --> this is where kernel will store count ACTUALLY sent/received
                 frame_string = taskUtils.stringFromFrame(frame)
+                self.lgr.debug('winSyscall %s word_size %d' % (op_cmd, word_size))
+                exit_info.count_addr = frame['param5'] + 8
+                '''
                 if word_size == 4:
                     #  Seems to be same for 32 and 64 bit?   TBD is different for DATAGRAM, see below
                     #exit_info.fname_addr = frame['param5'] + 8
                     #exit_info.fname_addr = frame['param5'] + word_size
                     # TBD confused
-                    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                    exit_info.count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
                     self.lgr.debug('frames: %s' % frame_string)
                 else:
-                    exit_info.fname_addr = frame['param5'] + word_size 
+                    exit_info.count_addr = frame['param5'] + word_size 
+                '''
                 #SIM_break_simulation('in send/recv') 
                 value = self.paramOffPtr(7, [0, 0], frame, word_size) 
                 if value is not None:
@@ -1078,23 +1082,29 @@ class WinSyscall():
                         sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd)
                         send_string = sock_struct.getString()
                         ## TBD UDP has different params than TCP?
-                        exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                        exit_info.delay_count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
                     elif op_cmd == 'RECV_DATAGRAM':
                         if word_size == 8:
                             exit_info.sock_addr = self.paramOffPtr(7, [0x18], frame, word_size) 
                         else:
                             exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
                         # TBD UDP has different params than TCP?
-                        exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                        exit_info.delay_count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
 
-                        #self.lgr.debug('winSyscall sock addr 0x%x returned length addr 0x%x' % (exit_info.sock_addr, exit_info.fname_addr))
+                        #self.lgr.debug('winSyscall sock addr 0x%x returned length addr 0x%x' % (exit_info.sock_addr, exit_info.delay_count_addr))
                         sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
                         to_string = sock_struct.getString()
                         #self.lgr.debug('winSyscall sock %s' % to_string)
                         #frame_string = taskUtils.stringFromFrame(frame)
                         #SIM_break_simulation(trace_msg+' '+to_string+ ' '+frame_string)
-                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x ret_count_addr: 0x%x %s' %  (exit_info.retval_addr, exit_info.count, exit_info.fname_addr, send_string)
+                    else:
+                        exit_info.delay_count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                        self.lgr.debug('winSyscall setting delay_count_addr to 0x%x' % exit_info.delay_count_addr)
+                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x count_addr: 0x%x delay_count_addr: 0x%x %s' %  (exit_info.retval_addr, 
+                                exit_info.count, exit_info.count_addr, exit_info.delay_count_addr, send_string)
                     self.lgr.debug(trace_msg)
+                    frame_string = taskUtils.stringFromFrame(frame)
+                    self.lgr.debug(frame_string)
                     do_async_io = True
 
                 else:
@@ -1102,6 +1112,9 @@ class WinSyscall():
                     exit_info.count=0
                     self.lgr.debug(trace_msg)
 
+            elif op_cmd in ['GET_PEER_NAME']:
+                self.lgr.debug(trace_msg)
+                #SIM_break_simulation('remove this')
             #elif op_cmd == 'TCP_FASTOPEN':
             #    trace_msg = trace_msg+' '+to_string
 
@@ -1139,7 +1152,7 @@ class WinSyscall():
                         self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
                         exit_info.call_params = call_param
             if do_async_io and exit_info is not None:
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.fname_addr, exit_info.retval_addr, exit_info.sock_addr,
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.count_addr, exit_info.delay_count_addr, exit_info.retval_addr, exit_info.sock_addr,
                           self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
                           exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 self.lgr.debug('doing winDelay.setDataWatch')
