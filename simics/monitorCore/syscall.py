@@ -310,6 +310,10 @@ class ExitInfo():
         self.word_size = 8
         self.append_msg = None
 
+        self.count_addr = None
+        # address used if asynch read is not ready
+        self.delay_count_addr = None
+
 EXTERNAL = 1
 AF_INET = 2
 DEST_PORT = 3
