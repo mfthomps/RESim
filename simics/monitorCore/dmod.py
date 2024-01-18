@@ -267,7 +267,10 @@ class Dmod():
         if byte_array is None:
             self.lgr.debug('Dmod checkstring bytearray None from 0x%x' % addr)
             return retval
-        s = ''.join(map(chr,byte_array))
+        try:
+            s = ''.join(map(chr,byte_array))
+        except:
+            return retval
         #self.lgr.debug('dMod checkString %d bytes' % len(byte_array))
         rm_this = False
         if self.kind == 'sub_replace':
