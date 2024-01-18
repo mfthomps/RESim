@@ -364,6 +364,7 @@ class LaunchRESim():
 
             params=''
             script = self.getSimicsScript(section)
+            did_net_create = False
             if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
@@ -375,7 +376,6 @@ class LaunchRESim():
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
             else:
-                did_net_create = False
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
