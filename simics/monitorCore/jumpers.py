@@ -64,16 +64,18 @@ class Jumpers():
         ''' The simulation would stop at destinations corresponding to these source addresses.  '''
         self.break_simulation = []
         self.pending_libs = {}
+        ''' brute force avoid reloading if called twice '''
+        self.did_lines = []
 
-    def setJumper(self, from_addr, to_addr, comm=None):
+    def setJumper(self, from_addr, to_addr, comm=None, use_pid=None):
         self.fromto[from_addr] = to_addr
         if comm is not None:
             self.comm_name[from_addr] = comm
-        self.setOneBreak(from_addr)
+        self.setOneBreak(from_addr, use_pid=use_pid)
 
-    def setOneBreak(self, addr):
+    def setOneBreak(self, addr, use_pid=None):
 
-        phys_addr = self.mem_utils.v2p(self.cpu, addr)
+        phys_addr = self.mem_utils.v2p(self.cpu, addr, use_pid=use_pid)
         if phys_addr is None or phys_addr == 0:
             self.lgr.debug('jumper setOneBreak address not yet mapped, call pageCallback for addr 0x%x' % addr)
             self.top.pageCallback(addr, self.pagedIn)
@@ -158,6 +160,9 @@ class Jumpers():
 
     def handleLoadAddrs(self, line):
         retval = True
+        if line in self.did_lines:
+            return retval
+        self.did_lines.append(line)
         parts = line.strip().split()
         if len(parts) < 2:
             self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
@@ -181,8 +186,11 @@ class Jumpers():
         return retval
 
     def handleOrigAddrs(self, line):
-        self.lgr.debug('jumpers handleOrig')
         retval = True
+        if line in self.did_lines:
+            return retval
+        self.did_lines.append(line)
+        self.lgr.debug('jumpers handleOrig')
         parts = line.strip().split()
         if len(parts) < 2:
             self.lgr.error("jumpers Error reading %s from %s, bad jumper" % (line, fname))
@@ -218,6 +226,12 @@ class Jumpers():
 
         tid = self.top.getTID(target=self.cell_name)
         prog_info = self.so_map.getSOAddr(prog, tid)
+        pid = None
+        if prog_info is None:
+            pid, prog_info = self.so_map.findPidWithSO(prog)
+            self.lgr.debug('jumpers handleOrigAddrs no prog info for this tid: %s, tried any got pid %s' % (tid, pid))
+            if pid is not None:
+                self.lgr.debug('jumpers handleOrigAddrs found pid %s had library loaded' % pid)
         if prog_info is None:
             self.lgr.debug('jumpers handleOrig, no prog info for %s, set callback with soMap' % prog)
             jump_rec = self.JumperRec(prog, from_addr, to_addr, comm, break_at_dest) 
@@ -226,7 +240,7 @@ class Jumpers():
         else:
             offset = prog_info.offset
             self.lgr.debug('jumpers handleOrig, got prog info for %s, do breaks for orig addrs' % prog)
-            self.doOrigBreaks(offset, from_addr, to_addr, comm, break_at_dest)
+            self.doOrigBreaks(offset, from_addr, to_addr, comm, break_at_dest, use_pid=pid)
         return retval
 
     def libLoadCallback(self, section):
@@ -252,11 +266,11 @@ class Jumpers():
             self.lgr.debug('jumpers libLoadCallback basename %s offset 0x%x from 0x%x to 0x%x' % (basename, offset, from_addr, to_addr))
             self.doOrigBreaks(offset, from_addr, to_addr, comm, break_at_dest)
         
-    def doOrigBreaks(self, offset, from_addr_in, to_addr_in, comm, break_at_dest):
-        self.lgr.debug('jumpers doOrigBreaks offset 0x%x from_add 0x%x to_addr 0x%x' % (offset, from_addr_in, to_addr_in))
+    def doOrigBreaks(self, offset, from_addr_in, to_addr_in, comm, break_at_dest, use_pid=None):
         from_addr = from_addr_in + offset 
         to_addr = to_addr_in + offset 
-        self.setJumper(from_addr, to_addr, comm) 
+        self.lgr.debug('jumpers doOrigBreaks offset 0x%x.  After applying offset: from_add 0x%x to_addr 0x%x' % (offset, from_addr, to_addr))
+        self.setJumper(from_addr, to_addr, comm, use_pid=use_pid) 
         if break_at_dest:
             self.break_simulation.append(from_addr) 
 
