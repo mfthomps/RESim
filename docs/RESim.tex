@@ -186,7 +186,9 @@ Once a system is modeled and referenced by a RESim configuration file, a RESim s
 
 \subsection{Kernel parameter extraction}
 RESim analysis requires about twenty parameters that characterize the booted kernel instance, e.g., offsets within task 
-records and addresses of selected kernel symbols.  The CREATE\_RESIM\_PARAMS directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
+records and addresses of selected kernel symbols. Many of these parameters are defind within the Linux sched.h file, however offsets within structures
+vary by kernel versions and configurations.  RESim uses huersistics to locate the needed offsets. 
+The CREATE\_RESIM\_PARAMS directive within the RESim configuration file directs the tool to automatically analyze the running kernel 
 and extract the desired parameters.  This allows RESim to analyze disparate Linux kernels without a priori 
 knowledge of their versions or configurations \footnote{Not to be confused with the similar function included with Simics Analyzer product. RESim uses an alternate strategy for OS-Awareness.}.
 See section \ref{getting-started}.
@@ -1309,24 +1311,22 @@ RESim includes {\tt jumpers} to cause execution to skip from a given source addr
 The execution jumpers are different from jumpers intended for use with code coverage and fuzzing,
 which are described in \ref{jumpers}.
 Execution jumpers are defined in a filed named by the {\tt EXECUTION\_JUMPERS} environment variable.
-The file may have multiple entries, and the format of each entry can be one of two forms.  
-Each includes an optional comm paramter that names the process,
+The file may have multiple entries
+Each includes an optional comm parameter that names the process,
 which is intended to differentiate processes that share a library containing the jump 
-addresses. Each format also includes an optional 'break' keyword that causes the
+addresses. Otherwise, the jumper will be active for all processes that execute that code
+in that library. Each entry also includes an optional 'break' keyword that causes the
 simulation to stop at the destination address. The break keyword must come last.
-The two formats are:
+The format is:
 
-\begin{enumerate}
-\item Provide load addresses (implies you know the load address of source and destination)
-\begin{verbatim}
-    addr addr [comm] [break]
-\end{verbatim}
-\item Provide original addresses (i.e., per the binary file).  Provide "prog" as either the
-program name or the SO/DLL basename and the addr as the original address.
 \begin{verbatim}
     prog:addr addr [comm] [break]
 \end{verbatim}
-\end{enumerate}
+Use {\tt getSO} with {\tt show\_orig=True} to get the original load address of a program or library.
+
+The jumper file is processed either as the result of the {\tt loadJumpers} command, or when a program
+is debugged, e.g., via debugSnap.  Jumpers use physical addresses.  If a named library is not loaded 
+when the jumper file is processed, a callback is set to handle it when it becomes loaded.  
 
 \subsection{Dynamic modifications to memory, registers, topology and control flow}
 \label{dmod}
@@ -3022,7 +3022,7 @@ The data injection scheme catches kernel reads and skips over them while injecti
 blocks.
 
 \subsection{Data Watch ntohl}
-The ntohl function is common in some programs.  Consider treating it results as a data copy if easy to find where in memory it lands. e.g.,
+The ntohl type functions are common in some programs.  RESim catches some (but not all) instances of the results of these functions getting copied into memory buffers:
 \begin{verbatim}
 call    _ntohl
 0808A7E0 add     esp, 10h
@@ -3130,6 +3130,18 @@ BEQ     loc_6BEE8
 \end{verbatim}
 Some BNTs are at cycles that are not likely to be affected by input data, e.g., occur prior to parsing.  However we only record the first hit of a bb, so we cannot weed these out without
 running and seeing if early blocks are hit again.
+
+\subsection{Shared libraries and jumpers}
+The jumper loading functions takes the name of a library and offset into that code.  If the library is not yet loaded, a watch is set in the SO manager.
+Once the SO is loaded, an attempt is made to get the physical address of the jump source.  If not yet mapped, a callback is set using the pageCallback module.
+This scheme presupposes these things all happen while the process of interest is schedule.  However, we may wish to load a set of jumpers from arbitrary 
+snapshots, where the process of interest is not scheduled.
+
+Jumpers exclusively use physical addresses.  Thus we should be able to set jumpers from any process that loads the library.  But if a library is already
+loaded at the point of the snapshot, but not by the currently schedule process, we need a way to obtain the physical address.  The cleanest approach would
+be to have the SO module find a task with the library loaded, and then get the page table address (what would be loaded into CR3) for that task.  While 
+Windows stores that value at a small offset within EPROCESS, Linux stores it within the mm\_struct at a location that is not trivially found.  The Windows
+implementation has been tested.  More testing is needed for the Linux x86 and arm implementations.
 
 \section{Driver platforms}
 \label{driver}
@@ -3472,6 +3484,7 @@ port 22 on that interface.
 "ubuntu" server, which has IP of 10.0.0.91 on ens11.  
 \item Everthing goes through switch0.
 \end{itemize}
+
 
 
 \end{appendices}
