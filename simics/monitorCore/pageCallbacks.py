@@ -217,7 +217,7 @@ class PageCallbacks():
             if addr in self.callbacks:
                 self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x callback %s' % (addr, self.callbacks[addr]))
                 self.callbacks[addr](addr)
-                SIM_break_simulation('remove this')
+                #SIM_break_simulation('remove this')
             else:
                 self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x not in callbacks' % (addr))
    
