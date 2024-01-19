@@ -86,6 +86,7 @@ class WinDLLMap():
             self.loadPickle(run_from_snap)
         self.pending_procs = []
         self.fun_list_cache = []
+        self.unknown_sections = {}
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -170,6 +171,7 @@ class WinDLLMap():
 
     def addFile(self, fname, fd, tid):
         pid = self.pidFromTID(tid)
+        self.lgr.debug('winDLL addFile tid:%s fd:0x%x fname: %s' % (tid, fd, fname))
         if pid not in self.open_files:
             self.open_files[pid] = {}
         dll_info = DLLInfo(pid, fname, fd)
@@ -286,10 +288,14 @@ class WinDLLMap():
                 else:
                     self.lgr.debug('WinDLLMap Ignore existing section pid:%s fname %s' % (pid, self.sections[pid][section_handle].fname))
             else:                
-                unknown_dll = DLLInfo(pid, 'unknown', -1)
-                unknown_dll.addLoadAddress(load_addr, size)
-                self.section_list.append(unknown_dll)
-                self.lgr.debug('WinDLLMap mapSection section_handle %d not defined for pid:%s, add unknown section' % (section_handle, pid))
+                if pid in self.unknown_sections and load_addr not in self.unknown_sections[pid]:
+                    unknown_dll = DLLInfo(pid, 'unknown', -1)
+                    unknown_dll.addLoadAddress(load_addr, size)
+                    self.section_list.append(unknown_dll)
+                    if pid not in self.unknown_sections:
+                        self.unknown_sections[pid] = []
+                    self.unknown_sections[pid].append(load_addr)
+                    self.lgr.debug('WinDLLMap mapSection section_handle %d not defined for pid:%s, add unknown section' % (section_handle, pid))
         else:
             self.lgr.warning('WinDLLMap mapSection pid:%s not in sections ' % (pid))
 
@@ -325,9 +331,14 @@ class WinDLLMap():
                     self.lgr.debug('winDLLMap showSO pid:%s 0x%x - 0x%x %s' % (section.pid, section.addr, end, section.fname)) 
 
     def listSO(self):
-        for pid in self.text:
-            end = self.text[pid].addr + self.text[pid].size
-            print('pid:%s  0x%x - 0x%x   %s' % (pid, self.text[pid].addr, end, self.text[pid].fname))
+        #for pid in self.text:
+        #    end = self.text[pid].addr + self.text[pid].size
+        #    print('pid:%s  0x%x - 0x%x   %s' % (pid, self.text[pid].addr, end, self.text[pid].fname))
+
+        for section in self.section_list:
+            if section.size is not None:
+                end = section.addr + section.size
+                print('pid:%s  0x%x - 0x%x   %s' % (section.pid, section.addr, end, section.fname))
 
     def isMainText(self, address):
         retval = False
@@ -410,6 +421,26 @@ class WinDLLMap():
             self.size = size
             self.text_size = size
 
+    def progFromSection(self, section):
+        retval = None
+        if section.image_base is None:
+            self.lgr.debug('winDLLMap no image base defined for %s, get it' % section.fname)
+            full_path = self.top.getFullPath(fname=section.fname)
+            self.lgr.debug('winDLL getSOAddr got %s from getFullPath' % full_path)
+            size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
+            section.image_base = image_base
+            section.text_offset = text_offset
+            section.size = size
+        if section.image_base is not None:
+            delta = (section.addr - section.image_base) 
+            # TBD text offset already accounted for?  Changed to get coverage to work
+            #offset = delta + section.text_offset
+            offset = delta 
+            retval = self.HackCompat(section.addr, section.image_base, offset, section.size)
+        else:
+            self.lgr.error('winDLLMap no image base defined for %s' % section.fname)
+        return retval
+
     def getSOAddr(self, in_fname, tid=None):
         self.lgr.debug('winDLLMap getSOAddr %s' % in_fname)
         retval = None
@@ -421,30 +452,29 @@ class WinDLLMap():
             return None
         if in_fname == 'unknown':
             self.lgr.debug('winDLLMap getSOAddr in_fname is "unknown" for pid for %s' % str(pid))
-            return
+            return None
         for section in self.section_list:
             if section.pid == pid:
                 #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(in_fname).lower(), ntpath.basename(section.fname).lower()))
                 if os.path.basename(in_fname).lower() == ntpath.basename(section.fname).lower():
-                    if section.image_base is None:
-                        self.lgr.debug('winDLLMap no image base defined for %s, get it' % section.fname)
-                        full_path = self.top.getFullPath(fname=section.fname)
-                        self.lgr.debug('winDLL getSOAddr got %s from getFullPath' % full_path)
-                        size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
-                        section.image_base = image_base
-                        section.text_offset = text_offset
-                        section.size = size
-                    if section.image_base is not None:
-                        delta = (section.addr - section.image_base) 
-                        # TBD text offset already accounted for?  Changed to get coverage to work
-                        #offset = delta + section.text_offset
-                        offset = delta 
-                        retval = self.HackCompat(section.addr, section.image_base, offset, section.size)
-                    else:
-                        self.lgr.error('winDLLMap no image base defined for %s' % section.fname)
+                    retval = self.progFromSection(section)
                     break 
         return retval
 
+    def findPidWithSO(self, in_fname):
+        # find a process having the given library loaded and return the PID and program info per that process's virtual memory
+        retval = (None, None)
+        self.lgr.debug('winDLLMap findTidWithSO in_fname %s' % in_fname)
+        if in_fname == 'unknown':
+            self.lgr.debug('winDLLMap findTidWithSO in_fname is "unknown" for pid for %s' % str(pid))
+            return retval
+        for section in self.section_list:
+            if os.path.basename(in_fname).lower() == ntpath.basename(section.fname).lower():
+                self.lgr.debug('winDLLMap findTidWithSO got match')
+                retval = (section.pid, self.progFromSection(section))
+                break
+        return retval
+   
     def getSOInfo(self, addr_in):
         retval = None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
