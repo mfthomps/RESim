@@ -1858,33 +1858,41 @@ class WinSyscall():
 
     def genericCallParams(self, syscall_info, exit_info, callname):
         retval = exit_info
+        got_something = False
+        ignore_if_not_got_something = False
         for call_param in syscall_info.call_params:
             self.lgr.debug('winSyscall genericCallparams got param name: %s type %s subcall: %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
             if call_param.match_param.__class__.__name__ == 'Dmod':
-                 retval = None
+                 ignore_if_not_got_something = True
                  mod = call_param.match_param
                  #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
                  #if mod.fname_addr is None:
                  if mod.getMatch() == exit_info.fname:
                      self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
                      exit_info.call_params = call_param
-                     retval = exit_info
+                     got_something = True
                      break
             if type(call_param.match_param) is str: 
                 if ((call_param.subcall is None or call_param.subcall.startswith(callname) or callname.startswith(call_param.subcall)) \
                          and (call_param.proc is None or call_param.proc == self.comm_cache[tid])):
                     if call_param.subcall in ['OpenFile', 'CreateFile'] and exit_info.fname is not None and ntpath.basename(exit_info.fname) != call_param.match_param:
                         self.lgr.debug('winSyscall genericCallParams, fname found but does not match string param')
+                        ignore_if_not_got_something = True
                         continue
                     self.lgr.debug('syscall %s, found match_param %s param.subcall %s' % (callname, call_param.match_param, call_param.subcall))
                     exit_info.call_params = call_param
-                    retval = exit_info
                     break
+                elif call_param.name == 'trackSO':
+                    exit_info.call_params = call_param
+                    got_something = True
                 else:
                     self.lgr.debug('winSyscall genericCallParams match_param is str, no match, set retval to None')
-                    retval = None
+                    ignore_if_not_got_something = True
             elif call_param.name == 'trackSO':
+                got_something = True
                 exit_info.call_params = call_param
+        if not got_something and ignore_if_not_got_something:
+            exit_info = None 
         return retval
 
     def resetHackCycle(self):
