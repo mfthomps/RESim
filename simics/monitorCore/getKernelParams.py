@@ -83,7 +83,7 @@ class GetKernelParams():
             try making phys addresses relative to the fs base '''
         self.param.current_task_fs = False
 
-        self.mem_utils = memUtils.memUtils(word_size, self.param, self.lgr, arch=self.cpu.architecture)
+        self.mem_utils = memUtils.MemUtils(self, word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS
         self.data_abort = None
         if self.cpu.architecture == 'arm':
@@ -413,6 +413,7 @@ class GetKernelParams():
                 if not self.isWindows() and addr < 0x1000:
                     self.lgr.debug('gs offset looks dicey, skip this 0x%x' % addr)
                     continue
+
                 did_offset.append(addr)
                 self.gs_base = self.cpu.ia32_gs_base
                 self.param.current_task_gs  = True
@@ -859,6 +860,8 @@ class GetKernelParams():
                         SIM_break_simulation('entryModeChanged found two rets: 0x%x 0x%x' % (self.param.arm_ret, self.param.arm_ret2))
                     
         elif old == Sim_CPU_Mode_User:
+            #if self.param.page_table is None:
+            #    self.param.page_table = self.getPageTableDirectory()
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if self.param.arm_entry is None and instruct[1].startswith('svc 0'):
@@ -933,6 +936,9 @@ class GetKernelParams():
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
             self.lgr.debug('entryModeChanged entering kernel')
+            if not self.isWindows() and self.param.mm_struct is None:
+                if not self.getPageTableDirectory():
+                    self.lgr.error('Failed to get page table offsets from process record')
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
@@ -1640,6 +1646,43 @@ class GetKernelParams():
             return True
         else:
             return False
+
+    def getPageTableDirectory(self):
+        retval = False
+        if self.cpu.architecture == 'arm':
+            ttbr = self.cpu.translation_table_base0
+            page_dir_addr = ttbr & 0xfffff000
+        else:
+            reg_num = self.cpu.iface.int_register.get_number("cr3")
+            page_dir_addr = self.cpu.iface.int_register.read(reg_num)
+        proc_rec = self.taskUtils.getCurProcRec()
+        self.lgr.debug('proc rec 0x%x' % proc_rec) 
+        start = self.param.ts_prev + 4
+        ptr = proc_rec + start
+        mm_struct = None
+        mm_struct_off = None
+        end = proc_rec + self.param.ts_pid 
+        while ptr < end:
+            maybe = self.mem_utils.readPtr(self.cpu, ptr)
+            self.lgr.debug('ptr 0x%x maybe 0x%x' % (ptr, maybe))
+            pgd_ptr = maybe
+            for i in range(100):
+                pgd = self.mem_utils.readWord32(self.cpu, pgd_ptr)
+                if pgd is not None:
+                    self.lgr.debug('\t pgd_ptr 0x%x   pgd 0x%x' % (pgd_ptr, pgd))
+                    if pgd == page_dir_addr:
+                        mm_struct = ptr - proc_rec
+                        self.param.mm_struct = mm_struct
+                        mm_struct_off = i * 4
+                        self.param.mm_struct_offset = mm_struct_off
+                        self.lgr.debug('got it  mm_struct %d  offset %d' % (mm_struct, mm_struct_off))
+                        retval = True
+                        break
+                pgd_ptr = pgd_ptr+4
+            ptr = ptr + 4
+            if retval:
+                break
+        return retval
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
