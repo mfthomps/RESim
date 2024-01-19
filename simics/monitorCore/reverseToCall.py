@@ -117,7 +117,6 @@ class reverseToCall():
             self.recent_cycle = {}
             self.jump_stop_hap = None
             self.sysenter_hap = None
-            self.start_cycles = None
             self.page_faults = None
             self.frame_ips = []
             self.uncall_hap = None
@@ -139,11 +138,6 @@ class reverseToCall():
 
             self.lgr.debug('__init__ bookmarks is %s' % self.bookmarks)
 
-    def getStartCycles(self):
-        return self.start_cycles
-
-    def resetStartCycles(self):
-        self.start_cycles = self.cpu.cycles
 
     def noWatchSysenter(self):
         if self.sysenter_hap is not None:
@@ -195,7 +189,6 @@ class reverseToCall():
     def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
         if self.cpu is None:
             self.cpu = cpu
-            self.start_cycles = self.cpu.cycles & 0xFFFFFFFFFFFFFFFF
             self.x_pages = x_pages
             self.page_faults = page_faults
             if self.run_from_snap is not None:
@@ -409,8 +402,9 @@ class reverseToCall():
 
     def tooFarBack(self):
         cycles = self.cpu.cycles & 0xFFFFFFFFFFFFFFFF
-        self.lgr.debug('tooFarBack cycles: 0x%x  started at 0x%x' % (cycles, self.start_cycles))
-        if cycles-1 <= self.start_cycles:
+        start_cycles = self.top.getFirstCycle()
+        self.lgr.debug('tooFarBack cycles: 0x%x  started at 0x%x' % (cycles, start_cycles))
+        if cycles-1 <= start_cycles:
             return True
         else:
             return False
@@ -738,7 +732,7 @@ class reverseToCall():
         self.num_bytes = num_bytes
         self.kernel = kernel
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r' % (eip, self.cpu.cycles, reg, offset, taint))
+        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, taint, kernel))
         self.reg = reg
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
@@ -790,7 +784,7 @@ class reverseToCall():
                         self.lgr.debug('reverseToModReg, did reverse')
                         done=True
                 else:
-                    ida_message = 'doRevToModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.start_cycles)
+                    ida_message = 'doRevToModReg must have backed to 0x%x, first cycle was 0x%x' % (self.cpu.cycles, self.top.getFirstCycle())
                     self.lgr.debug(ida_message)
                     self.context_manager.setIdaMessage(ida_message)
                     self.cleanup(None)
@@ -836,7 +830,7 @@ class reverseToCall():
                             self.followTaint(reg_mod_type)
                             
                     else:
-                        self.lgr.debug('doToRevModReg must have backed to first cycle 0x%x' % self.start_cycles)
+                        self.lgr.debug('doToRevModReg must have backed to first cycle 0x%x' % self.top.getFirstCycle())
             else:
                 self.lgr.debug('doRevToModReg bailed, maybe trying uncall')
                 done=True
@@ -883,7 +877,8 @@ class reverseToCall():
                 self.lgr.error('cycleRegisterMod, skipped to wrong cycle')
                 return None
             if self.tooFarBack():
-                self.lgr.debug('cycleRegisterMod prev cycle 0x%x prior to first 0x%x, stop here' %(previous, self.start_cycles))
+                print('Reversed to original cycle')
+                self.lgr.debug('cycleRegisterMod prev cycle 0x%x prior to first 0x%x, stop here' %(previous, self.top.getFirstCycle()))
                 break
             cpl = memUtils.getCPL(self.cpu)
             if cpl == 0 and not self.kernel:
@@ -1229,7 +1224,7 @@ class reverseToCall():
                 else:
                     self.lgr.debug('cycleAlone, assume jumpOverKernel took over the search')
             else:
-                self.lgr.debug('cycleAlone must have backed to first cycle 0x%x' % self.start_cycles)
+                self.lgr.debug('cycleAlone must have backed to first cycle 0x%x' % self.top.getFirstCycle())
         elif reg_mod_type.mod_type != RegisterModType.BAIL:
             ''' current eip modifies self.reg, done, or continue taint '''
             self.lgr.debug('cycleAlone, not bail mod type %s' % reg_mod_type.mod_type)
@@ -1241,7 +1236,7 @@ class reverseToCall():
                     self.lgr.debug('cycleAlone, not too far back, follow taint?')
                     self.followTaint(reg_mod_type)
                 else:
-                    self.lgr.debug('cycleAlone must backed to first cycle 0x%x' % self.start_cycles)
+                    self.lgr.debug('cycleAlone must backed to first cycle 0x%x' % self.top.getFirstCycle())
  
     def stoppedReverseModReg(self, my_args, one, exception, error_string):
         '''
@@ -1311,7 +1306,8 @@ class reverseToCall():
         current = SIM_cycle_count(cpu)
         self.lgr.debug('stoppedReverseToCall, entered %s (%s) cycle: 0x%x' % (tid, comm, current))
         #if current < self.top.getFirstCycle():
-        if current <= self.start_cycles:
+        if current <= self.top.getFirstCycle():
+            print('Reversed to original cycle')
             self.lgr.debug('stoppedReverseToCall found cycle 0x%x prior to first, stop here' %(current))
             self.cleanup(None)
         elif tid == self.tid and (memUtils.getCPL(cpu) != 0 or self.kernel):
