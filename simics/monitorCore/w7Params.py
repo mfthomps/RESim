@@ -494,6 +494,8 @@ def findParams(cpu, mem_utils, task_list, param, current_task_phys, lgr):
     param.ts_pid = 384
     param.ts_next = 952
     param.ts_prev = 944
+    # offset of user space page table base (cr3)
+    param.page_table = 0x28
 
     return
 
