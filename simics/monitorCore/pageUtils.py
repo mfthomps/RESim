@@ -177,7 +177,7 @@ def getPageBasesArm(cpu, lgr, kernel_base):
     NUM_FIRST = 4096
     NUM_SECOND = 256
     first_index = 0
-    kernel_base = 0xc0000000
+    #kernel_base = 0xc0000000
     for i in range(NUM_FIRST):
         first_addr = base_shifted | first_index*4
         ''' first level directory '''
