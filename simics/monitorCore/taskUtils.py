@@ -179,6 +179,10 @@ class TaskUtils():
     def getPhysCurrentTask(self):
         return self.phys_current_task
 
+    # match name in winTaskUtils
+    def getCurProcRec(self):
+        return self.getCurThreadRec()
+
     def getCurThreadRec(self):
         if self.phys_current_task == 0:
             return 0
@@ -617,6 +621,10 @@ class TaskUtils():
             tid = str(pid)
         return tid 
  
+    def getProcRecForTid(self, tid):
+        # match windows
+        return self.getRecAddrForTid(tid)
+
     def getRecAddrForTid(self, tid):
         retval = None
         #self.lgr.debug('getRecAddrForTid %s' % tid)
