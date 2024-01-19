@@ -606,6 +606,11 @@ class WinTaskUtils():
         ''' TBD see taskUtils'''
         return self.curTID()
 
+    def getProcRecForTid(self, tid):
+        tid_rec = self.getRecAddrForTid(tid)
+        proc_rec = self.getCurProcRec(cur_thread_in=tid_rec)
+        return proc_rec
+
     def getRecAddrForTid(self, tid):
         ''' find the current task pointer (ETHREAD) for a given tid (pid-thread_id)'''
         ret_rec = None
@@ -753,7 +758,6 @@ class WinTaskUtils():
                 return thread_id_dict
             thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + self.THREAD_HEAD)
             self.lgr.debug('thread list head is 0x%x' % thread_list_head)
-
 
             next_thread = self.mem_utils.readPtr(self.cpu, thread_list_head+8)
             got = []
