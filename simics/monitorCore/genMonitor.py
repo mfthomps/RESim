@@ -426,6 +426,10 @@ class GenMonitor():
                     self.param[cell_name].current_task_gs = False
                 if not hasattr(self.param[cell_name], 'gs_base'):
                     self.param[cell_name].gs_base = None
+                if comp_dict[cell_name]['OS_TYPE'].startswith('WIN'):
+                    if not hasattr(self.param[cell_name], 'page_table'):
+                        # TBD remove hack after old snapshots cycle out
+                        self.param[cell_name].page_table = 0x28
 
                 ''' always true? TBD '''
                 self.param[cell_name].ts_state = 0
@@ -443,7 +447,7 @@ class GenMonitor():
                 self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 
             cpu = self.cell_config.cpuFromCell(cell_name)
-            self.mem_utils[cell_name] = memUtils.memUtils(word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
+            self.mem_utils[cell_name] = memUtils.MemUtils(self, word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
             if cell_name not in self.os_type:
                 # TBD move os type into params file so it need not be in the ini file?
                 self.lgr.error('Missing OS_TYPE for cell %s' % cell_name)
@@ -501,10 +505,13 @@ class GenMonitor():
             cmd = 'run-command-file %s' % init_script
             SIM_run_command(cmd)
             self.lgr.debug('ran PRE_INIT_SCRIPT %s' % init_script)
+
     def runScripts(self):
         ''' run the INIT_SCRIPT and the one_done module, if iany '''
+        self.lgr.debug('runScripts')
         init_script = os.getenv('INIT_SCRIPT')
         if init_script is not None:
+            self.lgr.debug('run INIT_SCRIPT %s' % init_script)
             cmd = 'run-command-file %s' % init_script
             SIM_run_command(cmd)
             self.lgr.debug('ran INIT_SCRIPT %s' % init_script)
@@ -974,6 +981,8 @@ class GenMonitor():
                 cmd = 'c %s cycles' % run_cycles
                 dumb, ret = cli.quiet_run_command(cmd)
                 #self.lgr.debug('back from continue')
+            else: 
+                self.lgr.debug('doInit done, call runScripts')
         self.runScripts()
 
     def getDbgFrames(self):
@@ -2039,11 +2048,14 @@ class GenMonitor():
     def getInstance(self):
         return INSTANCE
 
-    def revToModReg(self, reg):
+    def revToModReg(self, reg, kernel=False):
+        if not self.debugging():
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.rev_to_call[self.target].setup(cpu, [])
         reg = reg.lower()
-        self.lgr.debug('revToModReg for reg %s' % reg)
+        self.lgr.debug('revToModReg for reg %s kernel: %r' % (reg, kernel))
         self.removeDebugBreaks()
-        self.rev_to_call[self.target].doRevToModReg(reg)
+        self.rev_to_call[self.target].doRevToModReg(reg, kernel=kernel)
 
     def revToAddr(self, address, extra_back=0):
         if self.reverseEnabled():
@@ -2340,7 +2352,7 @@ class GenMonitor():
             dum, cpu = self.context_manager[self.target].getDebugTid() 
             new_cycle = cpu.cycles - 1
          
-            start_cycles = self.rev_to_call[self.target].getStartCycles()
+            start_cycles = self.getStartCycle()
             if new_cycle >= start_cycles:
                 self.is_monitor_running.setRunning(True)
                 try:
@@ -2792,14 +2804,22 @@ class GenMonitor():
         self.lgr.debug('genMonitor noReverse')
 
     def allowReverse(self):
+        if self.rev_execution_enabled:
+            print('Reverse execution already enabled')
+            return
         cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
+        cli.quiet_run_command(cmd)
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         prec = Prec(cpu, None, tid)
         if tid is not None:
+            self.lgr.debug('genMonitor allowReverse tid from getDebugTid is %s' % tid)
             self.rev_to_call[self.target].watchSysenter(prec)
+        if self.bookmarks is None:
+            self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+            self.bookmarks.setOrigin(cpu)
         self.rev_execution_enabled = True
-        self.lgr.debug('genMonitor allowReverse')
+        self.lgr.debug('genMonitor allowReverse done')
+        print('Reverse execution enabled.')
  
     def restoreDebugBreaks(self, was_watching=False):
          
@@ -3599,7 +3619,6 @@ class GenMonitor():
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         #self.stopTrackIO()
         self.lgr.debug('genMonitor clearBookmarks call clearWatches')
-        self.rev_to_call[self.target].resetStartCycles()
         return True
 
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
@@ -5935,7 +5954,29 @@ class GenMonitor():
     def getTIB(self):
         return self.task_utils[self.target].getTIB()
 
+    def getCurProcRec(self):
+        return self.task_utils[self.target].getCurProcRec()
+
+    def getProcRecForTid(self, cpu, tid):
+        cell_name = self.getTopComponentName(cpu)
+        return self.task_utils[cell_name].getProcRecForTid(tid)
+         
+    def hasUserPageTable(self, cpu=None):
+        retval = False
+        if cpu is None:
+            cell_name = self.target
+        else:
+            cell_name = self.getTopComponentName(cpu)
+        if self.isWindows(cell_name):
+            #if hasattr(self.param[cell_name], 'page_table') and self.param[cell_name].page_table is not None:
+            retval = True
+        else:
+            if hasattr(self.param[cell_name], 'mm_struct') and self.param[cell_name].mm_struct is not None:
+                retval = True
+        return retval
+  
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
     cgc.doInit()
+    print('Done with initialization')
