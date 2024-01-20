@@ -33,13 +33,14 @@ import memUtils
 import resimUtils
 import net
 class WinDelay():
-    def __init__(self, top, cpu, count_addr, delay_count_addr, buffer_addr, sock_addr, mem_utils, context_manager, trace_mgr, 
+    def __init__(self, top, cpu, exit_info, sock_addr, mem_utils, context_manager, trace_mgr, 
                   call_name, kbuffer, fd, count, stop_action, lgr, watch_count_addr=True):
         self.top = top
         self.cpu = cpu
-        self.count_addr = count_addr
-        self.delay_count_addr = delay_count_addr
-        self.buffer_addr = buffer_addr
+        ''' Note exit_info and its structs, e.g., exit_info.call_params are data structures generated as part of the syscall.  Changes made here
+            affect those structures.
+        '''
+        self.exit_info = exit_info
         self.sock_addr = sock_addr
         self.mem_utils = mem_utils
         self.context_manager = context_manager
@@ -76,10 +77,6 @@ class WinDelay():
         else:
             self.return_count = count
 
-        ''' assess call params.  Note exit_info.call_params is the data structure generated as part of the syscall.  Changes made here
-            affect that structure.
-        '''
-        self.exit_info = None
 
     def setDataWatch(self, data_watch, linger):
         self.lgr.debug('winDelay setDataWatch')
@@ -92,18 +89,19 @@ class WinDelay():
     def doDataWatch(self, did_delay):
         self.lgr.debug('winDelay doDataWatch')
         if self.data_watch is not None:
-            self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.buffer_addr, self.return_count))
+            self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.exit_info.retval_addr, self.return_count))
             if self.kbuffer is not None:
                 self.kbuffer.readReturn(self.return_count)
             if self.trace_msg is None:
-                self.trace_msg = 'Injected data copied to 0x%x %d bytes' % (self.buffer_addr, self.return_count)
-            self.data_watch.setRange(self.buffer_addr, self.return_count, msg=self.trace_msg, 
-                       max_len=self.return_count, recv_addr=self.buffer_addr, fd=self.fd)
+                self.trace_msg = 'Injected data copied to 0x%x %d bytes' % (self.exit_info.retval_addr, self.return_count)
+            self.data_watch.setRange(self.exit_info.retval_addr, self.return_count, msg=self.trace_msg, 
+                       max_len=self.return_count, recv_addr=self.exit_info.retval_addr, fd=self.fd)
 
             if did_delay:
-                count_addr = self.delay_count_addr
+                count_addr = self.exit_info.delay_count_addr
+                exit_info.did_delay = True
             else:
-                count_addr = self.count_addr
+                count_addr = self.exit_info.count_addr
             self.data_watch.setRange(count_addr, 4, msg='read count')
             if self.sock_addr is not None:
                 self.data_watch.setRange(self.sock_addr, 8, msg='source address')
@@ -138,27 +136,27 @@ class WinDelay():
     def setCountWriteHap(self):
         if self.count_write_hap is None:
             ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.delay_count_addr, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.exit_info.delay_count_addr, 1, 0)
             self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, 'winDelayCountHap')
-            self.lgr.debug('winDelay setCountWriteHap to 0x%x hap %d module %s' % (self.delay_count_addr, self.count_write_hap, str(self)))
-            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.buffer_addr, self.count, 0)
+            self.lgr.debug('winDelay setCountWriteHap to 0x%x hap %d module %s' % (self.exit_info.delay_count_addr, self.count_write_hap, str(self)))
+            #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.exit_info.retval_addr, self.count, 0)
             #self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeBufferHap, None, proc_break, 'winDelayBufferHap')
         else:
             self.lgr.warning('winDelay setCountWriteHap alread set!!!')
 
     #def writeBufferHap(self, dumb, third, forth, memory):
-    #    SIM_break_simulation('wrote to buffer 0x%x' % self.buffer_addr)
+    #    SIM_break_simulation('wrote to buffer 0x%x' % self.exit_info.retval_addr)
 
     def getIOData(self, return_count, count_addr):
-        #return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
+        #return_count = self.mem_utils.readWord32(self.cpu, self.exit_info.count_addr)
         self.lgr.debug('winDelay getIOData read count from 0x%x got 0x%x did exit? %r' % (count_addr, return_count, self.did_exit))
         if return_count == 0:
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
             max_read = min(return_count, 100)
-            #read_data = self.mem_utils.readString(self.cpu, self.buffer_addr, max_read)
+            #read_data = self.mem_utils.readString(self.cpu, self.exit_info.retval_addr, max_read)
 
-            byte_array = self.mem_utils.getBytes(self.cpu, return_count, self.buffer_addr)
+            byte_array = self.mem_utils.getBytes(self.cpu, return_count, self.exit_info.retval_addr)
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
                 # TBD add traceFiles to windows
@@ -169,7 +167,7 @@ class WinDelay():
 
             if self.did_exit:
                 trace_msg = self.call_name+' completed from cycle: 0x%x handle: 0x%x count: 0x%x into buffer: 0x%x requested: 0x%x data: %s\n' % (self.cycles, self.fd, return_count, 
-                   self.buffer_addr, self.exit_info.count, repr(read_data))
+                   self.exit_info.retval_addr, self.exit_info.count, repr(read_data))
                 self.trace_mgr.write(trace_msg)
                 self.lgr.debug('winDelay gitIOData already did exit so log the trace message %s' % trace_msg)
             else:
@@ -269,10 +267,10 @@ class WinDelay():
         retval = False
         if self.trace_msg is not None or not not_ready:
             if self.trace_msg is None and not not_ready:
-                return_count = self.mem_utils.readWord32(self.cpu, self.count_addr)
+                return_count = self.mem_utils.readWord32(self.cpu, self.exit_info.count_addr)
                 self.lgr.debug('winDelay exitingKernel with no delay assume data it is there, return count 0x%x' % return_count)
                 if return_count > 0:
-                    self.getIOData(return_count, self.count_addr)
+                    self.getIOData(return_count, self.exit_info.count_addr)
                     self.doDataWatch(False)
                     combined_msg = trace_msg + ' '+self.trace_msg
                     self.trace_mgr.write(combined_msg)
@@ -297,7 +295,4 @@ class WinDelay():
             self.lgr.debug('winDelay exitingKernel did not yet see data')
             self.did_exit = True
         return retval
-
-    def setExitInfo(self, exit_info):
-        self.exit_info = exit_info
 

@@ -748,12 +748,11 @@ class WinSyscall():
                         skip_this = True
             if not skip_this:
                 self.lgr.debug('winSyscall ReadFile set asynch_handler')
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.count_addr, exit_info.delay_count_addr, exit_info.retval_addr, None,
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info, None,
                         self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 if self.watchData(exit_info):
                     self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-                exit_info.asynch_handler.setExitInfo(exit_info)
 
 
         elif callname == 'WriteFile':
@@ -1152,13 +1151,12 @@ class WinSyscall():
                         self.lgr.debug('winSyscall parse socket call %s, add call_param to exit_info' % op_cmd)
                         exit_info.call_params = call_param
             if do_async_io and exit_info is not None:
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info.count_addr, exit_info.delay_count_addr, exit_info.retval_addr, exit_info.sock_addr,
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, exit_info, exit_info.sock_addr,
                           self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
                           exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 self.lgr.debug('doing winDelay.setDataWatch')
                 if self.watchData(exit_info):
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-                exit_info.asynch_handler.setExitInfo(exit_info)
  
         elif callname in ['CreateEvent', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
@@ -1551,7 +1549,8 @@ class WinSyscall():
                         self.top.rmCallTrace(self.cell_name, self.name)
                 # mftmft TBD
                 for param in self.rm_param_queue:
-                    self.top.rmSyscall(param.name)
+                    self.lgr.debug('syscall stopHap call top.rmSyscall for %s' % param)
+                    self.top.rmSyscall(param)
                 self.rm_param_queue = []
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
@@ -1900,3 +1899,10 @@ class WinSyscall():
 
     def appendRmParam(self, param):
         self.rm_param_queue.append(param)
+
+    def rmRmParam(self, param):
+        retval = False
+        if param in self.rm_param_queue: 
+            self.rm_param_queue.remove(param)
+            retval = True
+        return retval
