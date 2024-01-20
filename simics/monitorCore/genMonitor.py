@@ -1576,6 +1576,7 @@ class GenMonitor():
 
 
     def toProc(self, proc, binary=False, run=True):
+        self.rmDebugWarnHap()
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
