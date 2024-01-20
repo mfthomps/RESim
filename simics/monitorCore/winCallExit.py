@@ -390,6 +390,7 @@ class WinCallExit():
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
             if not my_syscall.linger: 
+                self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
             if my_syscall is None:
                 self.lgr.error('winCallExit could not get syscall for %s' % callname)
@@ -398,13 +399,17 @@ class WinCallExit():
                     new_msg = exit_info.trace_msg + ' ' + trace_msg
                     self.context_manager.setIdaMessage(new_msg)
                 self.lgr.debug('winCallExit call stopAlone of syscall')
-                SIM_run_alone(my_syscall.stopAlone, callname)
+
+                stop_param = callname
+                if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+                    stop_param = exit_info.socket_callname
+                SIM_run_alone(my_syscall.stopAlone, stop_param)
                 self.top.idaMessage() 
                 # remove it from syscall else there will be stop hap to execute
                 #if not my_syscall.linger: 
                 #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
                 self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.call_params.name)
-                my_syscall.appendRmParam(exit_info.call_params)
+                my_syscall.appendRmParam(exit_info.call_params.name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
