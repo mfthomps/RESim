@@ -685,3 +685,12 @@ class SOMap():
         if tid in self.prog_local_path:
             retval = self.prog_local_path[tid]
         return retval
+
+    def findPidWithSO(self, in_fname):
+        retval = (None, None)
+        for tid in self.so_file_map:
+            for text_seg in self.so_file_map[tid]:
+                if os.path.basename(self.so_file_map[tid][text_seg]) == os.path.basename(in_fname):
+                    retval = (tid, text_seg)
+                    break
+        return retval
