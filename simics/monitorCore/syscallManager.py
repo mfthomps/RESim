@@ -82,7 +82,9 @@ class SyscallInstance():
     def addCallParams(self, call_params, call_names):
         call_param_name = call_params[0].name
         if call_param_name in self.param_call_list:
-            self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % call_param_name)
+            # don't error if the param was queued up to be removed from the syscall
+            if not self.syscall.rmRmParm(call_param_name):
+                self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % call_param_name)
         else:
             self.param_call_list[call_param_name] = call_names
             self.lgr.debug('syscallManager SyscallInstance addCallParams set self.param_call_list[%s] to %s' % (call_param_name, call_names))
