@@ -238,8 +238,10 @@ class Jumpers():
             self.pending_libs[prog] = jump_rec
             self.so_map.addSOWatch(prog, self.libLoadCallback)
         else:
-            offset = prog_info.offset
-            self.lgr.debug('jumpers handleOrig, got prog info for %s, do breaks for orig addrs' % prog)
+            #offset = prog_info.offset
+            offset = prog_info.locate - prog_info.address
+            self.lgr.debug('jumpers handleOrig, got prog info for %s, do breaks for orig addrs prog_info.locate 0x%x prog_info.offset 0x%x offset 0x%x' % (prog,
+               prog_info.locate, prog_info.offset, offset))
             self.doOrigBreaks(offset, from_addr, to_addr, comm, break_at_dest, use_pid=pid)
         return retval
 
