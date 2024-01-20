@@ -211,12 +211,7 @@ class Coverage():
         self.so_entry = so_entry
         if so_entry.address is not None:
             if so_entry.locate is not None:
-                if self.top.isWindows(target=self.cell_name):
-                    self.offset = so_entry.offset
-                else:
-                    self.offset = so_entry.locate+so_entry.offset
-            #else:
-            #    self.offset = so_entry.address
+                self.offset = so_entry.locate+so_entry.offset
         else:
             self.lgr.debug('coverage: cover no address in so_entry for %s' % self.analysis_path)
             return
