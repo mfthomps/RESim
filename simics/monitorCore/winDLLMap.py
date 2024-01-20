@@ -414,31 +414,35 @@ class WinDLLMap():
 
     class HackCompat():
         def __init__(self, address, locate, offset, size):
+            # image_base
             self.address = address
             self.text_start = address
+            # where loaded in memory
             self.locate = locate
             self.offset = offset
             self.size = size
             self.text_size = size
 
     def progFromSection(self, section):
+        # for aligning program information with elf structure used by RESim
         retval = None
         if section.image_base is None:
-            self.lgr.debug('winDLLMap no image base defined for %s, get it' % section.fname)
+            self.lgr.debug('winDLLMap progFromSection no image base defined for %s, get it' % section.fname)
             full_path = self.top.getFullPath(fname=section.fname)
-            self.lgr.debug('winDLL getSOAddr got %s from getFullPath' % full_path)
+            self.lgr.debug('winDLL progFromSection got %s from getFullPath' % full_path)
             size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
             section.image_base = image_base
             section.text_offset = text_offset
             section.size = size
         if section.image_base is not None:
-            delta = (section.addr - section.image_base) 
+            #delta = (section.addr - section.image_base) 
             # TBD text offset already accounted for?  Changed to get coverage to work
             #offset = delta + section.text_offset
-            offset = delta 
-            retval = self.HackCompat(section.addr, section.image_base, offset, section.size)
+            #offset = delta 
+            offset = section.text_offset
+            retval = self.HackCompat(section.image_base, section.addr, offset, section.size)
         else:
-            self.lgr.error('winDLLMap no image base defined for %s' % section.fname)
+            self.lgr.error('winDLLMap progFromSection no image base defined for %s' % section.fname)
         return retval
 
     def getSOAddr(self, in_fname, tid=None):
@@ -549,6 +553,9 @@ class WinDLLMap():
                 self.addSectionFunction(section, locate)
 
     def addSectionFunction(self, section, locate):
+        if self.fun_mgr is None:
+            self.lgr.error('winDLL MISSING fun_mgr *************************************')
+            return
         fun_path = self.getAnalysisPath(section.fname)
         if fun_path is not None:
             self.lgr.debug('winDLL addSectionFunction set addr 0x%x for %s' % (locate, fun_path))
