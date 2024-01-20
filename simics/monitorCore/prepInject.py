@@ -39,7 +39,7 @@ class PrepInject():
         self.prepInject()
 
 
-    def prepInject(self):
+    def prepInject(self, dumb=None):
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('prepInject snap %s FD: %d (0x%x)' % (self.snap_name, self.fd, self.fd))
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
@@ -111,7 +111,10 @@ class PrepInject():
             length = self.exit_info.count
             self.lgr.debug('prepInject getLength length from count is %d' % length)
             if self.top.isWindows():
-                self.addr_of_count = self.exit_info.fname_addr
+                if self.exit_info.did_delay:
+                    self.addr_of_count = self.exit_info.delay_count_addr
+                else:
+                    self.addr_of_count = self.exit_info.count_addr
                 self.lgr.debug('prepInject getLength length address of count 0x%x' % self.addr_of_count)
         return length
 
@@ -120,6 +123,7 @@ class PrepInject():
         self.top.stopTracking(keep_watching=True, keep_coverage=True)
         current_ip = self.top.getEIP(self.cpu)
         tid = self.top.getTID()
+        self.lgr.debug('instrumentAlone tid %s ip 0x%x' % (tid, current_ip))
         if self.mem_utils.isKernel(current_ip): 
             ''' go forward one to user space and record the return IP '''
             SIM_run_command('pselect %s' % self.cpu.name)
@@ -181,7 +185,10 @@ class PrepInject():
         self.lgr.debug("prepInject in instrument IO, callname is %s" % callname);
         if self.top.isWindows():
             self.lgr.debug("prepInject in instrument IO")
-            SIM_run_alone(self.instrumentAlone, None)
+            if callname == 'GET_PEER_NAME':
+                SIM_run_alone(self.prepInject, None)
+            else:
+                SIM_run_alone(self.instrumentAlone, None)
         elif callname.startswith('re') or callname == 'socketcall':
             SIM_run_alone(self.instrumentAlone, None)
         elif 'select' in callname:
