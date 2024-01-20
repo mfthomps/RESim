@@ -313,6 +313,7 @@ class ExitInfo():
         self.count_addr = None
         # address used if asynch read is not ready
         self.delay_count_addr = None
+        self.did_delay = False
 
 EXTERNAL = 1
 AF_INET = 2
@@ -488,6 +489,9 @@ class Syscall():
 
         self.sig_handler = {}
         self.platform = self.top.getTargetPlatform()
+
+        # when stophap it, remove these parameters
+        self.rm_param_queue = []
 
     def breakOnExecve(self):
         for call in self.call_params:
@@ -2736,3 +2740,12 @@ class Syscall():
     #def stopOnExit(self):
     #    self.stop_on_exit=True
     #    self.lgr.debug('syscall stopOnExit')
+    def appendRmParam(self, param):
+        self.rm_param_queue.append(param)
+
+    def rmRmParam(self, param):
+        retval = False
+        if param in self.rm_param_queue: 
+            self.rm_param_queue.remove(param)
+            retval = True
+        return retval
