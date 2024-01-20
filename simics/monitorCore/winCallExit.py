@@ -403,13 +403,13 @@ class WinCallExit():
                 stop_param = callname
                 if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
                     stop_param = exit_info.socket_callname
+                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.call_params.name)
+                my_syscall.appendRmParam(exit_info.call_params.name)
                 SIM_run_alone(my_syscall.stopAlone, stop_param)
                 self.top.idaMessage() 
                 # remove it from syscall else there will be stop hap to execute
                 #if not my_syscall.linger: 
                 #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
-                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.call_params.name)
-                my_syscall.appendRmParam(exit_info.call_params.name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))

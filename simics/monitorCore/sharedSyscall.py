@@ -1209,6 +1209,8 @@ class SharedSyscall():
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:
+                self.lgr.debug('sharedSyscall add call param %s to syscall remove list' % exit_info.call_params.name)
+                my_syscall.appendRmParam(exit_info.call_params.name)
                 SIM_run_alone(my_syscall.stopAlone, callname)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
