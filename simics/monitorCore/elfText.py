@@ -12,6 +12,7 @@ class Text():
         self.address = address
         self.offset = offset
         self.size = size
+        # locate is filled in by SOMap when loaded
         self.locate = None
         self.text_start = None
         self.text_size = None
