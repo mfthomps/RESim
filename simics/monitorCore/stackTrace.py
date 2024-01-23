@@ -350,6 +350,9 @@ class StackTrace():
         else:
             if (fun1 == 'timelocal' and fun2 == 'mktime') or (fun1 == 'mktime' and fun2 == 'timelocal'):
                 retval = True
+        if not retval and fun2 == 'strcmp':
+            if fun1 in ['wcscmp', 'mbscmp', 'mbscmp_l']:
+                retval = True 
         if not retval and self.cpu.architecture == 'arm':
             ''' TBD seems incomplete.  Should only be meaningful for first frame? '''
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
