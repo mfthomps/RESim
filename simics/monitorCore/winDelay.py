@@ -99,7 +99,7 @@ class WinDelay():
 
             if did_delay:
                 count_addr = self.exit_info.delay_count_addr
-                exit_info.did_delay = True
+                self.exit_info.did_delay = True
             else:
                 count_addr = self.exit_info.count_addr
             self.data_watch.setRange(count_addr, 4, msg='read count')
