@@ -288,10 +288,12 @@ class MemUtils():
                 else: 
                     table_base = self.getLinuxTableBase(cpu, use_pid)
 
-            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=table_base)
-            if ptable_info.page_exists:
-                #self.lgr.debug('memUtils v2pUserAddr used other proc (%d) page table, got phys 0x%x' % (use_pid, ptable_info.page_addr))
-                retval = ptable_info.page_addr
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=table_base)
+                if ptable_info.page_exists:
+                    #self.lgr.debug('memUtils v2pUserAddr used other proc (%d) page table, got phys 0x%x' % (use_pid, ptable_info.page_addr))
+                    retval = ptable_info.page_addr
+            else:
+                self.lgr.warning('memUtils v2pUserAddr ADD for arm!!!')
              
         if retval is None and cpl == 0 and self.top.isWindows() and self.WORD_SIZE == 8:
             table_base = self.getWindowsTableBase(cpu, use_pid)
