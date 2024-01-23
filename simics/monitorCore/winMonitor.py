@@ -178,7 +178,6 @@ class WinMonitor():
                 tf = 'logs/syscall_trace-%s.txt' % self.cell_name
                 cpu, comm, tid = self.task_utils.curThread() 
 
-            traceBuffer.TraceBuffer(self.top, cpu, self.mem_utils, self.context_manager, self.lgr)
             self.traceMgr.open(tf, cpu)
             if not self.context_manager.watchingTasks():
                 self.traceProcs.watchAllExits()
