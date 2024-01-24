@@ -40,43 +40,59 @@ class PageCallbacks():
         self.missing_haps = {}
         self.mode_hap = None
 
-    def setCallback(self, addr, callback):
-        self.lgr.debug('pageCallbacks setCallback for 0x%x' % addr)
-        phys_addr = self.mem_utils.v2p(self.cpu, addr)
+    def setCallback(self, addr, callback, name=None, use_pid=None):
+        if use_pid is None:
+            self.lgr.debug('pageCallbacks setCallback for 0x%x' % addr)
+        else:
+            self.lgr.debug('pageCallbacks setCallback for 0x%x use_pid %s' % (addr, use_pid))
+        phys_addr = self.mem_utils.v2p(self.cpu, addr, use_pid=use_pid)
         if phys_addr is None or phys_addr == 0:
-            self.callbacks[addr] = callback
-            self.setTableHaps(addr)
+            if name is None:
+                name = 'NONE'
+            if addr not in self.callbacks:
+                self.callbacks[addr] = {}
+            self.callbacks[addr][name] = callback
+            self.setTableHaps(addr,use_pid=use_pid)
+        else:
+            self.lgr.error('pageCallbacks setCallback for 0x%x pid %d but addr already mapped' % (addr, pid))
 
-    def setTableHaps(self, addr):
-            self.lgr.debug('pageCallbacks setTableHaps for 0x%x' % addr)
-            pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
-            if pt.page_addr is not None:
-                if pt.page_addr not in self.missing_pages:
-                    self.missing_pages[pt.page_addr] = []
-                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
-                    self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on page_addr 0x%x' % (addr, break_num, pt.page_addr))
-                    self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
-                          None, break_num)
-                self.missing_pages[pt.page_addr].append(addr)
-                self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing pages for page addr 0x%x' % (addr, pt.page_addr))
-            elif pt.page_base_addr is not None:
-                if pt.page_base_addr not in self.missing_page_bases:
-                    self.missing_page_bases[pt.page_base_addr] = []
-                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_base_addr, 1, 0)
-                    self.lgr.debug('pageCallbacks no physical address for 0x%x, set break %d on page_base_addr 0x%x' % (addr, break_num, pt.page_base_addr))
-                    self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageBaseHap, 
-                          None, break_num)
-                self.missing_page_bases[pt.page_base_addr].append(addr)
-                self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing page bases for page addr 0x%x' % (addr, pt.page_base_addr))
-            elif pt.ptable_addr is not None:
-                if pt.ptable_addr not in self.missing_tables:
-                    self.missing_tables[pt.ptable_addr] = []
-                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
-                    self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (addr, break_num, pt.ptable_addr))
-                    self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
-                          None, break_num)
-                self.missing_tables[pt.ptable_addr].append(addr)
-                self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing tables for table addr 0x%x' % (addr, pt.ptable_addr))
+    def setTableHaps(self, addr, use_pid=None):
+        table_base = None
+        self.lgr.debug('pageCallbacks setTableHaps for 0x%x' % addr)
+        if use_pid is not None:
+            if self.top.isWindows():
+                table_base = self.mem_utils.getWindowsTableBase(self.cpu, use_pid)
+            else: 
+                table_base = self.mem_utils.getLinuxTableBase(self.cpu, use_pid)
+            self.lgr.debug('pageCallbacks setTableHaps for pid %s table_base is 0x%x' % (use_pid, table_base))
+        pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
+        if pt.page_addr is not None:
+            if pt.page_addr not in self.missing_pages:
+                self.missing_pages[pt.page_addr] = []
+                break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
+                self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on page_addr 0x%x' % (addr, break_num, pt.page_addr))
+                self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
+                      None, break_num)
+            self.missing_pages[pt.page_addr].append(addr)
+            self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing pages for page addr 0x%x' % (addr, pt.page_addr))
+        elif pt.page_base_addr is not None:
+            if pt.page_base_addr not in self.missing_page_bases:
+                self.missing_page_bases[pt.page_base_addr] = []
+                break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_base_addr, 1, 0)
+                self.lgr.debug('pageCallbacks no physical address for 0x%x, set break %d on page_base_addr 0x%x' % (addr, break_num, pt.page_base_addr))
+                self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageBaseHap, 
+                      None, break_num)
+            self.missing_page_bases[pt.page_base_addr].append(addr)
+            self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing page bases for page addr 0x%x' % (addr, pt.page_base_addr))
+        elif pt.ptable_addr is not None:
+            if pt.ptable_addr not in self.missing_tables:
+                self.missing_tables[pt.ptable_addr] = []
+                break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.ptable_addr, 1, 0)
+                self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on phys ptable_addr 0x%x' % (addr, break_num, pt.ptable_addr))
+                self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.tableHap, 
+                      None, break_num)
+            self.missing_tables[pt.ptable_addr].append(addr)
+            self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing tables for table addr 0x%x' % (addr, pt.ptable_addr))
 
     def delModeAlone(self, hap):
         if hap is not None:
@@ -211,12 +227,16 @@ class PageCallbacks():
                 for addr in redo_addrs:
                     self.setTableHaps(addr)
 
-
     def doCallback(self, addr):
-            self.lgr.debug('would do callback here')
+            self.lgr.debug('pageCallbacks doCallback would do callback here')
             if addr in self.callbacks:
-                self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x callback %s' % (addr, self.callbacks[addr]))
-                self.callbacks[addr](addr)
+                for name in self.callbacks[addr]:
+                    if name == 'NONE':
+                        self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x callback %s' % (addr, self.callbacks[addr]))
+                        self.callbacks[addr]['NONE'](addr)
+                    else:
+                        self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x name %s callback %s' % (addr, name, self.callbacks[addr]))
+                        self.callbacks[addr][name](addr, name)
                 #SIM_break_simulation('remove this')
             else:
                 self.lgr.debug('pageCallbacks pageBaseUpdated addr 0x%x not in callbacks' % (addr))
