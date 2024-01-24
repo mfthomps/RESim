@@ -190,8 +190,8 @@ class GenContextMgr():
         self.haps = []
         self.break_handle = 0
         self.hap_handle = 0
-        self.text_start = None
-        self.text_end = None
+        #self.text_start = None
+        #self.text_end = None
         self.catch_tid = None
         self.catch_callback = None
         self.watch_only_this = False
@@ -291,13 +291,13 @@ class GenContextMgr():
     #def getRESimContext(self):
     #    return self.debugging_cell
 
-    def recordText(self, start, end):
-        self.lgr.debug('contextMgr recordText 0x%x 0x%x' % (start, end))
-        self.text_start = start
-        self.text_end = end
+    #def recordText(self, start, end):
+    #    self.lgr.debug('contextMgr recordText 0x%x 0x%x' % (start, end))
+    #    self.text_start = start
+    #    self.text_end = end
 
-    def getText(self):
-        return self.text_start, self.text_end
+    #def getText(self):
+    #    return self.text_start, self.text_end
 
     def nextHapHandle(self):
         self.hap_handle = self.hap_handle+1

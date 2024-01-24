@@ -327,6 +327,8 @@ class GenMonitor():
 
         self.page_callbacks = {}
 
+        self.trace_buffers = {}
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -372,7 +374,9 @@ class GenMonitor():
             binder_file = os.path.join('./', self.run_from_snap, 'binder.json')
             if os.path.isfile(binder_file):
                 self.binders.loadJson(binder_file)
+            self.lgr.debug('genInit rand from snap loop through targets in comp_dict')
             for cell_name in comp_dict:
+                self.lgr.debug('genInit snapshot load target %s' % cell_name)
                 param_file = os.path.join('./', self.run_from_snap, cell_name, 'param.pickle')
                 if os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
@@ -394,6 +398,7 @@ class GenMonitor():
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
                          
+        self.lgr.debug('genInit each target in comp_dict (%d targets)' % len(comp_dict))
         for cell_name in comp_dict:
             self.lgr.debug('genInit for cell %s' % (cell_name))
             if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
@@ -455,7 +460,11 @@ class GenMonitor():
                 return
             if self.os_type[cell_name].startswith('LINUX'):
                 if 'RESIM_UNISTD' not in comp_dict[cell_name]:
+                    if cell_name == 'driver':
+                        print('Driver missing RESIM_UNISTD, will not be analyzed')
+                        continue
                     print('Target is missing RESIM_UNISTD path')
+                    self.lgr.error('Target is missing RESIM_UNISTD path')
                     self.quit()
                     return
                 self.unistd[cell_name] = comp_dict[cell_name]['RESIM_UNISTD']
@@ -463,7 +472,11 @@ class GenMonitor():
                 if 'RESIM_UNISTD_32' in comp_dict[cell_name]:
                     self.unistd32[cell_name] = comp_dict[cell_name]['RESIM_UNISTD_32']
                 if 'RESIM_ROOT_PREFIX' not in comp_dict[cell_name]:
+                    if cell_name == 'driver':
+                        print('Driver missing RESIM_ROOT_PREFIX, will not be analyzed')
+                        continue
                     print('Target missing RESIM_ROOT_PREFIX path')
+                    self.lgr.error('Target missing RESIM_ROOT_PREFIX path')
                     self.quit()
                     return;
             try:
@@ -497,6 +510,7 @@ class GenMonitor():
             if 'ARM_SVC' in comp_dict[cell_name]:
                 if comp_dict[cell_name]['ARM_SVC'].lower() in ['false', 'no']:
                     self.param[cell_name].arm_svc = False 
+        self.lgr.debug('genInit finished')
 
     def runPreScripts(self):
         ''' run the PRE_INIT_SCRIPT and the one_done module, if any '''
@@ -1338,26 +1352,27 @@ class GenMonitor():
                     if self.isWindows(self.target):
                         ''' Assumes winProg has already populated soMap'''
                         # Note this call will add the text section after getting the load address from the peb
-                        elf_info = self.soMap[self.target].getText(tid)
+                        load_info = self.soMap[self.target].getLoadInfo()
                     else:
-                        elf_info = self.soMap[self.target].addText(real_path, prog_name, tid)
-                    if elf_info is not None:
+                        load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
+                    if load_info is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                         #self.getIDAFuns(self.full_path, elf_info.address)
                         self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.lgr)
                         if self.isWindows():
-                            offset = elf_info.address - elf_info.image_base
+                            image_base = self.soMap[self.target].getImageBase(prog_name)
+                            offset = load_info.addr - image_base
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         else:
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, 0)
                         ''' TBD alter stackTrace to use this and buid it out'''
-                        self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
+                        #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setFunMgr(self.fun_mgr, tid)
                         self.bookmarks.setFunMgr(self.fun_mgr)
                         self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell_name, self.context_manager[self.target],  self.mem_utils[self.target],
-                             elf_info.address, elf_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
+                             load_info.addr, load_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     else:
                         self.lgr.error('debug, text segment None for %s' % self.full_path)
                     self.lgr.debug('create coverage module')
@@ -1369,7 +1384,7 @@ class GenMonitor():
                             self.lgr.debug('coverage, no analysis path, revert to full_path')
                         self.lgr.debug('debug, create Coverage ida_path %s, analysis path: %s' % (ida_path, analysis_path))
                         
-                        self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
+                        self.coverage = coverage.Coverage(self, prog_name, analysis_path, ida_path, self.context_manager[self.target], 
                            cell_name, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
                         if self.coverage is None:
                             self.lgr.error('debug: Coverage is None!')
@@ -1401,11 +1416,13 @@ class GenMonitor():
         self.page_faults[self.target].clearFaultingCycles()
         self.rev_to_call[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
+
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
-            if self.target not in self.jumper_dict:
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
-                self.jumper_dict[self.target].loadJumpers(jumper_file)
+            self.lgr.error('Please remove EXECUTION_JUMPERS from ENV section.  Place them in target sections.')
+
+        self.loadJumpersTarget(self.target)
+
         if self.target in self.read_replace:
              self.read_replace[self.target].swapContext()
         if self.target in self.reg_set:
@@ -1536,14 +1553,14 @@ class GenMonitor():
             full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
             self.lgr.debug('execToText, progname is %s  full: %s' % (prog_name, full_path))
 
-            elf_info = self.soMap[self.target].addText(full_path, prog_name, tid)
-            if elf_info is not None:
-                if elf_info.address is None:
+            prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
+            if prog_info is not None:
+                if prog_info.addr is None:
                     self.lgr.error('execToText found file %s, but address is None?' % full_path)
                     stopFunction.allFuns(flist)
                     return
-                self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, elf_info.address, elf_info.address+elf_info.size))       
-                self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
+                self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
+                #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                 self.runToText(flist)
                 return
             else:
@@ -1712,8 +1729,8 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         if self.target not in self.magic_origin:
             self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
-        if not self.isWindows():
-            self.soMap[self.target].setContext(tid_list)
+        #if not self.isWindows():
+        #    self.soMap[self.target].setContext(tid_list)
         self.lgr.debug('debugTidList cell %s tid_list: %s' % (self.target, str(tid_list)))
         if to_user:
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
@@ -2589,6 +2606,7 @@ class GenMonitor():
             self.lgr.debug('Will preserve syscall exits')
             self.sharedSyscall[self.target].preserveExit()
 
+        self.traceBufferTarget(target, msg='traceAll')
         if self.isWindows():
             self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
             self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
@@ -2611,7 +2629,6 @@ class GenMonitor():
                 tf = 'logs/syscall_trace-%s.txt' % target
                 cpu, comm, tid = self.task_utils[target].curThread() 
 
-            traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr, msg='traceAll')
             self.traceMgr[target].open(tf, cpu)
             if not self.context_manager[self.target].watchingTasks():
                 self.traceProcs[target].watchAllExits()
@@ -2721,15 +2738,15 @@ class GenMonitor():
         #SIM_run_command('c')
         self.runToClone(nth)
 
-    def recordText(self, start, end):
-        ''' record IDA's view of text segment, unless we recorded from our own parse of the elf header '''
-        self.lgr.debug('.text IDA is 0x%x - 0x%x' % (start, end))
-        s, e = self.context_manager[self.target].getText()
-        if s is None:
-            self.lgr.debug('genMonitor recordText, no text from contextManager, use from IDA')
-            cpu, comm, tid = self.task_utils[self.target].curThread() 
-            self.context_manager[self.target].recordText(start, end)
-            self.soMap[self.target].addText(start, end-start, 'tbd', tid)
+    #def recordText(self, start, end):
+    #    ''' record IDA's view of text segment, unless we recorded from our own parse of the elf header '''
+    #    self.lgr.debug('.text IDA is 0x%x - 0x%x' % (start, end))
+    #    s, e = self.context_manager[self.target].getText()
+    #    if s is None:
+    #        self.lgr.debug('genMonitor recordText, no text from contextManager, use from IDA')
+    #        cpu, comm, tid = self.task_utils[self.target].curThread() 
+    #        self.context_manager[self.target].recordText(start, end)
+    #        self.soMap[self.target].addText(start, end-start, 'tbd', tid)
 
     def textHap(self, prec, third, forth, memory):
         ''' callback when text segment is executed '''
@@ -2924,11 +2941,14 @@ class GenMonitor():
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
-        start, end = self.context_manager[self.target].getText()
-        if start is None:
+        #start, end = self.context_manager[self.target].getText()
+        load_info = self.soMap[self.target].getLoadInfo()
+        if load_info is None:
             print('No text segment defined, has IDA been started with the rev plugin?')
             return
         self.removeDebugBreaks()
+        start = load_info.addr
+        end = load_info.end
         count = end - start
         self.lgr.debug('revToText 0x%x - 0x%x count: 0x%x' % (start, end, count))
         cell = self.cell_config.cell_context[self.target]
@@ -2990,10 +3010,13 @@ class GenMonitor():
     def runToText(self, flist = None, this_tid=False):
         ''' run until within the currently defined text segment '''
         self.is_monitor_running.setRunning(True)
-        start, end = self.context_manager[self.target].getText()
-        if start is None:
-            print('No text segment defined, has IDA been started with the rev plugin?')
+        #start, end = self.context_manager[self.target].getText()
+        load_info = self.soMap[self.target].getLoadInfo()
+        if load_info is None:
+            print('No text load info for current process?')
             return
+        start = load_info.addr
+        end = load_info.end
         count = end - start
         self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
 
@@ -3424,79 +3447,36 @@ class GenMonitor():
         retval = self.getSO(eip)
         return retval
 
-    def getSOAddr(self, fname, tid):
-        elf_info  = self.soMap[self.target].getSOAddr(fname, tid=tid) 
-        return elf_info
-
-    def getSOFromFile(self, fname):
-        retval = ''
-        self.lgr.debug('getSOFromFile %s' % fname)
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
-        if tid is None:
-           self.lgr.error('gotSOFromFile, no debug tid defined')
-           return retval
-        self.lgr.debug('getSOFromFile tid:%s fname %s' % (tid, fname))
-        elf_info  = self.soMap[self.target].getSOAddr(fname, tid=tid) 
-        if elf_info is None:
-            self.lgr.error('getSO no map for %s' % fname)
-            return retval
-        if elf_info.address is not None:
-            if elf_info.locate is not None:
-                start = elf_info.locate+elf_info.offset
-                end = start + elf_info.size
-            else:
-                # TBD fix this, assume text segment, no offset (fix for relocatable mains)
-                start = 0
-                end = elf_info.address + elf_info.size
-            retval = ('%s:0x%x-0x%x' % (fname, start, end))
-            print(retval)
-        else:
-            #print('None')
-            pass
-        return retval
-
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
+
     def getSO(self, eip, show_orig=False):
         retval = None
-        if show_orig: 
-            fname = self.getSOFile(eip)
-            self.lgr.debug('getCurrentSO fname for eip 0x%x target: %s is %s' % (eip, self.target, fname))
-            if fname is not None:
-                elf_info  = self.soMap[self.target].getSOAddr(fname) 
-                if elf_info is None:
-                    self.lgr.error('getSO no map for %s' % fname)
-                    return
-                if elf_info.address is not None:
-                    if elf_info.locate is not None:
-                        start = elf_info.locate+elf_info.offset
-                        end = start + elf_info.size
-                    else:
-                        start = elf_info.address
-                        end = elf_info.address + elf_info.size
-                    orig_eip = eip - elf_info.offset
-                    orig_str = ' orig address: 0x%x' % orig_eip
-                    retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
-                else:
-                    #print('None')
-                    pass
-            else:
-                #print('None')
-                pass
+        fname, start, end = self.soMap[self.target].getSOInfo(eip)
+        if fname is None:
+            self.lgr.debug('getSO no library found for 0x%x' % eip)
         else:
-            fname, start, end = self.soMap[self.target].getSOInfo(eip)
-            if fname is not None:
+            if show_orig:
+                cpu, comm, tid = self.task_utils[self.target].curThread() 
+                pid = self.soMap[self.target].pidFromTID(tid)
+                image_base = self.soMap[self.target].getImageBaseForPid(fname, pid)
+                delta = eip - start
+                orig = image_base+delta  
+                orig_str = ' orig address: 0x%x' % orig
+                retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
+            else:
                 retval = ('%s:0x%x-0x%x' % (fname, start, end))
-        return retval
 
+        return retval
      
     def showSOMap(self, tid=None, filter=None):
         self.lgr.debug('showSOMap')
         self.soMap[self.target].showSO(tid, filter=filter)
 
-    def listSOMap(self):
-        self.soMap[self.target].listSO()
+    def listSOMap(self, filter=None):
+        self.lgr.debug('listSOMap for cell %s' % self.target)
+        self.soMap[self.target].listSO(filter=filter)
 
     def getSOMap(self, quiet=False):
         return self.soMap[self.target].getSO(quiet=quiet)
@@ -4040,9 +4020,9 @@ class GenMonitor():
         ''' 
        
 
-    def v2p(self, addr):
+    def v2p(self, addr, use_pid=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        value = self.mem_utils[self.target].v2p(cpu, addr)
+        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid)
         if value is not None:
             print('0x%x' % value)
         else:
@@ -4389,7 +4369,7 @@ class GenMonitor():
             cpu = this_cpu
         ''' Record any debuggerish buffers that were specified in the ini file '''
         if trace_all:
-            traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, msg='injectIO traceAll')
+            self.traceBufferTarget(target_cell, msg='injectIO traceAll')
 
         self.lgr.debug('genMonitor injectIO tid:%s' % tid)
         cell_name = self.getTopComponentName(cpu)
@@ -4404,7 +4384,7 @@ class GenMonitor():
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, tid, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
-                  self.mem_utils[self.target], self.context_manager[self.target], self.lgr, 
+                  self.mem_utils[self.target], self.context_manager[self.target], self.soMap[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
@@ -4889,11 +4869,6 @@ class GenMonitor():
         #    return
         #
         # 
-
-        #''' Record any debuggerish buffers that were specified in the ini file '''
-        #trace_buffer = traceBuffer.TraceBuffer(self, target_cpu, self.mem_utils[target_cell], self.context_manager[target_cell], self.lgr, 'playAFL')
-        #if len(trace_buffer.addr_info) == 0:
-        #    trace_buffer = None
 
         if no_cover:
             bb_coverage = None
@@ -5437,15 +5412,22 @@ class GenMonitor():
         SIM_run_command(cmd)
         
     def loadJumpers(self):    
-        jumper_file = os.getenv('EXECUTION_JUMPERS')
-        if jumper_file is not None:
-            if self.target not in self.jumper_dict:
-                cpu = self.cell_config.cpuFromCell(self.target)
-                self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
-            self.jumper_dict[self.target].loadJumpers(jumper_file)
-            print('Loaded jumpers from %s' % jumper_file)
-        else:
-            print('No jumper file defined.')
+        for target in self.context_manager:
+            self.loadJumpersTarget(target)
+
+    def loadJumpersTarget(self, target):    
+        if 'EXECUTION_JUMPERS' in self.comp_dict[target]:
+            jumper_file = self.comp_dict[target]['EXECUTION_JUMPERS']
+            if jumper_file is not None:
+                if target not in self.jumper_dict:
+                    cpu = self.cell_config.cpuFromCell(target)
+                    self.jumper_dict[target] = jumpers.Jumpers(self, self.context_manager[target], self.soMap[target], self.mem_utils[target], cpu, self.lgr)
+                    self.jumper_dict[target].loadJumpers(jumper_file)
+                    print('Loaded jumpers from %s' % jumper_file)
+                else:
+                    print('Jumpers for %s already loaded' % target)
+            else:
+                print('No jumper file defined though ENV set for target %s.' % target)
 
     def getSyscallEntry(self, callname):
         retval = None
@@ -5730,7 +5712,7 @@ class GenMonitor():
 
     def traceWindows(self):
         tid, cpu = self.context_manager[self.target].getDebugTid() 
-        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        self.traceBufferTarget(self.target)
         if tid is None:
             self.checkOnlyIgnore()
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
@@ -5848,8 +5830,15 @@ class GenMonitor():
         return analysis_path
 
     def traceBuffer(self):
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
-        traceBuffer.TraceBuffer(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        for target in self.context_manager:
+            self.traceBufferTarget(target)
+
+    def traceBufferTarget(self, target, msg=None):
+        if 'TRACE_BUFFERS' in self.comp_dict[target]:
+            trace_buffer_file = self.comp_dict[target]['TRACE_BUFFERS']
+            if trace_buffer_file is not None and target not in self.trace_buffers:
+                cpu= self.cell_config.cpuFromCell(target)
+                self.trace_buffers[target] = traceBuffer.TraceBuffer(self, trace_buffer_file, cpu, target, self.mem_utils[target], self.context_manager[target], self.soMap[target], self.lgr, msg=msg)
 
     def toRunningProc(self, proc, plist, flist):
         self.run_to[self.target].toRunningProc(proc, plist, flist)
@@ -5949,8 +5938,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         rle = recordLogEvents.RecordLogEvents(fname, obj, 4, cpu, self.lgr)
 
-    def pageCallback(self, addr, callback):
-        self.page_callbacks[self.target].setCallback(addr, callback)
+    def pageCallback(self, addr, callback, name=None, use_pid=None):
+        # TBD pass cell name and set for any target!
+        self.page_callbacks[self.target].setCallback(addr, callback, name=name, use_pid=use_pid)
 
     def getTIB(self):
         return self.task_utils[self.target].getTIB()

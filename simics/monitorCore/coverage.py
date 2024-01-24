@@ -44,7 +44,7 @@ Tracks a single code file at a time, e.g., main or a single so file.  TBD expand
 Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
-    def __init__(self, top, analysis_path, hits_path, context_manager, cell_name, so_map, cpu, run_from_snap, lgr):
+    def __init__(self, top, prog_path, analysis_path, hits_path, context_manager, cell_name, so_map, cpu, run_from_snap, lgr):
         self.lgr = lgr
         self.cell_name = cell_name
         self.cpu = cpu
@@ -58,6 +58,7 @@ class Coverage():
         self.funs_hit = []
         self.blocks_hit = OrderedDict()
         self.analysis_path = analysis_path
+        self.prog_path = prog_path
         self.hits_path = hits_path
         self.did_cover = False
         self.enabled = False
@@ -106,7 +107,6 @@ class Coverage():
         self.default_context = self.context_manager.getDefaultContext()
         self.jumpers = {}
         self.did_exit=False
-        self.so_entry = None
         self.no_save = False
         self.mode_hap = None
         self.only_thread = False
@@ -201,20 +201,7 @@ class Coverage():
                 self.lgr.error('coverage: No blocks file at %s' % block_file)
                 return
         self.loadBlocks(block_file)         
-        so_entry = self.so_map.getSOAddr(self.analysis_path, tid=self.tid)
-        if so_entry is None:
-           
-            so_entry = self.so_map.getSOAddr(self.top.getProgName(self.tid, target=self.cell_name), tid=self.tid)
-            if so_entry is None:
-                self.lgr.error('coverage no SO entry for %s' % self.analysis_path)
-                return
-        self.so_entry = so_entry
-        if so_entry.address is not None:
-            if so_entry.locate is not None:
-                self.offset = so_entry.locate+so_entry.offset
-        else:
-            self.lgr.debug('coverage: cover no address in so_entry for %s' % self.analysis_path)
-            return
+        self.offset = self.so_map.getLoadOffset(self.prog_path)
         self.lgr.debug('cover offset 0x%x' % self.offset)
         if self.blocks is None:
             self.lgr.error('Coverge: No basic blocks defined')
@@ -249,7 +236,7 @@ class Coverage():
 
         ''' physical breaks, context does not matter'''
         self.lgr.debug('coverage generated %d breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
-        self.block_total = len(self.bp_list)
+        self.block_total = len(self.bp_list) + len(self.unmapped_addrs)
         if len(tmp_list) > 0:
             self.doHapRange(tmp_list)
 
@@ -304,17 +291,18 @@ class Coverage():
                 self.missing_tables[pt.ptable_addr].append(bb_rel)
                 #self.lgr.debug('handleUnmapped bb 0x%x added to missing tables for table addr 0x%x' % (bb_rel, pt.ptable_addr))
             else:
+                pass
                 #self.lgr.debug('coverage, no page table address for 0x%x ' % (bb_rel))
                 ''' don't report on external jump tables etc.'''
-                if self.so_entry.text_start is not None:
-                    end = self.so_entry.text_start + self.so_entry.text_size
-                    #if bb_rel >= self.so_entry.text_start and bb_rel <= end:
-                    #    self.lgr.error('coverage, no page table address for text 0x%x so_entry.text_start 0x%x - 0x%x' % (bb_rel, 
-                    #         self.so_entry.text_start, end))
-                    #else:
-                    #    self.lgr.error('coverage, has text_start but no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
-                else:
-                    self.lgr.debug('coverage, no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
+                #if self.so_entry.text_start is not None:
+                #    end = self.so_entry.text_start + self.so_entry.text_size
+                #    #if bb_rel >= self.so_entry.text_start and bb_rel <= end:
+                #    #    self.lgr.error('coverage, no page table address for text 0x%x so_entry.text_start 0x%x - 0x%x' % (bb_rel, 
+                #    #         self.so_entry.text_start, end))
+                #    #else:
+                #    #    self.lgr.error('coverage, has text_start but no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
+                #else:
+                #    self.lgr.debug('coverage, no page table address for 0x%x so_entry.address 0x%x' % (bb_rel, self.so_entry.address))
 
 
     def getNumBlocks(self):

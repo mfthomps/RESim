@@ -12,8 +12,6 @@ class Text():
         self.address = address
         self.offset = offset
         self.size = size
-        # locate is filled in by SOMap when loaded
-        self.locate = None
         self.text_start = None
         self.text_size = None
         self.text_offset = None
@@ -59,7 +57,7 @@ def getText(path, lgr):
     retval = None
     ftype = magic.from_file(path)
     if 'elf' in ftype.lower():
-        lgr.debug('elfText getText, just use program header')
+        lgr.debug('elfText getText %s, just use program header' % path)
         retval = getProgHdr(path)
         toft = getTextOfText(path, lgr)
         if toft is not None:

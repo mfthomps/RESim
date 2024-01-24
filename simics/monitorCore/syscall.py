@@ -796,7 +796,6 @@ class Syscall():
             self.lgr.debug('finishParseOpen tid %s got fid none, arm fu?' % (tid))
 
     def addElf(self, prog_string, tid):
-        retval = True
         if self.targetFS is not None and prog_string is not None:
             full_path = self.targetFS.getFull(prog_string, self.lgr)
             if full_path is None:
@@ -805,7 +804,8 @@ class Syscall():
             if os.path.isfile(full_path):
                 elf_info = None
                 if self.soMap is not None:
-                    elf_info = self.soMap.addText(full_path, prog_string, tid)
+                    self.soMap.addText(full_path, prog_string, tid)
+                '''
                 if elf_info is not None:
                     if self.soMap is not None:
                         if elf_info.address is not None:
@@ -818,15 +818,15 @@ class Syscall():
                         self.lgr.debug('syscall addElf, no text segment found, advise SO we have an exec, but no starting map')
                         self.soMap.noText(prog_string, tid)
                     retval = False
-                    ftype = magic.from_file(full_path)
-                    if self.traceProcs is not None:
-                        self.traceProcs.setFileType(tid, ftype) 
+                '''
+                ftype = magic.from_file(full_path)
+                if self.traceProcs is not None:
+                    self.traceProcs.setFileType(tid, ftype) 
             else:
                 self.lgr.debug('addElf, no file at %s' % full_path)
                 if self.soMap is not None:
                     self.soMap.noText(prog_string, tid)
       
-        return retval
 
     def finishParseExecve(self, call_info, third, forth, memory):
         cpu, comm, tid = self.task_utils.curThread() 

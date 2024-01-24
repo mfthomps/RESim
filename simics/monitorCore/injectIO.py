@@ -37,7 +37,7 @@ import pickle
 from resimHaps import *
 import resimUtils
 class InjectIO():
-    def __init__(self, top, cpu, cell_name, tid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager,
+    def __init__(self, top, cpu, cell_name, tid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
@@ -55,6 +55,7 @@ class InjectIO():
         self.callback = callback
         self.mem_utils = mem_utils
         self.context_manager = context_manager
+        self.so_map = so_map
         self.top = top
         self.lgr = lgr
         self.count = count
@@ -62,15 +63,12 @@ class InjectIO():
         self.break_on = break_on
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
-            so_entry = self.top.getSOAddr(fname, tid=self.tid)
-            if so_entry is None:
-                self.lgr.error('injectIO no SO entry for %s' % prog)
-            if so_entry.address is not None:
-                if so_entry.locate is not None:
-                    self.break_on = self.break_on + so_entry.locate + so_entry.offset
-                    self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
-            else:
-                self.lgr.error('injectIO SO entry address is None for %s' % fname)
+            offset = self.so_map.getLoadOffset(fname, tid=tid)
+            if offset is None:
+                self.lgr.error('injectIO break_on set, but no offset for %s' % fname)
+                return
+            self.break_on = self.break_on + offset
+            self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
         self.in_data = None
         self.backstop_cycles =   9000000
         bsc = os.getenv('BACK_STOP_CYCLES')

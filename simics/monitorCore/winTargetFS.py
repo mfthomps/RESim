@@ -63,13 +63,10 @@ class TargetFS():
                 #    lgr.debug('TargetFS getFull not relative changed to %s' % path) 
             elif path.startswith('/'):
                 path = path[1:]
-            full = os.path.join(self.root_prefix, path)
-            #self.lgr.debug('winTargetFS root_prefix %s path %s full %s' % (self.root_prefix, path, full))
-            full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, lgr)
-            #self.lgr.debug('full_insenstive is %s' % full_insensitive)
+            self.lgr.debug('winTargetFS root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
+            full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
+            self.lgr.debug('full_insenstive is %s' % full_insensitive)
             if full_insensitive is None or not os.path.isfile(full_insensitive):
-                #if lgr is not None:
-                #    lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
                 pattern = path
                 if self.root_subdirs is None or len(self.root_subdirs) == 0:
                     #self.lgr.debug('pattern %s' % pattern)
