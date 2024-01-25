@@ -280,8 +280,17 @@ class MemUtils():
                 retval = phys_block.address
             except:
                 self.lgr.debug('memUtils v2pUserAddr logical_to_physical failed on 0x%x' % v)
+        elif cpl > 0  and not self.top.hasUserPageTable(cpu) and use_pid is not None:
+            self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2pUserAddr logical_to_physical failed on 0x%x' % v)
+
         elif cpl > 0  and self.top.hasUserPageTable(cpu) and use_pid is not None:
             # get phys address for a different process
+            #self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
             if cpu.architecture != 'arm':
                 if self.top.isWindows():
                     table_base = self.getWindowsTableBase(cpu, use_pid)
@@ -311,8 +320,10 @@ class MemUtils():
                 retval = ptable_info.page_addr
             else:
                 self.lgr.debug('memUtils v2pUserAddr tried user CR3 and failed to get page')
+        if retval == 0:
+            retval = None
         
-        if retval is None or retval == 0:
+        if cpl == 0 and (retval is None or retval == 0):
             #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
