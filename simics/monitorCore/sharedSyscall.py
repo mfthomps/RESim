@@ -799,14 +799,16 @@ class SharedSyscall():
                     self.top.writeRegValue('syscall_ret', 99, alone=True)
                     dmod.setFD(99)
                     dmod.setTid(tid)
-                    #self.top.runToRead(dmod, ignore_running=True)
-                    call_params = syscall.CallParams('read-dmod', 'read', dmod, break_simulation=False)        
-                    cell_name = dmod.getCellName()
-                    cell = self.top.getCell(cell_name = cell_name)
-                    self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True, 
-                       cell_name=dmod.getCellName(), cell=self.cpu.current_context)
+
+                    #call_params = syscall.CallParams('read-dmod', 'read', dmod, break_simulation=False)        
+                    #cell_name = dmod.getCellName()
+                    #cell = self.top.getCell(cell_name = cell_name)
+                    #self.top.runTo(['read','close','lseek','_llseek'], call_params, name='read-dmod', ignore_running=True, 
+                    #   cell_name=dmod.getCellName(), cell=self.cpu.current_context)
 
                     trace_msg = ('\treturn from open tid:%s file: %s DMOD! forced return FD of 99 \n' % (str(tid), exit_info.fname))
+                    #SIM_break_simulation('remove this')
+                    #return
                 exit_info.call_params = None
 
             if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
@@ -815,8 +817,6 @@ class SharedSyscall():
                 if exit_info.call_params.match_param not in exit_info.fname:
                     ''' no match, set call_param to none '''
                     exit_info.call_params = None
-
-
                 
         elif callname == 'pipe' or \
              callname == 'pipe2':
@@ -1064,12 +1064,14 @@ class SharedSyscall():
                 self.top.writeRegValue('syscall_ret', 0, alone=True)
                 trace_msg = ('\terror return from close DMOD! tid:%s, FD: %d  eax: 0x%x\n' % (tid, exit_info.old_fd, eax))
                 exit_info.call_params.match_param.resetOpen()
-                if exit_info.syscall_instance.name == 'read-dmod':
-                    self.lgr.debug('sharedSyscall close stopping read-dmod syscall, call_params.name %s' % exit_info.call_params.name)
-                    # read-dmod is not a real dmod, it is created by the open dmod.  so just remove this instance and assume no concurrency...
-                    context = self.context_manager.getContextName(self.cpu.current_context)
-                    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name, context=context)
-                    #exit_info.syscall_instance.stopTrace()
+                #if exit_info.syscall_instance.name == 'read-dmod':
+
+                #if exit_info.syscall_instance.name.startswith('dmod'):
+                #    self.lgr.debug('sharedSyscall close stopping read-dmod syscall, call_params.name %s' % exit_info.call_params.name)
+                #    # read-dmod is not a real dmod, it is created by the open dmod.  so just remove this instance and assume no concurrency...
+                #    context = self.context_manager.getContextName(self.cpu.current_context)
+                #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name, context=context)
+
                 exit_info.call_params = None
             else:
                 trace_msg = ('\terror return from close tid:%s, FD: %d  eax: 0x%x\n' % (tid, exit_info.old_fd, eax))
