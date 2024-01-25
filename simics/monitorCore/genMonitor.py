@@ -3485,22 +3485,6 @@ class GenMonitor():
         fname = self.soMap[self.target].getSOFile(addr)
         return fname
 
-    def showThreadsXXXXX(self):
-        self.tasksDBG()
-        '''
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
-        if tid is None:
-            self.lgr.error('showThreads debug tid from context manager is none?')
-            return
-        self.lgr.debug('showThreads for tid:%s' % tid)
-        thread_recs = self.context_manager[self.target].getThreadRecs()
-        for rec in thread_recs:
-            tid = self.mem_utils[self.target].readWord32(cpu, rec + self.param[self.target].ts_pid)
-            state = self.mem_utils[self.target].readWord32(cpu, rec)
-            self.lgr.debug('thread tid: %s state: 0x%x rec: 0x%x' % (tid, state, rec)) 
-            print('thread tid: %s state: 0x%x rec: 0x%x' % (tid, state, rec)) 
-        '''
-            
 
     def traceExternal(self):
         call_list = ['vfork','fork', 'clone','execve','socketcall']
