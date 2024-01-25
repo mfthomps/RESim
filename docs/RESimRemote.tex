@@ -30,7 +30,7 @@ Perform these steps on the computer that you will use to access RESim.  These in
 assume a Linux host upon which IDA Pro is installed, e.g., a VM.
 
 Use {\tt ssh-keygen} to create an ssh key pair, using the {\tt -t ed25519} option to avoid problems with ssh
-clients that reject sha1 keys by default. 
+clients that reject sha1 keys by default.  Use a strong passphrase to protect this key.
 Send the public key to mfthomps@nps.edu along with a requested user ID. 
 You will then receive an assigned server name and IP address.
 After receiving the reply, do the following:
@@ -56,11 +56,18 @@ Host cgc-gw
    TCPKeepAlive        yes
    HostName            205.155.65.172
 
+# For use when accessing the blade from external connections via the ssh gateway.
 Host bladet9
   HostName             bladet9
   User                 mike
   IdentityFile         ~/.ssh/id_rsa
   ProxyCommand         ssh -q cgc-gw nc 10.20.200.159 22
+
+# For use when accessing the blade internally via the VLAN
+Host bladet9-local
+  HostName             10.20.200.159
+  User                 mike
+  IdentityFile         ~/.ssh/id_rsa
 \end{verbatim}
 
 \item Create an ssh agent on your local Linux.  E.g., source this script (using
@@ -71,12 +78,16 @@ your ssh id file):
    ssh-add ~/.ssh/id_rsa
 \end{verbatim}
 
-\item You should now be able to ssh to the RESim server, e.g., 
+\item You should now be able to remotely ssh to the RESim server, e.g., 
 \begin{verbatim}
    ssh -Y bladet9
 \end{verbatim}
 (Using -X seems to eventually time out because of temporary permissions?)
 
+\item Or ssh locally via the VLAN
+\begin{verbatim}
+   ssh -Y bladet9-local
+\end{verbatim}
 \end{itemize}
 
 \subsection{IDA}
@@ -86,8 +97,12 @@ RESim.
 Clone the RESim repo onto the computer from which you'll run IDA (need this for RESim
 IDA Python plugins.)  Set the RESIM\_DIR, RESIM\_IDA\_DIR and IDA\_DIR per the guide.
 
-When starting IDA with the {\tt runIda.sh} command per the guide, you will provide the
-name of your blade server as the final argument, e.g.,,
+Using IDA (or Ghidra) remotely via the ssh gateway can be very slow due to transfer of
+a lot of memory data.  It is suggested that you
+primarly use IDA locally via the VLAN, setting your blade as IDA's debugger host.
+
+If you must run IDA remotely via the gateway, then when starting IDA with the {\tt runIda.sh} command per the guide, you will provide the
+name of your blade server as the final argument, e.g.,
 \begin{verbatim}
     runIda.sh foo bladet9
 \end{verbatim}
@@ -98,7 +113,7 @@ with the {\tt ps aux | grep ssh} command.  It will look something like:
 \begin{verbatim}
  ssh -fN -L 9123:localhost:9123 -oStrictHOstKeyChecking=no -oUserKnownHostsFile=/dev/null bladet9
 \end{verbatim}
-
+\noindent Again, it is better to run IDA locally on the VLAN.
 
 \section{Configure RESim Server}
 See section \ref{section-system} if this RESim server has not yet been configured.
