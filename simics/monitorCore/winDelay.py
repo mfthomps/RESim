@@ -267,7 +267,13 @@ class WinDelay():
         retval = False
         if self.trace_msg is not None or not not_ready:
             if self.trace_msg is None and not not_ready:
+                if self.exit_info.count_addr is None:
+                    self.lgr.debug('winDelay exitingKernel with no delay but exit_info.count_addr is None')
+                    return 
                 return_count = self.mem_utils.readWord32(self.cpu, self.exit_info.count_addr)
+                if return_count is None:
+                    self.lgr.debug('winDelay exitingKernel with no delay return_count none reading from count addr 0x%x' % self.exit_info.count_addr)
+                    return 
                 self.lgr.debug('winDelay exitingKernel with no delay assume data it is there, return count 0x%x' % return_count)
                 if return_count > 0:
                     self.getIOData(return_count, self.exit_info.count_addr)
