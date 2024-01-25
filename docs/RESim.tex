@@ -3134,14 +3134,19 @@ running and seeing if early blocks are hit again.
 \subsection{Shared libraries and jumpers}
 The jumper loading functions takes the name of a library and offset into that code.  If the library is not yet loaded, a watch is set in the SO manager.
 Once the SO is loaded, an attempt is made to get the physical address of the jump source.  If not yet mapped, a callback is set using the pageCallback module.
-This scheme presupposes these things all happen while the process of interest is schedule.  However, we may wish to load a set of jumpers from arbitrary 
-snapshots, where the process of interest is not scheduled.
+This scheme presupposes these things all happen while the process of interest is schedule.   We want to set the jumper on physical memory so that it affects
+all processes.  Since we do not know which process will be first in mapping the page containing the jumper address, we must set page callbacks on every process
+that loads the library. 
 
-Jumpers exclusively use physical addresses.  Thus we should be able to set jumpers from any process that loads the library.  But if a library is already
-loaded at the point of the snapshot, but not by the currently schedule process, we need a way to obtain the physical address.  The cleanest approach would
+Also, we must be able to load a set of jumpers from arbitrary snapshots, where the process of interest is not scheduled.  If a library is already
+loaded at the point of the snapshot, but not by the currently scheduled process, we need a way to obtain the physical address.  The cleanest approach would
 be to have the SO module find a task with the library loaded, and then get the page table address (what would be loaded into CR3) for that task.  While 
 Windows stores that value at a small offset within EPROCESS, Linux stores it within the mm\_struct at a location that is not trivially found.  The Windows
 implementation has been tested.  More testing is needed for the Linux x86 and arm implementations.
+
+A library shared between multiple processes does not necessarily have a shared physical memory address.  Thus library load callbacks and page table callbacks
+must persist, even after some process has set a break on a physical address.  And you must track all processes that might load the target library since they may
+end up with unique physical addresses.
 
 \section{Driver platforms}
 \label{driver}
