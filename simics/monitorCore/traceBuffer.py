@@ -149,7 +149,7 @@ class TraceBuffer():
             if trace_info.image_base is None:
                 trace_info.image_base = self.so_map.getImageBase(trace_info.lib)
             tid = self.top.getTID(target=self.cell_name)
-            phys = self.getPhys(trace_info, load_addr, str(pid))
+            phys = self.getPhys(trace_info, load_addr, str(tid))
             if phys is not None and phys != 0:
                 self.setBreak(trace_info, phys)
             else:
