@@ -231,19 +231,6 @@ class WinDLLMap():
                     break
         return retval
 
-    '''
-    def findLoadAddr(self, pid, load_addr):
-        got_one = None
-        for fname in self.section_map[pid]:
-            section = self.section_map[pid][fname]
-            if section.pid == pid:
-                if section.addr == load_addr:
-                    self.lgr.debug('winDLL findLoadAddr found existing section for load addr 0x%x %s, remove it' % (load_addr, section.fname))
-                    got_one = section
-                    break
-        if got_one is not None:
-            self.section_list.remove(got_one)
-    '''
         
  
     def mapSection(self, tid, section_handle, load_addr, size):
@@ -497,6 +484,7 @@ class WinDLLMap():
         return retval
 
     def getImageBaseForPid(self, in_fname, pid):
+        # TBD separate staic program info from load addres and remove this.
         retval = None
         pid = self.pidFromTID(str(pid))
         self.lgr.debug('winDLL getImageBaseForPid %s pid: %d' % (in_fname, pid))
@@ -568,8 +556,8 @@ class WinDLLMap():
         if pid in self.section_map:
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
-                code_section = soMap.CodeSection(section.load_addr, section.size)
-                retval.append(section) 
+                code_section = soMap.CodeSection(section.load_addr, section.size, fname)
+                retval.append(code_section) 
         return retval
 
     def addSOWatch(self, fname, callback, name=None):
@@ -797,3 +785,7 @@ class WinDLLMap():
         else:
             self.lgr.debug('winDLL getLoadOffset tid %s not in section_map' % pid)
         return retval
+
+    def getSOTid(self, tid):
+        # compatability 
+        return tid

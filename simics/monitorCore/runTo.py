@@ -151,12 +151,12 @@ class RunTo():
            
     def soLoadCallback(self, section):
         ''' called by soMap or winDLLMap when a watched code file is loaded '''
-        self.lgr.debug('runTo soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (section.fname, section.addr, section.size, str(self.cpu.current_context)))
+        self.lgr.debug('runTo soLoadCallback fname: %s addr: 0x%x size 0x%x current_context %s' % (section.fname, section.load_addr, section.size, str(self.cpu.current_context)))
         if section.fname.endswith(self.skip_dll):
-            self.skip_dll_section = soMap.CodeSection(section.addr, section.size)
+            self.skip_dll_section = soMap.CodeSection(section.load_addr, section.size, section.fname)
             self.breakOnSkip()
         else:
-            other_section = soMap.CodeSection(section.addr, section.size)
+            other_section = soMap.CodeSection(section.load_addr, section.size, section.fname)
             self.skip_dll_other_section.append(other_section)
 
 

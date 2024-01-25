@@ -12,9 +12,10 @@ Also track text segment.
 NOTE: does not catch introduction of new code other than so libraries
 '''
 class CodeSection():
-    def __init__(self, addr, size):
+    def __init__(self, addr, size, fname):
         self.addr = addr
         self.size = size
+        self.fname = fname
 
 class ProgInfo():
     def __init__(self, text_start, text_size, text_offset, local_path):
@@ -514,6 +515,7 @@ class SOMap():
         return None
  
     def getSOTid(self, tid):
+        # all threads in a family share one record for what we think is the parent tid
         retval = tid
         if tid not in self.so_file_map:
             if tid == self.cheesy_tid:
@@ -705,10 +707,10 @@ class SOMap():
         if map_tid not in self.so_file_map:
             self.lgr.error('soMap getLoadAddr tid %s not in so_file_map' % map_tid)
         else:
-            for load_addr in self.so_file_map[map_tid]:
+            for load_info in self.so_file_map[map_tid]:
                 #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(prog).lower(), ntpath.basename(section.fname).lower()))
-                if os.path.basename(self.so_file_map[map_tid][load_addr]) == os.path.basename(prog):
-                    retval = load_addr.addr
+                if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
+                    retval = load_info.addr
                     self.lgr.debug('mapSO got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
@@ -765,7 +767,6 @@ class SOMap():
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (fpath, name))
                     self.so_watch_callback[fpath][name](load_addr, name)
 
-
     def getLoadInfo(self):
         load_info = None
         cpu, comm, tid = self.task_utils.curThread() 
@@ -799,4 +800,13 @@ class SOMap():
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
             retval = self.getLoadAddr(prog, tid)
+        return retval
+
+    def getCodeSections(self, tid):
+        retval = []
+        tid = self.getSOTid(tid)
+        if tid in self.so_file_map: 
+            for load_info in self.so_file_map[map_tid]:
+                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[map_tid][load_info])
+                retval.append(code_section) 
         return retval
