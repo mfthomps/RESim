@@ -158,15 +158,23 @@ class Jumpers():
             jump_rec.image_base = image_base
             loaded_pids = self.so_map.getSOPidList(jump_rec.prog)
             if len(loaded_pids) == 0:
-                self.lgr.error('jumper handleJumperEntry least one pid for %s' % jump_rec.prog)
+                self.lgr.error('jumper handleJumperEntry not at least one pid for %s' % jump_rec.prog)
                 return
             self.lgr.debug('jumper handleJumperEntry %d pids with lib loaded, image_base 0x%x' % (len(loaded_pids), image_base))
             phys = None
-            for pid in loaded_pids:
-                load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=str(pid))
+            # a bit of hackery to avoid looking up another process's page table if threads of same process.
+            # can remove after all params include the page table info (mm_struct)
+            tid = self.top.getTID(target=self.cell_name)
+            tid = self.so_map.getSOTid(tid)
+            for so_pid in loaded_pids:
+                if str(so_pid) == tid:
+                    use_pid = None
+                else:
+                    use_pid = str(so_pid)
+                load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=use_pid)
                 if load_addr is not None:
-                    self.lgr.debug('jumper handleJumperEntrys pid:%s load addr 0x%x, call getPhys' % (pid, load_addr))
-                    phys = self.getPhys(jump_rec, load_addr, pid)
+                    self.lgr.debug('jumper handleJumperEntrys pid:%s lib_addr %s load addr 0x%x, call getPhys' % (use_pid, jump_rec.lib_addr, load_addr))
+                    phys = self.getPhys(jump_rec, load_addr, use_pid)
                     if phys is not None and phys != 0:
                         self.setBreak(jump_rec, phys)
         return True
@@ -186,8 +194,6 @@ class Jumpers():
                 offset = load_addr - jump_rec.image_base
                 linear = jump_rec.from_addr + offset
                 self.lgr.debug('jumper libLoadCallback for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x name %s' % (load_addr, jump_rec.image_base, offset, linear, jump_rec.lib_addr))
-                self.pending_pages[jump_rec.lib_addr] = jump_rec
-                self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr)
         else:
             self.lgr.error('jumper libLoadCallback for %s, but not in pending_libs' % lib_addr)
 
@@ -211,7 +217,9 @@ class Jumpers():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(jump_rec.prog, jump_rec.lib_addr)
         if phys_addr is None:
+            self.lgr.debug('jumper getPhys no phys for above, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr, use_pid=pid)
+            self.pending_pages[jump_rec.lib_addr] = jump_rec
         return phys_addr
 
     def setBreak(self, jump_rec, phys_addr):
