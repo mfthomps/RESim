@@ -188,7 +188,7 @@ class PageFaultGen():
                 self.user_eip = self.cpu.iface.int_register.read(i_reg_num)
                 #self.lgr.debug('pageFaultHap arm user_eip is 0x%x' % self.user_eip)
             except SimExc_General:
-                self.lgr.debug('bad reg num')
+                #self.lgr.debug('pageFaultGen pageFaultHap bad reg num')
                 bad_reg = True
 
             if bad_reg or eip == self.param.data_abort:
