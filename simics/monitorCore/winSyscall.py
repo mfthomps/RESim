@@ -715,6 +715,7 @@ class WinSyscall():
             #    exit_info.fname_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
             #else:
             #    exit_info.fname_addr = frame['param5'] + word_size
+            exit_info.count_addr = frame['param5'] + 8
             # So far we have only seen a pointer to a 64-bit IO_CTRL_BLOCK structure so just do 64 bit way for now
             exit_info.delay_count_addr = frame['param5'] + 8
             exit_info.count = self.stackParam(3, frame) & 0xFFFFFFFF 
