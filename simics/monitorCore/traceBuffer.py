@@ -143,7 +143,7 @@ class TraceBuffer():
                             self.setBreak(trace_info, phys)
 
     def libLoadCallback(self, load_addr, lib_addr):
-        self.lgr.error('traceBuffer libLoadCallback for %s load_addr 0x%x' % (lib_addr, load_addr))
+        self.lgr.debug('traceBuffer libLoadCallback for %s load_addr 0x%x' % (lib_addr, load_addr))
         if lib_addr in self.pending_libs:
             trace_info = self.pending_libs[lib_addr]
             if trace_info.image_base is None:
@@ -155,7 +155,7 @@ class TraceBuffer():
             else:
                 offset = load_addr - trace_info.image_base
                 linear = trace_info.addr + offset
-                self.lgr.error('traceBuffer libLoadCallback for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x' % (load_addr, trace_info.image_base, offset, linear))
+                self.lgr.debug('traceBuffer libLoadCallback for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x' % (load_addr, trace_info.image_base, offset, linear))
                 self.pending_pages[trace_info.lib_addr] = trace_info
                 self.top.pageCallback(linear, self.pagedIn, name=trace_info.lib_addr)
         else:
