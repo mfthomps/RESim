@@ -221,14 +221,14 @@ class WinMonitor():
             self.w7_call_params.flushTrace()
 
     def traceWindows(self):
-        tf = '/tmp/trace_windows.txt'
+        tf = 'logs/trace_windows.txt'
         self.traceMgr.open(tf, self.cpu)
         call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
                          'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32',
-                         'DuplicateObject', 'ReadFile', 'WriteFile']
+                         'DuplicateObject', 'ReadFile', 'WriteFile', 'TerminateProcess', 'TerminateThread']
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
-        retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False)
+        retval = self.syscallManager.watchSyscall(None, call_list, call_params, 'traceWindows', stop_on_call=False, trace=True, linger=True)
         self.lgr.debug('traceWindows')
         return retval
 
