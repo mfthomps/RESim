@@ -501,13 +501,8 @@ its origin just prior to the initial data transmission.  This also causes RESim 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
 
-The {\tt kbuf} option is used in conjunction with prepInjectWatch to record kernel buffers used when receiving the data.  This data must be populated with 
-a designated character, currently ``Z''.  And there must be as much data as you expect to read during injectIO sessions.  The designated characters are used by
-RESim to identify the end of individual kernel buffers, and thus are critical to determining the size and location of the different kernel buffers.  It is also
-critical that the data be of a form that will be read by the application because RESim locates kernel buffers by backtracing data read into application buffers.
-However, if you find the first kernel buffer is as large as any data you might send, then a single application read will suffice.
-If AFL filters are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
-Take care to avoid extranious characters, e.g., newlines at the end of the test data.
+The {\tt kbuf} option is used in conjunction with prepInjectWatch to record addresses of kernel buffers used when receiving the data.  Those kernel buffer addresses
+are then referenced when inject data into the kernel as described in \ref{prepInject}
 
 Use an optional {\tt run=False} to prevent RESim from continuing the simulation, e.g., so that you can run commands such as ptime.
 
@@ -615,7 +610,9 @@ and {\tt disconnect} commands.
 the {\tt EXECUTION\_JUMPERS} ini environment value.
 
 \end{itemize}
+
 \subsection{Code coverage}
+\label{code-coverage}
 \begin{itemize}
 \item {\tt mapCoverage} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
 saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client when the {\tt color} option is used. Subsequent uses of {\tt mapCoverage}
@@ -784,7 +781,9 @@ generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} c
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
-\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last data watch event, or the last code coverage hit.
+\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run during {\tt trackIO} or {\tt injectIO} 
+after the last data watch event, or the last code coverage hit.
+\item {\tt AFL\_BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last code coverage hit during an AFL session.
 \item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
 \item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
@@ -797,15 +796,15 @@ This value will also be used to determine the size of writes to receive buffers 
 leave this undefined. NOTE: initial data, e.g., AFL seeds should include the UDP header, (vice relying on filters) because the system will split input data into datagrams at the
 headers \textit{prior} to applying filters.  The default maximum number of UDP packets is 10.  A maximum is needed, otherwise AFL gets carried away by duplicating
 the header.  (TBD, add an env override.)
-\item{\tt AFL\_PACKET\_FILTER} A packet filter to modify or weed out data received from AFL for purposes of constraining fuzzing sessions to
+\item{\tt AFL\_PACKET\_FILTER} A data filter to modify or weed out data received from AFL for purposes of satisfying protocols or constraining fuzzing sessions to
 particualar paths, e.g., to fuzz a single command dictated by a byte at a fixed offset.  The value should be a .py file name, less the
 .py extension.  The file must be relative to the Simics workspace and it must have a {\tt filter(data, packet\_num)} method that returns
 the desired string.  For example, if the packet is to be rejected, return a byte array of zeros.  Filters can also be used to 
-compute and store CRCs within data.  
+compute and store CRCs within data and conform to other protocol requirements to guide AFL.  
 \item {\tt AFL\_OUTPUT} -- Optional path to an AFL afl-output directory that will be referenced when running {\tt playAFL} and {\tt crashReport} commands. Typically this should not be used, and the system will use the value of {\tt AFL\_DATA} defined in the {\tt .bashrc}.
 \item {\tt AFL\_MAX\_LEN} -- Maximum size of a data injection for AFL, into either kernel or user buffers. Note the trimming occurs just prior to injection,
 and thus queue files and records of recent data, e.g., the ihung file, will not yet be trimmed.
-\item {\tt AFL\_MAX\_PACKETS} -- Maximum size of a AFL packets written to the user space buffer.
+\item {\tt AFL\_MAX\_PACKETS} -- Maximum number of UDP packets that RESim will extract from a unit of fuzzed data from AFL.
 \item {\tt AFL\_STOP\_ON\_READ} -- Stop fuzzing or tracking if the a read system call is encountered for the target FD after the fuzzed data is consumed.
 \item {\tt AFL\_STOP\_ON\_CLOSE} -- Stop fuzzing or tracking if the FD is closed.  AFL queue files will be given a suffix of \textit{closed}.
 \item {\tt AFL\_NO\_CALL\_HAP} -- An optimization applicable only to TCP sessions (kernel buffers) that prevents an AFL session 
@@ -1681,60 +1680,7 @@ Watch mark entries may include information about compare or test instructions th
 that the comparison is relevant to the input data reference.  With ARM programs, some watch marks may reflect ``CBR'' (compare before reference) as the comparison, 
 which means that the data reference occurs subsequent to a {\tt cmp} instruction and prior to a conditional branch, i.e., the conditional branch is not dependent on the data reference.
 
-\subsubsection{Tracking injected data}
-\label{tracking-injected-data}
-Once a trackIO is performed and you've reviewed input data references, you can repeat the tracking step with modified data.
-The recommended way to iteratively modify input data is to use  {\tt injectIO}, which injects data from a file into simulated memory.
-The RESim AFL fuzzing functions use a similar data injection scheme.
-
-Data is injected into one of three kinds of memory buffers, depending on the nature of the application being analyzed:
-\begin{enumerate}
-\item An application buffer defined by a read or receive system call.
-\item A kernel buffer from which data is copied into a user buffer during processing of a read or receive system call.
-\item A buffer on a driver computer that a driver utility will read when constructing data to send to a target.
-This buffer is typically the result of a file read, e.g., JSON data that will be extracted and used to construct 
-data passed to {\tt send} system calls.
-\end{enumerate}
-As described in detail in the following subsection, data injection requires that the system be put into a suitable
-state in which some program is about to consume input data and we know the addresses of buffers that are to contain injected data.
-The {\tt prepInject} and {prepInjectWatch} functions automate the steps needed to achieve this state and capture necessary information 
-about buffer addresses and execution points.    
-
-The application whose consumption of data is to be tracked may not be the application that initially ingests the data.  For example, one
-process may read from a network port and perform some data validation or transformation whose analysis is completed or otherwise not of interest.
-However that process may then send the data via a pipe or socket to another process.  The injectIO function accommodates this through use of
-the {\tt target} parameter which names the process whose data references are to be tracked, and the {\tt targetFD} which names 
-a file descriptor (handle) via which
-the process reads the data.  Note that while you could inject data directly into the 2nd process's buffer, doing so risks ingest of data that
-would never get through the first process.
-
-The target application might also execute on a different computer than that into which data is injected.  Use the optional {\tt target} parameter
-can include a prefix (followed by a colon) to identify the computer upon which the target process executes.
-
-There also may be situations in which you wish to inject data directly into the driver computer.  Consider an example target application that consumes
-multiple UDP packets that each change the system state in a manner that affects processing of subsequent packets.  While the {\tt injectIO} function
-supports injecting multiple UDP packets, doing so causes the reverse execution bookmarks to be reset on each packet injection.  Also, the injectIO
-support for multiple UDP packets assumes all packets are received into the same buffer.  Injecting data into the driver is performed in the same
-manner as injecting data into a target application.  The {\tt drive-driver.py} utility includes a {\tt --json} option to send UDP packets from a
-JSON file.  Use that utility to tee up the reading of the JSON on the driver, after first using {\tt debugProc('clientudpJson')} to catch its execution.
-Then use {\tt runToOpen} to catch the opening of the JSON file and to see its FD.  You can then use prepInject on that FD.
-
-\subsubsection{Preparing for data injection}
-\label{prepInject}
-Data injection techniques depend on whether the goal is to inject data into the application buffer, or into a kernel buffer.
-
-The {\tt prepInject} command is used to put the simulation in a state suitable for injecting data into an application
-read buffer, i.e., the named by the application when making a syscall such as recv.  For network traffic, the general steps for this include:
-\begin{itemize}
-\item Run the simulation to a desired state after selecting the target process for debugging, e.g., using {\tt debugProc}.  This state may include
-completion of initialization that may occur while the target process is waiting in the kernel on the target recv.
-\item Create a snapshot.
-\item Prepare a means of sending sample data to the target port.  The purpose of this data is to cause the target to receive it and return.  The
-data itself will be replaced later by injected data.  The data should not include multiple UDP packets, you want a single read.
-\item Restart RESim and issue the {\tt prepInject} command, providing the FD of the receive socket a name for the new snapshot.
-\item Send the sample data.
-\item RESim will pause the simulation when the data is read and will create a new snapshot.
-\end{itemize}
+\subsubsection{Sending data to be tracked}
 In general, data should be sent to the target from a driver or other simulated computer rather than via a real network.  Use of real networks to
 send data for prepInject may fail because of the problems associated with real-world leakage, see \ref{real-networks}.
 Even using a real network to ssh into a driver to send the data may lead to corruption, particularly if the target process is waiting in the 
@@ -1767,7 +1713,6 @@ after the real network is done interacting with the system.  See \ref{real-netwo
 Also, modifying memory content or register content will effectively redefine the origin used for reversing.  Do not use direct Simics commands to modify 
 memory or registers, use the RESim wrappers.
 
-
 \subsubsection{Tracking manually modified data}
 A more ad-hoc approach can be applied to the results of a trackIO by manually modifying memory data:
 \begin{itemize}
@@ -1797,81 +1742,240 @@ window, depending on where the command originated.
 Target network ports may receive periodic traffic from other components in the simulated topology, thus interfering with your crafted data streams.
 Offending network connections can be disconnected as described in \ref{manual_net_mods}.
 
+\subsection{Tracking injected data}
+\label{tracking-injected-data}
+Once trackIO is performed and you've reviewed input data references, you can repeat the tracking step with modified data.
+The recommended way to iteratively modify input data is to use  {\tt injectIO}, which injects data from a file into simulated memory.
+This subsection describes methods for injecting data and observing references to the data by applications.
+As described in detail in \ref{prepInject}, data injection requires that the system be put into a suitable
+state in which some program is about to consume input data and we know the addresses of buffers that are to contain injected data.
+The {\tt prepInject} and {\tt prepInjectWatch} functions automate the steps needed to achieve this state and capture necessary information 
+about buffer addresses and execution points.    
+The RESim AFL fuzzing functions (see \ref{fuzz} use a similar data injection scheme and rely on injection preparation steps described in \ref{prepInject}.
+
+\subsubsection{Where to inject data?}
+\label{where-to-inject}
+Data is injected into one of three kinds of memory buffers, depending on the nature of the application being analyzed:
+\begin{enumerate}
+\item An application buffer defined by a read or receive system call.
+\item A kernel buffer from which data is copied into a user buffer during processing of a read or receive system call.
+\item A buffer on a driver computer that a driver utility will read when constructing data to send to a target.
+This buffer is typically the result of a file read, e.g., JSON data that will be extracted and used to construct 
+data passed to {\tt send} system calls.
+\end{enumerate}
+
+Injection into application buffers is often appropriate for UDP applications and others where the application obtains data from a system 
+call and then processes that data.  Applications that consume multiple UDP packets can also make use of injection into application buffers
+as long as the buffer address remains the same for each RECV system call.  In such cases, RESim will note the location of the RECV call
+and jump over the kernel for each subsequent packet.
+ 
+Injection into kernel buffers is useful for applications that do not read all data available from an interface, e.g., ones that read a character at a time from the kernel.  
+Such an application may violate assumptions made when injecting data directly into application memory, e.g., the assumption that the application
+will read all necessary data in a single read.  For example, a non-conformant application may end up hanging on a {\tt select} call because
+the kernel does not know there is more data to inject into the application memory.  Another proplem with partial reads that they would break
+the use of {\tt injectIO} since each injection into application memory resets the origin used with reverse execution.
+
+The application whose consumption of data is to be tracked may not be the application that initially ingests the data.  For example, one
+process may read from a network port and perform some data validation or transformation whose analysis is completed or otherwise not of interest.
+However that process may then send the data via a pipe or socket to another process.  The injectIO function accommodates this through use of
+the {\tt target} parameter which names the process whose data references are to be tracked, and the {\tt targetFD} which names 
+a file descriptor (handle) via which
+the process reads the data.  Note that while you could inject data directly into the 2nd process's buffer, doing so risks ingest of data that
+would never get through the first process.
+
+The target application might also execute on a different computer than that into which data is injected.  Use the optional {\tt target} parameter
+can include a prefix (followed by a colon) to identify the computer upon which the target process executes.
+
+There also may be situations in which you wish to inject data directly into the driver computer.  Consider an example target application that consumes
+multiple UDP packets that each change the system state in a manner that affects processing of subsequent packets.  While the {\tt injectIO} function
+supports injecting multiple UDP packets, doing so causes the reverse execution bookmarks to be reset on each packet injection.  Also, the injectIO
+support for multiple UDP packets assumes all packets are received into the same buffer.  Injecting data into the driver is performed in the same
+manner as injecting data into a target application.  The {\tt drive-driver.py} utility includes a {\tt --json} option to send UDP packets from a
+JSON file.  Use that utility to tee up the reading of the JSON on the driver, after first using {\tt debugProc('clientudpJson')} to catch its execution.
+Then use {\tt runToOpen} to catch the opening of the JSON file and to see its FD.  You can then use prepInject on that FD.
+
+\subsubsection{Preparing for data injection}
+\label{prepInject}
+Data injection techniques depend on whether the goal is to inject data into the application buffer, or into a kernel buffer.
+
+The {\tt prepInject} command is used to put the simulation in a state suitable for injecting data into an application
+read buffer, i.e., the named by the application when making a syscall such as recv.  Notional data is sent to the target just as you would when using
+{\tt trackIO}, however instead of using {\tt trackIO}, you use {\tt prepInject}.  The data content is not important, however it should be as large as
+any data that you wish to inject (bounded of course by the application design.)
+
+For network traffic, the general steps for prepInject include:
+\begin{itemize}
+\item Run the simulation to a desired state after selecting the target process for debugging, e.g., using {\tt debugProc}.  This state may include
+completion of initialization that may occur while the target process is waiting in the kernel on the target recv.
+\item Create a snapshot.
+\item Prepare a means of sending sample data to the target port.  The purpose of this data is to cause the target to receive it and return.  The
+data itself will be replaced later by injected data.  The data should not include multiple UDP packets, you want a single read.
+\item Restart RESim and issue the {\tt prepInject} command, providing the FD of the receive socket a name for the new snapshot.
+\item Send the sample data.
+\item RESim will pause the simulation when the data is read and will create a new snapshot.
+\end{itemize}
+
+Splitting multiple UDP packets for each injection takes one of two approaches.  If the application is known
+to have a fixed UDP header, e.g., RrUdP, then we can split AFL data at those strings using the {\tt AFL\_UDP\_HEADER} environment
+defintion in the ini file.  Packet combinations can be concatentated
+to accomodate whatever packet quantity is desired.  The second approach is to inject the UPD packets
+into the driver computer as described in  \ref{where-to-inject}.
+
+The {\tt prepInjectWatch} operation prepares snapshots for injection of data directly into the kernel buffer instead of into application memory.  
+{\tt injectIO} is first used with the {\tt kbuf=True} option.
+This data sent to the target must be populated with 
+a designated character, currently ``Z''.  And there must be as much data as you expect to read during injectIO sessions.  The designated characters are used by
+RESim to identify the end of individual kernel buffers, and thus are critical to determining the size and location of the different kernel buffers.  It is also
+critical that the data be of a form that will be read by the application because RESim locates kernel buffers by backtracing data read into application buffers.
+However, if you find the first kernel buffer is as large as any data you might send, then a single application read will suffice.
+If AFL filters (see \ref{packet-filters}) are to be used, e.g., to generate CRCs, then apply the filter before sending the data to the target via the driver.
+Take care to avoid extranious characters, e.g., newlines at the end of the test data.
+
+\subsubsection{Injecting data}
+\label{injecting-data}
+Once you've created a snapshot with either {\tt prepInject} or {\tt prepInjectWatch}, the {\tt injectIO} operation takes data from a file and writes it into the 
+target memory. It then runs the simulation forward with data tracking functions from the {\tt trackIO} function, generating watch marks.  
+If you've defined a {\tt AFL\_UDP\_HEADER} to split up
+UPD packets, then RESim performs multiple injections, one for each packet.  Otherwise, all of the data from the file is written to the target buffer.
+When injecting data, you must account for buffer sizes.  With user space injections, the length value
+given to a recv call can be a guide (but not always).  Injecting data past the end of an application buffer is a fine way to observe artificial SEGV's.
+
+The {\tt injectIO} function will apply data filters defined in the ini {\tt AFL\_PACKET\_FILTER} environment variable.  See \ref{packet-filters}.
 
 \subsection{Code coverage}
 \label{coverage}
+Code coverage artifacts help the analysis understand how much of the target code has been executed by test inputs, and may help to identify data inputs
+that will lead to previously unexplored execution paths.
 RESim generate two different kinds of code coverage artifacts:
 \begin{itemize}
 \item Coverage files resulting from the replay of AFL sessions using the {\tt runPlay} script.  These files are stored beneath the AFL output directory
 and include cpu cycles and UDP packet number for each hit. 
 \item Hits files containing lists of all basic blocks hit in a session or cumulatively.
 \end{itemize}
-\subsubsection{Coverage from fuzzing}
+
+Analysis and expansion of fuzzing code coverage is described in \ref{fuzz}.  RESim also includes code coverage functions intended for use
+by the analyst independent of fuzzing.  Those are described in this subsection.  
+
+The scope of coverage is tied either to the target program binary, or a single shared library.  We refer to this as a \textit{coverage unit}..  
+Coverage tracking commences with use of the {\tt mapCoverage} command which causes RESim to record each basic block hit within a coverage unit.
+The {\tt showCoverage} command displays a summary of the hits and stores them in a json file known as a \textit {hits file}.  
+Alternately, providing the {\tt cover} option to the {\tt trackIO} function causes it to create a hits file.
+
+The hits files are read by IDA and Ghidra, coloring basic blocks to highlight the code that has been executed. If the target is being debugged in RESim,
+use the {\tt color} option when starting IDA, otherwise run the colorBlocks.py script from IDA.  In Ghidra, use the {\tt color blocks} menu option.
+The location and naming of hits files is described in \ref{data-stores}.
+
+\subsubsection{Branches not taken}
+The {\tt findBNT.py} script analyzes hits files and reports on \textit{branches not taken}, (BNTs), i.e., unused exits from hit basic blocks within a coverage unit.
+These reports can be helpful when identifying data inputs that would improve code coverage.  BNTs are a key part of fuzzing workflows as described in \ref{fuzz}.
+
+\subsubsection{Hits in libraries}
+The instruction addresses in hits files, (and those reported by findBNT.py) are based on static program values, i.e., when recording hits 
+in a shared library the runtime address values are reduced by the image base. 
+The RESim IDA plugin provides a {\tt GoTo} function to jump to a program address computed by adding the image base to the given value.  This is invoked using Ctrl-Shift-g.
+
+\subsection{Selecting checkpoints}
+Use of checkpoints can significantly simplify and speed up analysis, e.g., by not having to wait for simulated systems to boot each time.
+The performance and ease of analysis can depend on the state of the simulated system when a checkpoint is made.  Assume you wish to analyze 
+a particular service. After using the {\tt debugProc} command to select it and gather its information, consider running the simulation
+forward for a while until you see that other system initialization has completed.  Creating a snapshot after initialization may speed up
+subsequent analysis by reducing the amount of extraneous execution.  
+
+Watching the log at {\tt logs/monitors/resim.log} can let you know when initialization has largely completed.
+While you are waiting for initialization to complete, the target process may be waiting in a kernel call, e.g., an accept or a read.
+RESim retains that information in its checkpoint.  For example, when running from such a checkpoint, a {\tt trackIO} function on the bound FD 
+will catch the return from accept and alter the tracked FD to the new FD returned by the kernel.
+
+\section{Fuzzing with AFL}
+\label{fuzz}
+RESim is integrated with a forked version of AFL from github/mfthomps/AFL.
+The AFL fuzzer was modified to provide its fuzzed input to RESim via a
+network socket.  RESim uses that socket to send AFL results of the fuzzing
+session in terms of basic block edges hit.  The {\tt -R} switch tells AFL
+that this is a RESim session.
+
+RESim either injects data received from AFL directly into application memory, or it injects the data into
+a kernel read buffer, depending on the setup steps used to prepare for data injection as described in \ref{prepInject}.
+
+Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  But you must first prepare and
+test a single fuzzing instance as described below.  If you are limited to running a single instance of Simics, consider using
+the {\tt --dirty} option to the runAFL command.
+
+The following steps describe fuzzing an network service.
+\begin{itemize}
+\item Clone the AFL repo (\url{https://github.com/mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
+\item Create a RESim workspace for the fuzzing session.  The name of the workspace will be used
+to name fuzzing artifcats, so make it meaningful.
+\item Confirm your {\.bashrc} file defines the AFL paths per section \ref{installation}.
+\item Create a \textit{target} directory beneath the AFL output directory having the name of your workspace.
+\item Create a {\tt seeds} subdirectory beneath that. 
+\item Use tracing or static analysis to identify the FD the service binds to and whether packet processing requires a minimum sized packet.
+\item Use the {\tt prepInject} or the {\tt prepInjectWatch} function as described in \ref{prepInject}.
+\item Set values in the ENV section of your ini file per section \ref{env}.  These may include a UDP header, and the 
+backstop cycles that determine how long an AFL session will contiue to run after hitting the the most recent basic block. 
+\item From a shell, use the {\tt runAFL} command, naming the target (e.g., your workspace name).
+\item You should see AFL run some initial sessions for calibration and then begin its fuzzing.
+\item Output from the Simics command line is redirected to /tmp/resim.log, check that for errors if AFL hangs.  Also look at resim\_db.log
+in the workspace.
+\end{itemize}
+
+A set of RESim ini environment variables affect the fuzzing sessions.  These include:
+\begin{itemize}
+\item Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
+value is defined in the {\tt AFL\_BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
+if the there is not more data to inject into application memory upon hitting the read call address.
+
+\item The {\tt HANG\_CYCLES} value determine when a session is considered to be hung, e.g., the program is in an infinite loop.
+Hangs may reflect more than just DoS vulnerabilities, e.g., corruption of a return address might lead to a viable code location
+that leads to a loop.
+
+\item The AFL\_STOP\_ON\_CLOSE env value will end the fuzzing session if the FD is closed, and AFL\_STOP\_ON\_READ will end it if
+a read system call is encountered on the target FD after all fuzzed data is consumed.
+
+\item Variables that have an effect on tracking data injection as described in \ref{tracking-injected-data}.
+\end{itemize}
+
+\subsection{Seeds}
+Well chosen seeds can save a lot of fuzzing time.  For example, if all packets must start with a specific string there is no sense in
+making AFL discover that string.  On the other hand, AFL can quickly discover many protocol values that affect execution paths from simple
+data.  This is particularly true when the data sizes are small.  
+
+There is no one right way to select seeds.  Sometimes a sample of PCAPs provide suitable seeds.  However there are other cases where AFL would
+be more efficient with a smaller degenerate data set, e.g., a few key fields and a small set of a constant character.  An example of such a case
+might be a protocol in which delimited fields are relatively long within the PCAP, but could be very much shorter in the protocol.  In such a case,
+AFL might struggle to determine the field delimiters (not that it explicitly does any such thing) from the longer PCAP fields.
+
+It is often the case that smaller seeds yield quicker results.  There are though plenty of exceptions to that.  An understanding of the protocol can
+be very helpful when selecting seeds.
+
+\subsection{Injecting fuzzed data}
+RESim receives fuzzed data from AFL and injects that data just as it does with the {\tt injectIO} function.
+See \ref{injecting-data}
+
+For single UDP packets, we simply truncate the AFL data to conform to expected UDP packet size (trusting that AFL will not focus future resources on fuzzing 
+truncated data.)    For multiple packets, RESim catches subsequent calls to recv, injects the new data, adjusts the size in the
+return register and skips execution foward to the return from the system call.
+Handling multiple packets currently requires that we assume the recv calls are made from a common user space address, and
+the returns from recv all end up a the same user space address.  
+
+Splitting multiple UDP packets for each coverage session currently takes one of two approaches.  If the application is known
+to have a fixed UDP header, e.g., RrUdP, then we can split AFL data at those strings using the {\tt AFL\_UDP\_HEADER} environment
+defintion in the ini file.  Seed packet combinations can be concatentated
+to accomodate whatever packet quantity is desired.  RESim will reject any packet that lacks the prescribed header for subsequent
+packets, which should cause AFL to see reduced coverage for such data sets.  The second approach is to inject the UPD packets
+into the driver computer as described in  \ref{tracking-injected-data}.
+
+One potential challenge is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
+minimum size is 1400 bytes, a 2 packet sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
+
+\subsection{Fuzzing code coverage}
 After a fuzzing session, the {\tt playAFL} script will create coverage files for each code execution path found by AFL.  These tend to have a lot of
-redundancy because of the way that AFL determines uniqueness.  When fuzzing UPD with a defined {\tt AFL\_UDP\_HEADER}, the extraneous execution paths compound,
-e.g., if AFL gets 2 UDP packets for one session, and each of result in hit sets already covered by different other sessions, AFL will treat that as a execution
-new path.  For this reason, the quantity of UPD headers is bounded as described in TBD.  
+redundancy because of the way that AFL determines uniqueness.  
 
 The {\tt dedupCoverage.py} script creates a list of coverage files that are, in some sense, unique.  First, it removes duplicate coverage files resulting from
 parallel fuzzing.  Next it removes any file whose hits are a subset of another coverage file.  When UDP headers are used, the script first assesses all files from
 sessions having a single UDP packet.  It then considers multi-packet sessions that result in new hits.  And where these match or are subsets, it removes files 
 giving preference to those whose hits occur on the earliest session.
-
-\subsubsection{Ad-hoc code coverage}
-Features to reflect code coverage should support human analysis as well as automated analysis, e.g., fuzzing.  To support the human, coverage is highlighted within IDA using color-coded
-basic blocks.  The scope of coverage is tied either to the text segment, i.e., the program, or a single shared library.  We refer to this as a \textit{coverage unit}..  
-Coverage tracking commences with use of the {\tt mapCoverage} command and is intended to aid understanding of program response to inputs tracked via 
-the {\tt trackIO} or {\tt injectIO} commands.  Those basic blocks which are only hit between coverage commencement and the first input event are separately colored so as to not
-be confused with blocks hit subsequent to receipt of input.  This distinction is intended to facilitate comparisons between \textit{data sessions} defined as periods
-between receipt of input (or IO injection) and quiescence with respect to the backstop logic.
-Within the IDA display, coverage properties of basic blocks will be
-coded into five colors:
-\begin{itemize}
-\item Never executed.
-\item Never executed during a data session
-\item Executed during a data session, but not during this data session
-\item Executed during this session and some previous data session.
-\item Executed only during this data session.
-\end{itemize}
-
-The {\tt coverage} module maintains three data files for each coverage unit: a running total set of hits from previous data sessions; the hits for the most recent data session;
-and hits which occur prior to the first input data reference (e.g., reads, selects, etc).  The running total is only updated immediately prior to the start 
-of a new data session.  At the start of each data session, the coverage module will restore any breakpoints found
-in the recent session data file and then merge it into the running total.  The coverage module will then clear its internal hits data.  
-When the IDA client is started with the {\tt color} argument, it will first
-reset all basic block colors,  and will then read the hits files and color blocks accordingly.  The running hits file is intended to persist across
-RESim sessions.  
-
-
-\subsubsection{Branches not taken}
-\label{BNT}
-The IDA client generates a list of basic block branches that were not taken, i.e., unused exits from hit basic blocks.  This list is presented in the {\tt BNT} window of the IDA client
-and is intended to help the analyst see places where changes in input data may have resulted in added coverage.  When used following a
-RESim {\tt mapCoverage} command, double-clicking on an entry will take the simulation to the corresponding 
-cycle.  Note this is only available for the very first coverage hit of each basic block, and of course only within a session that hit the from block (see the bbAFL function).  This window is most useful when IDA is started with the {\tt color} option.
-
-The {\tt color} option and {\tt BNT} window can also be used outside of the {\tt mapCoverage} context, e.g., to analyze branches not 
-taken during AFL sessions.  Double-clicking an entry in the BNT window will go to the source of the branch not taken (note the simulation state
-is not altered.)  The following is a notional code coverage workflow.
-\begin{itemize}
-\item Use AFL to fuzz a target.
-\item Use the playAFL command to replay all of the sessions, generating a new hits file.
-\item Copy that hits file over the target hits file.
-\item Start a RESim session from the checkpoint used during AFL.
-\item Start IDA and use the {\tt resetBlocks} script to clear block coloring; then use {\tt Color blocks} to color all blocks hit
-during the AFL session.
-\item Find an interesting BNT in the BNT window.
-\item Use the findBB.py utility to search for all AFL data files that hit the source block.
-\item Restart RESim and use the {\tt injectIO}, {\tt aflInject}, {\tt aflTrack} or {aflReplay} functions to play the data file identified above.
-\item Run to the source block of interest and investigate whether an altered input could result in a branch to the BNT.
-\end{itemize}
-Note in the above workflow, you may wish to use 2 different checkpoints.  The {\tt playAFL} function must run from the
-checkpoint used with AFL.  However the other functions that use trackIO could run from checkpoints that include a driver component.  And 
-that checkpoint might be from early on in the process's life, e.g., to identify the sources of state values that do not seem to result from
-the input data.
-
-Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
-which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
 
 \subsubsection{BNTs from fuzzing}
 \label{BNT-fuzz}
@@ -1900,160 +2004,8 @@ The {\tt -d} option of {\tt findBNT.py} will annotate its output with any data w
 using the {\tt runTrack} utility, which runs injectIO on all of the AFL sessions and records all of the watch marks.  This option can be useful when there are a large number
 of BNTs and you want to prioritize those with a higher likelihood of being affected by inputs.
 
-\subsubsection{Hits in libraries}
-The instruction addresses in hits files are based on static program values, i.e., when recording hits in a shared library the runtime address values are reduced by the image base. 
-The RESim IDA plugin provides a {\tt GoTo} function to jump to a program address computed by adding the image base to the given value.  This is invoked using Ctrl-Shift-g.
-
-\subsection{Selecting checkpoints}
-Use of checkpoints can significantly simplify and speed up analysis, e.g., by not having to wait for simulated systems to boot each time.
-The performance and ease of analysis can depend on the state of the simulated system when a checkpoint is made.  Assume you wish to analyze 
-a particular service. After using the {\tt debugProc} command to select it and gather its information, consider running the simulation
-forward for a while until you see that other system initialization has completed.  Creating a snapshot after initialization may speed up
-subsequent analysis by reducing the amount of extraneous execution.  
-
-Watching the log at {\tt logs/monitors/resim.log} can let you know when initialization has largely completed.
-While you are waiting for initialization to complete, the target process may be waiting in a kernel call, e.g., an accept or a read.
-RESim retains that information in its checkpoint.  For example, when running from such a checkpoint, a {\tt trackIO} function on the bound FD 
-will catch the return from accept and alter the tracked FD to the new FD returned by the kernel.
-
-\section{Fuzzing with AFL}
-\label{fuzz}
-RESim is integrated with a forked version of AFL from github/mfthomps/AFL.
-The AFL fuzzer was modified to provide its fuzzed input to RESim via a
-network socket.  RESim uses that socket to send AFL results of the fuzzing
-session in terms of basic block edges hit.  The {\tt -R} switch tells AFL
-that this is a RESim session.
-
-RESim either injects data received from AFL directly into application memory, or it injects the data into
-a kernel read buffer, depending on the setup steps used to configure the fuzzing session.  UDP and single-read TCP applications
-will typically use application memory.  TCP applications that might issue multiple kernel calls to receive
-data should be configured to inject data into kernel buffer.  When injecting fuzzed data, you must account for buffer sizes.  With user space injections, the length value
-given to a recv call can be a guide (but not always).  Injecting data past the end of either the kernel buffer or an application buffer is a fine
-way to observe artificial SEGV's.
-
-The setup steps create a snapshot and associated data that dictate the starting state and the location
-to which data will be written.  
-
-Parallel fuzzing is supported as described in section \ref{parallel-fuzzing}.  But you must first prepare and
-test a single fuzzing instance as described below.  If you are limited to running a single instance of Simics, consider using
-the {\tt --dirty} option to the runAFL command.
-
-\begin{itemize}
-\item Clone the AFL repo (\url{https://github.com/mfthomps/AFL.git})\footnote{Older environments may need to update binutils.} and use {\tt make} to build the executable.
-\item Create a RESim workspace for the fuzzing session.  The name of the workspace will be used
-to name fuzzing artifcats, so make it meaningful.
-\item Confirm your {\.bashrc} file defines the AFL paths per section \ref{installation}.
-\item Create a \textit{target} directory beneath the AFL output directory having the name of your workspace.
-\item Create a {\tt seeds} subdirectory beneath that. 
-\item Use tracing or static analysis to identify the FD the service binds to and whether packet processing requires a minimum sized packet.
-\item Use the {\tt prepInject} command to create a snapshot of the state where data from the FD has been read and user space is being returned to.
-Typically, start the system from scratch and use {\tt debugProc} to debug the desired process.  Then issue the {\tt prepInject} command and
-send the service some data (or wait for some other component to do so.)  The data does not matter -- though make it large enough
-to map any page that might be referenced by the maximum read length, and do not send multiple UDP packets.  Update your ini file to reflect
-the snapshot name.  See section \ref{partial-reads} if injection into kernel memory is needed.
-\item Assuming you've created a set of input files that follow different paths through the service of interest, 
-reduce them to the minimal number of bytes needed to function -- or skip this step if you think your input files are
-as small as they need to be.
-Use the {\tt fuzz} command for each of your input files to create a minimal set of seeds for AFL. Prior to using the fuzz command,
-Each run of the fuzz command creates an output file in {\tt /tmp/trimmer}.  You can run the fuzz command multiple times from the same 
-RESim session (it returns to the original IO state.) 
-\item Copy those trimmer files into the AFL seed directory for this target.
-\item Set values in the ENV section of your ini file per section \ref{env}.  These may include a UDP header, and the 
-backstop cycles that determine how long an AFL session will contiue to run after hitting the the most recent basic block. 
-\item Use the {\tt runAFL} command, naming the target (e.g., your workspace name).
-\item You should see AFL run some initial sessions for calibration and then begin its fuzzing.
-\item Output from the Simics command line is redirected to /tmp/resim.log, check that for errors if AFL hangs.  Also look at resim\_db.log
-in the workspace.
-\end{itemize}
-
-Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
-value is defined in the {\tt BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
-if the there is not more data to inject into application memory upon hitting the read call address.
-(NOTE: the backstop value is currently shared with the value used with trackIO, and thus may need to change for fuzzing.)
-
-The {\tt HANG\_CYCLES} value determine when a session is considered to be hung, e.g., the program is in an infinite loop.
-Hangs may reflect more than just DoS vulnerabilities, e.g., corruption of a return address might lead to a viable code location
-that leads to a loop.
-
-The AFL\_STOP\_ON\_CLOSE env value will end the fuzzing session if the FD is closed, and AFL\_STOP\_ON\_READ will end it if
-a read system call is encountered on the target FD after all fuzzed data is consumed.
-
-\subsection{Seeds}
-Well chosen seeds can save a lot of fuzzing time.  For example, if all packets must start with a specific string there is no sense in
-making AFL discover that string.  On the other hand, AFL can quickly discover many protocol values that affect execution paths from simple
-data.  This is particularly true when the data sizes are small.  
-
-There is no one right way to select seeds.  Sometimes a sample of PCAPs provide suitable seeds.  However there are other cases where AFL would
-be more efficient with a smaller degenerate data set, e.g., a few key fields and a small set of a constant character.  An example of such a case
-might be a protocol in which delimited fields are relatively long within the PCAP, but could be very much shorter in the protocol.  In such a case,
-AFL might struggle to determine the field delimiters (not that it explicitly does any such thing) from the longer PCAP fields.
-
-It is often the case that smaller seeds yield quicker results.  There are though plenty of exceptions to this.  An understanding of the protocol is 
-
-\subsection{Multiple UDP packets}
-AFL is organized as a file fuzzer. It is up to the user to adapt it (or the target) for network environments.
-Our fork of AFL uses networking instead of files to provide data to the RESim environment.
-AFL generates fuzzed data.  RESim injects this data directly into the target memory to at a point where the target has returned from a recv syscall.
-For single UDP packets, we simply truncate the AFL data to conform to expected UDP packet size (trusting that AFL will not focus future resources on fuzzing 
-truncated data.)    For multiple packets, RESim catches subsequent calls to recv, injects the new data, adjusts the size in the
-return register and skips execution foward to the return from the system call.
-Handling multiple packets currently requires that we assume the recv calls are made from a common user space address, and
-the returns from recv all end up a the same user space address.  This seems a safe assumption for most applications.  
-
-Splitting multiple UDP packets for each coverage session currently takes one of two approaches.  If the application is known
-to have a fixed UDP header, e.g., RrUdP, then we can split AFL data at those strings using the {\tt AFL\_UDP\_HEADER} environment
-defintion in the ini file.  Seed packet combinations can be concatentated
-to accomodate whatever packet quantity is desired.  RESim will reject any packet that lacks the prescribed header for subsequent
-packets, which should cause AFL to see reduced coverage for such data sets.  The second approach is to inject the UPD packets
-into the driver computer as described in  \ref{tracking-injected-data}.
-
-One potential challenge is where the application expects a minimum packet size.  That complicates creation of minimal seeds.  If the
-minimum size is 1400 bytes, a 2 packet sequence would require a seed of 2800 bytes, which is a lot for AFL to fuzz.
-
-\subsection{Fuzzing TCP}
-TCP sessions initialized using the {\tt prepInject} command assume the application gets its data from a single read call to the kernel.
-Applications that depend on the kernel to provide buffered input, e.g., character-at-a-time reads, or applications that otherwise make multiple
-kernel calls to read data should have data injected into the kernel buffer.  This is acheived by using {\tt prepInjectWatch}. 
-as described in section \ref{partial-reads} 
-
-\subsubsection{Partial reads}
-\label{partial-reads}
-Consider an application that does not read all data available from an interface, e.g., one that reads a character at a time from the kernel.  
-Such an application may violate assumptions made when injecting data directly into application memory, e.g., the assumption that the application
-will read all necessary data in a single read.  For example, a non-conformant application may end up hanging on a {\tt select} call because
-the kernel does not know there is more data to inject into the application memory.  Another proplem with partial reads that they would break
-the use of {\tt injectIO} since each injection into application memory resets the origin used with reverse execution.
-
-The {\tt prepInjectWatch} operation can be used to
-prepare snapshots to inject data directly into the kernel buffer instead of into application memory.  Currently this assumes 
-that the initial buffer from the prepInjectWatch is as large as any data to be injected. The intended use includes an application that simply 
-reads a character at a time until it sees some delimiiter, will stop the simulation when the application
-has consumed all the data provided in the injection and again hits the read call.
-
-\subsubsection{TCP timing and packetizing}
-Sometimes programmers make assumptions about TCP reads, e.g., they assume a relationship between the quantity of bytes written in a single write to the
-quantity of bytes read in a single read.  Thus, changes in things like MTU can affect the application protocol...
-
-\subsubsection{State of the target system}
-Stateful services such as FTP typically require some amount of interaction to get the process into the state at which you'd like to fuzz it.
-In the example of FTP, this may include logging in, e.g., as \textit{anonymous}, and issuing the PORT command.  Keeping with the FTP example,
-you would create a driver component and ssh to that as part of the setup.  If you wish to fuzz commands that use PORT, e.g, LIST, you would
-login to the ftp server and then stop the simulation.  Knowing that a command such as LIST will first send the port command, you would use
-{\tt prepInject} with {\tt count=2} to pause the simulation after it has first read the PORT directive and then the LIST directive.  The fuzzing
-injection would then be overwritting the LIST directive.
-
-Using AFL to fuzz a sequence of FTP commands is not currenty possible.
-
-The CADET01 example is fuzzed by the {\tt simics/testing/cadet-test}.  This simple CGC service lives up to a reputation it achieved for 
-illustrating subtle issues related to TCP.  The service reads a character at a time, until it sees a newline at which point it processes
-the buffered data.  Each fuzzing iteration will
-catch each read system call and their returns to determine when the injected data has been consumed, and it will set the {\tt read} syscall return value to
-zero following the consumption of the buffer. In cases having the newline, this will happen after all buffer processing and after the subsequent read
-for the next round of the service.  From a fuzzing perspective, this is wasteful and slow because we could have stopped fuzzing upon the next call
-to read instead of waiting for that zero value to be set and processed.  One alternative would be to set {\tt STOP\_ON\_READ} and set a filter to force
-the newline in each input.
-
-\subsection{Packet filters}
+\subsection{Data filters}
+\label{packet-filters}
 Sometimes you may wish to focus the fuzzing on a specific code path determined by data within the packet.  This may be of particular
 interest in multi-packet UDP cases where you know a specific command will lead to interesting paths when the 2nd packet is consumed.
 Left alone however, AFL will find interest in code paths generated by the first packet having other commands.  Currently, you can
@@ -2061,6 +2013,10 @@ define a {\tt AFL\_PACKET\_FILTER} as a python program to reject AFL data that d
 at a specific offset.  The program must have a {\tt filter(data, packet\_number)} method that returns data to be injected.  
 For example, return nulls if the packet is to be rejected.  The intention is that will yield poor coverage, causing AFL not see new paths.
 Alternately, return an altered packed, e.g., with a computed CRC injected into the data.
+An example AFL data filter can be found in 
+\begin{verbatim}
+   simics/workspace/sample.filter
+\end{verbatim}
 When creating filter modules, you may need to modify the python module search path to include the python distribution, e.g., 
 \begin{verbatim}
 sys.path.insert(0,'/usr/lib/python3/dist-packages')
@@ -2073,7 +2029,7 @@ the basic block addresses of a from-block and a to-block. When code coverage hit
 to-block.  The jumpers are managed in a file with a .jumpers suffix along with the IDA databases and block lists for applications.
 
 Jumpers are also useful when you discover very slow fuzzing sessions caused by large quantities of iterations driven by an input value.
-A {\tt Packet filter} as described above might mitigate such a problem, however that can artificially constrain data whose value may
+A {\tt Data filter} as described above might mitigate such a problem, however that can artificially constrain data whose value may
 have effects beyond the iteration count.  Review of the iterated code should identify whether use of a jumper might affect program
 execution.
 
@@ -2091,11 +2047,12 @@ and you want the fuzzing guidance (i.e., code coverage feedback) to be driven by
 {\tt prepInject} as if the 1st process were the target.  Then provide the {\tt afl} command with the optional {\tt target} and {\tt targetFD}
 parameters to name the 2nd process and FD from which it reads the data.
 
-\subsection{Thread isolation}
+\subsection{Thread isolation and skipping breakpoints}
 Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
 Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process -- or amongst
 all processes sharing a library that is being tracked.  Given the costs
-of tracking context, often this is the best alternative.  You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
+of tracking context switches, breaking on physical addresses is often the best alternative.  
+You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
 breakpoints using the {\tt dead=True} parameter (the {\tt -d} flag on runAFL).  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
 name of the snapshot from which the session began.  This may take several minutes to complete.  When it has found no new blocks hit by other threads for 2 minutes, it stores the
 dead zones and exits. When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
@@ -2108,7 +2065,7 @@ this situation could suggest discovery of input data that causes other threads t
 It would be nice if RESim could provide notice that some other thread is consuming breakpoints, however the act of reading modeled state during a 
 breakpoint slows down the execution cycles by multiples.  One clue may be the stability displayed by AFL.  A low value can suggest interference by other threads.
 
-TBD: The runTrack artifacts will reflect if multiple threads are referencing data. Use that to exempt selected threads from generation of dead zones.
+TBD: The runTrack artifacts reflect if multiple threads are referencing data. Use that to exempt selected threads from generation of dead zones.
 
 \subsection{Crash analysis}
 If AFL finds crashes, use the {\tt crashReport} command to generate reports on each crash.  These reports include stack traces, reverse
@@ -2122,72 +2079,45 @@ memory.
 The original fuzzed data for most recent crash in any Simics instance is written to a file in the workspace called {\tt icrashed}.  This data can be injected using
 injectIO (ensure the original filter is applied within the ini file.)
 
-\textbf{Note:} Crash analysis and fuzzing have different criteria for handing BACK\_STOP\_CYCLES.  It may be necessary to increase this 
+\textbf{Note:} Crash analysis and fuzzing have different criteria back-stop cycles.  Crash analysis uses the BACK\_STOP\_CYCLES value.  It may be necessary to increase this 
 value to allow time for the crash analysis to encounter the crash.
+
+\subsubsection{False crash reports}
+The primary means of detecting SEGV relies on looking for unresolved page faults when an AFL cycle ends, e.g., due to a backstop.
+False crash reports may be the result of a backstop that is too small, i.e., a large backstop will let the kernel complete the
+mapping of the page.
 
 
 \subsection{Update code coverage}
 The new code paths discovered by AFL can be added to your aggregate code coverage file using the {\tt playAFL} command (or the {\tt runPlay} utility.  This is intended
 to aid manual analysis to see if the new path leads to other interesting paths that can then be fed back to AFL.  
-The  aflBNT command displays the branches not taken (BNT).  You can then use the bbAFL command to identify AFL-generated data files
-that lead to source of the BNT.  Also, refer to the BNT window on
-the IDA client.
-
-TBD: process for manually eliminating a BNT based on analysis, e.g., no xref to function that modifies prerequisite value.
+See \ref{code-coverage} for information on fuzzing code coverage and analysis of branches not taken.
 
 \subsection{Fuzzing performance}
-The number of breakpoints hit for coverage has a large effect on performance.
+The following notes may aid in improving fuzzing performance.
+\begin{itemize}
+\item The number of breakpoints hit for coverage has a large effect on performance.
 Avoid references to the target model from within the coverage HAP -- a call to getTID reduces execution iterations from 20/sec to 5/sec.
 And see Thread isolation above.
 
-The default is for the {\tt afl} command to set breakpoints on physical addresses.  Use {\tt linear=True} to force linear addresses, which will
+\item The default is for the {\tt afl} command to set breakpoints on physical addresses.  Use {\tt linear=True} to force linear addresses, which will
 result in use of the contextManager to maintain execution context.  Depending on the application, this may have different performance properties than 
 use of physical addresses.  
 
-One thing that may affect performance when using physical addresses is paging. If a significant amount of application code is not paged in at the
+\item One thing that may affect performance when using physical addresses is paging. If a significant amount of application code is not paged in at the
 start, RESim must dynamically break on page table structures and dynamically add breakpoints and Haps in order to track the basic blocks.  Depending on
 the  application and your goals, consider running the program to a steady state prior to creating the snapshot for fuzzing.
 
-Use the {\tt -n} option to the resim command to suppress the GUI and windows, this can be the different between 2 sessions per second and 10.
+\item Use the {\tt -n} option to the resim command to suppress the GUI and windows, this can be the different between 2 sessions per second and 10.
 
-The {\tt BACK\_STOP\_CYCLES} value might cause AFL sessions to run longer than needed.  On the other hand, too small a value may cause some
+\item The {\tt AFL\_BACK\_STOP\_CYCLES} value might cause AFL sessions to run longer than needed.  On the other hand, too small a value may cause some
 execution paths to be missed.
 
-When using the UDP\_HEADER to fuzz with multiple packets, AFL may run amuck, generating lots of packets because it observes what it considers
+\item When using the UDP\_HEADER to fuzz with multiple packets, AFL may run amuck, generating lots of packets because it observes what it considers
 to be unique paths or unique crashes.  Consider putting a cap on the number of packets with the AFL\_MAX\_PACKETS ENV value. 
 
-\subsection{False crash reports}
-The primary means of detecting SEGV relies on looking for unresolved page faults when an AFL cycle ends, e.g., due to a backstop.
-False crash reports may be the result of a backstop that is too small, i.e., a large backstop will let the kernel complete the
-mapping of the page.
-
-\subsection{Why fuzz with full system simulation?}
-Fuzzing a binary often requires the binary to be led to a state in which it is prepared
-to consume fuzzed data. A general fuzzer such as AFL makes no provision for brining the 
-binary to such a state.  AFL is designed to exec the target program at the start of each
-session.  Getting a binary into the desired starting state so that it can be fuzzed is
-sometimes accomplished using a custom test harness designed for that binary.
-
-Creating a test harness to fuzz a non-trivial binary can be error prone and time consuming.
-Instead of constructing a harness, a full system simulator allows you to commence interaction
-with a target at the locus of execution of your choosing.
-
-Applications that require specific interaction with external entities can be satisfied and checkpointed
-such that fuzzing sessions start precisely when/where the application is about to consume fuzzed data.
-Consider a thread that processes selected data provided by another thread that receives network data
-and writes some version of the data to a pipe.
-
-Fuzzed data is injected directly into application memory, bypassing data reception by the kernel.
-This can often be achieved with multi-packet UDP or TCP sessions by simply skipping over receive system
-calls when injecting the next data packet.
-
-The fuzzer, e.g., AFL, relies on feedback from instrumentation on the taget to tell it which code paths
-were hit while consuming a specific input.  So long as that feedback indicates new code paths, the fuzzer
-will pursue those paths in attempts to find more branches on those paths.  Sometimes however, we would like
-to avoid some paths, e.g., to focus on some areas of interest.  If the inputs leading to different paths
-are well enough understood, applying filters to fuzzed data can deter the fuzzer from following unwanted paths.
-However, sometimes the inputs leading to unwanted paths is not known.  While theorem satisfaction tools might
-help identify such inputs, it may be simpler to simply break on them and feedback a poor coverage report.
+\item Use parallel fuzzing as described in \ref{parallel-fuzzing}.
+\end{itemize}
 
 \subsection{Parallel fuzzing}
 \label{parallel-fuzzing}
@@ -2239,11 +2169,6 @@ The {\tt runAFL} command monitors free memory on each computer and will restart 
 memory leaks in Simics.  The AFL sessions persist during these restarts so that they do not lose context.  \textbf{NOTE:} restarts of RESim
 inherit the current python scripts.  Those should not be edited on hosts having long-running fuzzing sessions.
 
-\subsection{False paths}
-Use the dedupCoverage.py utility to identify unique coverage sets.  If you find massive reductions, e.g., AFL finds 200 paths and
-deduping yields four, it is worth going back and looking if AFL is observing extraneous processing, either in another thread or
-crude read loops.  TBD if the latter, add switch to force ending at next read?  However that precludes byte-at-a-time receives.
-
 \subsection{Fuzzing in background}
 The {\tt runAFL} command creates an xterminal for each session when run on a single server.  Use {\tt nohup} and the {\tt --background} option to 
 run in the background, e.g., if your X11 server is a local VM that may be interrupted.
@@ -2251,6 +2176,65 @@ run in the background, e.g., if your X11 server is a local VM that may be interr
     nohup runAFL some.ini -b &
 \end{verbatim}
 Then use the {\tt fuzzhappening.py} script to observe the status of the fuzzing sessions.
+
+\subsection{Fuzzing application notes}
+\subsubsection{Why fuzz with full system simulation?}
+Fuzzing a binary often requires the binary to be led to a state in which it is prepared
+to consume fuzzed data. A general fuzzer such as AFL makes no provision for brining the 
+binary to such a state.  AFL is designed to exec the target program at the start of each
+session.  Getting a binary into the desired starting state so that it can be fuzzed is
+sometimes accomplished using a custom test harness designed for that binary.
+
+Creating a test harness to fuzz a non-trivial binary can be error prone and time consuming.
+Instead of constructing a harness, a full system simulator allows you to commence interaction
+with a target at the locus of execution of your choosing.
+
+Applications that require specific interaction with external entities can be satisfied and checkpointed
+such that fuzzing sessions start precisely when/where the application is about to consume fuzzed data.
+Consider a thread that processes selected data provided by another thread that receives network data
+and writes some version of the data to a pipe.
+
+Fuzzed data is injected directly into application or kernel memory, bypassing data reception by the kernel.
+
+The fuzzer, e.g., AFL, relies on feedback from instrumentation on the taget to tell it which code paths
+were hit while consuming a specific input.  So long as that feedback indicates new code paths, the fuzzer
+will pursue those paths in attempts to find more branches on those paths.  Sometimes however, we would like
+to avoid some paths, e.g., to focus on some areas of interest.  If the inputs leading to different paths
+are well enough understood, applying filters to fuzzed data can deter the fuzzer from following unwanted paths.
+However, sometimes the inputs leading to unwanted paths is not known.  While theorem satisfaction tools might
+help identify such inputs, it may be simpler to simply break on them and feedback a poor coverage report.
+\subsubsection{TCP timing and packetizing}
+Sometimes programmers make assumptions about TCP reads, e.g., they assume a relationship between the quantity of bytes written in a single write to the
+quantity of bytes read in a single read.  Thus, changes in things like MTU can affect the application protocol...
+
+\subsubsection{State of the target system}
+Stateful services such as FTP typically require some amount of interaction to get the process into the state at which you'd like to fuzz it.
+In the example of FTP, this may include logging in, e.g., as \textit{anonymous}, and issuing the PORT command.  Keeping with the FTP example,
+you would create a driver component and ssh to that as part of the setup.  If you wish to fuzz commands that use PORT, e.g, LIST, you would
+login to the ftp server and then stop the simulation.  Knowing that a command such as LIST will first send the port command, you would use
+{\tt prepInject} with {\tt count=2} to pause the simulation after it has first read the PORT directive and then the LIST directive.  The fuzzing
+injection would then be overwritting the LIST directive.
+
+Using AFL to fuzz a sequence of FTP commands is not currenty possible.
+
+\subsubsection{False paths}
+Use the dedupCoverage.py utility to identify unique coverage sets.  If you find massive reductions, e.g., AFL finds 200 paths and
+deduping yields four, it is worth going back and looking if AFL is observing extraneous processing, either in another thread or
+crude read loops.  TBD if the latter, add switch to force ending at next read?  However that precludes byte-at-a-time receives.
+
+When fuzzing UPD with a defined {\tt AFL\_UDP\_HEADER}, the quantity execution paths that AFL thinks it is seeing can explode,
+e.g., if AFL gets 2 UDP packets for one session, and each result in hit sets already covered by different other sessions, AFL will treat that as a new execution
+path.  The quantity of UPD headers processed by RESim can be is bounded using the {\tt MAX\_AFL\_PACKETS} environment variable in the ini file.
+
+\subsubsection{CADET01}
+The CADET01 example is fuzzed by the {\tt simics/testing/cadet-test}.  This simple CGC service lives up to a reputation it achieved for 
+illustrating subtle issues related to TCP.  The service reads a character at a time, until it sees a newline at which point it processes
+the buffered data.  Each fuzzing iteration will
+catch each read system call and their returns to determine when the injected data has been consumed, and it will set the {\tt read} syscall return value to
+zero following the consumption of the buffer. In cases having the newline, this will happen after all buffer processing and after the subsequent read
+for the next round of the service.  From a fuzzing perspective, this is wasteful and slow because we could have stopped fuzzing upon the next call
+to read instead of waiting for that zero value to be set and processed.  One alternative would be to set {\tt STOP\_ON\_READ} and set a filter to force
+the newline in each input.
 
 \section{Example workflows}
 \label{example-workflows}
@@ -2525,6 +2509,7 @@ and look at the logs to see if some Hap is defined for that breakpoint.  Use sho
 managed by the genContextManager.  It may be an ad-hock break/hap, such as those used by the writeData module.
 
 \section{Data Stores}
+\label{data-stores}
 This section describes how RESim names and accesses different data stores.
 
 \section{IDA data and hits files}
@@ -3490,6 +3475,62 @@ port 22 on that interface.
 \item Everthing goes through switch0.
 \end{itemize}
 
+\section{More code coverage}
+The following described functions that have not been recently tested.
+Features to reflect code coverage should support human analysis as well as automated analysis, e.g., fuzzing.  To support the human, coverage is highlighted within IDA using color-coded basic blocks.  
+
+Coverage tracking commences with use of the {\tt mapCoverage} command and is intended to aid understanding of program response to inputs tracked via 
+the {\tt trackIO} or {\tt injectIO} commands.  Those basic blocks which are only hit between coverage commencement and the first input event are separately colored so as to not
+be confused with blocks hit subsequent to receipt of input.  This distinction is intended to facilitate comparisons between \textit{data sessions} defined as periods
+between receipt of input (or IO injection) and quiescence with respect to the backstop logic.
+Within the IDA display, coverage properties of basic blocks will be
+coded into five colors:
+\begin{itemize}
+\item Never executed.
+\item Never executed during a data session
+\item Executed during a data session, but not during this data session
+\item Executed during this session and some previous data session.
+\item Executed only during this data session.
+\end{itemize}
+
+The {\tt coverage} module maintains three data files for each coverage unit: a running total set of hits from previous data sessions; the hits for the most recent data session;
+and hits which occur prior to the first input data reference (e.g., reads, selects, etc).  The running total is only updated immediately prior to the start 
+of a new data session.  At the start of each data session, the coverage module will restore any breakpoints found
+in the recent session data file and then merge it into the running total.  The coverage module will then clear its internal hits data.  
+When the IDA client is started with the {\tt color} argument, it will first
+reset all basic block colors,  and will then read the hits files and color blocks accordingly.  The running hits file is intended to persist across
+RESim sessions.  
+
+\subsection{Branches not taken}
+\label{BNT}
+The IDA client generates a list of basic block branches that were not taken, i.e., unused exits from hit basic blocks.  This list is presented in the {\tt BNT} window of the IDA client
+and is intended to help the analyst see places where changes in input data may have resulted in added coverage.  When used following a
+RESim {\tt mapCoverage} command, double-clicking on an entry will take the simulation to the corresponding 
+cycle.  Note this is only available for the very first coverage hit of each basic block, and of course only within a session that hit the from block (see the bbAFL function).  This window is most useful when IDA is started with the {\tt color} option.
+
+\subsection{Ad-hoc code coverage}
+The {\tt color} option and {\tt BNT} window can also be used outside of the {\tt mapCoverage} context, e.g., to analyze branches not 
+taken during AFL sessions.  Double-clicking an entry in the BNT window will go to the source of the branch not taken (note the simulation state
+is not altered.)  The following is a notional code coverage workflow.
+\begin{itemize}
+\item Use AFL to fuzz a target.
+\item Use the playAFL command to replay all of the sessions, generating a new hits file.
+\item Copy that hits file over the target hits file.
+\item Start a RESim session from the checkpoint used during AFL.
+\item Start IDA and use the {\tt resetBlocks} script to clear block coloring; then use {\tt Color blocks} to color all blocks hit
+during the AFL session.
+\item Find an interesting BNT in the BNT window.
+\item Use the findBB.py utility to search for all AFL data files that hit the source block.
+\item Restart RESim and use the {\tt injectIO}, {\tt aflInject}, {\tt aflTrack} or {aflReplay} functions to play the data file identified above.
+\item Run to the source block of interest and investigate whether an altered input could result in a branch to the BNT.
+\end{itemize}
+Note in the above workflow, you may wish to use 2 different checkpoints.  The {\tt playAFL} function must run from the
+checkpoint used with AFL.  However the other functions that use trackIO could run from checkpoints that include a driver component.  And 
+that checkpoint might be from early on in the process's life, e.g., to identify the sources of state values that do not seem to result from
+the input data.
+
+Initially, no database of hits will be maintained tying data files to hit sets.  A downside is that if a data file is consumed twice, the analyst no longer sees
+which basic block hits are unique to that data file. Each subsequent data session artifacts are additive, and the effects of any previous runs cannot independently viewed.
 
 
 \end{appendices}
