@@ -13,17 +13,17 @@ sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
 import elfText
 '''
-Find BNT's by looking at AFL coverage files.
+Find BNT's by looking at hits files.
 Will read trackio data from AFL with the -d option and report on 
 watch marks that occur within the BB that leads to the BNT.
 '''
 
 
 
-def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet):
+def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet):
     retval = []
     count = 0
-    #print('in findBNT')
+    #print('in findBNTForFun')
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             #print('compare %s to %s' % (bb_hit, bb['start_ea']))
@@ -94,9 +94,9 @@ def findBNT(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks,
                     #    print('branch 0x%x in hits' % branch)
     return retval
 
-def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False):
-    lgr = resimUtils.getLogger('aflBNT', '/tmp', level=None)
-    lgr.debug('aflBNT begin')
+def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False):
+    lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
+    lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
     ida_path = resimUtils.getIdaDataFromIni(prog, ini)
     #print('prog: %s  ida_path is %s' % (prog, ida_path))
@@ -123,15 +123,15 @@ def aflBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=F
         num_funs = len(blocks)
         for f in blocks:
             num_blocks = num_blocks + len(blocks[f]['blocks']) 
-        print('aflBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
+        print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in sorted(blocks):
-            this_list = findBNT(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
+            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNT(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
+                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
@@ -145,7 +145,7 @@ def main():
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')
     args = parser.parse_args()
-    bnt_list = aflBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
+    bnt_list = findBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
     if bnt_list is not None:
         print('Found %d branches not taken.' % len(bnt_list))
 
