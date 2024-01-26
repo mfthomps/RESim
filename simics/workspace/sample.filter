@@ -1,0 +1,26 @@
+#!/usr/bin/python3
+'''
+Sample packet filter
+Inserts a 4 byte CRC at offset 0
+Requires next 4 bytes to be 0xbaaabaaa
+'''
+import crcmod
+from struct import *
+def getCRC(data):
+    crc32_func = crcmod.mkCrcFun(0x104c11db7, rev=True, initCrc=0x00000000, xorOut=0xffffffff)
+    crc = crc32_func(bytes(data))
+    return crc
+
+def filter(data, packet_num):
+    #print('in filter')
+    #if len(data) < 18 or data[6] == 0x22:
+    if len(data) < 4:
+        return bytearray(len(data))
+    header_str=pack('>I', 0xbaaabaa)+data[:4]
+    crc = getCRC(header_str)
+    header_str = pack('>I', crc)+header_str
+    retval = header_str+data[4:]
+    #with open('/tmp/filtered.io', 'wb') as fh:
+    #    fh.write(retval)
+    return retval
+
