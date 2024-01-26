@@ -167,7 +167,7 @@ class SyscallManager():
         return context 
 
     def watchSyscall(self, context, call_list, call_params_list, name, linger=False, background=False, flist=None, 
-                     callback=None, compat32=False, stop_on_call=False, skip_and_mail=True, kbuffer=None):
+                     callback=None, compat32=False, stop_on_call=False, skip_and_mail=True, kbuffer=None, trace=False):
         ''' Create a syscall instance.  Intended for use by other modules, not by this module.
             Assumes all of the call_params have the same call parameter name for purposes of managing the
             call instances, e.g, an open watched for a dmod and a SO mapping.
@@ -199,13 +199,13 @@ class SyscallManager():
                                    self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                    self.dataWatch, call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                    background=background, name=name, flist_in=flist, callback=callback, soMap=self.soMap, 
-                                   stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
+                                   stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                    self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
                                    call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                    background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, soMap=self.soMap, 
-                                   stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer)
+                                   stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
                 ''' will have at least one call parameter, perhaps the dummy. '''
                 call_param_name = call_params_list[0].name
                 self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s, call_param_name: %s' % (context, name, call_param_name))
