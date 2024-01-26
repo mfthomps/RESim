@@ -277,7 +277,8 @@ class WinDelay():
                 self.lgr.debug('winDelay exitingKernel with no delay assume data it is there, return count 0x%x' % return_count)
                 if return_count > 0:
                     self.getIOData(return_count, self.exit_info.count_addr)
-                    self.doDataWatch(False)
+                    if self.data_watch is not None or (self.exit_info is not None and self.exit_info.call_params is not None and self.exit_info.call_params.break_simulation):
+                        self.doDataWatch(False)
                     combined_msg = trace_msg + ' '+self.trace_msg
                     self.trace_mgr.write(combined_msg)
                 self.rmAllHaps()
