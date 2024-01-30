@@ -127,8 +127,9 @@ class WinTaskUtils():
                 else:
                     self.phys_current_task = value['current_task_phys']
                     self.phys_saved_cr3 = value['saved_cr3_phys']
-                    if 'system_proc_rec' in value:
+                    if 'system_proc_rec' in value and value['system_proc_rec'] is not None:
                         self.system_proc_rec = value['system_proc_rec']
+                        self.lgr.debug('winTaskUtils, cell %s got system_proc_rec 0x%x' % (self.cell_name, self.system_proc_rec))
                     else:
                         self.system_proc_rec = self.getSystemProcRec()
                         if self.system_proc_rec is None:
@@ -348,7 +349,7 @@ class WinTaskUtils():
             pid = self.mem_utils.readWord32(self.cpu, cur_proc_rec + self.param.ts_pid)
             self.lgr.debug('winTaskUtils curThread tried again, pid %s' % pid)
         if pid is None or thread is None:
-            self.lgr.error('winTaskUtils curThread pid %s thread %s cur_proc_rec 0x%x' % (pid, thread, cur_proc_rec))
+            self.lgr.debug('winTaskUtils curThread pid %s thread %s cur_proc_rec 0x%x' % (pid, thread, cur_proc_rec))
             return None, None, None
         comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         pid_thread = '%d-%d' % (pid, thread)
@@ -516,9 +517,10 @@ class WinTaskUtils():
                 #print('got no pid for pid_ptr 0x%x' % pid_ptr)
                 break
             task_next = self.mem_utils.getUnsigned(task_ptr + offset)
+            #self.lgr.debug('read from task_next 0x%x' % task_next)
             val = self.mem_utils.readWord(self.cpu, task_next)
             if val is None:
-                #print('died on task_next 0x%x' % task_next)
+                #self.lgr.debug('died on task_next 0x%x' % task_next)
                 break
             else:
                 next_head = self.mem_utils.getUnsigned(val)
@@ -530,15 +532,17 @@ class WinTaskUtils():
                 #print('already got task_ptr 0x%x' % task_ptr)
                 #self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
                 break
+        #self.lgr.debug('walk return')
         return got
 
     def getTaskList(self):
         ''' get a list of processes (EPROCESS)'''
         got = []
         done = False
-        #self.lgr.debug('getTaskList ')
+        self.lgr.debug('getTaskList ')
         if self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
+            self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
         else:
             dum, dum1, pid = self.curThread()
             if pid != 0:
@@ -546,9 +550,10 @@ class WinTaskUtils():
             else:
                 self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
                 return got
-        #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
+            self.lgr.debug('getTaskList using results of curThread??? 0x%x' % task_ptr)
+        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
-        #self.lgr.debug('getTaskList returning %d tasks' % len(got))
+        self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
     
     def getTaskStructs(self):
@@ -673,7 +678,7 @@ class WinTaskUtils():
         self.lgr.debug('getTidsForComm %s' % comm_in)
         ts_list = self.getTaskStructs()
         for ts in ts_list:
-            #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
             if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 self.lgr.debug('getTidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
@@ -886,6 +891,12 @@ class WinTaskUtils():
                retval = ts
                break
         return retval
+
+    def setSystemProcessRec(self):
+        val = self.getSystemProcRec()
+        self.system_proc_rec = val
+        self.lgr.debug('winTaskUtils setSystemProcessRec set to 0x%x' % val)
+ 
 
     def getTIB(self):
         va = self.cpu.ia32_gs_base + 0x30
