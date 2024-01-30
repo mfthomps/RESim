@@ -400,7 +400,7 @@ class DataWatch():
             addr = start
             for c in self.commence_with:
                 v = self.mem_utils.readByte(self.cpu, addr)
-                if c != chr(v):
+                if v is None or c != chr(v):
                     match = False
                     #self.lgr.debug('dataWatch setRange failed commence. %x does not match %x' % (ord(c), v))
                     break
