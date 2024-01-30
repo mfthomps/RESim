@@ -978,6 +978,8 @@ class GenMonitor():
                                     else:
                                         task_utils.savePhysCR3Addr()
                                 self.task_utils[cell_name] = task_utils
+                                if self.isWindows(cell_name):
+                                    self.task_utils[cell_name].setSystemProcessRec()
                                 # adjust kernel params for aslr
                                 self.mem_utils[cell_name].adjustParam(cpu)
                                 self.lgr.debug('doInit Booted enough to get cur_task_rec for cell %s, now call to finishInit' % cell_name)
@@ -5334,7 +5336,7 @@ class GenMonitor():
             return None
         prog_name = self.traceProcs[target].getProg(tid)
         self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
-        if prog_name is None or prog_name == 'unknown':
+        if prog_name is None or prog_name == 'unknown' or prog_name == '<clone>':
             #prog_name = self.soMap[target].getProg(tid)
             #if True or prog_name is None:
             self.lgr.debug('getProgName call to get from traceProcs failed, try taskUtils')
@@ -5380,9 +5382,9 @@ class GenMonitor():
     def runToSeconds(self, seconds):
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
-        dumb, ret = cli.quiet_run_command('ptime -t')
-        #print('dumb is %s ret is %s' % (dumb, ret))
-        now = float(dumb)
+        now_string, ret = cli.quiet_run_command('ptime -t')
+        #print('now_string is %s ret is %s' % (now_string, ret))
+        now = float(now_string)
         want = float(seconds)
         if now > want:
             print('Cannot use this function to run backwards.')
@@ -5392,6 +5394,7 @@ class GenMonitor():
         ms = delta * 1000
         
         print('will run forward %d ms' % int(ms))
+        self.lgr.debug('runToSeconds.  Now %s, want %s Will run forward %d ms' % (now, seconds, int(ms)))
         cmd = 'run count = %d unit = ms' % (int(ms))
         SIM_run_command(cmd)
         
@@ -5635,9 +5638,11 @@ class GenMonitor():
         ida_path = resimUtils.getIdaData(path, root_prefix)
         return ida_path
 
-    def isWindows(self, target=None):
+    def isWindows(self, target=None, cpu=None):
         retval = False
-        if target is None:
+        if cpu is not None:
+            target = self.getTopComponentName(cpu)
+        elif target is None:
             target = self.target
         #self.lgr.debug('isWindows os type of %s is %s' % (target, self.os_type[target]))
         if self.os_type[target].startswith('WIN'):
@@ -5930,7 +5935,10 @@ class GenMonitor():
         return self.task_utils[self.target].getTIB()
 
     def getCurProcRec(self):
-        return self.task_utils[self.target].getCurProcRec()
+        if self.target in self.task_utils:
+            return self.task_utils[self.target].getCurProcRec()
+        else:
+            return None
 
     def getProcRecForTid(self, cpu, tid):
         cell_name = self.getTopComponentName(cpu)
