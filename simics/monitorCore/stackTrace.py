@@ -214,7 +214,7 @@ class StackTrace():
                     faddr = int(parts[1], 16)
                     #print('faddr 0x%x' % faddr)
                 except:
-                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
+                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct, fun_of_ip))
                     continue
                 fun_name = None
                 if frame.fun_name is not None:
@@ -223,15 +223,15 @@ class StackTrace():
                     fun_name = self.fun_mgr.getFunName(faddr)
                 if fun_name is not None:
                     fun_name = cppClean(fun_name)
-                    print('%s 0x%08x %s %s %s %s' % (sp_string, frame.ip, fname, self.callmn, fun_name, fun_of_ip))
+                    print('%s 0x%08x %s %s %s %s' % (sp_string, frame.ip, frame.fname, self.callmn, fun_name, fun_of_ip))
                 else:
                     #print('nothing for 0x%x' % faddr)
-                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
+                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct, fun_of_ip))
             else:
                 if fun_of_ip is not None: 
-                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, fname, frame.instruct, fun_of_ip))
+                    print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct, fun_of_ip))
                 else:
-                    print('%s 0x%08x %s %s' % (sp_string, frame.ip, fname, frame.instruct))
+                    print('%s 0x%08x %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct))
 
 
     def isCallToMe(self, fname, eip):
