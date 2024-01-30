@@ -210,6 +210,9 @@ class MemUtils():
             tid = str(pid)
             eprocess = self.top.getProcRecForTid(cpu, tid)
 
+        if eprocess is None:
+            return None
+
         if not hasattr(self.param, 'page_table'):
             # TBD remove hack after old snapshots cycle out
             table_base_addr = eprocess + 0x28
@@ -248,16 +251,26 @@ class MemUtils():
                 retval = ptable_info.page_addr
             else:
                 if self.WORD_SIZE == 8:
-                    retval = None
-                    self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
-                    reg_num = cpu.iface.int_register.get_number("cr3")
-                    current_cr3 = cpu.iface.int_register.read(reg_num)
-                    if current_cr3 is None:
-                        self.lgr.debug('memUtils v2pKaddr current_cr3 from reg is None')
-                    elif self.kernel_saved_cr3 is None:
-                        self.lgr.debug('memUtils v2pKaddr self.kernel_saved_cr3 is None')
-                    else:
-                        self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
+                    if self.top.isWindows(cpu=cpu) and self.phys_cr3 is not None:
+                        current_saved_cr3 = self.readPhysPtr(cpu, self.phys_cr3) 
+                        if current_saved_cr3 is not None and current_saved_cr3 != self.kernel_saved_cr3:
+                            self.lgr.debug('memUtils v2pKaddr saved cr3 changed from 0x%x to 0x%x' % (self.kernel_saved_cr3, current_saved_cr3))
+                            self.kernel_saved_cr3 = current_saved_cr3
+                            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
+                            if ptable_info.page_exists:
+                                retval = ptable_info.page_addr
+                                self.lgr.debug('memUtils v2pKaddr after change of cr3, got retval 0x%x' % retval)
+                    else: 
+                        retval = None
+                        self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
+                        reg_num = cpu.iface.int_register.get_number("cr3")
+                        current_cr3 = cpu.iface.int_register.read(reg_num)
+                        if current_cr3 is None:
+                            self.lgr.debug('memUtils v2pKaddr current_cr3 from reg is None')
+                        elif self.kernel_saved_cr3 is None:
+                            self.lgr.debug('memUtils v2pKaddr self.kernel_saved_cr3 is None')
+                        else:
+                            self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
                 else:
                     retval = v & ~self.param.kernel_base 
                      #self.lgr.debug('memUtils v2pKaddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
@@ -292,7 +305,7 @@ class MemUtils():
             # get phys address for a different process
             #self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
             if cpu.architecture != 'arm':
-                if self.top.isWindows():
+                if self.top.isWindows(cpu=cpu):
                     table_base = self.getWindowsTableBase(cpu, use_pid)
                 else: 
                     table_base = self.getLinuxTableBase(cpu, use_pid)
@@ -304,8 +317,10 @@ class MemUtils():
             else:
                 self.lgr.warning('memUtils v2pUserAddr ADD for arm!!!')
              
-        if retval is None and cpl == 0 and self.top.isWindows() and self.WORD_SIZE == 8:
+        if retval is None and cpl == 0 and self.top.isWindows(cpu=cpu) and self.WORD_SIZE == 8:
             table_base = self.getWindowsTableBase(cpu, use_pid)
+            if table_base is None:
+                return None
             #self.lgr.debug('memUtils v2pUserAddr windows kernel mode user space ref table_base 0x%x' % (table_base))
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=table_base)
             if cpu.architecture != 'arm':
