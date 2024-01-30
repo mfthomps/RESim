@@ -133,7 +133,7 @@ class WinDLLMap():
                             #TBD what is being loaded at addr 0?  Are we getting confused by mapped memory that is not code?
                             self.min_addr[section.pid] = section.load_addr + section.text_offset
                         if section.size is None:
-                            self.lgr.error('winDLL loadPickle no size for %s, addr 0x%x pid:%s' % (section.fname, section.load_addr, section.pid))
+                            self.lgr.warning('winDLL loadPickle no size for %s, addr 0x%x pid:%s' % (section.fname, section.load_addr, section.pid))
                             continue
                         ma = section.load_addr + section.text_offset + section.size
                         if self.max_addr[section.pid] is None or self.max_addr[section.pid] < ma:
@@ -143,8 +143,8 @@ class WinDLLMap():
                             self.sections[section.pid] = {}
                         if section.section_handle is not None and section.section_handle not in self.sections[section.pid]:
                             self.sections[section.pid][section.section_handle] = section
-                            if section.fname.lower().endswith('fnet.dll'):
-                                self.lgr.debug('FNET addr 0x%x' % section.load_addr)
+                            #if section.fname.lower().endswith('fnet.dll'):
+                            #    self.lgr.debug('FNET addr 0x%x' % section.load_addr)
               
             else:
                 self.lgr.debug('windDLL loadPickle no open_files in pickle')
@@ -239,11 +239,16 @@ class WinDLLMap():
             if section_handle in self.sections[pid]:
                 if self.isNew(self.sections[pid][section_handle], pid):
                     self.sections[pid][section_handle].addLoadAddress(load_addr, size)
-                    self.lgr.debug('WinDLL mapSection did load address to 0x%x for %s' % (load_addr, self.sections[pid][section_handle].fname))
+                    self.lgr.debug('WinDLL mapSection tid: %s did load address to 0x%x for %s' % (tid, load_addr, self.sections[pid][section_handle].fname))
                     #self.findLoadAddr(pid, load_addr)
                     section_copy = DLLInfo.copy(self.sections[pid][section_handle])
                     if pid not in self.section_map:
                         self.section_map[pid] = {}
+                    
+                    already = self.getSOFile(load_addr)
+                    if already is not None:
+                        self.lgr.debug('winDLL mapSection already have %s at addr 0x%x' % (already, load_addr))
+
                     self.section_map[pid][self.sections[pid][section_handle].fname] = section_copy
                     debugging_pid, dumb = self.context_manager.getDebugTid()
                     if debugging_pid is not None:
@@ -361,7 +366,7 @@ class WinDLLMap():
                     print('pid:%s 0x%x size UNKNOWN %s' % (section.pid, section.load_addr, section.fname)) 
                    
                 else:
-                    end = section.load_addr+section.size
+                    end = section.load_addr+section.size - 1
                     print('pid:%s 0x%x - 0x%x %s' % (section.pid, section.load_addr, end, section.fname)) 
                     self.lgr.debug('winDLLMap showSO pid:%s 0x%x - 0x%x %s' % (section.pid, section.load_addr, end, section.fname)) 
 
@@ -378,7 +383,7 @@ class WinDLLMap():
                         print('pid:%s  no load address  %s' % (section.pid, section.fname))
  
                     elif section.size is not None:
-                        end = section.load_addr + section.size
+                        end = section.load_addr + section.size -1
                         print('pid:%s  0x%x - 0x%x   %s' % (section.pid, section.load_addr, end, section.fname))
                     else:
                         print('pid:%s  0x%x - ???  %s' % (section.pid, section.load_addr, section.fname))
@@ -388,7 +393,7 @@ class WinDLLMap():
         dumb, comm, tid = self.task_utils.curThread() 
         pid = self.pidFromTID(tid)
         if pid in self.text:
-            end = self.text[pid].load_addr + self.text[pid].size
+            end = self.text[pid].load_addr + self.text[pid].size - 1
             if address >= self.text[pid].load_addr and address <= end:
                 retval = True
         return retval
@@ -422,7 +427,7 @@ class WinDLLMap():
                     continue
                 if section.pid == pid:
                     if section.size is not None:
-                        end = section.load_addr+section.size
+                        end = section.load_addr+section.size - 1
                         if addr_in >= section.load_addr and addr_in <= end:
                             if section.fname != 'unknown':
                                 retval = ntpath.basename(section.fname)
@@ -452,7 +457,7 @@ class WinDLLMap():
                         if section.load_addr == 0:
                             continue
                         if section.pid == pid:
-                            end = section.load_addr+section.size
+                            end = section.load_addr+section.size - 1
                             if addr_in >= section.load_addr and addr_in <= end:
                                 retval = True
                                 break 
@@ -543,11 +548,13 @@ class WinDLLMap():
         if pid in self.section_map:
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
-                end = section.load_addr+section.size
-                #self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.load_addr, end, addr_in))
+                end = section.load_addr+section.size - 1
+                self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.load_addr, end, addr_in))
                 if addr_in >= section.load_addr and addr_in <= end:
-                    retval = section.fname, section.load_addr, end
-                    break 
+                    if retval != (None, None, None):
+                        self.lgr.debug('winDLL already got getSOInfo %s 0x%x 0x%x' % ((fname, section.load_addr, end)))
+                    retval = (fname, section.load_addr, end)
+                    #break 
         return retval
 
     def getCodeSections(self, tid):
@@ -656,7 +663,7 @@ class WinDLLMap():
                 section = {}
                 text_seg = sort_map[locate]
                 start = text_seg.load_addr
-                end = locate + text_seg.size
+                end = locate + text_seg.size - 1
                 section['locate'] = locate
                 section['end'] = end
                 section['offset'] = text_seg.text_offset
