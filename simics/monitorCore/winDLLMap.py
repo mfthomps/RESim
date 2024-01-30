@@ -230,10 +230,9 @@ class WinDLLMap():
                     retval = False
                     break
         return retval
-
-        
  
     def mapSection(self, tid, section_handle, load_addr, size):
+        # map a section into the section_map
         pid = self.pidFromTID(tid)
         if pid in self.sections:
             if section_handle in self.sections[pid]:
@@ -245,10 +244,11 @@ class WinDLLMap():
                     if pid not in self.section_map:
                         self.section_map[pid] = {}
                     
-                    already = self.getSOFile(load_addr)
-                    if already is not None:
-                        self.lgr.debug('winDLL mapSection already have %s at addr 0x%x' % (already, load_addr))
-
+                    already = self.getSOFileFull(load_addr)
+                    if already is not None and already != self.sections[pid][section_handle].fname:
+                        old = self.section_map[pid][already]
+                        self.lgr.debug('winDLL mapSection already have %s at new load addr 0x%x.  Old load addr 0x%x size 0x%x.  Remove old' % (already, load_addr, old.load_addr, old.size))
+                        del self.section_map[pid][already]
                     self.section_map[pid][self.sections[pid][section_handle].fname] = section_copy
                     debugging_pid, dumb = self.context_manager.getDebugTid()
                     if debugging_pid is not None:
@@ -413,6 +413,14 @@ class WinDLLMap():
 
     def getSOFile(self, addr_in):
         retval = None
+        full = self.getSOFileFull(addr_in)
+        if full is not None:
+            retval = ntpath.basename(full)
+        
+        return retval
+
+    def getSOFileFull(self, addr_in):
+        retval = None
         dumb, comm, tid = self.task_utils.curThread() 
         pid = self.pidFromTID(tid)
         if addr_in is not None:
@@ -422,6 +430,8 @@ class WinDLLMap():
                 return retval
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
+                if section.fname != fname:
+                    self.lgr.error('winDLL getSOFileFull section.fname is %s fname %s' % (section.fname, fname))
                 if section.load_addr is None:
                     #self.lgr.debug('getSOFile got no addr for section %s' % section.fname)
                     continue
@@ -429,16 +439,18 @@ class WinDLLMap():
                     if section.size is not None:
                         end = section.load_addr+section.size - 1
                         if addr_in >= section.load_addr and addr_in <= end:
-                            if section.fname != 'unknown':
-                                retval = ntpath.basename(section.fname)
-                                break 
+                            if fname != 'unknown':
+                                if retval is not None:
+                                    self.lgr.debug('winDLL getSOFile got retval of %s, but now %s?' % (retval, fname))
+                                retval = fname
                             else:
                                 got_unknown = True
                     else:
-                        self.lgr.debug('winDLL getSOFile section size is None for %s' % section.fname)
+                        self.lgr.debug('winDLL getSOFile section size is None for %s' % fname)
             if retval is None and got_unknown:
                 retval = 'unknown'     
         return retval
+
 
     def isCode(self, addr_in, tid):
         if addr_in is None:
