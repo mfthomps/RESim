@@ -61,8 +61,6 @@ class Jumpers():
         self.hap = {}
         self.breakpoints = {}
         self.reverse_enabled = None
-        ''' The simulation would stop at destinations corresponding to these source addresses.  '''
-        self.break_simulation = []
         self.pending_libs = {}
         self.pending_pages = {}
         ''' brute force avoid reloading if called twice '''
@@ -139,14 +137,22 @@ class Jumpers():
 
         comm = None
         break_at_dest = False
-        if len(parts) == 3 and parts[2] == 'break':
-            break_at_dest = True
+        break_at_load = False
+        break_options = ['break', 'break_load']
+        if len(parts) == 3 and parts[2] in break_options:
+            if parts[2] == 'break':
+                break_at_dest = True
+            else:
+                break_at_load = True
         elif len(parts) > 2:
             comm = parts[2]
-        if len(parts) > 3 and parts[3] == 'break':
-            break_at_dest = True
+        if len(parts) > 3 and parts[3] in break_options:
+            if parts[3] == 'break':
+                break_at_dest = True
+            else:
+                break_at_load = True
 
-        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest) 
+        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_load) 
         image_base = self.so_map.getImageBase(prog)
         if image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
@@ -181,6 +187,7 @@ class Jumpers():
 
 
     def libLoadCallback(self, load_addr, lib_addr):
+        # called when a jumpered library is loaded
         self.lgr.debug('jumper libLoadCallback for %s load_addr 0x%x' % (lib_addr, load_addr))
         if lib_addr in self.pending_libs:
             jump_rec = self.pending_libs[lib_addr]
@@ -194,6 +201,8 @@ class Jumpers():
                 offset = load_addr - jump_rec.image_base
                 linear = jump_rec.from_addr + offset
                 self.lgr.debug('jumper libLoadCallback for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x name %s' % (load_addr, jump_rec.image_base, offset, linear, jump_rec.lib_addr))
+            if jump_rec.break_at_load:
+                SIM_break_simulation('Jumper DLL loaded %s' % lib_addr)
         else:
             self.lgr.error('jumper libLoadCallback for %s, but not in pending_libs' % lib_addr)
 
@@ -234,11 +243,11 @@ class Jumpers():
         if eip == self.prev_dest_eip:
             # break is hit a 2nd time?
             return
-        self.lgr.debug('doJump phys memory 0x%x' % memory.physical_address)
+        self.lgr.debug('doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
         ''' callback when jumper breakpoint is hit'''
         #curr_addr = memory.logical_address 
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-        self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it effects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
+        self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it affects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
         if jump_rec.lib_addr not in self.hap:
             self.lgr.debug('jumper doJump lib_addr %s not in haps' % jump_rec.lib_addr)
             return
@@ -283,11 +292,12 @@ class Jumpers():
             SIM_enable_breakpoint(self.breakpoints[lib_addr])
  
     class JumperRec():
-        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest):
+        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest, break_at_load):
             self.prog = prog
             self.from_addr = from_addr
             self.to_addr = to_addr
             self.comm = comm
             self.break_at_dest = break_at_dest
+            self.break_at_load = break_at_load
             self.lib_addr = '%s:0x%x' % (prog, from_addr)
             self.image_base = None
