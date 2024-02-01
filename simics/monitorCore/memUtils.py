@@ -294,7 +294,7 @@ class MemUtils():
             except:
                 self.lgr.debug('memUtils v2pUserAddr logical_to_physical failed on 0x%x' % v)
         elif cpl > 0  and not self.top.hasUserPageTable(cpu) and use_pid is not None:
-            self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
+            #self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
@@ -303,7 +303,7 @@ class MemUtils():
 
         elif cpl > 0  and self.top.hasUserPageTable(cpu) and use_pid is not None:
             # get phys address for a different process
-            #self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
+            self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
             if cpu.architecture != 'arm':
                 if self.top.isWindows(cpu=cpu):
                     table_base = self.getWindowsTableBase(cpu, use_pid)
@@ -316,6 +316,13 @@ class MemUtils():
                     retval = ptable_info.page_addr
             else:
                 self.lgr.warning('memUtils v2pUserAddr ADD for arm!!!')
+
+        if cpl ==0 and retval is None:
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2pUserAddr cpl 0, logical_to_physical failed on 0x%x' % v)
              
         if retval is None and cpl == 0 and self.top.isWindows(cpu=cpu) and self.WORD_SIZE == 8:
             table_base = self.getWindowsTableBase(cpu, use_pid)
@@ -359,15 +366,15 @@ class MemUtils():
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
-                            self.lgr.debug('memUtils v2pUserAddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
+                            #self.lgr.debug('memUtils v2pUserAddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
                             reg_num = cpu.iface.int_register.get_number("cr3")
                             current_cr3 = cpu.iface.int_register.read(reg_num)
-                            if current_cr3 is None:
-                                self.lgr.debug('memUtils v2pUserAddr current_cr3 from reg is None')
-                            elif self.kernel_saved_cr3 is None:
-                                self.lgr.debug('memUtils v2pUserAddr self.kernel_saved_cr3 is None')
-                            else:
-                                self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
+                            #if current_cr3 is None:
+                            #    self.lgr.debug('memUtils v2pUserAddr current_cr3 from reg is None')
+                            #elif self.kernel_saved_cr3 is None:
+                            #    self.lgr.debug('memUtils v2pUserAddr self.kernel_saved_cr3 is None')
+                            #else:
+                            #    self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
                         else:
                             retval = v & ~self.param.kernel_base 
                             #self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
