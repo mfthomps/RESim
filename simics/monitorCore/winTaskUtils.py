@@ -456,7 +456,7 @@ class WinTaskUtils():
         else:
             rec_start = rec
         look_for = rec_start + self.THREAD_NEXT 
-        self.lgr.debug('winTaskUtils getTaskListPtr rec_start 0x%x  look_for 0x%x' % (rec_start, look_for))
+        #self.lgr.debug('winTaskUtils getTaskListPtr rec_start 0x%x  look_for 0x%x' % (rec_start, look_for))
         got = []
         for i in range(250):
             thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
@@ -539,10 +539,10 @@ class WinTaskUtils():
         ''' get a list of processes (EPROCESS)'''
         got = []
         done = False
-        self.lgr.debug('getTaskList ')
+        #self.lgr.debug('getTaskList ')
         if self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
-            self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
+            #self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
         else:
             dum, dum1, pid = self.curThread()
             if pid != 0:
@@ -551,9 +551,9 @@ class WinTaskUtils():
                 self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
                 return got
             self.lgr.debug('getTaskList using results of curThread??? 0x%x' % task_ptr)
-        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
+        #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
-        self.lgr.debug('getTaskList returning %d tasks' % len(got))
+        #self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
     
     def getTaskStructs(self):
