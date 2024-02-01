@@ -441,7 +441,8 @@ class WinDLLMap():
                         if addr_in >= section.load_addr and addr_in <= end:
                             if fname != 'unknown':
                                 if retval is not None:
-                                    self.lgr.debug('winDLL getSOFile got retval of %s, but now %s?' % (retval, fname))
+                                    #self.lgr.debug('winDLL getSOFile got retval of %s, but now %s?' % (retval, fname))
+                                    pass
                                 retval = fname
                             else:
                                 got_unknown = True
@@ -561,10 +562,10 @@ class WinDLLMap():
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
                 end = section.load_addr+section.size - 1
-                self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.load_addr, end, addr_in))
+                #self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.load_addr, end, addr_in))
                 if addr_in >= section.load_addr and addr_in <= end:
-                    if retval != (None, None, None):
-                        self.lgr.debug('winDLL already got getSOInfo %s 0x%x 0x%x' % ((fname, section.load_addr, end)))
+                    #if retval != (None, None, None):
+                    #    self.lgr.debug('winDLL already got getSOInfo %s 0x%x 0x%x' % ((fname, section.load_addr, end)))
                     retval = (fname, section.load_addr, end)
                     #break 
         return retval
