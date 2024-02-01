@@ -1014,7 +1014,7 @@ class SharedSyscall():
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x retval_addr: 0x%x result: 0x%x written to 0x%x\n' % (tid, 
                             exit_info.old_fd, exit_info.cmd, exit_info.retval_addr, result, result_ptr))
                     else:
-                        trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x could not read bye written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result, result_ptr))
+                        trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x could not read bye written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result_ptr))
 
                 else:
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
