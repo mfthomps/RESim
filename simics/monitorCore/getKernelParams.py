@@ -57,16 +57,16 @@ class GetKernelParams():
 
         if self.os_type is None:
             self.os_type = 'LINUX32'
-        word_size = 4
+        self.word_size = 4
         if self.os_type == 'LINUX64' or self.os_type == 'WIN7':
-            word_size = 8
+            self.word_size = 8
   
-        print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
+        print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
 
         #self.log_dir = '/tmp'
         self.log_dir = './logs'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
-        self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, word_size))
+        self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
         platform = None
         if 'PLATFORM' in comp_dict[self.target]:
             platform = comp_dict[self.target]['PLATFORM']
@@ -74,7 +74,7 @@ class GetKernelParams():
             self.param = winKParams.WinKParams()
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
         else:
-            self.param = kParams.Kparams(self.cpu, word_size, platform)
+            self.param = kParams.Kparams(self.cpu, self.word_size, platform)
             # override a previous hack
             self.param.sysexit = None
 
@@ -83,7 +83,7 @@ class GetKernelParams():
             try making phys addresses relative to the fs base '''
         self.param.current_task_fs = False
 
-        self.mem_utils = memUtils.MemUtils(self, word_size, self.param, self.lgr, arch=self.cpu.architecture)
+        self.mem_utils = memUtils.MemUtils(self, self.word_size, self.param, self.lgr, arch=self.cpu.architecture)
         # TBD FIX THIS
         self.data_abort = None
         if self.cpu.architecture == 'arm':
@@ -342,10 +342,16 @@ class GetKernelParams():
             self.lgr.debug('gsEnableReverse should be at kernel entry. eip is 0x%x, , now continue %d cycles' % (eip, self.gs_cycles))
             ''' The point of going forward is to let us reverse'''
             SIM_continue(self.gs_cycles)
-            self.gsFindAlone()
+            self.lgr.debug('gsEnableReverse back from continue, now call gsFindAlone')
+            got_it = self.gsFindAlone()
+            if not got_it:
+                self.gsFindAlone(any_reg=True)
+            self.lgr.debug('gsEnableReverse back from gsFindAlone')
 
     def currentTaskStopHap(self, dumb, one, exception, error_string):
+        self.lgr.debug('currentTaskStopHap')
         if self.current_task_stop_hap is None:
+            self.lgr.debug('currentTaskStopHap, hap was gone, bail')
             return
         if self.fs_stop_hap:
             self.lgr.debug('currentTaskStopHap, fs_stop_hap is true')
@@ -385,7 +391,8 @@ class GetKernelParams():
                 self.findSwapper()
                 break
 
-    def gsFindAlone(self):
+    def gsFindAlone(self, any_reg=False):
+        retval = False
         self.lgr.debug('gsFindAlone, gs_cycles is %d' % self.gs_cycles)
         did_offset = []
         for i in range(1,self.gs_cycles):
@@ -397,15 +404,21 @@ class GetKernelParams():
                 op2, op1 = decode.getOperands(instruct[1])
                 self.lgr.debug('eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (eip, instruct[1], mn, op2, op1)) 
                 print('eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (eip, instruct[1], mn, op2, op1)) 
-                #SIM_break_simulation('remove')
-                #return
+
+
                 # TBD may need to cycle through multiple gsFindAlone iterations to get to the right gs reference.
                 if self.isWindows(): 
                     if mn != 'mov' or op1 == 'rsp' or not op1.startswith('r'):
                         continue
                 else:
-                    if mn != 'mov' or not op1.startswith('ra'):
+                    if mn != 'mov':
                         continue
+                    if 'rip' in instruct[1] or 'rsp' in instruct[1]:
+                        continue
+                    if (not any_reg and not op1.startswith('ra')):
+                        self.lgr.debug('gsFind wrong op1? %s' % op1)
+                        continue
+
                 prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
@@ -432,6 +445,7 @@ class GetKernelParams():
 
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
+                retval = True
                 if self.os_type == 'WIN7':
                     next_eip = eip + instruct[0]
                     next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
@@ -442,8 +456,12 @@ class GetKernelParams():
                 else:
                     #SIM_break_simulation('remove this')
                     #return
+                    self.lgr.debug('got gs stuff, call findSwapper')
                     self.findSwapper()
                 break
+        if self.current_task_phys is None:
+            self.lgr.error('gsFindAlone failed')
+        return retval
                 
     def lookForFS(self, dumb):
          self.lgr.debug('lookForFS')
@@ -457,6 +475,7 @@ class GetKernelParams():
          ''' will piggy back on the currentTaskStopHap'''
          self.gs_stop_hap = True
          self.param.current_task = None
+         self.lgr.debug('lookForGS, now break')
          SIM_break_simulation('gs stop')
 
     def taskModeChanged(self, cpu, one, old, new):
@@ -775,8 +794,11 @@ class GetKernelParams():
                 self.lgr.debug('init_next_ptr is none, continue')
                 SIM_run_command('c 500000') 
 
-
         #self.lgr.debug('getInit real pid is %d' % self.real_param.ts_pid)
+
+        # save cr3 for use by memutils
+        self.mem_utils.saveKernelCR3(self.cpu)
+
         init_next_ptr = self.mem_utils.readPtr(self.cpu, self.init_task + self.param.ts_next) 
         init_next = init_next_ptr - self.param.ts_next
         self.lgr.debug('getInit ts_next %d  ptr 0x%x init_next is 0x%x' % (self.param.ts_next, init_next_ptr, init_next))
@@ -1648,23 +1670,26 @@ class GetKernelParams():
             return False
 
     def getPageTableDirectory(self):
+        self.lgr.debug('getPageTableDirectory')
         retval = False
         if self.cpu.architecture == 'arm':
             ttbr = self.cpu.translation_table_base0
             page_dir_addr = ttbr & 0xfffff000
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr3")
-            page_dir_addr = self.cpu.iface.int_register.read(reg_num)
+            #page_dir_addr = self.cpu.iface.int_register.read(reg_num)
+            page_dir_addr = self.mem_utils.getKernelSavedCR3()
         proc_rec = self.taskUtils.getCurProcRec()
-        self.lgr.debug('proc rec 0x%x' % proc_rec) 
+        self.lgr.debug('getPageTableDirectory proc rec 0x%x page_dir_addr 0x%x' % (proc_rec, page_dir_addr)) 
         start = self.param.ts_prev + 4
         ptr = proc_rec + start
         mm_struct = None
         mm_struct_off = None
         end = proc_rec + self.param.ts_pid 
+        self.lgr.debug('getPageTableDirectory start 0x%x ptr 0x%x end 0x%x' % (start, ptr, end))
         while ptr < end:
             maybe = self.mem_utils.readPtr(self.cpu, ptr)
-            self.lgr.debug('ptr 0x%x maybe 0x%x' % (ptr, maybe))
+            self.lgr.debug('getPageTableDirectory ptr 0x%x maybe 0x%x' % (ptr, maybe))
             pgd_ptr = maybe
             for i in range(100):
                 pgd = self.mem_utils.readWord32(self.cpu, pgd_ptr)
@@ -1675,7 +1700,7 @@ class GetKernelParams():
                         self.param.mm_struct = mm_struct
                         mm_struct_off = i * 4
                         self.param.mm_struct_offset = mm_struct_off
-                        self.lgr.debug('got it  mm_struct %d  offset %d' % (mm_struct, mm_struct_off))
+                        self.lgr.debug('getPageTableDirectory got it  mm_struct %d  offset %d' % (mm_struct, mm_struct_off))
                         retval = True
                         break
                 pgd_ptr = pgd_ptr+4
@@ -1683,6 +1708,9 @@ class GetKernelParams():
             if retval:
                 break
         return retval
+
+    def hasUserPageTable(self, cpu=None):
+        return False
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
