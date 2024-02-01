@@ -232,7 +232,7 @@ class WinMonitor():
         self.lgr.debug('traceWindows')
         return retval
 
-    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None):
+    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None, just_input=False):
 
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc, sub_match=sub_match)        
         ''' nth occurance of syscalls that match params '''
@@ -255,7 +255,10 @@ class WinMonitor():
                     kbuffer_mod = kbuf
                     self.sharedSyscall.setKbuffer(kbuffer_mod)
                 if call_list is None:
-                    calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'RECV_DATAGRAM', 'SEND_DATAGRAM', 'ReadFile', 'WriteFile', 'QueryValueKey', 'EnumerateValueKey', 'Close', 'GET_PEER_NAME']
+                    if just_input:
+                        calls = ['RECV', 'RECV_DATAGRAM', 'ReadFile', 'QueryValueKey', 'EnumerateValueKey', 'Close', 'GET_PEER_NAME']
+                    else:
+                        calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'RECV_DATAGRAM', 'SEND_DATAGRAM', 'ReadFile', 'WriteFile', 'QueryValueKey', 'EnumerateValueKey', 'Close', 'GET_PEER_NAME']
                 else:
                     calls = call_list
                 the_syscall = self.syscallManager.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
