@@ -768,9 +768,12 @@ class SharedSyscall():
         elif callname == 'open' or callname == 'openat':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
             if exit_info.fname is None:
-                self.lgr.error('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
                 #ptable_info = pageUtils.findPageTableIA32E(self.cpu, exit_info.fname_addr, self.lgr)
-                SIM_break_simulation('fname is none on exit of open')
+                if tid != '1':
+                    self.lgr.error('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
+                    SIM_break_simulation('fname is none on exit of open')
+                else:
+                    self.lgr.debug('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
                 exit_info.fname = 'unknown'
             trace_msg = ('\treturn from open tid:%s FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (tid, eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
