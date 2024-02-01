@@ -345,6 +345,10 @@ class StackTrace():
         #    self.lgr.debug('does  %s' % fun1)
         #    self.lgr.debug('match %s' % fun2)
 
+        # TBD generalize?
+        fun1 = fun1.replace('snextc', 'sgetc')
+        fun2 = fun2.replace('snextc', 'sgetc')
+
         if fun1.startswith(fun2) or fun2.startswith(fun1):
             retval = True
         else:
