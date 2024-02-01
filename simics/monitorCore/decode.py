@@ -176,7 +176,12 @@ def getValue(s, cpu, lgr=None):
     #lgr.debug('getValue for %s' % s)
     if '+' in s:
         parts = s.split('+',1)
-        retval = getValue(parts[0], cpu, lgr) + getValue(parts[1], cpu, lgr)
+        v1 = getValue(parts[0], cpu, lgr) 
+        v2 = getValue(parts[1], cpu, lgr)
+        if v1 is not None and v2 is not None:
+            retval = getValue(parts[0], cpu, lgr) + getValue(parts[1], cpu, lgr)
+        elif lgr is not None:
+            lgr.debug('decode getValue failed getting values from %s' % s)
     elif '-' in s:
         parts = s.split('-',1)
         retval = getValue(parts[0], cpu, lgr) - getValue(parts[1], cpu, lgr)
