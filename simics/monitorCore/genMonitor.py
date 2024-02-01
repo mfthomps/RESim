@@ -794,7 +794,7 @@ class GenMonitor():
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
-                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.lgr)
+                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -3292,7 +3292,7 @@ class GenMonitor():
         self.runTo(call, call_params, name='bind', run=run)
 
     def runToIO(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, origin_reset=False, 
-                run_fun=None, proc=None, run=True, kbuf=False, call_list=None, sub_match=None, target=None):
+                run_fun=None, proc=None, run=True, kbuf=False, call_list=None, sub_match=None, target=None, just_input=False):
         if target is None:
             target = self.target
         if self.isWindows(target):
@@ -3301,7 +3301,7 @@ class GenMonitor():
             else:
                 kbuffer = None
             self.winMonitor[target].runToIO(fd, linger, break_simulation, count, flist_in, origin_reset, 
-                   run_fun, proc, run, kbuffer, call_list, sub_match=sub_match)
+                   run_fun, proc, run, kbuffer, call_list, sub_match=sub_match, just_input=just_input)
             return
         ''' Run to any IO syscall.  Used for trackIO.  Also see runToInput for use with prepInject '''
         #call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc)        
@@ -4790,6 +4790,9 @@ class GenMonitor():
         if self.reverseEnabled():
             if '-' in snap_name:
                print('Avoid use of - in snapshot names.')
+               return
+            if os.path.exists(snap_name):
+               print('%s already exists, pick a new snapshot name.' % snap_name)
                return
             cpu = self.cell_config.cpuFromCell(self.target)
             cell_name = self.getTopComponentName(cpu)
