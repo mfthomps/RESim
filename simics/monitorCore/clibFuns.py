@@ -27,7 +27,7 @@ def adjustFunName(frame, fun_mgr, lgr):
         fun = None
         if frame.fun_name is not None:
             fun = frame.fun_name.strip()
-            lgr.debug('clibFuns adjustFunName fun starts as %s' % fun)
+            #lgr.debug('clibFuns adjustFunName fun starts as %s' % fun)
             if '@' in frame.fun_name:
                 fun = frame.fun_name.split('@')[0]
                 try:
@@ -79,8 +79,15 @@ def adjustFunName(frame, fun_mgr, lgr):
                         if 'char' in param1:
                             fun = 'compare_chr'
 
+            elif fun.startswith('basic_istringstream'):
+                # TBD will need variations based on templates?
+                fun = 'basic_istringstream'
+                lgr.debug('clibFuns istring windows fun %s' % fun)
             elif fun.startswith('basic_string'):
-                lgr.debug('clibFuns windows fun %s' % fun)
+                stringbuf=False
+                if fun.startswith('basic_stringbuf'):
+                    stringbuf = True
+                lgr.debug('clibFuns basic_string windows fun %s' % fun)
                 pre_paren, in_paren = fun.split('(', 1)
                 fun = pre_paren.split('::')[-1]
                 if fun.startswith('allocator'):
@@ -88,7 +95,13 @@ def adjustFunName(frame, fun_mgr, lgr):
                     #if in_paren.startswith('char'):
                     if 'char' in in_paren:
                         lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
-                        fun = 'string_win_basic_char' 
+                        if stringbuf:
+                            fun = 'stringbuf_win_basic_char' 
+                        else:
+                            fun = 'string_win_basic_char' 
+            elif fun.startswith('basic_streambuf'):
+                if 'sgetc' in fun or 'snextc' in fun:
+                    fun = 'win_streambuf_getc'
                       
             elif fun.startswith('__cxx11::'):
                 fun = fun[len('__cxx11::'):]
