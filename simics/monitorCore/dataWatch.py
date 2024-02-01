@@ -44,6 +44,7 @@ import pickle
 import traceback
 import reWatch
 import clibFuns
+import appendCharReturns
 from resimHaps import *
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 'strcasecmp', 'strncpy', 'strtoul', 
@@ -51,9 +52,9 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
-            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string', 'str', 'ostream_insert', 'regcomp', 
+            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets', 'WSAAddressToStringA']
+            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -66,6 +67,7 @@ free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 
 allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
 mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
+reg_return_funs = ['win_streambuf_getc']
 class MemSomething():
     def __init__(self, fun, fun_addr, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -98,7 +100,7 @@ class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
     def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, 
-                 back_stop, compat32, lgr):
+                 back_stop, compat32, comp_dict, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.rev_to_call = rev_to_call
         self.top = top
@@ -112,6 +114,7 @@ class DataWatch():
         self.compat32 = compat32
         self.page_size = page_size
         self.back_stop = back_stop
+        self.comp_dict = comp_dict
         self.buffer_offset = None
         self.buffer_length = None
         self.finish_check_move_hap = None
@@ -157,6 +160,11 @@ class DataWatch():
         ''' ring buffers for characters copied via char_ring_functions '''
         self.ring_char_entry = {}
         self.ring_char_hap = {}
+        self.append_char_returns = None
+        if 'APPEND_CHAR_RETURNS' in comp_dict:
+            def_file = comp_dict['APPEND_CHAR_RETURNS']
+            self.append_char_returns = appendCharReturns.AppendCharReturns(top, self, cpu, def_file, cell_name, mem_utils, context_manager, lgr)
+         
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -771,6 +779,8 @@ class DataWatch():
         self.setStackBufHaps()
         self.setStackThisHaps()
         self.setRingCharBreaks()
+        if self.append_char_returns is not None:
+            self.append_char_returns.setBreaks()
 
         return retval
 
@@ -851,6 +861,8 @@ class DataWatch():
             SIM_run_alone(self.delStopHap, self.call_stop_hap)
             self.call_stop_hap = None
 
+        if self.append_char_returns is not None:
+            self.append_char_returns.rmHaps()
 
     def resetWatch(self):
         #self.lgr.debug('dataWatch resetWatch')
@@ -1053,7 +1065,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles less than when we read the data' % eip)
                 SIM_run_alone(self.startUndoAlone, None)
                 return
-        #self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
+        self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
         hap = self.return_hap
         self.pending_call = False
         SIM_run_alone(self.top.restoreDebugBreaks, True)
@@ -1295,6 +1307,21 @@ class DataWatch():
             if self.mem_something.count > 0:
                 self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
                 self.setBreakRange()
+
+        elif self.mem_something.fun == 'basic_istringstream':
+            # eax + 0x10 is where return string starts
+            returned = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            addr_addr = returned + 0x10
+            self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, addr_addr, size=word_size)
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest,
+               self.mem_something.count))
+            buf_start = self.findRange(self.mem_something.src)
+            mark = self.watchMarks.stringMark(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+            self.lgr.debug('dataWatch returnHap, call setRange dest 0x%x  count %d' % (self.mem_something.dest, self.mem_something.count))
+            if self.mem_something.count > 0:
+                self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
+                self.setBreakRange()
+                #self.watchStackObject(obj_ptr)
 
         elif self.mem_something.fun.startswith('string'):
             skip_it = False
@@ -1577,6 +1604,9 @@ class DataWatch():
             else: 
                 self.mem_something.count = self.mem_utils.getRegValue(self.cpu, 'eax')
             self.watchMarks.returnInt(self.mem_something.count, self.mem_something.fun)
+        elif self.mem_something.fun in reg_return_funs:
+            #adhoc = self.lookPushedReg()
+            self.lgr.debug('return from %s' % self.mem_something.fun)
         elif self.mem_something.fun not in mem_funs:
             ''' assume iterator '''
             self.lgr.debug('dataWatch returnHap eip: 0x%x, return from iterator %s src: 0x%x ' % (eip, self.mem_something.fun, self.mem_something.src))
@@ -1657,10 +1687,11 @@ class DataWatch():
                         self.lgr.debug('dataWatch memSomethingEntry, src 0x%x not something we care about and dest does not fall in a buffer, skip it' % self.mem_something.src)
                         return
                 
-
+        # what is this about?
         if self.cpu.architecture != 'arm':
             bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
             if bp == self.recent_entry_bp:
+                self.lgr.debug('dataWatch memSomethingEntry, bp 0x%x is same as recent, bail' % bp)
                 return
             else:
                self.recent_entry_bp = bp
@@ -2082,6 +2113,14 @@ class DataWatch():
             the_string = self.mem_utils.readString(self.cpu, self.mem_something.src, 1000)
             # TBD some instances do not have a count.  See clibFuns signature, if char is first in parens, then there is a count?
             self.mem_something.count = min(len(the_string), self.mem_something.count)
+            self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
+                 self.mem_something.count))
+
+        elif self.mem_something.fun == 'basic_istringstream':
+            src_struct, dumb, dumb2 = self.getCallParams(sp, word_size)
+            self.mem_something.src = self.mem_utils.readAppPtr(self.cpu,  src_struct+4)
+            the_string = self.mem_utils.readString(self.cpu, self.mem_something.src, 1000)
+            self.mem_something.count = len(the_string)
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
                  self.mem_something.count))
 
@@ -2601,6 +2640,24 @@ class DataWatch():
                         break
         return retval
 
+    def isTestByValue(self, instruct, call_instr, recent_instructs=[]):
+        fun_list = ['isspace', 'iswspace', 'isspace_l', 'iswspace_l', 'isprint', 'iswprint', 'isprint_l', 'iswprint_l']
+        retval = None
+        if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
+            fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr, recent_instructs=recent_instructs, check_reg=True)
+            if fun_hex is not None:
+                self.lgr.debug('isTestByValue fun is %s  (0x%x)' % (fun, fun_hex))
+            else:
+                self.lgr.debug('isTestByValue fun is %s  failed to get fun_hex from %s' % (fun, instruct[1]))
+
+            if fun is not None:
+                for tform in fun_list:
+                    if tform in fun.lower():
+                        retval = fun
+                        break
+        self.lgr.debug('isTestByValue retval %s' % retval)
+        return retval
+
     def isDataRef(self, instruct, call_instr, recent_instructs=[]):
         retval = None
         if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
@@ -2620,6 +2677,7 @@ class DataWatch():
         if self.fun_mgr is None:
             self.lgr.debug('dataWatch checkNTOHL with no fun_mgr')
             return False
+        self.lgr.debug('dataWatch checkNTOHL addr 0x%x' % addr)
         orig_ip = self.top.getEIP(self.cpu)
         orig_cycle = self.cpu.cycles
         instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
@@ -2669,6 +2727,29 @@ class DataWatch():
                 self.lgr.debug('dataWatch checkNOTHL is data ref %s' % fun)
                 retval = True
                 mark = self.watchMarks.mscMark(fun, addr)
+        return retval
+
+    def checkPushedTest(self, next_ip, addr, trans_size, start, length, recent_instructs=[]):
+        ''' if the given ip is a call to a function that tests the value of a parameter that is passed-by-value, e.g., isspace '''
+        retval = False
+        if self.fun_mgr is None:
+            self.lgr.debug('dataWatch checkNTOHL with no fun_mgr')
+            return False
+        orig_ip = self.top.getEIP(self.cpu)
+        orig_cycle = self.cpu.cycles
+        cur_ip = next_ip
+        max_try = 5
+        for i in range(max_try):
+            instruct = SIM_disassemble_address(self.cpu, cur_ip, 1, 0)
+            self.lgr.debug('dataWatch checkPushedTest instruct %s' % instruct[1])
+            fun = self.isTestByValue(instruct, cur_ip, recent_instructs=recent_instructs)
+            if fun is not None:
+                wm = self.watchMarks.pushTestMark(fun, addr, cur_ip)
+                self.lgr.debug('dataWatch checkPushedTest found fun %s for addr 0x%x did watchMark %s' % (fun, addr, wm.mark.getMsg()))
+                retval = True
+                break
+            cur_ip = cur_ip + instruct[0]
+            recent_instructs.append(instruct[1])
         return retval
 
     def adjustSP(self, sp, instruct, op1, op2):
@@ -2741,122 +2822,150 @@ class DataWatch():
                     break
             return adhoc                
 
-    def loopAdHoc(self, addr, trans_size, start, length, instruct, our_reg, eip, orig_ip, orig_cycle, tid):
-            #self.lgr.debug('dataWatch loopAdHoc')
-            ''' Loop through the next several instructions to see if our reg is stored to memory,
-                or pushed onto the stack for a call'''
-            ''' TBD this will miss copies and such that occur in branches.  It assumes no branching between the start and the next'''
-            adhoc = False
-            next_ip = eip
-            next_instruct = instruct
+    def loopAdHoc(self, addr, trans_size, start, length, instruct, our_reg, eip, orig_ip, orig_cycle, tid, only_push=False):
+        #self.lgr.debug('dataWatch loopAdHoc')
+        ''' Loop through the next several instructions to see if our reg is stored to memory,
+            or pushed onto the stack for a call
+
+            Function deliberately does not evaluate the first instruction because it may be an mov from a buffer
+            that triggered this call.  Use of this function following returns should force eip to be the call.
+           
+        '''
+        #TBD this will miss copies and such that occur in branches.  It assumes no branching between the start and the next
+        adhoc = False
+        next_ip = eip
+        next_instruct = instruct
+        op2, op1 = self.decode.getOperands(next_instruct[1])
+        track_sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.lgr.debug('dataWatch loopAdHoc, sp from reg 0x%x' % track_sp)
+        new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
+        if new_sp is not None:
+            self.lgr.debug('dataWatch loopAdHoc, sp from adjustSP 0x%x' % new_sp)
+            track_sp = new_sp
+        self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x instruct %s starting sp 0x%x' % (our_reg, eip, instruct[1], track_sp))
+        our_reg_list = [our_reg]
+        max_num = 10
+        our_reg_value = self.mem_utils.getRegValue(self.cpu, our_reg)
+        if our_reg.startswith('xmm'):
+            max_num = 100
+
+        word_size = self.top.wordSize(tid, target=self.cell_name)
+        recent_instructs = []
+        flags = None
+        for i in range(max_num):
+            next_ip = next_ip + next_instruct[0]
+            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+            if next_instruct[1].startswith('jmp'):
+                parts = next_instruct[1].split()
+                if len(parts) == 2:
+                    try:
+                        next_ip = int(parts[1], 16)
+                        next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                    except:
+                        pass
+                 
+            self.lgr.debug('dataWatch loopAdHoc in loop ip 0x%x instruc %s' % (next_ip, next_instruct[1]))
+            ''' Normally bail on branch, but catch xmm mem copies that have a lot of processing. TBD this is broken since we can't follow branches properly'''
+            if (decode.isBranch(self.cpu, next_instruct[1]) and not our_reg.startswith('xmm')) or next_instruct[1].startswith('ret'):
+                self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
+                break
             op2, op1 = self.decode.getOperands(next_instruct[1])
-            track_sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
             new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
-            if new_sp is not None:
-                track_sp = new_sp
-            self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x starting sp 0x%x' % (our_reg, eip, track_sp))
-            our_reg_list = [our_reg]
-            max_num = 10
-            if our_reg.startswith('xmm'):
-                max_num = 100
-            word_size = self.top.wordSize(tid, target=self.cell_name)
-            recent_instructs = []
-            for i in range(max_num):
-                next_ip = next_ip + next_instruct[0]
-                next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
-                ''' Normally bail on branch, but catch xmm mem copies that have a lot of processing. TBD this is broken since we can't follow branches properly'''
-                if (decode.isBranch(self.cpu, next_instruct[1]) and not our_reg.startswith('xmm')) or next_instruct[1].startswith('ret'):
-                    self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
-                    break
-                op2, op1 = self.decode.getOperands(next_instruct[1])
-                self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
-                new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
+            dest_addr = None
+            if not only_push:
                 dest_addr = self.getMoveDestAddr(next_instruct, op1, op2, our_reg_list)
-                if dest_addr is not None:
-                    self.lgr.debug('dataWatch loopAdHoc dest_addr 0x%x' % dest_addr)
-                else:
-                    self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
+            if dest_addr is not None:
+                self.lgr.debug('dataWatch loopAdHoc dest_addr 0x%x' % dest_addr)
+            else:
+                self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
  
-                if dest_addr is not None:
-                    ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
-                    if 'sp' in op2:
-                        adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
-                        break
-                    else:                   
-                        self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
-                        adhoc = True
-                        break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
-                        dest_op = op1
-                        if self.cpu.architecture == 'arm':
-                            dest_op = op2
-                        ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
-                        self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
-                        self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
-                              start, next_ip, self.cpu.current_context))
-                        self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                                 self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
-                        break
-                elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
-                        self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
-                        our_reg_list.append(op1)
-                elif self.cpu.architecture != 'arm' and next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
-                    # TBD fix for arm
-                    self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
+            if dest_addr is not None:
+                ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
+                if 'sp' in op2:
+                    adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
+                    break
+                else:                   
+                    self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
+                    adhoc = True
+                    break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
+                    dest_op = op1
+                    if self.cpu.architecture == 'arm':
+                        dest_op = op2
+                    ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
+                    self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
+                    self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
+                          start, next_ip, self.cpu.current_context))
+                    self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                             self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
+                    break
+            elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
+                    self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
+                    our_reg_list.append(op1)
+            elif self.cpu.architecture != 'arm' and next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
+                # TBD fix for arm
+                self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
+                our_reg_list.remove(op1)
+            elif self.cpu.architecture == 'arm' and self.decode.isReg(op1) and op1 in our_reg_list and \
+                                                    (next_instruct[1].startswith('mov') or next_instruct[1].startswith('sub') or next_instruct[1].startswith('add')):
                     our_reg_list.remove(op1)
-                elif self.cpu.architecture == 'arm' and self.decode.isReg(op1) and op1 in our_reg_list and \
-                                                        (next_instruct[1].startswith('mov') or next_instruct[1].startswith('sub') or next_instruct[1].startswith('add')):
-                        our_reg_list.remove(op1)
-                elif new_sp is not None:
-                    self.lgr.debug('dataWatch loopAdHoc is stack adjust, now 0x%x' % new_sp)
-                    track_sp = new_sp
-                #elif not self.top.isWindows(target=self.cell_name) and next_instruct[1].startswith('push') and self.top.isCode(next_ip): 
-                elif  next_instruct[1].startswith('push') and self.top.isCode(next_ip): 
-                    self.lgr.debug('dataWatch loopAdHoc is push op1: <%s>  our_reg_list: %s' % (op1, str(our_reg_list)))
-                    ''' TBD extend for arm stm,  use for windows?'''
-                    if self.decode.isReg(op1) and self.decode.regIsPartList(op1, our_reg_list):
-                        ''' Pushed our register '''
-                        next_next_ip = next_ip + next_instruct[0]
-                        self.lgr.debug('dataWatch loopAdHoc pushed our reg, next_next_ip is 0x%s' % next_next_ip)
-                        ''' Assumes calls we care about to ntohl-type calls immediatly follow push of our register 
-                            See if result of function is stored to memory. 
-                        '''
-                        self.lgr.debug('dataWatch loopAdHoc is push, see if the call is to a data transform.  next_next_ip is 0x%x' % (next_next_ip))
-                        adhoc = self.checkNTOHL(next_next_ip, addr, trans_size, start, length, recent_instructs=recent_instructs)
-                        if not adhoc:
-                            self.lgr.debug('dataWatch loopAdHoc, not a NTOHL into memory')
-                            ''' TBD tweak this for ARM fu '''
-                            ''' If call to ntohl-like function (but result not stored to memory per above, don't record push '''
-                            instruct = SIM_disassemble_address(self.cpu, next_next_ip, 1, 0)
-                        
-                            self.lgr.debug('dataWatch loopAdHoc see if next is a data xform')
-                            fun = self.isDataTransformCall(instruct, next_next_ip, recent_instructs=recent_instructs)
-                            if fun is None:
-                                ''' Will track the push.  Manage so the stack buffer (the push), is removed on return.'''
-                                track_sp = track_sp - word_size
-                                self.lgr.debug('dataWatch loopAdHoc next was not data xform, track the push to track_sp 0x%x' % track_sp)
-                                self.trackPush(track_sp, instruct, addr, start, length, next_next_ip)
-                                adhoc = True
-                            else:
-                                ''' set a break/hap on return from transform to see if its eax gets pushed onto the stack for a call.'''
-                                self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, fun, ip=orig_ip, cycle=orig_cycle)
-                                after_call = next_next_ip + instruct[0]
-                                self.lgr.debug('dataWatch loopAdHoc, was push, saw it is a data transform function, look for push of result, thinking after_call is 0x%x.' % after_call)
-                                break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, after_call, 1, 0)
-                                track_sp = track_sp - word_size
-                                ntoh_rec = self.NTOHType(track_sp, next_next_ip, fun)
-                                self.transform_push_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                                     self.transformPushHap, ntoh_rec, break_num, 'transformPush')
-                                adhoc = True
-                        else:
-                            self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory')
-                            pass
-                        break
-                    else:
-                        track_sp = track_sp - word_size
-                        #self.lgr.debug('dataWatch loopAdHoc track_sp now 0x%x' % track_sp) 
-                recent_instructs.append(next_instruct[1])
-            #self.lgr.debug('dataWatch loopAdHoc exit i is %d' % i)
-            return adhoc
+            elif new_sp is not None:
+                self.lgr.debug('dataWatch loopAdHoc is stack adjust, now 0x%x' % new_sp)
+                track_sp = new_sp
+            elif  next_instruct[1].startswith('push') and self.top.isCode(next_ip): 
+                self.lgr.debug('dataWatch loopAdHoc is push op1: <%s>  our_reg_list: %s' % (op1, str(our_reg_list)))
+                ''' TBD extend for arm stm,  use for windows?'''
+                if self.decode.isReg(op1) and self.decode.regIsPartList(op1, our_reg_list):
+                    ''' Pushed our register '''
+                    adhoc = self.checkPushedData(track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
+                    break
+                else:
+                    track_sp = track_sp - word_size
+            recent_instructs.append(next_instruct[1])
+        #self.lgr.debug('dataWatch loopAdHoc exit i is %d' % i)
+        return adhoc
+
+
+    def checkPushedData(self, track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size):
+        adhoc = False
+        next_next_ip = next_ip + next_instruct[0]
+        self.lgr.debug('dataWatch loopAdHoc pushed our reg, next_next_ip is 0x%s' % next_next_ip)
+        ''' Assumes calls we care about to ntohl-type calls immediatly follow push of our register 
+            See if result of function is stored to memory. 
+        '''
+        self.lgr.debug('dataWatch loopAdHoc is push, see if the call is to a data transform.  next_next_ip is 0x%x' % (next_next_ip))
+        adhoc = self.checkNTOHL(next_next_ip, addr, trans_size, start, length, recent_instructs=recent_instructs)
+        if not adhoc:
+            adhoc = self.checkPushedTest(next_next_ip, addr, trans_size, start, length, recent_instructs=recent_instructs)
+        if not adhoc:
+            self.lgr.debug('dataWatch loopAdHoc, not a NTOHL into memory')
+            ''' TBD tweak this for ARM fu '''
+            ''' If call to ntohl-like function (but result not stored to memory per above, don't record push '''
+            instruct = SIM_disassemble_address(self.cpu, next_next_ip, 1, 0)
+        
+            self.lgr.debug('dataWatch loopAdHoc see if next is a data xform')
+            fun = self.isDataTransformCall(instruct, next_next_ip, recent_instructs=recent_instructs)
+            if fun is None:
+                ''' Will track the push.  Manage so the stack buffer (the push), is removed on return.'''
+                track_sp = track_sp - word_size
+                self.lgr.debug('dataWatch loopAdHoc next was not data xform, track the push to track_sp 0x%x' % track_sp)
+                self.trackPush(track_sp, instruct, addr, start, length, next_next_ip)
+                adhoc = True
+            else:
+                ''' set a break/hap on return from transform to see if its eax gets pushed onto the stack for a call.'''
+                self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, fun, ip=orig_ip, cycle=orig_cycle)
+                after_call = next_next_ip + instruct[0]
+                self.lgr.debug('dataWatch loopAdHoc, was push, saw it is a data transform function, look for push of result, thinking after_call is 0x%x.' % after_call)
+                break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, after_call, 1, 0)
+                track_sp = track_sp - word_size
+                ntoh_rec = self.NTOHType(track_sp, next_next_ip, fun)
+                self.transform_push_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                     self.transformPushHap, ntoh_rec, break_num, 'transformPush')
+                adhoc = True
+        else:
+            self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory or a test of a pass by value')
+            pass
+        return adhoc
 
     class NTOHType():
         def __init__(self, sp, ip, fun):
@@ -2866,6 +2975,8 @@ class DataWatch():
             self.reg = None
 
     def trackPush(self, sp, instruct, addr, start, length, ip):
+        # A buffer value was pushed on the stack and we don't know the called function,
+        # so just track it as a new buffer.
         self.setRange(sp, self.mem_utils.wordSize(self.cpu), no_extend=True)
         self.watchMarks.pushMark(addr, sp, start, length, ip)                            
         self.lgr.debug('dataWatch trackPush, did push')
@@ -2907,6 +3018,24 @@ class DataWatch():
                 retval = next_ip + next_instruct[0]
         return retval
 
+    def lookPushedReg(self):
+        '''
+        At return from a function that returns a value in a register, e.g, eax.
+        See if this value is passed to some function of interest.
+        '''
+        eip = self.top.getEIP(self.cpu)
+        our_reg = self.mem_utils.regs['syscall_ret']
+        dum_cpu, comm, tid = self.task_utils.curThread()
+        self.lgr.debug('dataWatch lookPushedReg cycle 0x%x' % self.cpu.cycles)
+        instruct = SIM_disassemble_address(self.cpu, self.mem_something.called_from_ip, 1, 0)
+        # pass called-from address because loopAdHoc does not assess the first instruction.
+        # set only_push so we are not distracted by move of value into a temp variable
+        adhoc = self.loopAdHoc(self.mem_something.addr, self.mem_something.trans_size, self.mem_something.start, self.mem_something.length, 
+                     instruct, our_reg, self.mem_something.called_from_ip, eip, self.cpu.cycles, tid, only_push=True)
+
+
+        return adhoc
+
     def transformPushHap(self, xform_rec, an_object, breakpoint, memory):
         ''' Returned from a data transform call that operated on tracked data.  See if return value is put somewhere or passed to another function.'''
         if self.transform_push_hap is not None:
@@ -2943,7 +3072,7 @@ class DataWatch():
                 #self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
                 our_reg = op1
                 adhoc = self.loopAdHoc(addr, trans_size, start, length, instruct, our_reg, eip, orig_ip, orig_cycle, tid)
-                #self.lgr.debug('dataWatch checkMove loopAdHoc returned %r' % adhoc)
+                self.lgr.debug('dataWatch checkMove loopAdHoc returned %r' % adhoc)
                 was_checked = True
         elif instruct[1].startswith('ldm'):
             op2, op1 = self.decode.getOperands(instruct[1])
@@ -3194,6 +3323,9 @@ class DataWatch():
         cpl = memUtils.getCPL(self.cpu)
         if cpl > 0:
             addr = memory.logical_address
+            if addr == 0:
+                self.lgr.error('readHap memory logical address zero???, index %d' % index)
+                SIM_break_simulation('remove this')
         else:
             start = self.start[index]
             phys_of_start = self.mem_utils.v2p(self.cpu, start)
@@ -3323,6 +3455,7 @@ class DataWatch():
 
         self.prev_cycle = self.cpu.cycles
 
+
         self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s cpl: %d' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context, cpl))
         if self.show_cmp:
             self.showCmp(addr)
@@ -3373,7 +3506,7 @@ class DataWatch():
                     self.frames = st.getFrames(20)
                     if not self.checkFree(self.frames, index, op_type):
                         if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, fun):
-                            #self.lgr.debug('dataWatch, not memstuff, do finishRead')
+                            self.lgr.debug('dataWatch, not memstuff, do finishRead')
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
                             # TBD already done in lookForMemStuff?
                             #if fun is not None and fun not in self.not_mem_something:
@@ -3406,6 +3539,9 @@ class DataWatch():
                     self.lgr.debug('dataWatch cheapReuse mod looks like destructor addr 0x%x, TBD roll into other free functions?' % addr)
                     self.rmRange(addr)
                     retval = True
+                elif fun_name.startswith('basic_string') and 'Eos' in fun_name:
+                    self.lgr.debug('dataWatch cheapReuse mod basic_string Eos, assume done with buffer? %s' % fun_name)
+                    self.rmRange(addr)
             else:
                 #if fun_name.startswith('std::vector') or fun_name.startswith('allocate_') or fun_name == 'memcpy':
                 if fun_name.startswith('std::vector') or fun_name.startswith('allocate_'):
@@ -3528,10 +3664,10 @@ class DataWatch():
                 self.lgr.debug('DataWatch lookForMemstuff buffer mod in allocator, assume we missed a free and remove it 0x%x' % addr)
                 retval = True
             else:
-                #if mem_stuff.ret_addr is not None and mem_stuff.called_from_ip is not None:
-                #    self.lgr.debug('DataWatch lookForMemstuff ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
-                #else:
-                #    self.lgr.debug('DataWatch lookForMemstuff ret_ip  or called_from_ip no ret_addr found')
+                if mem_stuff.ret_addr is not None and mem_stuff.called_from_ip is not None:
+                    self.lgr.debug('DataWatch lookForMemstuff ret_ip 0x%x called_from_ip is 0x%x' % (mem_stuff.ret_addr, mem_stuff.called_from_ip))
+                else:
+                    self.lgr.debug('DataWatch lookForMemstuff ret_ip  or called_from_ip no ret_addr found')
                 ''' referenced memory address is src/dest depending on op_type''' 
                 dest = None
                 src = addr
@@ -3541,7 +3677,11 @@ class DataWatch():
                 self.mem_something = MemSomething(mem_stuff.fun, mem_stuff.fun_addr, addr, mem_stuff.ret_addr, src, dest, None, 
                       mem_stuff.called_from_ip, op_type, length, start, ret_addr_addr = mem_stuff.ret_addr_addr, trans_size=memory.size,
                       frames=mem_stuff.frames)
-                SIM_run_alone(self.handleMemStuff, None)
+                if mem_stuff.fun in reg_return_funs:
+                    self.lgr.debug('DataWatch lookForMemstuff is reg_return_fun %s addr 0x%x' % (mem_stuff.fun, addr))
+                    #self.runToReturn()
+                else:
+                    SIM_run_alone(self.handleMemStuff, None)
                 retval = True
         else:
             #self.lgr.debug('DataWatch lookForMemstuff not memsomething, reset the watch ')
@@ -4636,3 +4776,21 @@ class DataWatch():
 
     def findMarkIp(self, ip):
         return self.watchMarks.findMarkIp(ip)
+
+    def doAppend(self, this, addr):
+        wm = self.watchMarks.findCharAppend(this)
+        if wm is None:
+            wm = self.watchMarks.charAppendMark('charAppend', this, addr)
+        else:
+            if addr == wm.mark.addr:
+                # still appending to old buffer
+                wm.mark.extend()
+            else:
+                # switched buffers
+                wm.mark.switchTo(addr)
+
+        self.lgr.debug('dataWatch doAppend wm now %s' % wm.mark.getMsg())
+
+
+
+

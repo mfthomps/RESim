@@ -392,6 +392,21 @@ class PushMark():
             self.msg = 'push from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, buf_start, dest)
     def getMsg(self):
         return self.msg
+
+class PushTestMark():
+    def __init__(self, fun, addr, ip):
+        self.fun_list = [fun]
+        self.addr = addr
+        self.ip = ip
+        self.start = addr
+    def extend(self, addr, fun):
+        if fun not in self.fun_list:
+            self.fun_list.append(fun) 
+        self.addr = addr
+    def getMsg(self):
+        fun_string = '/'.join(self.fun_list)
+        msg = '%s start: 0x%x through 0x%x' % (fun_string, self.start, self.addr)
+        return msg
  
 class FGetsMark():
     def __init__(self, fun, addr, dest, count, start):
@@ -504,6 +519,22 @@ class MscMark():
             self.msg = '%s read None %s' % (fun, msg_append)
     def getMsg(self):
         return self.msg
+
+class CharAppendMark():
+    def __init__(self, fun, this, addr):
+        self.fun = fun
+        self.this = this
+        self.addr = addr
+        self.end_addr = addr
+    def getMsg(self):
+        msg = 'char append %s 0x%x - 0x%x' % (self.fun, self.addr, self.end_addr)
+        return msg
+    def extend(self):
+        self.end_addr = self.end_addr + 1
+    def switchTo(self, addr):
+        old_delta = self.end_addr - self.addr
+        self.addr = addr
+        self.end_addr = addr+old_delta+1
 
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
@@ -1035,6 +1066,20 @@ class WatchMarks():
         wm = self.addWatchMark(pm)
         return wm
 
+    def pushTestMark(self, fun, addr, ip):
+        retval = None
+        prev_mark = self.mark_list[-1]
+        if isinstance(prev_mark.mark, PushTestMark) and (fun in prev_mark.mark.fun_list or addr == prev_mark.mark.addr):
+            self.lgr.debug('watchMarks pushTestMark, will extend')
+            prev_mark.mark.extend(addr, fun)
+            retval = prev_mark
+        else:
+            self.lgr.debug('watchMarks pushTestMark, new mark fun %s' % fun)
+            pm = PushTestMark(fun, addr, ip)
+            wm = self.addWatchMark(pm)
+            retval = wm
+        return retval
+
     def fgetsMark(self, fun, src, dest, count, start):
         fm = FGetsMark(fun, src, dest, count, start)
         self.addWatchMark(fm)
@@ -1075,7 +1120,19 @@ class WatchMarks():
         um = ToStringMark(fun, src, dest, count, buf_start)
         self.addWatchMark(um)
         self.lgr.debug(um.getMsg())
-        
+
+    def findCharAppend(self, this):
+        for mark in reversed(self.mark_list):
+            if isinstance(mark.mark, CharAppendMark) and this == (mark.mark.this):
+                return mark
+        return None
+
+    def charAppendMark(self, fun, this, addr):
+        # for functions that append a character to the end of a buffer
+        cm = CharAppendMark(fun, this, addr)
+        wm = self.addWatchMark(cm)
+        return wm
+ 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
         self.addWatchMark(fm)
