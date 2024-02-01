@@ -130,6 +130,7 @@ class TaskUtils():
             if os.path.isfile(exec_addrs_file):
                 self.exec_addrs = pickle.load( open(exec_addrs_file, 'rb') ) 
         if self.phys_current_task is None:
+            self.lgr.debug('taskUtils phys_currrent_task None')
             ''' address of current_task symbol, pointer at this address points to the current task record '''
             ''' use physical address because some are relative to FS segment '''
 
@@ -851,7 +852,10 @@ class TaskUtils():
             self.exec_addrs[tid].prog_name = prog_string
             self.exec_addrs[tid].arg_list = arg_string_list
         else:
-            self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[tid].prog_addr)
+            if self.exec_addrs[tid].prog_addr is not None:
+                self.lgr.debug('readExecParamStrings got none from 0x%x ' % self.exec_addrs[tid].prog_addr)
+            else:
+                self.lgr.debug('readExecParamStrings prog_addr for tid %s is None???' % (tid))
         return prog_string, arg_string_list
 
     def getProcArgsFromStack(self, tid, at_enter, cpu):
