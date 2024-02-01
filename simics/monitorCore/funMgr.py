@@ -31,6 +31,7 @@ import os
 import json
 import decode
 import decodeArm
+from simics import *
 class FunMgr():
     def __init__(self, top, cpu, mem_utils, lgr):
         self.relocate_funs = {}
@@ -255,7 +256,7 @@ class FunMgr():
                     try:
                         call_addr = int(parts[1],16)
                     except ValueError:
-                        #self.lgr.debug('getFunName, %s not a hex' % parts[1])
+                        self.lgr.debug('getFunName, %s not a hex' % parts[1])
                         pass
                 if call_addr is not None:
                     fun = self.funFromAddr(call_addr)
@@ -306,6 +307,7 @@ class FunMgr():
         self.ida_funs.showMangle(search=search)
 
     def indirectCall(self, instruct, eip):
+            #self.lgr.debug('funMgr indirectCall <%s> eip: 0x%x' % (instruct, eip))
             retval = None
             fun_name = None
             parts = instruct[1].split()
@@ -324,6 +326,23 @@ class FunMgr():
                     ''' offset is from IP value following execution of instruction '''
                     retval = eip + offset + instruct[0]
                     fun_name = self.funFromAddr(retval)
+                elif content.startswith('ebp+'):
+                    #self.lgr.debug('funMgr indirectCall is relative to ebp, use it. content %s' % content)
+                    offset_s = content[4:]
+                    offset = None
+                    try:
+                        offset = int(offset_s, 16)
+                    except:
+                        self.lgr.error('funMgr indirectCall did not get offset from %s' % instruct)
+                        return None
+                    #self.lgr.debug('funMgr indirectCall offset_s %s offset 0x%x' % (offset_s, offset))
+                    ''' offset is from IP value following execution of instruction '''
+                    ebp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+                    addr_of_addr = ebp + offset 
+                    retval = self.mem_utils.readAppPtr(self.cpu, addr_of_addr)
+                    fun_name = self.funFromAddr(retval)
+                    #self.lgr.debug('funMgr indirectCall ebp+ 0x%x offset 0x%x addr_of_adr 0x%x retval 0x%x fun_name %s' % ((ebp, offset, addr_of_addr, retval, fun_name)))
+                    #SIM_break_simulation('remove this')
                 else:
                     addr = None
                     try:
