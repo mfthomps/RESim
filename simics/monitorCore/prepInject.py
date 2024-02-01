@@ -47,7 +47,7 @@ class PrepInject():
         f1 = stopFunction.StopFunction(self.instrumentIO, ['cb_param'], nest=False)
         flist = [f1]
         if self.top.isWindows():
-            self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence)
+            self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence, just_input=True)
         else:
             self.top.runToInput(self.fd, flist_in=flist, count=self.count)
 
@@ -185,7 +185,7 @@ class PrepInject():
         self.lgr.debug("prepInject in instrument IO, callname is %s" % callname);
         if self.top.isWindows():
             self.lgr.debug("prepInject in instrument IO")
-            if callname == 'GET_PEER_NAME':
+            if callname in ['GET_PEER_NAME']:
                 SIM_run_alone(self.prepInject, None)
             else:
                 SIM_run_alone(self.instrumentAlone, None)
