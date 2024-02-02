@@ -1434,28 +1434,34 @@ class Syscall():
         ida_msg = None
         self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, str(syscall_info.call_params), 
             str(self.cpu.current_context), self.cpu.cycles))
-        for call_param in syscall_info.call_params:
-            #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
-            if call_param.match_param.__class__.__name__ == 'TidFilter':
-                if tid != call_param.match_param.tid:
-                    #self.lgr.debug('syscall syscallParse, tid filter did not match')
-                    return
-                else:
-                    exit_info.call_params = call_param
-                    self.lgr.debug('syscall syscallParse %s, tid filter matched, added call_param' % callname)
-            elif call_param.match_param.__class__.__name__ == 'Dmod' and len(syscall_info.call_params) == 1:
-                if call_param.match_param.comm is not None and call_param.match_param.comm != comm:
-                    #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
-                    #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
-                    return
-            elif call_param.name == 'runToCall':
-                if callname not in self.call_list:
-                    self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
-                    return
-                else:
-                    exit_info.call_params = call_param
-                    self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
-             
+
+        # Optimization to see if call parameters exclude this sytem call
+        if self.name not in ['traceAll', 'traceWindows', 'traceProcs']:
+            for call_param in syscall_info.call_params:
+                #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
+                if call_param.match_param.__class__.__name__ == 'TidFilter':
+                    if tid != call_param.match_param.tid:
+                        #self.lgr.debug('syscall syscallParse, tid filter did not match')
+                        return
+                    else:
+                        exit_info.call_params = call_param
+                        self.lgr.debug('syscall syscallParse %s, tid filter matched, added call_param' % callname)
+                elif call_param.match_param.__class__.__name__ == 'Dmod' and len(syscall_info.call_params) == 1:
+                    if call_param.match_param.comm is not None and call_param.match_param.comm != comm:
+                        #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
+                        #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
+                        return
+                    elif call_param.match_param is not None:
+                        self.lgr.debug('syscall syscallParse, Dmod %s match comm %s' % (call_param.match_param.comm, comm))
+                      
+                elif call_param.name == 'runToCall':
+                    if callname not in self.call_list:
+                        self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
+                        return
+                    else:
+                        exit_info.call_params = call_param
+                        self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
+                 
         ''' NOTE returns above '''
         if callname == 'open' or callname == 'openat':        
             #self.lgr.debug('syscallParse, is %s' % callname)
@@ -1784,6 +1790,8 @@ class Syscall():
             exit_info.old_fd = frame['param1']
             count = frame['param3']
             ida_msg = 'write tid:%s (%s) FD: %d buf: 0x%x count: %d' % (tid, comm, frame['param1'], frame['param2'], count)
+            self.lgr.debug(ida_msg)
+            #SIM_break_simulation('remove this')
             exit_info.retval_addr = frame['param2']
             '''
             max_len = min(count, 1024)
@@ -1797,6 +1805,7 @@ class Syscall():
             '''
 
             ''' check runToIO '''
+            self.lgr.debug('syscallParse write %d params' % (len(syscall_info.call_params)))
             for call_param in syscall_info.call_params:
                 if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, frame['param1']))
@@ -2108,12 +2117,14 @@ class Syscall():
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
+                    #self.lgr.debug('syscallHap calculated, word size 8')
                     frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
                 exit_eip3 = self.param.sysret64
             else:
                 if frame is None:
+                    #self.lgr.debug('syscallHap calculated, word size 4')
                     frame = self.task_utils.frameFromStackSyscall()
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
