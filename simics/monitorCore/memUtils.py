@@ -127,6 +127,17 @@ param_map['x86_32']['param4'] = 'esi'
 param_map['x86_32']['param5'] = 'edi'
 param_map['x86_32']['param6'] = 'ebb'
 
+# Some linux use x86_64 map for enter and these for
+# computed.
+param_map['x86_64swap'] = {}
+param_map['x86_64swap']['param1'] = 'rbx'
+param_map['x86_64swap']['param2'] = 'rcx'
+param_map['x86_64swap']['param3'] = 'rdx'
+param_map['x86_64swap']['param4'] = 'rsi'
+param_map['x86_64swap']['param5'] = 'rdi'
+param_map['x86_64swap']['param6'] = 'rbb'
+
+# For Windows
 win_param_map = {}
 win_param_map['x86_64'] = {}
 win_param_map['x86_64']['param1'] = 'rcx'
@@ -262,7 +273,7 @@ class MemUtils():
                                 self.lgr.debug('memUtils v2pKaddr after change of cr3, got retval 0x%x' % retval)
                     else: 
                         retval = None
-                        self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
+                        #self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
                         reg_num = cpu.iface.int_register.get_number("cr3")
                         current_cr3 = cpu.iface.int_register.read(reg_num)
                         if current_cr3 is None:
@@ -285,6 +296,7 @@ class MemUtils():
         return retval
 
     def v2pUserAddr(self, cpu, v, cpl, use_pid=None):
+        #self.lgr.debug('memUtils v2pUserAddr addr 0x%x cpl %d' % (v, cpl)) 
         retval = None
         if use_pid is None and (cpl > 0 or not self.top.hasUserPageTable(cpu)):
             #self.lgr.debug('memUtils v2pUserAddr user address 0x%x from user space' % v)
@@ -303,7 +315,7 @@ class MemUtils():
 
         elif cpl > 0  and self.top.hasUserPageTable(cpu) and use_pid is not None:
             # get phys address for a different process
-            self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
+            #self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
             if cpu.architecture != 'arm':
                 if self.top.isWindows(cpu=cpu):
                     table_base = self.getWindowsTableBase(cpu, use_pid)
