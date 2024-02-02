@@ -49,6 +49,8 @@ class Directive():
             for line in fh:
                 if line.strip().startswith('#'):
                     continue
+                if len(line.strip()) == 0:
+                    continue
                 key, value = keyValue(line)
                 if key == 'DEVICE':
                     self.device = value
