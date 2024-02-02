@@ -109,6 +109,9 @@ class TaskUtils():
         self.swapper = None
         self.ia32_gs_base = None
 
+        self.ts_cache = None
+        self.ts_cache_cycle = None
+
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
@@ -408,6 +411,8 @@ class TaskUtils():
         return task
 
     def getTaskStructs(self):
+        if self.cpu.cycles == self.ts_cache_cycle:
+            return self.ts_cache
         seen = set()
         tasks = {}
         cpu = self.cpu
@@ -482,6 +487,10 @@ class TaskUtils():
         if task_rec_addr not in tasks:
             task = self.readTaskStruct(task_rec_addr, cpu)
             tasks[task_rec_addr] = task
+
+        self.ts_cache_cycle = self.cpu.cycles 
+        self.ts_cache = tasks
+
         return tasks
 
     def recentExitTid(self):
@@ -654,79 +663,15 @@ class TaskUtils():
             task_rec_addr = self.getCurThreadRec()
         else:
             task_rec_addr = rec
+        ts_list = self.getTaskStructs()
         comm = self.mem_utils.readString(self.cpu, task_rec_addr + self.param.ts_comm, COMM_SIZE)
         pid = self.mem_utils.readWord32(self.cpu, task_rec_addr + self.param.ts_pid)
-        seen = set()
-        tasks = {}
-        cpu = self.cpu
-        swapper_addr = self.findSwapper() 
-        if swapper_addr is None:
-            self.lgr.debug('getTaskListPtr got None for swapper, pid:%d %s' % (pid, comm))
-            return None
-        #self.lgr.debug('getTaskListPtr look for next pointer to current task 0x%x pid: %d (%s) using swapper_addr of %x' % (task_rec_addr, 
-        #                pid, comm,  swapper_addr))
-        stack = []
-        stack.append((swapper_addr, True))
-        while stack:
-            (task_addr, x,) = stack.pop()
-            if (task_addr, x) in seen:
-                continue
-            seen.add((task_addr, x))
-            seen.add((task_addr, False))
-            #self.lgr.debug('reading task addr 0x%x' % (task_addr))
-            task = self.readTaskStruct(task_addr, cpu)
-            if task is None or task.pid is None:
-                self.lgr.error('got task or pid of none for addr 0x%x' % task_addr)
-                return
-
-            if task.next == swapper_addr:
-               #self.lgr.debug('getTaskStructs next swapper, assume done TBD, why more on stack?')
-               return None
-
-            #self.lgr.debug('getTaskListPtr task struct for %x got comm of %s pid %d next %x thread_group.next 0x%x ts_next 0x%x' % (task_addr, task.comm, 
-            #     task.pid, task.next, task.thread_group.next, self.param.ts_next))
+        for ts in ts_list:
+            task = ts_list[ts]
             if (task.next) == task_rec_addr or task.next == (task_rec_addr+self.param.ts_next):
-                next_addr = task_addr + self.param.ts_next
+                next_addr = ts + self.param.ts_next
                 #self.lgr.debug('getTaskListPtr return next 0x%x  pid:%d (%s) task.next is 0x%x' % (next_addr, task.pid, task.comm, task.next))
                 return next_addr
-            #print 'reading task struct for got comm of %s ' % (task.comm)
-            tasks[task_addr] = task
-            for child in task.children:
-                if child:
-                    stack.append((child, task_addr))
-    
-            if task.real_parent:
-                stack.append((task.real_parent, False))
-            if self.param.ts_thread_group_list_head != None:
-                if task.thread_group.next:
-                    #c = task.thread_group.next + self.mem_utils.WORD_SIZE
-                    #self.lgr.debug('getTaskListPtr, has thread_group c is 0x%x' % c) 
-                    #if (task.thread_group.next - self.param.ts_next) == task_rec_addr:
-                    ''' TBD remove hack of off by 4 once other off by 4 hack sorted out '''
-                    #if (task.thread_group.next) == task_rec_addr or (task.thread_group.next + self.mem_utils.WORD_SIZE) == task_rec_addr:
-                    if (task.thread_group.next) == task_rec_addr or (task.thread_group.next) == task_rec_addr:
-                        thread_group_addr = task_addr + self.param.ts_thread_group_list_head
-                        #value = self.mem_utils.readPtr(self.cpu, thread_group_addr)
-                        #self.lgr.debug('getTaskListPtr return thread group 0x%x val read is 0x%x' % (thread_group_addr, value))
-                        return thread_group_addr
-                    stack.append((task.thread_group.next, False))
-    
-            if x is True:
-                task.in_main_list = True
-                if task.next:
-                    if (task.next) == task_rec_addr:
-                        retval = task_addr + self.param.ts_next
-                        #self.lgr.debug('getTaskListPtr x true return 0x%x  pid:%d (%s)' % (retval, task.pid, task.comm))
-                        return retval
-                    stack.append((task.next, True))
-            elif x is False:
-                pass
-            else:
-                task.in_sibling_list = x
-                for s in task.sibling:
-                    if s and s != x:
-                        stack.append((s, x))
-    
         return None
 
     def getTidCommFromNext(self, next_addr):
@@ -1076,8 +1021,12 @@ class TaskUtils():
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.WORD_SIZE == 8 and not compat32:
-                for p in memUtils.param_map['x86_64']:
-                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_64'][p])
+                map_id = 'x86_64'
+                #self.lgr.debug('taskUtils frameFromRegs pc 0x%x sysenter 0x%x' % (frame['pc'], self.param.sysenter))
+                if self.param.x86_reg_swap and frame['pc'] != self.param.sysenter:
+                    map_id = 'x86_64swap'
+                for p in memUtils.param_map[map_id]:
+                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
             else:
                 for p in memUtils.param_map['x86_32']:
                     frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_32'][p])
