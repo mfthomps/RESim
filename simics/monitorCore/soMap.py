@@ -4,7 +4,7 @@ import pickle
 import elfText
 import resimUtils
 import json
-
+from pathlib import Path
 from resimHaps import *
 '''
 Manage maps of shared object libraries
@@ -21,7 +21,8 @@ class ProgInfo():
     def __init__(self, text_start, text_size, text_offset, local_path):
         self.text_start = text_start
         self.text_size = text_size
-        self.text_end = text_start + text_size
+        if self.text_start is not None and text_size is not None:
+           self.text_end = text_start + text_size
         self.text_offset = text_offset
         self.local_path = local_path
 
@@ -266,7 +267,8 @@ class SOMap():
             self.prog_base_map[prog_basename] = prog
         else:
             if self.prog_base_map[prog_basename] != prog:
-                self.lgr.error('soMap addText collision on program base name %s adding %s' % (prog_basename, prog))
+                self.lgr.warning('soMap addText collision on program base name %s adding %s, replace old with new' % (prog_basename, prog))
+                self.prog_base_map[prog_basename] = prog
         if prog not in self.prog_info:
             elf_info = elfText.getText(path, self.lgr)
             if elf_info is not None:
@@ -332,12 +334,15 @@ class SOMap():
                 self.fun_mgr.add(full_path, locate)
             
     def addSO(self, tid_in, prog, addr, count):
+        if '..' in prog:
+            prog = Path(prog).resolve()
         prog_basename = os.path.basename(prog)
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
         else:
             if self.prog_base_map[prog_basename] != prog:
-                self.lgr.error('soMap addeSO collision on program base name %s adding %s' % (prog_basename, prog))
+                self.lgr.warning('soMap addeSO collision on program base name %s adding %s.  Replace old with new.' % (prog_basename, prog))
+                self.prog_base_map[prog_basename] = prog
         tid = self.getThreadTid(tid_in, quiet=True)
         if tid is None:
             tid = tid_in
@@ -776,6 +781,7 @@ class SOMap():
         return load_info
 
     def fullProg(self, prog_in):
+        # if the given prog_in is a basename, use a prog_base_map to return the full path
         if '/' not in prog_in:
             if prog_in in self.prog_base_map:
                 prog = self.prog_base_map[prog_in] 
