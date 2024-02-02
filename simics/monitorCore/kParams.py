@@ -1,7 +1,6 @@
 class Kparams():
     def __init__(self, cpu, word_size, platform):
         ''' assumptions '''
-        #self.kernel_base = 3221225472
 
         #if cpu.architecture == 'arm':
         if cpu.architecture == 'arm':
@@ -17,7 +16,8 @@ class Kparams():
         if word_size == 4:
             self.kernel_base = 0xc0000000
         else:
-            kernel_base = 0xffffffff80000000
+            #kernel_base = 0xffffffff80000000
+            kernel_base = 0xffff800000000000
             self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
             #self.cur_task_offset_into_gs = 0xc700
             #self.cur_task_offset_into_gs = 0xa748
@@ -45,8 +45,6 @@ class Kparams():
         self.ts_children_list_head = None
         self.ts_sibling_list_head = None
         self.ts_thread_group_list_head = None
-        # vdr
-        #self.current_task = 0xc2001454
         self.current_task = None
        
         self.current_task_fs = False
@@ -90,6 +88,9 @@ class Kparams():
         self.mm_struct = None
         self.mm_struct_offset = None
 
+        # some linux don't use same registers for syscalls at sysenter as they do at the computed jump table
+        self.x86_reg_swap = False
+
     def printParams(self):
         print('Kernel parameters:')
         for k in self.__dict__.keys():
@@ -104,3 +105,12 @@ class Kparams():
             if v is not None:
                 retval = retval + '\t%-30s  %s\n' % (k, v)
         return retval
+
+    def assignParams(self, values):
+        # used to hack new parameters
+        for k in values.__dict__.keys():
+            v = values.__dict__.__getitem__(k)
+            if v is not None:
+                self.__dict__.__setitem__(k, v)
+
+
