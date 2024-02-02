@@ -1035,6 +1035,8 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChangedWin what to do?')
 
     def stepCompute(self, compat32=False): 
+        # find the jump table used for system calls and record the 2 parameters needed to recreate the jump address
+        # based on the call
         self.lgr.debug('stepCompute')
         SIM_delete_breakpoint(self.task_break)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
@@ -1663,7 +1665,7 @@ class GetKernelParams():
                 x = b.decode('ascii', errors='ignore')
                 print('decoded ascii %s' % x)
 
-    def isWindows(self):
+    def isWindows(self, cpu=None):
         if self.os_type.startswith('WIN'):
             return True
         else:
