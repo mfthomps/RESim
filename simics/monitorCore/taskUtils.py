@@ -807,7 +807,7 @@ class TaskUtils():
         ''' NOTE side effect of populating exec_addrs '''
         if tid is None:
             return None, None
-
+        self.lgr.debug('getProgArgsFromStack')
         mult = 0
         done = False
         arg_addr_list = []
@@ -815,6 +815,7 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
+            self.lgr.debug('getProgArgsFromStack word size 4')
             if cpu.architecture == 'arm':
                 prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
                 argv = self.mem_utils.getRegValue(cpu, 'r1')
@@ -869,10 +870,18 @@ class TaskUtils():
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
         else:
-            reg_num = cpu.iface.int_register.get_number("rsi")
+            self.lgr.debug('getProgArgsFromStack word size 8')
+            # if swap, use rdx
+            if self.param.x86_reg_swap:
+                reg_num = cpu.iface.int_register.get_number("rdx")
+            else:
+                reg_num = cpu.iface.int_register.get_number("rsi")
             rsi = cpu.iface.int_register.read(reg_num)
             prog_addr = self.mem_utils.readPtr(cpu, rsi)
-            #self.lgr.debug('getProcArgsFromStack 64 bit rsi is 0x%x prog_addr 0x%x' % (rsi, prog_addr))
+            if prog_addr is not None:
+                self.lgr.debug('getProcArgsFromStack 64 bit rsi is 0x%x prog_addr 0x%x' % (rsi, prog_addr))
+            else:
+                self.lgr.debug('getProcArgsFromStack 64 bit rsi is 0x%x prog_addr None' % (rsi))
             i=0
             done = False
             while not done and i < 30:
@@ -884,7 +893,6 @@ class TaskUtils():
                 else:
                     done = True
                 i += 1
-
      
 
         #xaddr = argv + 4*self.mem_utils.WORD_SIZE
