@@ -393,6 +393,9 @@ class GenMonitor():
                     self.param[cell_name].page_fault = pjson.page_fault
                     self.lgr.debug('*** page fault value over-written by value from %s' % new_param_file)
 
+                    # TBD more hackary
+                    if self.param[cell_name].kernel_base == 0xffffffff80000000:
+                        self.param[cell_name].kernel_base = 0xffff800000000000
 
                     self.lgr.debug(self.param[cell_name].getParamString())
                 else:
@@ -605,21 +608,16 @@ class GenMonitor():
             if want_tid is None and this_tid is not None:
                 SIM_break_simulation('mode changed, tid was None, now is not none.')
                 
-            #self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+            self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
             return
         cpl = memUtils.getCPL(cpu)
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
         mode = 1
         if new == Sim_CPU_Mode_Supervisor:
             mode = 0
-        phys = self.mem_utils[self.target].v2p(cpu, eip)
-        if phys is None:
-            self.lgr.debug('modeChanged failed to get phys addr for 0x%x' % eip)
-            SIM_break_simulation('bad phys')
-            return
-        instruct = SIM_disassemble_address(cpu, phys, 0, 0)
-        self.lgr.debug('mode changed cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (cpl, 
-            mode, str(one), old, new, eip, instruct[1]))
+        instruct = SIM_disassemble_address(cpu, eip, 0, 0)
+        self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
+                mode, str(one), old, new, eip, instruct[1]))
         SIM_break_simulation('mode changed, break simulation')
         
     def stopHap(self, stop_action, one, exception, error_string):
