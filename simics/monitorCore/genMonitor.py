@@ -1174,7 +1174,7 @@ class GenMonitor():
             retval.append(tid_state)
         print(json.dumps(retval))
 
-    def tasks(self, target=None, filter=None, file=None):
+    def tasks(self, target=None, filter=None, file=None, verbose=False):
         self.lgr.debug('tasks')
         if target is None:
             target = self.target
@@ -1201,8 +1201,16 @@ class GenMonitor():
                         id_str = 'uid: %d  euid: %d' % (uid, e_uid)        
                     else:
                         id_str = ''
+                    if verbose:
+                        prog = self.soMap[self.target].getProg(tid)
+                        if prog is not None:
+                            name = os.path.basename(prog)
+                        else:
+                            name = tasks[t].comm
+                    else:
+                        name = tasks[t].comm
                     print('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
-                        tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
+                        name, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
                     if fh is not None:
                         fh.write('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s\n' % (tasks[t].pid, t, 
                             tasks[t].comm, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
@@ -1589,7 +1597,7 @@ class GenMonitor():
                 until we enter the text segment so we get the SO map '''
             f1 = stopFunction.StopFunction(self.execToText, [], nest=True)
             flist = [f1]
-            self.toExecve(comm=proc, flist=flist)
+            self.toExecve(prog=proc, flist=flist)
 
 
     def toProc(self, proc, binary=False, run=True):
@@ -1618,7 +1626,7 @@ class GenMonitor():
                 self.winMonitor[self.target].toCreateProc(comm=proc, run=run)
             else:
                 self.lgr.debug('toProc no process %s found, run until execve' % proc)
-                self.toExecve(comm=proc, flist=[], binary=binary)
+                self.toExecve(prog=proc, flist=[], binary=binary)
 
         
     def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True):
@@ -1633,9 +1641,9 @@ class GenMonitor():
             print('Need a proc name as a string')
             return
         self.lgr.debug('genMonitor debugProc')
-        if len(proc) > 15:
-            proc = proc[:16]
-            print('Process name truncated to %s to match Linux comm name' % proc)
+        #if len(proc) > 15:
+        #    proc = proc[:16]
+        #    print('Process name truncated to %s to match Linux comm name' % proc)
         self.rmDebugWarnHap()
         #self.stopTrace()
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
@@ -1670,7 +1678,7 @@ class GenMonitor():
             f3 = stopFunction.StopFunction(self.stackFrameManager[self.target].setStackBase, [], nest=False)
             f4 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3, f4]
-            self.toExecve(comm=proc, flist=flist, binary=True)
+            self.toExecve(prog=proc, flist=flist, binary=True)
        
 
     def listHasDebug(self, flist):
@@ -2716,10 +2724,10 @@ class GenMonitor():
         
         self.traceProcs[self.target].showAll()
  
-    def toExecve(self, comm=None, flist=None, binary=False):
+    def toExecve(self, prog=None, flist=None, binary=False):
         cell = self.cell_config.cell_context[self.target]
-        if comm is not None:    
-            params = syscall.CallParams('toExecve', 'execve', comm, break_simulation=True) 
+        if prog is not None:    
+            params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
             if binary:
                 params.param_flags.append('binary')
             call_params = [params]

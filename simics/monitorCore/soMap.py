@@ -257,6 +257,11 @@ class SOMap():
         return retval
 
     def addText(self, path, prog, tid_in):
+        tid_already = self.getSOTid(tid_in)
+        if tid_already != tid_in:
+            self.lgr.debug('soMap addText tid_in %s is thread of existing leader %s' % (tid_in, tid_alread))
+            return None
+        self.lgr.debug('soMap addText tid %s path %s' % (tid_in, path))
         # Add information about a newly loaded program, returning load info
         retval = None
         prog_basename = os.path.basename(path)
@@ -283,6 +288,7 @@ class SOMap():
         if tid not in self.so_addr_map:    
             self.so_addr_map[tid] = {}
             self.so_file_map[tid] = {}
+            self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
         else:
             self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
         if tid in self.prog_start:
@@ -526,17 +532,17 @@ class SOMap():
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)
-            #self.lgr.debug('SOMap getSOTid getCurrnetTaskLeader got %s for current tid:%s' % (ptid, tid))
+            self.lgr.debug('SOMap getSOTid getCurrnetTaskLeader got %s for current tid:%s' % (ptid, tid))
             if ptid != tid:
-                #self.lgr.debug('SOMap getSOTid use group leader')
+                self.lgr.debug('SOMap getSOTid use group leader')
                 retval = ptid
             else:
                 ptid = self.task_utils.getTidParent(tid)
                 if ptid != tid:
-                    #self.lgr.debug('SOMap getSOTid use parent %s' % ptid)
+                    self.lgr.debug('SOMap getSOTid use parent %s' % ptid)
                     retval = ptid
                 else:
-                    #self.lgr.debug('getSOTid no so map after get parent for %s' % tid)
+                    self.lgr.debug('getSOTid no so map after get parent for %s' % tid)
                     retval = None
             self.cheesy_tid = tid
             self.cheesy_mapped = retval

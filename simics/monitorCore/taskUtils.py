@@ -540,6 +540,9 @@ class TaskUtils():
         return retval
 
     def getGroupTids(self, leader_tid):
+        if leader_tid is None:
+            self.lgr.error('taskUtils getGroupTids called with leader_tid of None')
+            return None
         # BEWARE uses PIDs and casts tid to pid
         retval = {}
         self.lgr.debug('getGroupTids for %s' % leader_tid)
@@ -872,23 +875,24 @@ class TaskUtils():
         else:
             self.lgr.debug('getProgArgsFromStack word size 8')
             # if swap, use rdx
-            if self.param.x86_reg_swap:
-                reg_num = cpu.iface.int_register.get_number("rdx")
+            if not at_enter and self.param.x86_reg_swap:
+                use_reg = 'rdx'
             else:
-                reg_num = cpu.iface.int_register.get_number("rsi")
-            rsi = cpu.iface.int_register.read(reg_num)
-            prog_addr = self.mem_utils.readPtr(cpu, rsi)
+                use_reg = 'rsi'
+            reg_num = cpu.iface.int_register.get_number(use_reg)
+            reg_val = cpu.iface.int_register.read(reg_num)
+            prog_addr = self.mem_utils.readPtr(cpu, reg_val)
             if prog_addr is not None:
-                self.lgr.debug('getProcArgsFromStack 64 bit rsi is 0x%x prog_addr 0x%x' % (rsi, prog_addr))
+                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
             else:
-                self.lgr.debug('getProcArgsFromStack 64 bit rsi is 0x%x prog_addr None' % (rsi))
+                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
             i=0
             done = False
             while not done and i < 30:
-                rsi = rsi+self.mem_utils.WORD_SIZE
-                arg_addr = self.mem_utils.readPtr(cpu, rsi)
+                reg_val = reg_val+self.mem_utils.WORD_SIZE
+                arg_addr = self.mem_utils.readPtr(cpu, reg_val)
                 if arg_addr != 0:
-                    #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, rsi))
+                    #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
                     arg_addr_list.append(arg_addr)
                 else:
                     done = True
@@ -1033,8 +1037,20 @@ class TaskUtils():
                 #self.lgr.debug('taskUtils frameFromRegs pc 0x%x sysenter 0x%x' % (frame['pc'], self.param.sysenter))
                 if self.param.x86_reg_swap and frame['pc'] != self.param.sysenter:
                     map_id = 'x86_64swap'
-                for p in memUtils.param_map[map_id]:
-                    frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
+                    # TBD Very odd way to load parameters.
+                    offset = 0x70
+                    rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
+                    addr = rdi+offset
+                    for p in memUtils.param_map[map_id]:
+                        frame[p] = self.mem_utils.readWord(self.cpu, addr)
+                        if p == 'param4':
+                            addr = addr - 0x10
+                        else:
+                            addr = addr - 8
+                else:
+                    for p in memUtils.param_map[map_id]:
+                        frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
+        
             else:
                 for p in memUtils.param_map['x86_32']:
                     frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['x86_32'][p])

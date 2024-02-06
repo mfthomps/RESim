@@ -516,7 +516,7 @@ def soMatch(fname, cache, lgr):
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
-    #lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
         lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
@@ -529,12 +529,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
-        #if lgr is not None:
-        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            #if lgr is not None:
-            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
@@ -553,8 +553,8 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
                 #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
-            #if lgr is not None:
-            #    lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalysisPath %s not in cache' % base)
             pass
 
     return retval

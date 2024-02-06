@@ -1012,12 +1012,15 @@ class GenContextMgr():
                 self.lgr.debug('resetWatchTasks got leader tid of 1, skip')
                 return
             leader_tid = self.task_utils.getGroupLeaderTid(tid)
-            tid_list = self.task_utils.getGroupTids(leader_tid)
-            for tid in tid_list:
-                if tid == 1:
-                    self.lgr.debug('resetWatchTasks got tid of 1, skip')
-                else:
-                    self.addTask(tid)
+            if leader_tid is None:
+                self.lgr.error('contextManager resetWatchTask got no leader tid for tid %s' % tid)
+            else:
+                tid_list = self.task_utils.getGroupTids(leader_tid)
+                for tid in tid_list:
+                    if tid == 1:
+                        self.lgr.debug('resetWatchTasks got tid of 1, skip')
+                    else:
+                        self.addTask(tid)
 
     def setTaskHap(self, tid=None):
         #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
