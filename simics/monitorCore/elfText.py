@@ -100,7 +100,8 @@ def getTextOfText(path, lgr=None):
         return None
     retval = None
     cmd = 'readelf -WS %s' % path
-    grep = 'grep " .text"'
+    #grep = 'grep " .text"'
+    grep = 'grep " .plt"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
                          stdout=subprocess.PIPE,stderr=subprocess.PIPE)
