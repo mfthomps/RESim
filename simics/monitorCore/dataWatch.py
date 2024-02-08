@@ -1687,14 +1687,14 @@ class DataWatch():
                         self.lgr.debug('dataWatch memSomethingEntry, src 0x%x not something we care about and dest does not fall in a buffer, skip it' % self.mem_something.src)
                         return
                 
-        # what is this about?
-        if self.cpu.architecture != 'arm':
-            bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
-            if bp == self.recent_entry_bp:
-                self.lgr.debug('dataWatch memSomethingEntry, bp 0x%x is same as recent, bail' % bp)
-                return
-            else:
-               self.recent_entry_bp = bp
+        # TBD what is this about?
+        #if self.cpu.architecture != 'arm':
+        #    bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
+        #    if bp == self.recent_entry_bp:
+        #        self.lgr.debug('dataWatch memSomethingEntry, bp 0x%x is same as recent, bail' % bp)
+        #        return
+        #    else:
+        #       self.recent_entry_bp = bp
          
         '''
         TBD for now if call is not from main, bail.  Note this is an optimization anyway, so if data is actually hit, we'll see it. 
@@ -1774,7 +1774,6 @@ class DataWatch():
             retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
             retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
-        #elif self.top.isWindows(target=self.cell_name) and self.mem_utils.wordSize(self.cpu) == 8:
         elif self.top.isWindows(target=self.cell_name) and word_size == 8:
             retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
@@ -1783,6 +1782,10 @@ class DataWatch():
         #    retval1 = self.mem_utils.getRegValue(self.cpu, 'eax')
         #    retval2 = self.mem_utils.getRegValue(self.cpu, 'ebx')
         #    retval3 = self.mem_utils.getRegValue(self.cpu, 'ecx')
+        elif word_size == 8:
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'rsi')
+            retval2 = self.mem_utils.getRegValue(self.cpu, 'rdi')
+            retval3 = self.mem_utils.getRegValue(self.cpu, 'rdx')
         else:
             retval1 = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
             retval2 = self.mem_utils.readAppPtr(self.cpu, sp+word_size, size=word_size)
@@ -1939,11 +1942,11 @@ class DataWatch():
                     if so_file is not None and 'libc' in so_file.lower():
                         count_addr = self.mem_utils.readAppPtr(self.cpu, sp+2*word_size, size=word_size)
                         self.mem_something.count = self.mem_utils.readWord32(self.cpu, count_addr)
-                        #self.lgr.debug('mempcy but is libc count_addr 0x%x, count %d' % (count_addr, self.mem_something.count))
+                        self.lgr.debug('mempcy but is libc count_addr 0x%x, count %d' % (count_addr, self.mem_something.count))
                     else:
                         self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*word_size)
-                        #self.lgr.debug('mempcy but not libc, so file %s  count %d' % (so_file, self.mem_something.count))
-                elif self.mem_something.fun != 'memcpy_xmm':
+                        self.lgr.debug('mempcy but not libc, so file %s  count %d' % (so_file, self.mem_something.count))
+                elif self.mem_something.fun != 'memcpy_xmm' and word_size == 4:
                     self.mem_something.count = self.mem_utils.readWord32(self.cpu, sp+2*word_size)
             if self.mem_something.count == 0:
                 self.lgr.debug('dataWatch gatherCallParams sees 0 count for copy, skip this function.')
@@ -3456,7 +3459,7 @@ class DataWatch():
         self.prev_cycle = self.cpu.cycles
 
 
-        self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s cpl: %d' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context, cpl))
+        self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s cpl: %d memory.size(trans_size)=%d' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context, cpl, memory.size))
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -3494,7 +3497,7 @@ class DataWatch():
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp') - self.mem_utils.wordSize(self.cpu)
                 self.trackPush(sp, instruct, addr, start, length, eip)
             elif fun in self.not_mem_something:
-                self.lgr.debug('DataWatch readHap fun 0x%x in not_mem_something' % fun)
+                self.lgr.debug('DataWatch readHap fun 0x%x in not_mem_something call finishReadHap memory.size %d' % (fun, memory.size))
                 self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
             else:
                 ''' Get the stack frame so we can look for memsomething or frees '''
@@ -3506,7 +3509,7 @@ class DataWatch():
                     self.frames = st.getFrames(20)
                     if not self.checkFree(self.frames, index, op_type):
                         if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, fun):
-                            self.lgr.debug('dataWatch, not memstuff, do finishRead')
+                            self.lgr.debug('dataWatch, not memstuff, do finishRead memory.size %d' % memory.size)
                             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
                             # TBD already done in lookForMemStuff?
                             #if fun is not None and fun not in self.not_mem_something:
@@ -3518,6 +3521,7 @@ class DataWatch():
                         #self.lgr.debug('dataWatch was checkFree')
                         pass
         else:
+            self.lgr.debug('dataWatch readHap cpl 0, memory.size %d' % memory.size)
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
 
     def cheapReuse(self, eip, addr, size):
