@@ -659,7 +659,15 @@ class StackTrace():
         retval = None
         first_instruct = SIM_disassemble_address(self.cpu, call_addr, 1, 0)
         #self.lgr.debug('stackTrace isGOT first_instruct is %s' % first_instruct[1])
-        if first_instruct[1].lower().startswith('jmp dword'):
+        if first_instruct[1].lower().startswith('jmp qword'):
+            got_fun_name = self.fun_mgr.funFromAddr(call_addr)
+            instruct = '%s %s' % (self.callmn, got_fun_name)
+            frame = self.FrameEntry(call_ip, fname, instruct, ptr, fun_addr=call_addr, fun_name=got_fun_name, ret_to_addr=ptr)
+            frame.ret_addr = call_ip + instruct_of_call[0] 
+            self.addFrame(frame)
+            retval = self.readAppPtr(ptr)
+            
+        elif first_instruct[1].lower().startswith('jmp dword'): 
             fun_name = None
             new_call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(first_instruct, call_addr)
             if new_call_addr is not None:
@@ -836,12 +844,12 @@ class StackTrace():
             #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
             if self.soMap.isCode(val, self.tid):
                 call_ip = self.followCall(val)
-                #if call_ip is not None:
-                #   self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
-                #   pass
-                #else:
-                #   self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
-                #   pass
+                if call_ip is not None:
+                   self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
+                   pass
+                else:
+                   self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                   pass
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''
@@ -890,12 +898,12 @@ class StackTrace():
                                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(first_instruct, call_to)
                                         if not (self.fun_mgr.isFun(fun_hex) and self.fun_mgr.inFun(prev_ip, fun_hex)):
                                             skip_this = True
-                                            #self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+                                            self.lgr.debug('StackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
                                         else:
                                             ''' record the direct branch, e.g., jmp dword...'''
                                             frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
                                             frame.ret_addr = call_ip + first_instruct[0] 
-                                            #self.lgr.debug('stackTrace direct branch fname: %s add frame %s' % (fname, frame.dumpString()))
+                                            self.lgr.debug('stackTrace direct branch fname: %s add frame %s' % (fname, frame.dumpString()))
                                             self.addFrame(frame)
                                     else:
                                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
