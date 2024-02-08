@@ -476,20 +476,22 @@ class SharedSyscall():
                     trace_msg = ('\treturn from socketcall %s tid:%s  FD: None' % (socket_callname, tid))
                     return trace_msg 
                 if exit_info.sock_struct is None or exit_info.sock_struct.length is None:
-                    self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call')
-                    trace_msg = ('\treturn from socketcall %s tid:%s  FD: %d length none (from revToCall?)' % (socket_callname, tid, exit_info.old_fd))
-                    return trace_msg 
+                    self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call, assume was a setExit from snapshot')
+                    count = exit_info.count
+                else:
+                    count = exit_info.sock_struct.length
                 trace_msg = ('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, tid, 
-                     exit_info.old_fd, exit_info.sock_struct.length, eax, exit_info.retval_addr, src, s))
+                     exit_info.old_fd, count, eax, exit_info.retval_addr, src, s))
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
+                self.lgr.debug('sharedSyscall matched_param is %s, my_syscall %s linger %r' % (str(exit_info.matched_param), my_syscall.name, my_syscall.linger))
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data.  NOTE: length was the given length, changed to count'''
-                    self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, eax, exit_info.sock_struct.length))
+                    self.lgr.debug('recv call setRange retval_addr 0x%x count len %d length %d' % (exit_info.retval_addr, eax, count))
                     if self.kbuffer is not None:
                         self.kbuffer.readReturn(eax)
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, 
-                               max_len=exit_info.sock_struct.length, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
+                               max_len=count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
                     if exit_info.fname_addr is not None:
                         count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                         msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
@@ -862,6 +864,7 @@ class SharedSyscall():
                 self.lgr.debug(trace_msg)
 
                 my_syscall = exit_info.syscall_instance
+                self.lgr.debug('sharedSyscall return from read matched_param is %s linger %r my_syscall %s' % (str(exit_info.matched_param), my_syscall.linger, my_syscall.name))
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None \
                    and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
@@ -1155,7 +1158,7 @@ class SharedSyscall():
                 self.traceProcs.addProc(ueax, tid)
                 self.traceProcs.copyOpen(tid, eax)
         elif callname == 'execve':
-            self.lgr.debug('syscall handleExit from execve tid:%s  remove from pending_execve' % tid)
+            self.lgr.debug('sharedSyscall execve tid:%s  remove from pending_execve' % tid)
             if self.isPendingExecve(tid):
                 self.rmPendingExecve(tid)
         elif callname == 'socketcall' or callname.upper() in net.callname:
