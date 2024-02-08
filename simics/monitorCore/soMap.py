@@ -258,9 +258,11 @@ class SOMap():
 
     def addText(self, path, prog, tid_in):
         tid_already = self.getSOTid(tid_in)
+        #self.lgr.debug('soMap addText tid_in %s tid_already %s' % (tid_in, tid_already))
         if tid_already != tid_in:
-            self.lgr.debug('soMap addText tid_in %s is thread of existing leader %s' % (tid_in, tid_alread))
-            return None
+            self.lgr.debug('soMap addText tid_in %s is thread of existing leader %s' % (tid_in, tid_already))
+            retval = self.getLoadInfo(tid=tid_already)
+            return retval
         self.lgr.debug('soMap addText tid %s path %s' % (tid_in, path))
         # Add information about a newly loaded program, returning load info
         retval = None
@@ -386,6 +388,7 @@ class SOMap():
 
     def listSO(self, filter=None):
         for tid in self.so_file_map:
+            self.lgr.debug('soMap listSO tid %s in so_file_map')
             for load_info in self.so_file_map[tid]:
                 prog = self.so_file_map[tid][load_info]
                 if filter is None or filter in prog:
@@ -526,24 +529,30 @@ class SOMap():
         return None
  
     def getSOTid(self, tid):
-        # all threads in a family share one record for what we think is the parent tid
+        # all threads in a family share one record for what we think is the parent tid (group leader)
+        #self.lgr.debug('SOMap getSOTid for %s' % tid)
+        retval = None
+        if tid is None:
+            self.lgr.error('soMap getSOTid called with None for tid')
+            return None
         retval = tid
         if tid not in self.so_file_map:
+            #self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)
-            self.lgr.debug('SOMap getSOTid getCurrnetTaskLeader got %s for current tid:%s' % (ptid, tid))
+            #self.lgr.debug('SOMap getSOTid getCurrnetTaskLeader got %s for current tid:%s' % (ptid, tid))
             if ptid != tid:
-                self.lgr.debug('SOMap getSOTid use group leader')
+                #self.lgr.debug('SOMap getSOTid use group leader')
                 retval = ptid
-            else:
-                ptid = self.task_utils.getTidParent(tid)
-                if ptid != tid:
-                    self.lgr.debug('SOMap getSOTid use parent %s' % ptid)
-                    retval = ptid
-                else:
-                    self.lgr.debug('getSOTid no so map after get parent for %s' % tid)
-                    retval = None
+            #else:
+            #    ptid = self.task_utils.getTidParent(tid)
+            #    if ptid != tid:
+            #        self.lgr.debug('SOMap getSOTid use parent %s' % ptid)
+            #        retval = ptid
+            #    else:
+            #        self.lgr.debug('getSOTid no so map after get parent for %s' % tid)
+            #        retval = None
             self.cheesy_tid = tid
             self.cheesy_mapped = retval
         return retval
@@ -778,9 +787,11 @@ class SOMap():
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (fpath, name))
                     self.so_watch_callback[fpath][name](load_addr, name)
 
-    def getLoadInfo(self):
+    def getLoadInfo(self, tid=None):
         load_info = None
-        cpu, comm, tid = self.task_utils.curThread() 
+        if tid is None:
+            cpu, comm, tid = self.task_utils.curThread() 
+        tid = self.getSOTid(tid)
         if tid in self.prog_start:
             size = self.prog_end[tid] - self.prog_start[tid] + 1 
             load_info = LoadInfo(self.prog_start[tid], size)
