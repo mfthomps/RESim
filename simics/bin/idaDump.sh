@@ -86,11 +86,12 @@ if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
     fi
     echo "image_base is $target_image_base"
     echo $idacmd -L/tmp/idaDump.log -A -a -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
-    $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py "$ida_db_path"
+    $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py "$ida_db_path" || tail /tmp/idaDump.log && exit 1
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
     echo $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target"
-    $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target"
+    $idacmd -L/tmp/idaDump.log -A -o"$ida_db_path" -S$RESIM_DIR/simics/ida/idaDump.py "$target" || tail /tmp/idaDump.log && exit 1
     echo $idacmd -L/tmp/idaDump.log -A -o$ida_db_path -S$RESIM_DIR/simics/ida/idaDump.py "$target"
 fi
+tail /tmp/idaDump.log
