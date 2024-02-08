@@ -217,6 +217,8 @@ and then update your ini file to begin at that checkpoint using the {\tt RUN\_FR
 run commands, the tracing will continue.  While stopped, you may use the {\tt tasks} commands to see which processes are currently running.  Or the {\tt showBinders} command to 
 see network ports being listened to. See the \ref{process_tracing} for more information about process tracing. 
 
+Running wireshark from the Simics prompt will often tell you IP addresses used by the target.
+
 \subsection{Analyze a process}
 When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
 
@@ -2969,6 +2971,38 @@ on function list?
 look for the address as it does its processing, and then jump to it rather than relying on the watch mark  given by the trackio artifact.
 \end{itemize}
 
+\subsection{Data Watch and Watch Marks}
+\subsubsection{Data Watch ntohl}
+The ntohl type functions are common in some programs.  RESim catches some (but not all) instances of the results of these functions getting copied into memory buffers:
+\begin{verbatim}
+call    _ntohl
+0808A7E0 add     esp, 10h
+0808A7E3 mov     edx, eax
+0808A7E5 mov     eax, [ebp+arg_0]
+0808A7E8 mov     [eax+68h], edx
+\end{verbatim}
+
+\subsubsection{Data watch ad-hoc copies}
+Treated as an ad-hoc copy?:
+\begin{verbatim}
+mov x, buf
+push x
+call foo
+mov bar, x
+\end{verbatim}
+
+\subsubsection{Watch Marks and Parsing}
+Watch marks created by complex regular expression parsers such as perlMatcher may show multiple marks where you might expect to see one.  The ad-hoc nature
+of RESims regular expression detection can result in several adjacent marks that are part of the same call chain.  When RESim first sees a data reference
+that appears to be a regex character lookup, it finds the call to that function.  However it may be that the calling function might also be within a parser
+and it may then make a data reference, and so on.  One approach to making better sense of such watch marks (particularly when there are many of them) is
+to perform post-processing to consolidate multiple marks. 
+
+\subsubsection{Tracking values returned in registers}
+Data returned in registers, e.g., eax, from functions such as NTOHL or a getc from a buffer may be pushed onto the stack for passing to some
+other function that will store (or otherwise do something of interest with) the data.  Or it may store the data into memory.  Or it may do both.
+Currently this is not completely handled.
+
 \subsection{I/O via threads}
 Network traffic is sometimes sent via a thread, making it challenging to track the source of the data that was sent.  Breaking on a "sendto" may
 lead to a thread that only does the sendto, with the parameters coming from a clone setup.  Thus, you must find which pid does the send to and then
@@ -3021,16 +3055,6 @@ inputs besides the one picked by injectToBB.
 The data injection scheme catches kernel reads and skips over them while injecting data.  This affects timing/scheduling because the kernel never
 blocks.
 
-\subsection{Data Watch ntohl}
-The ntohl type functions are common in some programs.  RESim catches some (but not all) instances of the results of these functions getting copied into memory buffers:
-\begin{verbatim}
-call    _ntohl
-0808A7E0 add     esp, 10h
-0808A7E3 mov     edx, eax
-0808A7E5 mov     eax, [ebp+arg_0]
-0808A7E8 mov     [eax+68h], edx
-\end{verbatim}
-
 \subsection{More on kernel data buffers}
 On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
 This option, kbuf=True, requires drive-driver.sh to send as large a data stream as you wish to support for future injectIO or AFL sessions, and this data stream
@@ -3049,15 +3073,6 @@ And fuzzing design in general... In addition to basic problems that can be solve
 For example, previously received data may contain a crc and/or length of the data to be fuzzed.  Jumpers around crc calculations and memory modification should
 be avoided simply because it requires code analysis to determine completeness, e.g., is that the only reference to the predetermined code length?  In general,
 it is preferable to start the fuzzing at the injest of the earlier data, e.g., by using a filter.
-
-\subsection{Data watch ad-hoc copies}
-Treated as an ad-hoc copy?:
-\begin{verbatim}
-mov x, buf
-push x
-call foo
-mov bar, x
-\end{verbatim}
 
 \subsection{UDP without headers}
 The injectIO and AFL design for UDP relies on their being UDP headers to break data into multiple packets.
@@ -3110,13 +3125,6 @@ We watch crashes by watching for modifications of the next pointer in the link l
 The crashes are seen by AFL.
 Exits are watched during playback and are displayed to the user.  For Linux, the {\tt exit\_group} and the
 {\tt tgkill} calls are watched.  For Windows, the {\tt TerminateProcess} is watched.  (TBD add TerminateThread?)
-
-\subsection{Watch Marks and Parsing}
-Watch marks created by complex regular expression parsers such as perlMatcher may show multiple marks where you might expect to see one.  The ad-hoc nature
-of RESims regular expression detection can result in several adjacent marks that are part of the same call chain.  When RESim first sees a data reference
-that appears to be a regex character lookup, it finds the call to that function.  However it may be that the calling function might also be within a parser
-and it may then make a data reference, and so on.  One approach to making better sense of such watch marks (particularly when there are many of them) is
-to perform post-processing to consolidate multiple marks. 
 
 \subsection{BNTs and compares}
 Catch blocks such as these within markCompare.
@@ -3477,6 +3485,11 @@ All module interfaces will expect tids, and will sort them out from there if nee
 The Context Manager must be able to distinguish between threads of a process, e.g., for trace maze management.
 
 If traceAll while debugging, the all threads of the process must be traced.
+
+\subsection{CR3 and Windows}
+Windows saves the CR3 value used by the kernel in a location relative to GS.
+The CR3 used by the kernel stays constant until it doesn't.  The memUtils v2p
+changes the saved value when it is found to have changed. 
 
 \section{CADET01 networking}
 The cadet01 example can serve as a rapid prototyping testbed to explore Simics networking and RESim functions.
