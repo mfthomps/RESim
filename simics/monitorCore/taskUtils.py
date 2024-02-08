@@ -623,7 +623,7 @@ class TaskUtils():
         return retval
 
     def getTidParent(self, tid):
-        tid = None
+        return_tid = None
         rec = self.getRecAddrForTid(tid)
         if rec is None:
             self.lgr.error('TaskUtils getTidParent got none for tid %s' % tid)
@@ -631,8 +631,8 @@ class TaskUtils():
         parent = self.mem_utils.readPtr(self.cpu, rec + self.param.ts_real_parent)
         pid = self.mem_utils.readWord32(self.cpu, parent + self.param.ts_pid)
         if pid is not None:
-            tid = str(pid)
-        return tid 
+            return_tid = str(pid)
+        return return_tid 
  
     def getProcRecForTid(self, tid):
         # match windows
