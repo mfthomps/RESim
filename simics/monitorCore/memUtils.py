@@ -131,9 +131,8 @@ param_map['x86_32']['param6'] = 'ebb'
 # computed.
 param_map['x86_64swap'] = {}
 param_map['x86_64swap']['param1'] = 'rbx'
-# TBD seems odd assignments
-param_map['x86_64swap']['param3'] = 'rcx'
 param_map['x86_64swap']['param2'] = 'rdx'
+param_map['x86_64swap']['param3'] = 'rcx'
 param_map['x86_64swap']['param4'] = 'rsi'
 param_map['x86_64swap']['param5'] = 'rdi'
 param_map['x86_64swap']['param6'] = 'rbb'

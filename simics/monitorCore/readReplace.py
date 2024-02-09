@@ -57,7 +57,7 @@ class ReadReplace():
         self.breakmap = {}
         self.done_list = []
         if not os.path.isfile(fname):
-            self.lgr.error('ReadReplace: Could not find readReplace file %s' % fname)
+            self.lgr.error('readReplace: Could not find readReplace file %s' % fname)
             return
         if snapshot is not None:
             self.pickleLoad(snapshot)
@@ -67,37 +67,47 @@ class ReadReplace():
                     continue 
                 parts = line.strip().split()
                 if len(parts) != 3:
-                    self.lgr.error('ReadReplace: Could not make sense of %s' % line)
+                    self.lgr.error('readReplace: Could not make sense of %s' % line)
                     return
                 comm = parts[0]
                 try:
                     addr = int(parts[1], 16)
                 except:
-                    self.lgr.error('ReadReplace: bad addr in %s' % line)
+                    self.lgr.error('readReplace: bad addr in %s' % line)
                     return
                 ''' Set break unless comm/addr pair appears in the pickled list '''
                 comm_addr = '%s:0x%x' % (comm, addr)
                 if comm_addr not in self.done_list:
                     hexstring = parts[2]
                     self.addBreak(addr, comm, hexstring)
-        self.lgr.debug('ReadReplace: set %d breaks' % len(self.breakmap))
+        self.lgr.debug('readReplace: set %d breaks' % len(self.breakmap))
 
     def addBreak(self, addr, comm, hexstring):
                 breakpt = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Read, addr, 1, 0)
                 self.lgr.debug('readReplace addBreak %d addr 0x%x context %s' % (breakpt, addr, self.cpu.current_context))
                 hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.readHap, None, breakpt)
                 self.breakmap[breakpt] = BreakRec(addr, comm, hexstring, hap)
-         
+        
+    def getProg(self, break_num):
+        cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu) 
+        if len(self.breakmap[break_num].comm) > 15:
+            full_prog = self.top.getProgName(tid)
+            if full_prog is not None:
+                prog = os.path.basename(full_prog)
+        else:
+            prog = comm
+        return prog
+ 
     def readHap(self, dumb, context, break_num, memory):
         if break_num not in self.breakmap:
-            self.lgr.error('ReadReplace syscallHap break %d not in breakmap' % break_num)
+            self.lgr.error('readReplace syscallHap break %d not in breakmap' % break_num)
             return
-        cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu) 
-        if comm != self.breakmap[break_num].comm:
-            self.lgr.debug('ReadReplace: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, comm))
+        prog = self.getProg(break_num)
+        if prog != self.breakmap[break_num].comm:
+            self.lgr.debug('readReplace: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, prog))
         else:
             bstring = binascii.unhexlify(bytes(self.breakmap[break_num].hexstring.encode())) 
-            self.lgr.debug('ReadReplace comm %s would write %s to 0x%x, addr of interest is 0x%x' % (comm, bstring, memory.logical_address, self.breakmap[break_num].addr)) 
+            self.lgr.debug('readReplace comm %s would write %s to 0x%x, addr of interest is 0x%x' % (prog, bstring, memory.logical_address, self.breakmap[break_num].addr)) 
             self.top.writeString(self.breakmap[break_num].addr, bstring, target_cpu=self.cpu)
             #SIM_break_simulation('remove me')
             done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
@@ -111,10 +121,10 @@ class ReadReplace():
             del self.breakmap[break_num]
 
     def swapContext(self):
-        cpu, comm, pid = self.top.getCurrentProc(target_cpu=self.cpu) 
         swap_list = []
         for break_num in self.breakmap:
-            if self.breakmap[break_num].comm == comm:
+            prog = self.getProg(break_num)
+            if self.breakmap[break_num].comm == prog:
                 swap_list.append(break_num)
         for break_num in swap_list:
             self.lgr.debug('readReplace swapContext for comm %s current context %s' % (self.breakmap[break_num].comm, self.cpu.current_context))
@@ -125,9 +135,20 @@ class ReadReplace():
         done_file = os.path.join('./', name, self.cell_name, 'read_replace.pickle')
         fd = open(done_file, "wb") 
         pickle.dump( self.done_list, fd)
-        self.lgr.debug('ReadReplace done_list pickleit to %s ' % (done_file))
+        self.lgr.debug('readReplace done_list pickleit to %s ' % (done_file))
 
     def pickleLoad(self, name):
         done_file = os.path.join('./', name, self.cell_name, 'read_replace.pickle')
         if os.path.isfile(done_file):
             self.done_list = pickle.load( open(done_file, 'rb') ) 
+
+    def disableBreaks(self):
+        self.lgr.debug('readReplace disableBreaks')
+        for break_num in self.breakmap: 
+            SIM_disable_breakpoint(break_num)
+
+    def enableBreaks(self):
+        self.lgr.debug('readReplace enableBreaks')
+        for break_num in self.breakmap: 
+            SIM_enable_breakpoint(break_num)
+

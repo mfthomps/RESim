@@ -875,8 +875,9 @@ class GenContextMgr():
     def amWatching(self, tid):
         ctask = self.task_utils.getCurThreadRec()
         cur_tid  = self.task_utils.curTID()
-       
-        if tid == cur_tid and (ctask in self.watch_rec_list or len(self.watch_rec_list)==0):
+      
+        # TBD point of checking watch_rec_list len of zero? 
+        if tid == cur_tid and (ctask in self.watch_rec_list or (self.debugging_tid is not None and len(self.watch_rec_list)==0)):
             return True
         elif tid in self.tid_cache:
             return True
@@ -1012,12 +1013,15 @@ class GenContextMgr():
                 self.lgr.debug('resetWatchTasks got leader tid of 1, skip')
                 return
             leader_tid = self.task_utils.getGroupLeaderTid(tid)
-            tid_list = self.task_utils.getGroupTids(leader_tid)
-            for tid in tid_list:
-                if tid == 1:
-                    self.lgr.debug('resetWatchTasks got tid of 1, skip')
-                else:
-                    self.addTask(tid)
+            if leader_tid is None:
+                self.lgr.error('contextManager resetWatchTask got no leader tid for tid %s' % tid)
+            else:
+                tid_list = self.task_utils.getGroupTids(leader_tid)
+                for tid in tid_list:
+                    if tid == 1:
+                        self.lgr.debug('resetWatchTasks got tid of 1, skip')
+                    else:
+                        self.addTask(tid)
 
     def setTaskHap(self, tid=None):
         #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
@@ -1427,6 +1431,7 @@ class GenContextMgr():
                     SIM_run_alone(self.restoreIgnoreContext, None)
 
     def tidExit(self, tid):
+        self.lgr.debug('contextManager tidExit %s' % tid)
         if tid in self.ignore_tids:
             self.lgr.debug('contextManager tidEXit remove from ignore_pids: %s' % tid)
             self.ignore_tids.remove(tid)

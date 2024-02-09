@@ -39,7 +39,8 @@ class Dmod():
         def __init__(self, match, was, becomes, cmds=[]):
             self.match = match
             self.was = was
-            self.becomes = becomes        
+            mod = becomes.replace('\\n', '\n')
+            self.becomes = mod
             self.cmds = cmds        
 
 
@@ -169,8 +170,8 @@ class Dmod():
                 self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (self.fiddle.was, s))
                 return
             if was is not None:
-                self.lgr.debug('Dmod cell: %s replace %s with %s in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, s))
                 new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
+                self.lgr.debug('Dmod cell: %s replace %s with %s. Orig len %d new len %d in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, len(s), len(new_string), s))
                 self.top.writeString(addr, new_string, target_cpu=cpu)
             else:
                 #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
@@ -271,7 +272,7 @@ class Dmod():
             s = ''.join(map(chr,byte_array))
         except:
             return retval
-        #self.lgr.debug('dMod checkString %d bytes' % len(byte_array))
+        self.lgr.debug('dMod checkString %d bytes' % len(byte_array))
         rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)

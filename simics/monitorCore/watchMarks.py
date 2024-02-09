@@ -84,13 +84,13 @@ class DataMark():
             self.offset = None
         ''' start is the start of the accessed buffer '''
         self.start = start
-        ''' length of the accessed buffer '''
+        ''' length of the accessed buffer (NOT length of ad-hoc move!)'''
         self.length = length
         self.mark_compare = mark_compare
         ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
-            self.lgr.debug('DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
+            self.lgr.debug('watchMarks DataMark ad_hoc end_addr is now 0x%x' % self.end_addr)
         else:
             self.end_addr = None
         # becomes the length of an ad-hoc copy

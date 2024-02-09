@@ -6,6 +6,7 @@ class TargetFS():
         self.root_prefix = root_prefix
         self.root_subdirs = root_subdirs
         self.lgr = None
+        self.file_cache = {}
 
     def find(self, name):
         retval = None
@@ -70,6 +71,9 @@ class TargetFS():
                     lgr.debug('TargetFS getFull not relative changed to %s' % path) 
             elif path.startswith('/'):
                 path = path[1:]
+            elif '/' not in path and path in self.file_cache:
+                return self.file_cache[path] 
+
             full = os.path.join(self.root_prefix, path)
             if os.path.islink(full):
                 real = os.readlink(full)
@@ -104,6 +108,8 @@ class TargetFS():
                     #    if lgr is not None:
                     #        lgr.debug('getFull used find found file %s' % retval)
                     retval = self.find(base)
+                    if path == base and retval is not None and path not in self.file_cache:
+                        self.file_cache[path] = retval
                     if lgr is not None:
                          lgr.debug('getFull used find found file %s' % retval)
 

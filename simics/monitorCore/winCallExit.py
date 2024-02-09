@@ -80,7 +80,7 @@ class WinCallExit():
         self.tid_sockets = {}
 
     def watchData(self, exit_info):
-        if exit_info.call_params is not None and (exit_info.call_params.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
+        if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
             return True
         else:
             return False
@@ -138,14 +138,14 @@ class WinCallExit():
         word_size = exit_info.word_size
 
         if eax != 0:
-            if exit_info.call_params is not None and exit_info.call_params.subcall == 'BIND':
+            if exit_info.matched_param is not None and exit_info.matched_param.subcall == 'BIND':
                 ''' TBD why does this need special case?  remove it?''' 
                 trace_msg = trace_msg+' BIND on Handle 0x%x' % exit_info.old_fd
-                #self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                #self.top.rmSyscall(exit_info.matched_param.name, cell_name=self.cell_name)
             else:
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
-            exit_info.call_params = None
+            exit_info.matched_param = None
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             self.lgr.debug('winCallExit is %s' % callname)
@@ -168,7 +168,7 @@ class WinCallExit():
                         self.soMap.createSection(fd, fd, tid)
                 self.openCallParams(exit_info)
             else:
-                exit_info.call_params = None
+                exit_info.matched_param = None
                 self.lgr.debug('winCallExit %s retval addr is none' % trace_msg)
             
 
@@ -193,10 +193,10 @@ class WinCallExit():
 
                 else:
                     self.lgr.debug('%s handle is none' % trace_msg)
-                    exit_info.call_params = None
+                    exit_info.matched_param = None
             else:
                 self.lgr.debug('%s retval addr is none' % trace_msg)
-                exit_info.call_params = None
+                exit_info.matched_param = None
 
         elif callname == 'ReadFile':
             ''' delay_count_addr has address of return count'''
@@ -298,19 +298,19 @@ class WinCallExit():
                 else:
                     trace_msg = trace_msg+' old_handle: 0x%x new_handle: 0x%x' % (exit_info.old_fd, new_handle)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
-                    if exit_info.call_params is not None and type(exit_info.call_params.match_param) is int:
-                        if (exit_info.call_params.subcall == 'accept' or self.name=='runToIO') and \
-                           (exit_info.call_params.match_param < 0 or exit_info.call_params.match_param == exit_info.old_fd):
+                    if exit_info.matched_param is not None and type(exit_info.matched_param.match_param) is int:
+                        if (exit_info.matched_param.subcall == 'accept' or self.name=='runToIO') and \
+                           (exit_info.matched_param.match_param < 0 or exit_info.matched_param.match_param == exit_info.old_fd):
                             self.lgr.debug('winCallExit %s MODIFIED handle in call params to new handle' % trace_msg)
-                            exit_info.call_params.match_param = new_handle
-                            exit_info.call_params = None
+                            exit_info.matched_param.match_param = new_handle
+                            exit_info.matched_param = None
 
         elif callname in ['FindAtom', 'AddAtom']: 
             atom_hex = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
             trace_msg = trace_msg+' atom hex: 0x%x' % atom_hex
 
         elif callname == 'Close': 
-            if exit_info.call_params is not None and self.dataWatch is not None:
+            if exit_info.matched_param is not None and self.dataWatch is not None:
                    self.dataWatch.close(exit_info.old_fd)
 
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
@@ -342,7 +342,7 @@ class WinCallExit():
                         was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
 
                         ''' Call params satisfied in winDelay'''
-                        exit_info.call_params = None
+                        #exit_info.call_params = None
                         self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
                         if was_ready:
                             not_ready = False
@@ -361,7 +361,7 @@ class WinCallExit():
                 count = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 trace_msg = trace_msg+' count 0x%x from addr 0x%x fd: 0x%x' % (count, exit_info.retval_addr, exit_info.old_fd)
                 self.lgr.debug(trace_msg)
-                if exit_info.call_params is not None and type(exit_info.call_params.match_param) is int and exit_info.call_params.match_param == exit_info.old_fd:
+                if exit_info.matched_param is not None and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
                     self.lgr.debug('winCallExit %s doDataWatch call setRange for 0x%x count 0x%x' % (exit_info.socket_callname, exit_info.retval_addr, count))
                     self.dataWatch.setRange(exit_info.retval_addr, word_size, msg=trace_msg, 
                            max_len=word_size, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd, ignore_commence=True)
@@ -382,8 +382,8 @@ class WinCallExit():
             self.lgr.debug('winCallExit %s' % (trace_msg)) 
         trace_msg=trace_msg+'\n'
 
-        if exit_info.call_params is not None and exit_info.call_params.break_simulation:
-            self.lgr.debug('winCallExit found matching call parameter %s' % str(exit_info.call_params.match_param))
+        if exit_info.matched_param is not None and exit_info.matched_param.break_simulation:
+            self.lgr.debug('winCallExit found matching call parameter %s' % str(exit_info.matched_param.match_param))
             self.matching_exit_info = exit_info
             self.context_manager.setIdaMessage(trace_msg)
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
@@ -403,8 +403,8 @@ class WinCallExit():
                 stop_param = callname
                 if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
                     stop_param = exit_info.socket_callname
-                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.call_params.name)
-                my_syscall.appendRmParam(exit_info.call_params.name)
+                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.matched_param.name)
+                my_syscall.appendRmParam(exit_info.matched_param.name)
                 SIM_run_alone(my_syscall.stopAlone, stop_param)
                 self.top.idaMessage() 
                 # remove it from syscall else there will be stop hap to execute
@@ -428,12 +428,12 @@ class WinCallExit():
             self.exit_info[eip] = {}
 
     def openCallParams(self, exit_info):
-            if exit_info.call_params is not None and type(exit_info.call_params.match_param) is str:
-                self.lgr.debug('winCallExit openCallParams open check string %s against %s' % (exit_info.fname, exit_info.call_params.match_param))
+            if exit_info.matched_param is not None and type(exit_info.matched_param.matched_param) is str:
+                self.lgr.debug('winCallExit openCallParams open check string %s against %s' % (exit_info.fname, exit_info.matched_param.match_param))
                 #if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
-                if exit_info.call_params.match_param not in exit_info.fname:
+                if exit_info.matched_param.match_param not in exit_info.fname:
                     ''' no match, set call_param to none '''
-                    exit_info.call_params = None
+                    exit_info.matched_param = None
 
     def getMatchingExitInfo(self):
         return self.matching_exit_info 
