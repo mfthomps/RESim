@@ -31,7 +31,6 @@ from simics import *
 import writeData
 import aflPath
 import resimUtils
-import traceBuffer
 import cli
 import sys
 import os
@@ -266,12 +265,10 @@ class PlayAFL():
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
         self.lgr.debug('playAFL playInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
-        self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
+        self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
         self.initial_context = self.target_cpu.current_context
         if self.trace_all:
             self.top.traceAll()
-        if len(self.trace_buffer.addr_info) == 0:
-            self.trace_buffer = None
         if self.targetFD is not None and self.count > 0:
             ''' run to IO before finishing init '''
             self.top.jumperDisable(target=self.cell_name)
@@ -311,9 +308,9 @@ class PlayAFL():
             self.top.resetOrigin()
         if self.target_proc is None:
             # otherwise traceBuffer set up in playInitCallback
-            self.trace_buffer = traceBuffer.TraceBuffer(self.top, self.target_cpu, self.mem_utils, self.context_manager, self.lgr, 'playAFL')
-            if len(self.trace_buffer.addr_info) == 0:
-                self.trace_buffer = None
+            self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
+            #if len(self.trace_buffer.addr_info) == 0:
+            #    self.trace_buffer = None
 
         self.top.stopThreadTrack(immediate=True)
 
