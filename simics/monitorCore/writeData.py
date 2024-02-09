@@ -181,7 +181,7 @@ class WriteData():
                 self.user_space_addr, self.user_space_count = self.top.getReadAddr()
             #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
-            self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             #self.lgr.debug('writeData writeKdata, call setCallHap')
             if not self.no_call_hap:
                 self.setCallHap()
@@ -192,7 +192,7 @@ class WriteData():
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
