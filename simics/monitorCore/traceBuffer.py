@@ -86,6 +86,8 @@ class TraceBuffer():
                             if trace_info.fh is None:
                                 self.lgr.error('traceBuffer unable to open outfile %s from %s' % (outfile, buffer_file))
                                 return
+                            else:
+                                self.lgr.debug('traceBuffer output file will be %s' % outfile)
                             if msg is not None:
                                 trace_info.fh.write(msg+'\n')
                                 trace_info.fh.flush()
@@ -235,7 +237,7 @@ class TraceBuffer():
     def returnHap(self, return_info, third, forth, memory):
         if self.return_hap is None:
             return
-        self.lgr.debug('traceBuffer returnHap instruct addr: 0x%x cycle: 0x%x' % (trace_info.addr, self.cpu.cycles))
+        self.lgr.debug('traceBuffer returnHap instruct addr: 0x%x cycle: 0x%x' % (memory.logical_address, self.cpu.cycles))
         buf = self.mem_utils.readString(self.cpu, return_info.buf_addr, 256)
         self.lgr.debug('traceBuffer returnHap read: %s' % buf)
         return_info.trace_info.fh.write(buf+'\n')
