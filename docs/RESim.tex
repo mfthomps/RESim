@@ -317,10 +317,22 @@ time line of watch marks.
 
 \item {\tt buffer tracing} – Use the {\tt TRACE\_BUFFERS} environment variable to report on use of debug buffers.  Syntax of each line is:
 \begin{verbatim}
-   call_reg  <addr> <reg> <outfile>
+   <command>  <addr> <reg> <outfile>
 \end{verbatim}
-Where \textit{addr} is the address of an instruction, typically a call to some some sprintf function within a debug routine, \textit{reg} names the register that containing the address of the debug message
-and \textit{outfile} is the name of the file into which the messages should be written.
+The \textit{command} can be either {\tt call\_reg} or {\tt string\_reg}. if {\tt call\_reg}:
+\begin{itemize}
+\item \textit{addr} is the address of a call instruction, typically a call to some some sprintf function within a debug routine. This is of the form prog:addr where prog is the
+program or library name and addr is the static address within that binary.
+\item \textit{reg} names the register that containing the address of where the called function will write the debug message.
+\end{itemize}
+If the command is {\tt string\_reg} then:
+\begin{itemize}
+\item \textit{addr} is the address of some instruction at which we know the desired buffer is populated and we have a register whose current address points to that
+buffer.  This is also of the form prog:addr.
+\item \textit{reg} names the register that containing the address that contains debug message.
+\end{itemize}
+
+The \textit{outfile} is the name of the file into which the messages should be written.
 
 \item {\tt flushTrace} - Flush trace output to the trace log files.
 
@@ -1354,7 +1366,7 @@ input the name of a file containing one or more directives of the format:
 \end{verbatim}
 Where "comm" is the process comm name; addr is the address; and hexstring
 is a hexidecimal string that will be unhexified and written to the given
-address the first time the address is read.
+address the first time the address is read, e.g., {\tt deadbeef}
 
 Use the {\tt READ\_REPLACE} environment variable to automate execution of this function.
 
