@@ -3349,7 +3349,8 @@ class DataWatch():
                 if self.checkFailedStackBufs(index):
                     self.lgr.debug('dataWatch readHap is a write to dead stack buf %d, skip it' % index)
                     return
-                if self.cheapReuse(eip, addr, memory.size):
+                new_value = SIM_get_mem_op_value_le(memory)
+                if self.cheapReuse(eip, addr, memory.size, new_value):
                     return
             else:
                 self.lgr.debug('dataWatch just a write to 0x%x that is part of a copy.  Ignore' % addr)
@@ -3524,14 +3525,19 @@ class DataWatch():
             self.lgr.debug('dataWatch readHap cpl 0, memory.size %d' % memory.size)
             self.finishReadHap(op_type, memory.size, eip, addr, length, start, tid, index=index)
 
-    def cheapReuse(self, eip, addr, size):
+    def cheapReuse(self, eip, addr, size, new_value):
         ''' look for quick and dirty signs of buffer reuse '''
         retval = False
         if self.fun_mgr is None:
             self.lgr.error('dataWatch cheapReuse no funMgr')
             return retval
         fun_name = self.fun_mgr.funFromAddr(eip)
-        self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s cycles: 0x%x' % (addr, eip, fun_name, self.cpu.cycles))
+        self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s cycles: 0x%x size %d' % (addr, eip, fun_name, self.cpu.cycles, size))
+        index = self.findRangeIndex(addr)
+        if index is not None and self.length[index] == size and new_value == 0:
+            self.lgr.debug('dataWatch cheapReuse is write zero of same size as buffer, remove the buffer at index %d' % index)
+            self.rmRange(addr) 
+            return
         if fun_name is not None:
             if self.top.isWindows(target=self.cell_name):
                 if fun_name in mem_funs:
