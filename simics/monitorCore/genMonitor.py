@@ -329,6 +329,9 @@ class GenMonitor():
 
         self.trace_buffers = {}
 
+        self.resim_version = 23
+        self.snap_version = 0
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -349,6 +352,10 @@ class GenMonitor():
         self.connectors = connector.Connector(self.lgr)
         if self.run_from_snap is not None:
             self.lgr.debug('genInit running from snapshot %s' % self.run_from_snap)
+            version_file = os.path.join('./', self.run_from_snap, 'version.pickle')
+            if os.path.isfile(version_file):
+                self.snap_version = pickle.load( open(version_file, 'rb') )
+
             ''' Restore link naming for convenient connect / disconnect '''
             net_link_file = os.path.join('./', self.run_from_snap, 'net_link.pickle')
             if os.path.isfile(net_link_file):
@@ -1393,7 +1400,7 @@ class GenMonitor():
                         self.lgr.debug('debug, create Coverage ida_path %s, analysis path: %s' % (ida_path, analysis_path))
                         
                         self.coverage = coverage.Coverage(self, prog_name, analysis_path, ida_path, self.context_manager[self.target], 
-                           cell_name, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+                           cell_name, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, self.lgr)
                         if self.coverage is None:
                             self.lgr.error('debug: Coverage is None!')
                         else:
@@ -3458,7 +3465,6 @@ class GenMonitor():
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
-
     def getSO(self, eip, show_orig=False):
         retval = None
         fname, start, end = self.soMap[self.target].getSOInfo(eip)
@@ -4546,7 +4552,7 @@ class GenMonitor():
                 ida_path = self.getIdaData(analysis_path)
                 self.lgr.debug('mapCoverage, no coveage defined, create one. ida_path is %s' % ida_path)
                 self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
-                   cell, self.soMap[self.target], cpu, self.run_from_snap, self.lgr)
+                   cell, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, self.lgr)
             else:
                 self.lgr.error('mapCoverage, could not get analysis path from fname %s' % fname)
               
@@ -5840,6 +5846,8 @@ class GenMonitor():
             if trace_buffer_file is not None and target not in self.trace_buffers:
                 cpu= self.cell_config.cpuFromCell(target)
                 self.trace_buffers[target] = traceBuffer.TraceBuffer(self, trace_buffer_file, cpu, target, self.mem_utils[target], self.context_manager[target], self.soMap[target], self.lgr, msg=msg)
+                return self.trace_buffers[target]
+        return None
 
     def toRunningProc(self, proc, plist, flist):
         self.run_to[self.target].toRunningProc(proc, plist, flist)
@@ -5969,6 +5977,9 @@ class GenMonitor():
             if hasattr(self.param[cell_name], 'mm_struct') and self.param[cell_name].mm_struct is not None:
                 retval = True
         return retval
+
+    def getSnapVersion(self):
+        return self.snap_version
   
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
