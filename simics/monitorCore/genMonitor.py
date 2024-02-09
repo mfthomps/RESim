@@ -2886,6 +2886,8 @@ class GenMonitor():
                 self.magic_origin[self.target].setMagicHap()
             #self.lgr.debug('restoreDebugBreaks return')
             self.jumperEnable()
+            if self.target in self.read_replace:
+                self.read_replace[self.target].enableBreaks()
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
@@ -2944,6 +2946,8 @@ class GenMonitor():
                 #self.lgr.debug('genMon removeDebugBreaks magic')
                 self.magic_origin[self.target].deleteMagicHap()
             self.jumperDisable()
+            if self.target in self.read_replace:
+                self.read_replace[self.target].disableBreaks()
         else:
             retval = False
         return retval
@@ -3463,10 +3467,10 @@ class GenMonitor():
         else:
             if show_orig:
                 cpu, comm, tid = self.task_utils[self.target].curThread() 
-                pid = self.soMap[self.target].pidFromTID(tid)
-                image_base = self.soMap[self.target].getImageBaseForPid(fname, pid)
+                image_base = self.soMap[self.target].getImageBase(fname)
                 delta = eip - start
                 orig = image_base+delta  
+                self.lgr.debug('getSO eip 0x%x start 0x%x image_base 0x%x' % (eip, start, image_base))
                 orig_str = ' orig address: 0x%x' % orig
                 retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
             else:
@@ -5340,6 +5344,8 @@ class GenMonitor():
         if tid is None:
             self.lgr.debug('genMonitor getProgName tid is none')
             return None
+        if target in self.soMap:
+            prog_name = self.soMap[target].getProg(tid)
         prog_name = self.traceProcs[target].getProg(tid)
         self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
         if prog_name is None or prog_name == 'unknown' or prog_name == '<clone>':
@@ -5819,7 +5825,7 @@ class GenMonitor():
         if fname is not None:
             analysis_path = self.soMap[self.target].getAnalysisPath(fname)
             if analysis_path is None:
-                self.lgr.error('getAnalysisPath failed to get path from soMap for %s' % fname)
+                self.lgr.debug('getAnalysisPath failed to get path from soMap for %s' % fname)
         else:
             analysis_path = None
         return analysis_path
