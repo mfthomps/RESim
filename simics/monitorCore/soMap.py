@@ -18,12 +18,14 @@ class CodeSection():
         self.fname = fname
 
 class ProgInfo():
-    def __init__(self, text_start, text_size, text_offset, local_path):
+    def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, local_path):
         self.text_start = text_start
         self.text_size = text_size
         if self.text_start is not None and text_size is not None:
            self.text_end = text_start + text_size
         self.text_offset = text_offset
+        self.plt_addr = plt_addr
+        self.plt_offset = plt_offset
         self.local_path = local_path
 
 class LoadInfo():
@@ -94,7 +96,7 @@ class SOMap():
                          prog_path = os.path.join(root_prefix, use_prog)
                          elf_info = elfText.getText(prog_path, self.lgr)
                          if elf_info is not None:
-                             self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, prog)
+                             self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, elf_info.plt_offset, prog)
                              prog_basename = os.path.basename(prog)
                              self.prog_base_map[prog_basename] = prog
                          else:
@@ -109,9 +111,9 @@ class SOMap():
                     if self.prog_start[tid] is not None:
                         size = self.prog_end[tid] - self.prog_start[tid]
                         if tid in self.prog_local_path:
-                            self.prog_info[prog] = ProgInfo(self.prog_start[tid], size, 0, self.prog_local_path[tid])
+                            self.prog_info[prog] = ProgInfo(self.prog_start[tid], size, 0, 0, 0, self.prog_local_path[tid])
                         else:
-                            self.prog_info[prog] = ProgInfo(self.prog_start[tid], size, 0, None)
+                            self.prog_info[prog] = ProgInfo(self.prog_start[tid], size, 0, 0, 0, None)
                     else:
                         self.prog_info[prog] = None
                 old_so_file_map = so_pickle['so_file_map']
@@ -120,7 +122,7 @@ class SOMap():
                         prog = old_so_file_map[tid][text_seg]
                         if prog not in self.prog_info:
                             end = text_seg.text_start + text_seg.text_size - 1
-                            self.prog_info[prog] = ProgInfo(text_seg.text_start, end, text_seg.text_offset, None)
+                            self.prog_info[prog] = ProgInfo(text_seg.text_start, end, text_seg.text_offset, 0, 0, None)
                         self.lgr.debug('wtf %s text_seg.address 0x%x, offset 0x%x' % (prog, text_seg.address, text_seg.offset))
                         load_info = LoadInfo(text_seg.address, text_seg.size)
                         if tid not in self.so_file_map:
@@ -233,7 +235,7 @@ class SOMap():
         if prog not in self.prog_info:
             elf_info = elfText.getText(path, self.lgr)
             if elf_info is not None:
-                self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, path)
+                self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, elf_info.plt_offset, path)
             else:
                 self.lgr.debug('soMap addText no elf info for %s' % path)
                 pass
@@ -252,12 +254,13 @@ class SOMap():
         
         if prog in self.prog_info:    
             # TBD until we can get load address from process info, assume no ASLR
-            load_addr = self.prog_info[prog].text_start
+            load_addr = self.prog_info[prog].plt_addr
             self.prog_start[tid] = load_addr
             self.prog_end[tid] = self.prog_info[prog].text_end
             self.text_prog[tid] = prog
             self.checkSOWatch(load_addr, prog)
-            size = self.prog_info[prog].text_end - self.prog_start[tid]
+            #size = self.prog_info[prog].text_end - self.prog_start[tid]
+            size = self.prog_info[prog].text_size
             retval = LoadInfo(load_addr, size)
         return retval
 
@@ -325,7 +328,7 @@ class SOMap():
             if full_path is not None and prog not in self.prog_info:
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
-                    self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, full_path)
+                    self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, elf_info.plt_offset, full_path)
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
 
