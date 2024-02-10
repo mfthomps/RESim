@@ -14,7 +14,7 @@ for function_ea in Functions(SegStart(ea), SegEnd(ea)):
             s = GetString(r)
             if s is not None and ': START' in s:
                 name = s.split(':')[0].strip()
-                print name
+                print(name)
                 MakeNameEx(function_ea, name, 0)
                 done = True
                 break

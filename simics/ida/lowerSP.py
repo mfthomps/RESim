@@ -19,7 +19,7 @@ def rotateRight(val, r_bits):
     return ror(val, r_bits, 32)
 
 ea = get_screen_ea()
-print 'ea is %x' % ea
+print('ea is %x' % ea)
 start = get_segm_start(ea)
 end = get_segm_end(ea)
 print('code at 0x%x - 0x%x' % (start, end))

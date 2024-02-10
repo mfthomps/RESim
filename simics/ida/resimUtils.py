@@ -201,15 +201,15 @@ def dumpImports(fname):
     imports = {}
     nimps = idaapi.get_import_module_qty()
 
-    print "Found %d import(s)..." % nimps
+    print("Found %d import(s)..." % nimps)
     import_names = ImportNames()
     for i in xrange(0, nimps):
         name = idaapi.get_import_module_name(i)
         if not name:
-            print "Failed to get import module name for #%d" % i
+            print("Failed to get import module name for #%d" % i)
             continue
 
-        print "Walking-> %s" % name
+        print("Walking-> %s" % name)
         idaapi.enum_import_names(i, import_names.imp_cb)
     import_names.printit()
     import_names.dumpit(fname)
