@@ -8,12 +8,13 @@ sys.path.append('/usr/local/lib/python3.6/dist-packages')
 sys.path.append('/usr/lib/python3/dist-packages')
 import magic
 class Text():
-    def __init__(self, address, offset, size, plt_addr, plt_offset):
+    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size):
         self.text_start = address
         self.text_offset = offset
         self.text_size = size
         self.plt_addr = plt_addr
         self.plt_offset = plt_offset
+        self.plt_size = plt_size
 
 def getRelocate(path, lgr, ida_funs):
     cmd = 'readelf -r %s -W' % path
@@ -84,10 +85,11 @@ def getText(path, lgr):
             elif parts[0].strip() == '.plt':
                 plt_addr = int(parts[2], 16)
                 plt_offset = int(parts[3], 16)
+                plt_size = int(parts[4], 16)
             else:
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
     if addr is not None:
-        retval = Text(addr, offset, size, plt_addr, plt_offset)
+        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size)
    
     return retval
