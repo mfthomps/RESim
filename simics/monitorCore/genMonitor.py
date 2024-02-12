@@ -3658,9 +3658,9 @@ class GenMonitor():
             else:
                 self.lgr.debug('writeString reverse execution was not enabled.')
 
-    def stopDataWatch(self, immediate=False):
-        self.lgr.debug('genMonitor stopDataWatch')
-        self.dataWatch[self.target].stopWatch(break_simulation=True, immediate=immediate)
+    def stopDataWatch(self, immediate=False, leave_backstop=False):
+        self.lgr.debug('genMonitor stopDataWatch immediate %r leave_backstop %r' % (immediate, leave_backstop))
+        self.dataWatch[self.target].stopWatch(break_simulation=True, immediate=immediate, leave_backstop=leave_backstop)
 
     def showDataWatch(self):
         self.dataWatch[self.target].showWatch()
@@ -3865,6 +3865,9 @@ class GenMonitor():
                 
         net_link_file = os.path.join('./', name, 'net_link.pickle')
         pickle.dump( self.link_dict, open( net_link_file, "wb" ) )
+
+        version_file = os.path.join('./', name, 'version.pickle')
+        pickle.dump( self.resim_version, open(version_file, "wb" ) )
        
         self.stackFrameManager[self.target].pickleit(name) 
 
