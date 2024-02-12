@@ -1574,10 +1574,12 @@ class GenContextMgr():
             eproc = self.task_utils.getCurThreadRec()
             full_path = self.top.getFullPath(prog)
             self.lgr.debug('contextManager recordProcessText full path %s' % full_path)
-  
-            win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
-            self.soMap.addText(prog, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
+            if self.top.isWindows(target = self.cell_name):  
+                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                self.soMap.addText(prog, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
                         win_prog_info.image_base, win_prog_info.text_offset)
+            else:
+                self.soMap.addText(full_path, prog, tid)
         else:
             self.lgr.debug('contextManager recordProcess text %s not in comm_prog_map' % comm)
 
