@@ -1296,7 +1296,8 @@ class Syscall():
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, ss.length)
                     # keep kernel from triggering data watch mods if just reading more data into buffer
-                    self.top.stopDataWatch()
+                    # TBD apply this whereever we enter that might modify buffers
+                    self.top.stopDataWatch(leave_backstop=True)
         elif socket_callname == "recvmsg": 
             
             if self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
@@ -2522,10 +2523,14 @@ class Syscall():
                 exit_info.retval_addr = ss.addr
                 self.lgr.debug('ss addr is 0x%x len is %d' % (ss.addr, ss.length))
             if the_callname == 'recvfrom' and callname == 'socketcall':        
-                src_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+16)
-                src_addr_len = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
-                exit_info.fname_addr = src_addr
-                exit_info.count = src_addr_len
+                addr_addr = frame['param2']+16
+                src_addr = self.mem_utils.readWord32(self.cpu, addr_addr)
+                if src_addr is None:
+                    self.lgr.debug('syscall handleReadOrSocket got None for src addr reading from 0x%x' % addr_addr)
+                else:
+                    src_addr_len = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
+                    exit_info.fname_addr = src_addr
+                    exit_info.count = src_addr_len
 
         else:
             self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frame['param1'])
@@ -2611,9 +2616,17 @@ class Syscall():
             for cp in self.call_params:
                 if type(cp.match_param) is int:
                     if cp.match_param == exit_info.old_fd:
-                        self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
-                        exit_info.call_params.append(cp)
-                        exit_info.matched_param = cp
+                        if cp.nth is not None:
+                            self.lgr.debug('setExits found call param as integer our fd, cp.nth is not None it is %s' % str(cp.nth))
+                            cp.count = cp.count + 1
+                            if cp.count >= cp.nth:
+                                self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
+                                exit_info.call_params.append(cp)
+                                exit_info.matched_param = cp
+                        else:
+                            self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
+                            exit_info.call_params.append(cp)
+                            exit_info.matched_param = cp
                  
                 else:
                     exit_info.call_params.append(cp)

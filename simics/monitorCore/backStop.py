@@ -94,27 +94,27 @@ class BackStop():
 
     def checkEvent(self):
         if self.cycle_event is None:
-            print('backstop NO event') 
+            print('backStop NO event') 
         else:
-            print('backstop yes, has event') 
+            print('backStop yes, has event') 
 
     def setFutureCycleAlone(self, cycles):
         if self.cycle_event is None:
             self.cycle_event = SIM_register_event("cycle event", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
-            #self.lgr.debug('backstop did register')
+            #self.lgr.debug('backStop did register')
         else:
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
-            #self.lgr.debug('backstop did registercancel')
+            #self.lgr.debug('backStop did registercancel')
         self.back_stop_cycle = self.cpu.cycles + cycles
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
         #self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x should stop at 0x%x' % (self.cpu.cycles, cycles, self.back_stop_cycle))
 
     def setFutureCycle(self, cycles, now=False):
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
-            self.lgr.debug('backstop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
+            self.lgr.debug('backStop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
             self.hang_callback(self.cpu.cycles)
         if self.hang_cycles is None and self.hang_cycles_delta >0:
-            # curde way to defer hang cycle watch until first data read
+            # crude way to defer hang cycle watch until first data read
             SIM_run_alone(self.setHangCallbackAlone, None)
          
         if not now:
@@ -127,7 +127,7 @@ class BackStop():
            
 
     def hang_handler(self, obj, cycles):
-        self.lgr.debug('backstop hang_handler will call callback %s' % str(self.hang_callback))
+        self.lgr.debug('backStop hang_handler will call callback %s' % str(self.hang_callback))
         self.hang_callback(self.cpu.cycles)
 
     def setHangCallbackAlone(self, dumb):
@@ -138,7 +138,7 @@ class BackStop():
         self.hang_callback = callback
         if now:
             self.hang_cycles = self.cpu.cycles + cycles
-            #self.lgr.debug('backstop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
+            #self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
             if self.hang_event is None:
                 self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
             SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)

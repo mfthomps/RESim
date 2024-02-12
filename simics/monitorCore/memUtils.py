@@ -546,10 +546,11 @@ class MemUtils():
         if paddr is None:
             #self.lgr.debug('readWord32 phys of 0x%x is none' % vaddr)
             return None
+        #value = SIM_read_phys_memory(cpu, paddr, 4)
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
         except:
-            self.lgr.error('readWord32 could not read content of %x' % paddr)
+            self.lgr.debug('readWord32 could not read content of 0x%x vaddr was 0x%x' % (paddr, vaddr))
             value = None
         return value
 

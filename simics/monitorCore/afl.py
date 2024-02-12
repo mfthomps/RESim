@@ -318,9 +318,11 @@ class AFL():
             self.lgr.debug('afl finishInit, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
             self.fault_hap = None
             self.lgr.debug('afl finishInit, call debugExitHap to catch exits')
+
+            #TBD restore this
             self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
+
             self.lgr.debug('afl finishInit, clear context manager debugging tid')
-            self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
             self.context_manager.clearDebuggingTid()
             #tracemalloc.start()
             # hack around Simics model bug

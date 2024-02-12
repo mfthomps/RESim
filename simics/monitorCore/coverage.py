@@ -44,12 +44,13 @@ Tracks a single code file at a time, e.g., main or a single so file.  TBD expand
 Output files of hits use addresses from code file, i.e., not runtime addresses.
 '''
 class Coverage():
-    def __init__(self, top, prog_path, analysis_path, hits_path, context_manager, cell_name, so_map, cpu, run_from_snap, lgr):
+    def __init__(self, top, prog_path, analysis_path, hits_path, context_manager, cell_name, so_map, mem_utils, cpu, run_from_snap, lgr):
         self.lgr = lgr
         self.cell_name = cell_name
         self.cpu = cpu
         self.top = top
         self.so_map = so_map
+        self.mem_utils = mem_utils
         self.context_manager = context_manager
         self.bp_list = []
         self.bb_hap = []
@@ -166,16 +167,19 @@ class Coverage():
             if bb_rel not in self.dead_map:
                 bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         else: 
-            phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
-            if phys_block.address not in self.dead_map:
-                if phys_block.address == 0 or phys_block.address is None:
-                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+            phys_addr = self.mem_utils.v2p(self.cpu, bb_rel)
+            #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
+            #if phys_block.address not in self.dead_map:
+            if phys_addr not in self.dead_map:
+            
+                if phys_addr == 0 or phys_addr is None:
+                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     if self.afl:
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
                     else:
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, Sim_Breakpoint_Temporary)
+                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, Sim_Breakpoint_Temporary)
                     self.addr_map[bp] = bb_rel
             else:
                 #self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_block.address)
@@ -213,6 +217,7 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
+                #self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
                 # TBD REMOVE THIS
                 #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
                 #return
@@ -1080,12 +1085,13 @@ class Coverage():
                 bp_list = [] 
                 for line in fh:
                     bb = int(line.strip(),16)
-                    phys_block = self.cpu.iface.processor_info.logical_to_physical(bb, Sim_Access_Execute)
-                    if phys_block.address == 0:
+                    #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb, Sim_Access_Execute)
+                    phys_addr = self.mem_utils.v2p(self.cpu, bb)
+                    if phys_addr == 0:
                         self.lgr.error('loadExists failed to get phy for 0x%x' % bb)
                         continue
-                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
-                    self.lgr.debug('loadExits set break on 0x%x, linear 0x%x' % (phys_block.address, bb))
+                    bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+                    self.lgr.debug('loadExits set break on 0x%x, linear 0x%x' % (phys_addr, bb))
                     bp_list.append(bp)
                 hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.exitHap, None, bp_list[0], bp_list[-1])
 

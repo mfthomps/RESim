@@ -844,12 +844,12 @@ class StackTrace():
             #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
             if self.soMap.isCode(val, self.tid):
                 call_ip = self.followCall(val)
-                if call_ip is not None:
-                   self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
-                   pass
-                else:
-                   self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
-                   pass
+                #if call_ip is not None:
+                #   self.lgr.debug('is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
+                #   pass
+                #else:
+                #   self.lgr.debug('is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                #   pass
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once in main text assume we never leave? what about callbacks?'''

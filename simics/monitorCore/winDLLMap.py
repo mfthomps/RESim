@@ -176,7 +176,9 @@ class WinDLLMap():
     def pidFromTID(self, tid):
         if tid is None:
             return None
-        elif '-' in tid:
+        # make sure it is string
+        tid = str(tid)
+        if '-' in tid:
             return int(tid.split('-')[0])
         else:
             return int(tid)
