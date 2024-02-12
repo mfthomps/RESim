@@ -254,6 +254,8 @@ class NetLinks():
             else:
                 binder = 'unknown'
             for pname in self.file_sock_connectors[fname]:
+                if pname is None:
+                    continue
                 if pname not in connectors:
                     connectors[pname] = []
                 connectors[pname].append((fname, binder))
