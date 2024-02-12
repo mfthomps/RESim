@@ -973,7 +973,7 @@ class Syscall():
             if prog_addr is None:
                 self.lgr.debug('parseExecve tid:%s prog_addr is None, bail' % tid) 
                 return False
-            call_info = SyscallInfo(cpu, tid, None, None, None, None)
+            call_info = SyscallInfo(cpu, tid, None, None, None)
             self.lgr.debug('parseExecve tid:%s prog string missing, set break on 0x%x' % (tid, prog_addr))
             if prog_addr == 0:
                 self.lgr.error('parseExecve zero prog_addr tid:%s' % tid)
