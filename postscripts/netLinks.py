@@ -270,7 +270,15 @@ class NetLinks():
         if self.proc_trace is not None:
             pname = self.proc_trace.getPname(tid_tok)
         else:
-            pname = line.split()[1]
+            # no proc trace available, just parse the log file line for the comm
+            if '--pid:' in line:
+                # assume windows format
+                pname = line.split()[1]
+            else:
+                if 'tid:' in line:
+                    pre_tid, post_tid = line.split('tid:',1)
+                    parts = post_tid.split()
+                    pname = parts[1]
         return pname
    
         
