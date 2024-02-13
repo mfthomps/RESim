@@ -56,6 +56,12 @@ class GenBreakpoint():
             #self.lgr.debug('GenBreakpoint back from clear breakpoint %d break handle is %d' % (self.break_num, self.handle))
             self.break_num = None
 
+    def disable(self):
+        SIM_disable_breakpoint(self.break_num)
+
+    def enable(self):
+        SIM_enable_breakpoint(self.break_num)
+
 class GenHap():
     def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, immediate=True):
         ''' breakpoint_start and breakpont_end are GenBreakpoint types '''
@@ -148,6 +154,14 @@ class GenHap():
             RES_hap_delete_callback_id(self.hap_type, self.hap_num)
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
+
+    def disable(self):
+        for bp in self.breakpoint_list:
+            bp.disable()
+
+    def enable(self):
+        for bp in self.breakpoint_list:
+            bp.enable()
 
     def getContext(self):
         retval = None
@@ -409,33 +423,6 @@ class GenContextMgr():
                 if (not only_maze_breaks and hap.name != 'exitMaze') or (only_maze_breaks and hap.name == 'exitMaze'):
                     hap.set()
 
-    def clearAllBreak(self, dumb):
-        self.lgr.debug('contextManager clearAllBreak')
-        ''' Called to clear breaks within the resim context '''
-        for bp in self.breakpoints:
-            #if bp.cell == self.resim_context:
-            bp.clear()
-        
-    def clearAllHap(self, keep_maze_breaks=False):
-        #self.lgr.debug('clearAllHap start')
-        ''' clear all haps, excepting maze breakout haps per input switch 
-            If self.watch_rec_list is empty, then clear regardless of context.
-            Otherwise, if not empty, then clear only resim context.
-        '''
-        if self.watchingTasks(): 
-            for hap in self.haps:
-                if hap.getContext() == self.getRESimContext():
-                    if not keep_maze_breaks or hap.name != 'exitMaze':
-                        hap.clear()
-        else:
-            for hap in self.haps:
-                if not keep_maze_breaks or hap.name != 'exitMaze':
-                    hap.clear()
-
-        #self.lgr.debug('clearAllHap finish')
-        if self.pageFaultGen is not None:
-            self.pageFaultGen.stopPageFaults()
-
     def getThreadRecs(self):
         return self.watch_rec_list.keys()
 
@@ -471,7 +458,6 @@ class GenContextMgr():
         self.restoreSuspendContext()
         context = SIM_object_name(self.cpu.current_context)
         self.lgr.debug('contextManager addSuspendWatch for rec 0x%x context: %s' % (rec, context))
-        #SIM_run_alone(self.clearAllHap, True)
 
     def rmSuspendWatch(self):
         ''' Remove suspend watching of specific tid 
@@ -495,7 +481,6 @@ class GenContextMgr():
         #else:
         #    #self.lgr.error('contextManager rmSuspendWatch rec 0x%x not in list' % rec)
         #    SIM_break_simulation('fix this')
-        #SIM_run_alone(self.clearAllHap, True)
 
     def addNoWatch(self):
         ''' only watch maze exits for the current task. NOTE: assumes those are set after call to this function'''
@@ -512,7 +497,6 @@ class GenContextMgr():
             rec = self.task_utils.getCurThreadRec() 
         self.nowatch_list.append(rec)
         self.lgr.debug('contextManager addNoWatch for rec 0x%x' % rec)
-        #SIM_run_alone(self.clearAllHap, True)
 
     def rmNoWatch(self):
         ''' restart watching the current task, assumes it was added via addNoWatch '''
@@ -944,7 +928,6 @@ class GenContextMgr():
         if tid == cur_tid and self.debugging_tid is not None:
             ''' we are stopping due to a clone doing an exec or something similar.  in any event, remove haps and change context if needed '''
             ''' TBD, do this in some other function? '''
-            #SIM_run_alone(self.clearAllHap, False)
             self.watching_tasks = False
             if tid in self.watch_rec_list_saved:
                 self.watch_rec_list_saved.remove(tid)
@@ -955,7 +938,6 @@ class GenContextMgr():
             self.lgr.debug('genContextManager No longer watching tid:%s' % tid)
             if tid in self.tid_cache:
                 self.tid_cache.remove(tid)
-
         
     def stopWatchTasks(self):
         self.lgr.debug('genContextManager stopWatchTasks')
@@ -1587,3 +1569,10 @@ class GenContextMgr():
     def setSOMap(self, soMap):
         ''' ugly dependency loop needed to set text on first schedule ''' 
         self.soMap = soMap
+
+    def disableAll(self):
+        for hap in self.haps:
+            hap.disable()
+    def enableAll(self):
+        for hap in self.haps:
+            hap.enable()
