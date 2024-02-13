@@ -31,7 +31,12 @@ def onedone(top):
     no_page_faults = False
     if no_page_faults_s is not None and no_page_faults_s.lower() == 'true':
         no_page_faults = True
-    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults)
+
+    max_marks_s=os.getenv('ONE_DONE_PARAM4')
+    max_marks = None 
+    if max_marks_s is not None:
+        max_marks = int(max_marks_s)
+    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, max_marks=max_marks)
     myinject.setExitCallback(reportExit)
     myinject.go()
 
