@@ -402,7 +402,10 @@ class WriteData():
 
     def setSelectStopHap(self):
         if self.select_hap is None:
-            entry = self.top.getSyscallEntry('_newselect')
+            if self.mem_utils.WORD_SIZE == 8:
+                entry = self.top.getSyscallEntry('select')
+            else:
+                entry = self.top.getSyscallEntry('_newselect')
             #self.lgr.debug('writeData setSelectStopHap on 0x%x' % entry)
             if entry is not None:
                 self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -637,7 +640,7 @@ class WriteData():
         self.pending_call = False
         remain = self.read_limit - self.total_read
         self.total_read = self.total_read + eax
-        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d' % (eax, self.read_limit, self.total_read))
+        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d' % (eax, self.read_limit, self.total_read, remain))
 
         if self.stop_on_read and self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
@@ -654,6 +657,7 @@ class WriteData():
                          start = self.user_space_addr + remain
                          #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
+
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
                      #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
                      #rprint('**** Adjusted return value, RESET Origin ***') 
