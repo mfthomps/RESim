@@ -165,6 +165,7 @@ class DataWatch():
             def_file = comp_dict['APPEND_CHAR_RETURNS']
             self.append_char_returns = appendCharReturns.AppendCharReturns(top, self, cpu, def_file, cell_name, mem_utils, context_manager, lgr)
          
+        self.callback = None
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -1714,10 +1715,13 @@ class DataWatch():
         '''
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
-            self.stopWatch()
-            self.clearWatches()
-            SIM_break_simulation('max marks exceeded')
-            print('Data Watches removed')
+            if self.callback is None:
+                self.stopWatch()
+                self.clearWatches()
+                SIM_break_simulation('max marks exceeded')
+                print('Data Watches removed')
+            else:
+                self.callback()
             return
 
         ret_to = self.getReturnAddr()
@@ -3758,7 +3762,7 @@ class DataWatch():
             SIM_run_alone(self.delStopHap, self.stop_hap)
             self.stop_hap = None
             ''' check functions in list '''
-            #self.lgr.debug('stopHap now run actions %s' % str(stop_action.flist))
+            self.lgr.debug('stopHap now run actions %s' % str(stop_action.flist))
             stop_action.run()
 
     def delStopHap(self, hap):
@@ -4049,6 +4053,8 @@ class DataWatch():
         ''' what should backStop call when no activity for N cycles? '''
         self.lgr.debug('dataWatch setCallback, call to backstop to set callback')
         self.back_stop.setCallback(callback)
+        # use if max marks exceeded
+        self.callback = callback
 
     def showWatchMarks(self, old=False, verbose=False):
         self.watchMarks.showMarks(old=old, verbose=verbose)
