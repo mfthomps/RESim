@@ -5909,10 +5909,6 @@ class GenMonitor():
         mem_cur_task = self.mem_utils[self.target].getCurrentTask(cpu)
         print('cur_thread_rec 0x%x  phys_current_task 0x%x mem_cur_task: 0x%x' % (cur_thread_rec, phys_current_task, mem_cur_task))
 
-    def clearAllHaps(self):
-        for target in self.context_manager:
-            self.context_manager.clearAllHaps()
-
     def debugging(self):
         retval = False
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
