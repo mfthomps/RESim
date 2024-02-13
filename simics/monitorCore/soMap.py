@@ -79,7 +79,7 @@ class SOMap():
     def loadPickle(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
         if os.path.isfile(somap_file):
-            self.lgr.debug('SOMap pickle from %s' % somap_file)
+            self.lgr.debug('SOMap loadPickle pickle from %s' % somap_file)
             so_pickle = pickle.load( open(somap_file, 'rb') ) 
             #print('start %s' % str(so_pickle['text_start']))
             self.text_prog = so_pickle['text_prog']
@@ -89,7 +89,9 @@ class SOMap():
             if 'prog_info' in so_pickle:
                 self.so_addr_map = so_pickle['so_addr_map']
                 self.so_file_map = so_pickle['so_file_map']
-                if self.top.getSnapVersion() < 23:
+                version = self.top.getSnapVersion() 
+                if version < 23:
+                    self.lgr.debug('soMap loadPickle version %d less than 23, hack backward compat' % version)
                     old_prog_info = so_pickle['prog_info']
                     root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
                     for prog in old_prog_info: 
@@ -102,12 +104,14 @@ class SOMap():
                          if elf_info is not None:
                              self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                                   elf_info.plt_offset, elf_info.plt_size, prog)
+                             self.lgr.debug('soMap loadPickle prog %s info %s' % (prog, self.prog_info[prog].toString()))
                              prog_basename = os.path.basename(prog)
                              self.prog_base_map[prog_basename] = prog
                          else:
                              self.lgr.debug('soMap loadPickle no elf info for %s' % prog)
                              pass
                 else:
+                    self.lgr.debug('soMap loadPickle version %d has proper elf info, load from pickle' % version)
                     self.prog_info = so_pickle['prog_info']
             else:
                 # backward compatability, but only most recent
@@ -164,8 +168,10 @@ class SOMap():
             prog = self.text_prog[tid]
             prog_info = self.prog_info[prog]
             #self.lgr.debug('soMap isCode prog %s info %s' % (prog, prog_info.toString()))
-            plt_start = self.prog_start[tid] + prog_info.plt_offset    
-            if address > plt_start:
+            code_start = None
+            code_start = self.prog_start[tid] + prog_info.plt_offset    
+            #self.lgr.debug('soMap isCode addr 0x%x code_start 0x%x' % (address, code_start))
+            if address > code_start:
                 return True
             else:
                 return False
@@ -772,11 +778,14 @@ class SOMap():
                     self.so_watch_callback[fpath][name](load_addr, name)
 
     def getLoadInfo(self, tid=None):
+        # get load information for a tid program.
+        # TBD assumes not ASLR
         load_info = None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
         if tid in self.prog_start:
+            prog = self.text_prog[tid]
             size = self.prog_end[tid] - self.prog_start[tid] + 1 
             load_info = LoadInfo(self.prog_start[tid], size)
         return load_info
