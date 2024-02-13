@@ -403,12 +403,15 @@ class WriteData():
     def setSelectStopHap(self):
         if self.select_hap is None:
             entry = self.top.getSyscallEntry('_newselect')
-            #self.lgr.debug('wrireData setSelectStopHap on 0x%x' % entry)
-            self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-            entry = self.top.getSyscallEntry('poll')
-            self.poll_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-            self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.select_break)
-            self.poll_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.poll_break)
+            #self.lgr.debug('writeData setSelectStopHap on 0x%x' % entry)
+            if entry is not None:
+                self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+                entry = self.top.getSyscallEntry('poll')
+                self.poll_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
+                self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.select_break)
+                self.poll_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.poll_break)
+            else:
+                self.lgr.debug('writeData setSelectStopHap failed to get entry for _newselect')
 
     def setRetHap(self):
         if self.shared_syscall is None:
