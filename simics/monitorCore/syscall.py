@@ -641,9 +641,7 @@ class Syscall():
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
-        self.lgr.debug('do call to alone')
         SIM_run_alone(self.stopTraceAlone, None)
-        self.lgr.debug('did call to alone')
         if self.top is not None and not self.top.remainingCallTraces(cell_name=self.cell_name):
             self.sharedSyscall.stopTrace()
 
