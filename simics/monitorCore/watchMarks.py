@@ -576,7 +576,8 @@ class WatchMarks():
                 cycle = ' '
                 if verbose:
                     cycle = ' 0x%x ' % mark.cycle
-                print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
+                the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
+                print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, the_str, mark.ip, mark.tid))
                 i += 1
             print('Begin active watch marks.')
         elif len(self.stale_marks)>0:
@@ -586,7 +587,8 @@ class WatchMarks():
             cycle = ' '
             if verbose:
                 cycle = ' 0x%x ' % mark.cycle
-            print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, mark.mark.getMsg(), mark.ip, mark.tid))
+            the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
+            print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, the_str, mark.ip, mark.tid))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
@@ -945,19 +947,22 @@ class WatchMarks():
             src_str = ''
         cm = CompareMark(fun, dest, src, count, dst_str, src_str, buf_start) 
         wm = self.addWatchMark(cm)
-        self.lgr.debug('watchMarks compare (%s) %s' % (fun, cm.getMsg()))
+        the_str = cm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks compare (%s) %s' % (fun, the_str))
         return wm
 
     def strchr(self, start, the_chr, count):
         cm = StrChrMark(start, the_chr, count)
         self.removeRedundantDataMark(start)
         self.addWatchMark(cm)
-        self.lgr.debug('watchMarks strchr %s' % (cm.getMsg()))
+        the_str = cm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks strchr %s' % (the_str))
 
     def strtoul(self, fun, src):
         cm = StrtousMark(fun, src)
         self.addWatchMark(cm)
-        self.lgr.debug('watchMarks strtous %s' % (cm.getMsg()))
+        the_str = cm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks strtous %s' % (the_str))
 
     def sscanf(self, src, dest, count, buf_start):
         #sp, base = self.getStackBase(dest)
@@ -967,7 +972,8 @@ class WatchMarks():
             sp = None
         sm = ScanMark(src, dest, count, buf_start, sp)        
         wm = self.addWatchMark(sm)
-        self.lgr.debug('watchMarks sscanf %s' % (sm.getMsg()))
+        the_str = sm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks sscanf %s' % (the_str))
         return wm
 
     def strlen(self, src, count):
@@ -980,24 +986,28 @@ class WatchMarks():
         sp = self.isStackBuf(dest)
         lm = SprintfMark(fun, src, dest, count, buf_start, sp)        
         wm = self.addWatchMark(lm)
-        self.lgr.debug('watchMarks %s %s' % (fun, lm.getMsg()))
+        the_str = lm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
         return wm
 
     def fprintf(self, fun, src):
         lm = FprintfMark(fun, src)
         wm = self.addWatchMark(lm)
-        self.lgr.debug('watchMarks %s %s' % (fun, lm.getMsg()))
+        the_str = lm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
         return wm
 
     def fwrite(self, fun, src, count):
         wm = FwriteMark(fun, src, count)
         self.addWatchMark(wm)
-        self.lgr.debug('watchMarks %s %s' % (fun, wm.getMsg()))
+        the_str = wm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
 
     def glob(self, fun, src, count):
         wm = GlobMark(fun, src, count)
         self.addWatchMark(wm)
-        self.lgr.debug('watchMarks %s %s' % (fun, wm.getMsg()))
+        the_str = wm.getMsg().encode('utf-8', 'ignore')
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
 
     def inet_addr(self, src, count, the_string):
         xm = InetAddrMark(src, count, the_string)        
