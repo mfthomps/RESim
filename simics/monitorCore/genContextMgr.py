@@ -905,10 +905,15 @@ class GenContextMgr():
         if self.debugging_tid is not None:
             self.debugging_tid = self.debugging_tid_saved
             self.lgr.debug('contextManager restoreDebug set cpu context to resim, debugging_tid to %s' % self.debugging_tid)
-        self.watch_rec_list = self.watch_rec_list_saved.copy()
+        self.lgr.debug('contextManager restoreDebug set len list %d len saved %d' % (len(self.watch_rec_list), len(self.watch_rec_list_saved)))
+        if len(self.watch_rec_list_saved) > 0:
+            self.watch_rec_list = self.watch_rec_list_saved.copy()
+        else:
+            self.lgr.debug('contextManager restoreDebug set refused to copy empty saved watch_rec_list')
+
         for ctask in self.watch_rec_list:
             self.tid_cache.append(self.watch_rec_list[ctask])
-        self.lgr.debug('contextManager restoreDebug restore RESim context') 
+        self.lgr.debug('contextManager restoreDebug restore RESim context, watch_rec_list len now %d' % len(self.watch_rec_list)) 
         #SIM_run_alone(self.restoreDebugContext, None)
         # assuming already running alone
         self.restoreDebugContext()
@@ -955,9 +960,13 @@ class GenContextMgr():
         self.task_hap = None
         self.task_break = None
         self.watching_tasks = False
-        self.watch_rec_list_saved = self.watch_rec_list.copy()
+        if len(self.watch_rec_list) > 0:
+            self.watch_rec_list_saved = self.watch_rec_list.copy()
+        else:
+            self.lgr.debug('genContextManager stopWatchTasksAlone possible race condition, refusing to copy empty watch_rec_list to saved')
         if self.debugging_tid is not None:
             self.debugging_tid_saved = self.debugging_tid
+        self.lgr.debug('contextManager stopWatchTasksAlone cleared watch_rec_list')
         self.watch_rec_list = {}
        
         ''' stop watching for death of tasks ''' 
