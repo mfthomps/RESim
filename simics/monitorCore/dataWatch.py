@@ -3969,21 +3969,21 @@ class DataWatch():
         self.watchMarks.clearWatchMarks(record_old=record_old)
 
 
-    def clearWatches(self, cycle=None):
+    def clearWatches(self, cycle=None, immediate=False):
         self.lgr.debug('dataWatch clearWatches')
         if cycle is None:
             self.lgr.debug('DataWatch clearWatches, no cycle given')
             self.prev_cycle = None
         else:
             self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
-        self.stopWatch()
+        self.stopWatch(immediate=immediate)
         self.break_simulation = True
         self.stack_buffers = {}
         self.total_read = 0
         self.last_ad_hoc = 0
         for eip in self.stack_buf_hap:
             self.lgr.debug('DataWatch clearWatches remove stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
-            self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
+            self.context_manager.genDeleteHap(self.stack_buf_hap[eip], immediate=immediate)
         self.stack_buf_hap = {}
         if cycle is None:
             del self.start[:]
