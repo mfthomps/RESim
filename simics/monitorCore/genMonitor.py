@@ -1884,6 +1884,7 @@ class GenMonitor():
             self.lgr.debug("no cpu in runSkipAndMail")
             return
         if self.quit_when_done:
+            self.lgr.debug("skipAndMail quit_when_done true, bail")
             self.quit()
         #current = SIM_cycle_count(cpu)
         eip = self.getEIP(cpu)
@@ -4339,13 +4340,14 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, no_trace_dbg=False, run=True):
+            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.
             use no_reset True to stop the tracking if RESim would need to reset the origin.'''
         self.track_started = True
+        self.lgr.debug('injectIO')
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
@@ -4385,13 +4387,14 @@ class GenMonitor():
             self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
+        self.lgr.debug('genMonitor injectIO create instance')
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, tid, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.soMap[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
-                  no_trace_dbg=no_trace_dbg, run=run)
+                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug)
 
         if go:
             self.injectIOInstance.go()
@@ -5023,6 +5026,7 @@ class GenMonitor():
         SIM_run_alone(self.quitAlone, cycles)
 
     def quitWhenDone(self):
+        self.lgr.debug('quitWhenDone set true')
         self.quit_when_done = True
 
     def getMatchingExitInfo(self):
