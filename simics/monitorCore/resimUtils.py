@@ -216,7 +216,7 @@ def getPacketFilter(packet_filter, lgr):
 
 def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
     blocks = None
-    analysis_path = getAnalysisPath(ini, prog, root_prefix=root_prefix)
+    analysis_path = getAnalysisPath(ini, prog, root_prefix=root_prefix, lgr=lgr)
     #print('analysis_path at %s' % analysis_path)
     if lgr is not None:
         lgr.debug('getBasicBlocks analysis_path %s' % analysis_path)
@@ -233,18 +233,22 @@ def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
                 lgr.debug('is windows')
             prog_elf = winProg.getText(prog_path, lgr)
         else:
-            prog_elf = elfText.getTextOfText(prog_path)
-        #print('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+            prog_elf = elfText.getText(prog_path, lgr)
+        #print('prog addr 0x%x size %d' % (prog_elf.text_address, prog_elf.text_size))
         if lgr is not None:
-            lgr.debug('prog addr 0x%x size %d' % (prog_elf.address, prog_elf.size))
+            lgr.debug('prog text_start 0x%x text_size %d' % (prog_elf.text_start, prog_elf.text_size))
         block_file = analysis_path+'.blocks'
         #print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
+            if lgr is not None:
+                   lgr.debug('block file not found %s, see if it is a link?' % block_file)
             if os.path.islink(prog_file):
                 real = os.readlink(prog_file)
                 parent = os.path.dirname(prog_file)
                 block_file = os.path.join(parent, (real+'.blocks'))
                 if not os.path.isfile(block_file):
+                    if lgr is not None:
+                       lgr.debug('block file not found %s' % block_file)
                     print('block file not found %s' % block_file)
                     return
             else:
@@ -254,17 +258,21 @@ def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
             blocks = json.load(fh)
     return blocks, prog_elf
 
-def getOneBasicBlock(prog, addr, os_type, root_prefix):
+def getOneBasicBlock(prog, addr, os_type, root_prefix, lgr=None):
     #print('getOneBasicBloc os %s root_prefix %s' % (os_type, root_prefix))
-    blocks, dumb = getBasicBlocks(prog, root_prefix=root_prefix, os_type=os_type)
+    blocks, dumb = getBasicBlocks(prog, root_prefix=root_prefix, os_type=os_type, lgr=lgr)
     retval = None
-    for fun in blocks:
-        for bb in blocks[fun]['blocks']:
-            if bb['start_ea'] == addr:
-                retval = bb
-                break
-        if retval is not None:
-            break    
+    if blocks is not None:
+        for fun in blocks:
+            for bb in blocks[fun]['blocks']:
+                #print('compare 0x%x to 0x%x' % (addr, bb['start_ea']))
+                if bb['start_ea'] == addr:
+                    retval = bb
+                    break
+            if retval is not None:
+                break    
+    else:
+        print('ERROR: getOneBasicBlock, blocks was none')
     return retval
 
 def findBB(blocks, addr):
@@ -390,6 +398,7 @@ def findListFrom(pattern, from_dir):
     return retval
 
 def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
+    lgr.debug('getfileInsensitve path %s' % path)
     got_it = False
     retval = root_prefix
     cur_dir = root_prefix
@@ -417,8 +426,19 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
             if lgr is not None:
                  lgr.warning('getfileInsensitive RELATIVE %s root: %s   NOT LOOKING, return none' % (path, root_prefix))
         else:
-            for subpath in root_subdirs:
-                top_path = os.path.join(root_prefix, subpath)
+            lgr.debug('getfileInsensitive')
+            if len(root_subdirs) > 0:
+                for subpath in root_subdirs:
+                    top_path = os.path.join(root_prefix, subpath)
+                    #lgr.debug('getfileInsensitive walk from %s' % top_path)
+                    for root, dirs, files in os.walk(top_path):
+                        for f in files:
+                            if f.upper() == path.upper():
+                                retval = os.path.join(top_path, root, f)
+                                abspath = os.path.abspath(retval)
+                                return abspath
+            else:
+                top_path = os.path.join(root_prefix)
                 #lgr.debug('getfileInsensitive walk from %s' % top_path)
                 for root, dirs, files in os.walk(top_path):
                     for f in files:
@@ -516,25 +536,27 @@ def soMatch(fname, cache, lgr):
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
-    lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    #if lgr is not None:
+    #    lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
         lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
     quick_check = fname+'.funs'
     if fname.startswith(analysis_path) and os.path.isfile(quick_check):
-        lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
+        #if lgr is not None:
+        #    lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
         retval = fname
     else:
         if root_prefix is None: 
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
         top_dir = os.path.join(analysis_path, root_dir)
-        if lgr is not None:
-            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+        #if lgr is not None:
+        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            if lgr is not None:
-                lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            #if lgr is not None:
+            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if fname.startswith('/??/C:/'):
@@ -547,7 +569,8 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             parent = os.path.dirname(fname)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
-            lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+            #if lgr is not None:
+            #    lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, [], lgr, force_look=True)
             if retval is not None:
                 #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
