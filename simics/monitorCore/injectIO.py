@@ -41,7 +41,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -161,6 +161,7 @@ class InjectIO():
         self.no_page_faults = no_page_faults
         self.no_trace_dbg = no_trace_dbg
         self.run = run
+        self.reset_debug = reset_debug
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -250,10 +251,10 @@ class InjectIO():
                 if cpl == 0:
                     self.lgr.error('injectIO Still in kernel, cannot work from here.  Check your prepInject snapshot. Exit.')
                     return 
-
-            self.top.stopDebug()
-            self.lgr.debug('injectIO call debugTidGroup')
-            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+            if self.reset_debug:
+                self.top.stopDebug()
+                self.lgr.debug('injectIO call debugTidGroup')
+                self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             if not self.no_page_faults:
@@ -302,7 +303,7 @@ class InjectIO():
         eip = self.top.getEIP(self.cpu)
         if self.target_proc is None:
             self.dataWatch.clearWatchMarks(record_old=True)
-            self.dataWatch.clearWatches()
+            self.dataWatch.clearWatches(immediate=True)
             if self.coverage:
                 self.lgr.debug('injectIO enabled coverage')
                 analysis_path = self.top.getAnalysisPath(self.fname) 
@@ -364,7 +365,8 @@ class InjectIO():
                 else:
                     ''' Injected into kernel buffer '''
                     self.top.stopTrackIO(immediate=True)
-                    self.dataWatch.clearWatches()
+                    self.dataWatch.clearWatches(immediate=True)
+                    self.lgr.debug('injectIO call dataWatch to set callback to %s' % str(self.callback))
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
                     if self.mark_logs:
