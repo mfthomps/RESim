@@ -53,7 +53,7 @@ class InjectToWM():
             print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname)
+            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=False)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
