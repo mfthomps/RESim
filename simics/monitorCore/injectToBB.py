@@ -51,8 +51,9 @@ class InjectToBB():
             prog = self.top.getFullPath()
         else: 
             prog = fname
-        basic_block = resimUtils.getOneBasicBlock(prog, bb, os_type, root_prefix)
+        basic_block = resimUtils.getOneBasicBlock(prog, bb, os_type, root_prefix, lgr=self.lgr)
         if basic_block is None:
+            self.lgr.error('failed getting basic block for address 0x%x prog %s' % (bb, prog)) 
             print('ERROR getting basic block for address 0x%x prog %s' % (bb, prog)) 
             return
         good_bb = None
@@ -70,13 +71,20 @@ class InjectToBB():
                 print('Will inject %s, has a data ref at 0x%x' % (f, mark))
                 break 
         if good_bb is None and len(flist)>0:
-            qfile = flist[0]
-            print('Will inject %s' % qfile)
+            best_qfile = None
+            best_size = None
+            for try_file in flist:
+                try_size = os.path.getsize(try_file)                    
+                if best_qfile is None or try_size < best_size:
+                    best_qfile = try_file 
+                    best_size = try_size
+            print('Will inject %s' % best_qfile)
+            qfile = best_qfile
         if qfile is not None:
             self.lgr.debug('InjectToBB inject %s' % qfile)
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, fname=fname)
+            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, fname=fname, reset_debug=False)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
