@@ -810,7 +810,7 @@ class SOMap():
         if tid in self.prog_start:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
-                image_base =  self.prog_info[prog].text_start
+                image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                 retval = load_addr - image_base
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
