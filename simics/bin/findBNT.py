@@ -28,7 +28,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
         for bb_hit in hits:
             #print('compare %s to %s' % (bb_hit, bb['start_ea']))
             if bb_hit == bb['start_ea']:
-                if bb_hit < prog_elf.address or bb_hit > (prog_elf.address + prog_elf.size):
+                if bb_hit < prog_elf.text_start or bb_hit > (prog_elf.text_start + prog_elf.text_size):
                     #print('bb_hit 0x%x not in program text' % bb_hit)
                     continue
                 #print('check bb_hit 0x%x' % bb_hit)
