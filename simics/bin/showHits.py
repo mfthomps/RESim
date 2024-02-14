@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Display a givne hits file as hex
+# Display a given hits file as hex
 #
 import sys
 import os
