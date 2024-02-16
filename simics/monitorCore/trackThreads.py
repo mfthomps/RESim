@@ -93,7 +93,7 @@ class TrackThreads():
             self.parseExecve()
             return
         if len(self.context_manager.getWatchTids()) == 1:
-            self.lgr.debug('TrackThreads execveHap context manager tid list has only one, assume it is us? tid: %d' % tid)
+            self.lgr.debug('TrackThreads execveHap context manager tid list has only one, assume it is us? tid: %s' % tid)
             return
         self.lgr.debug('TrackThreads execveHap remove tid:%s from context manager watch' % tid)
         self.context_manager.rmTask(tid)
