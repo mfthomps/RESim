@@ -31,6 +31,7 @@ import pickle
 import osUtils
 import memUtils
 import syscallNumbers
+import traceback
 LIST_POISON2 = object()
 def stringFromFrame(frame):
     retval = None
@@ -111,7 +112,9 @@ class TaskUtils():
 
         self.ts_cache = None
         self.ts_cache_cycle = None
-
+  
+        self.lgr.debug('TaskUtils init kernel base 0x%x' % param.kernel_base)
+        
         if RUN_FROM_SNAP is not None:
             phys_current_task_file = os.path.join('./', RUN_FROM_SNAP, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
@@ -248,19 +251,34 @@ class TaskUtils():
     def curTID(self):
         cur_task_rec = self.getCurThreadRec()
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
-        return str(pid)
+        if pid is not None:
+            ret_pid = str(pid)
+        else:
+            ret_pid = None
+        return ret_pid
 
     def curThread(self):
         #self.lgr.debug('taskUtils curThread')
         cur_task_rec = self.getCurThreadRec()
         #self.lgr.debug('taskUtils curThread cur_task_rec 0x%x' % cur_task_rec)
+        pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
+        if pid > self.mem_utils.getUnsigned(0xf0000000):
+            self.lgr.error('taskUtils curThread cur_task_rec 0x%x got crazy pid %d, check saved' % (cur_task_rec, pid))
+            #traceback.print_stack()
+            self.mem_utils.checkSavedCR3(self.cpu)
+            SIM_break_simulation('remove this cur_task_rec 0x%x' % cur_task_rec)
+            self.mem_utils.checkSavedCR3(self.cpu)
+            #pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
-        pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_task_rec)
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_task_rec, phys, pid, comm, self.phys_current_task))
-        return self.cpu, comm, str(pid)
+        if pid is not None:
+            ret_pid = str(pid)
+        else:
+            ret_pid = None
+        return self.cpu, comm, ret_pid
 
     def findSwapper(self):
         task = None
@@ -526,6 +544,8 @@ class TaskUtils():
         self.exit_cycles = 0
 
     def getGroupLeaderTid(self, tid):
+        if tid is None:
+            return None
         retval = None
         ts_list = self.getTaskStructs()
         ipid=int(tid)
