@@ -880,11 +880,15 @@ class Syscall():
 
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
-        self.checkExecve(prog_string, arg_string_list, call_info.tid)
+        if len(arg_string_list) > 0:
+            arg0 = arg_string_list[0]
+        else:
+            arg0 = None
+        self.checkExecve(prog_string, arg_string, arg0, call_info.tid, comm)
         self.context_manager.newProg(prog_string, call_info.tid)
 
 
-    def checkExecve(self, prog_string, arg_string_list, tid):
+    def checkExecve(self, prog_string, arg_string, arg0, tid, comm):
         self.lgr.debug('checkExecve syscall %s  %s' % (self.name, prog_string))
         cp = None
         for call in self.call_params:
@@ -927,13 +931,15 @@ class Syscall():
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
                     if not wrong_type:
+                        if not self.top.trackingThreads():
+                            self.recordExecve(prog_string, arg_string, tid, comm)
                         self.lgr.debug('checkExecve execve of %s now stop alone ' % prog_string)
                         SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
                     else:
                         self.lgr.debug('checkExecve, got %s when looking for binary %s, skip' % (ftype, prog_string))
                 elif base == 'sh' and cp.match_param.startswith('sh '):
                     # TBD add bash, etc.
-                    base = os.path.basename(arg_string_list[0])
+                    base = os.path.basename(arg0)
                     sw = cp.match_param.split()[1]
                     #self.lgr.debug('syscall execve compare %s to %s' % (base, sw))
                     if base.startswith(sw):
@@ -990,6 +996,17 @@ class Syscall():
                 arg_string += arg_string_list[i]+' '
             else:
                 break
+        if self.top.trackingThreads():
+            self.recordExecve(prog_string, arg_string, tid, comm)
+        if len(arg_string_list) > 0:
+            arg0 = arg_string_list[0]
+        else:
+            arg0 = None
+        self.checkExecve(prog_string, arg_string, arg0, tid, comm)
+
+        return retval
+
+    def recordExecve(self, prog_string, arg_string, tid, comm):
         ida_msg = 'execve prog: %s %s  tid:%s (%s)' % (prog_string, arg_string, tid, comm)
         self.context_manager.newProg(prog_string, tid)
         self.lgr.debug(ida_msg)
@@ -1002,9 +1019,6 @@ class Syscall():
 
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
-        self.checkExecve(prog_string, arg_string_list, tid)
-
-        return retval
 
     def getSockParams(self, frame, syscall_info):
         domain = None
@@ -1435,6 +1449,7 @@ class Syscall():
         self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, str(self.call_params), 
             str(self.cpu.current_context), self.cpu.cycles))
 
+        do_stop_from_call = False
         # Optimization to see if call parameters exclude this sytem call
         # some exit_info params will be set in per-call blocks
         if self.name not in ['traceAll', 'traceWindows', 'traceProcs']:
@@ -1464,6 +1479,8 @@ class Syscall():
                         self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
                         bail_if_not_got = True
                     else:
+                        if self.stop_on_call:
+                            do_stop_from_call = True
                         exit_info.call_params.append(call_param)
                         self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
                         got_one = True
@@ -1985,6 +2002,22 @@ class Syscall():
                 ida_msg = '%s tid:%s (%s) path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, fname_addr, fname, retval_addr)
             #SIM_break_simulation(ida_msg)
             #return
+        elif callname == 'prctl':
+            option = frame['param1']
+            opt_name = 'unknown'
+            if option == 15:
+                opt_name = 'SET_NAME'
+            elif option == 16:
+                opt_name = 'GET_NAME'
+
+            self.lgr.debug(ida_msg)
+            if option == 15:
+                retval_addr = frame['param2']
+                new_comm = self.mem_utils.readString(self.cpu, retval_addr, 256)
+                ida_msg = '%s option: %s changed comm to: %s tid:%s (%s) cycle:0x%x' % (callname, opt_name, new_comm, tid, comm, self.cpu.cycles)
+                
+            else:
+                ida_msg = '%s option: %s  %s   tid:%s (%s) cycle:0x%x' % (callname, opt_name, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
 
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
@@ -1999,6 +2032,11 @@ class Syscall():
             if ida_msg is not None and self.traceMgr is not None:
                 if len(ida_msg.strip()) > 0:
                     self.traceMgr.write(ida_msg+'\n')
+
+        if do_stop_from_call:
+            self.top.rmSyscall('runToCall')
+            SIM_run_alone(self.stopAlone, 'run to call %s' % callname)
+
         return exit_info
 
     def rmStopHap(self, hap):
