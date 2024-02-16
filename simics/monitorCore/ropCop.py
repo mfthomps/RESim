@@ -61,8 +61,13 @@ class RopCop():
         #current_eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        return_to = self.mem_utils.readWord32(self.cpu, esp)
-        eip = return_to - 8
+        word_size = self.mem_utils.wordSize(self.cpu)
+        if word_size == 4:
+            return_to = self.mem_utils.readWord32(self.cpu, esp)
+        else:
+            return_to = self.mem_utils.readWord(self.cpu, esp)
+        #eip = return_to - 8
+        eip = return_to - 2*word_size
         done = False
         #self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
         while not done and eip < return_to:
