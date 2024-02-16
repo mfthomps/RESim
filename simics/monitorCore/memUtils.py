@@ -253,7 +253,7 @@ class MemUtils():
             retval = self.getUnsigned(phys_addr)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
-            #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+            #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
             # a mode of 3 is 32 bit mode
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             exec_mode_word_size = self.wordSize(cpu)
@@ -285,7 +285,7 @@ class MemUtils():
                 else:
                     retval = v & ~self.param.kernel_base 
                      #self.lgr.debug('memUtils v2pKaddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
-        if retval is None and v > self.param.kernel_base:
+        if retval is None:
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
@@ -1164,3 +1164,9 @@ class MemUtils():
                 retval = 4
         return retval
 
+    def checkSavedCR3(self, cpu):
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        current_cr3 = cpu.iface.int_register.read(reg_num)
+        new_cr3 = current_cr3 & 0xffffe7ff
+        self.lgr.debug('memUtils checkSavedCR3 kernel_saved_cr3 0x%x  current_cr3 0x%x new 0x%x' % (self.kernel_saved_cr3, current_cr3, new_cr3))
+        #self.kernel_saved_cr3 = new_cr3
