@@ -389,20 +389,10 @@ class GenMonitor():
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
 
-                    ''' TBD remove this once param files are cycled out '''
-                    new_param_file = comp_dict[cell_name]['RESIM_PARAM']
-                    print('Cell %s using params from %s' % (cell_name, new_param_file))
-                    self.lgr.debug('Cell %s using params from %s' % (cell_name, new_param_file))
-                    if not os.path.isfile(new_param_file):
-                        self.lgr.error('Could not find param file at %s -- ??' % param_file)
-                        continue
-                    pjson = pickle.load( open(new_param_file, 'rb') ) 
-                    self.param[cell_name].page_fault = pjson.page_fault
-                    self.lgr.debug('*** page fault value over-written by value from %s' % new_param_file)
-
                     # TBD more hackary
                     if self.param[cell_name].kernel_base == 0xffffffff80000000:
                         self.param[cell_name].kernel_base = 0xffff800000000000
+                        self.lgr.debug('genInit hacked kernel base to 0x%x' % self.param[cell_name].kernel_base)
 
                     self.lgr.debug(self.param[cell_name].getParamString())
                 else:
@@ -614,9 +604,11 @@ class GenMonitor():
             ''' or just want may be None if debugging some windows dead zone '''
             if want_tid is None and this_tid is not None:
                 SIM_break_simulation('mode changed, tid was None, now is not none.')
-                
-            self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
-            return
+            elif this_tid is not None:            
+                self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+                return
+            else:
+                self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (want_tid))
         cpl = memUtils.getCPL(cpu)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
         mode = 1
@@ -823,10 +815,6 @@ class GenMonitor():
             ''' TBD compatability remove this'''
             if self.stack_base is not None and cell_name in self.stack_base:
                 self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
-
-            #self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, None, self.context_manager[self.target], 
-            #        self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
-            #        self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
 
             if self.isWindows(target=cell_name):
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -1444,6 +1432,9 @@ class GenMonitor():
              self.reg_set[self.target].swapContext()
 
     def trackThreads(self):
+        if self.track_threads is None:
+            # undo hack
+            self.track_threads = {}
         if self.target not in self.track_threads:
             self.checkOnlyIgnore()
             cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -1638,6 +1629,7 @@ class GenMonitor():
         
     def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True):
         if not track_threads:
+            # TBD fix this hack.  confusing since track_threads is a dict
             self.track_threads = None
         if self.isWindows():
             self.rmDebugWarnHap()
@@ -1792,6 +1784,7 @@ class GenMonitor():
     #    self.proc_list[self.target][tid] = comm
  
     def toUser(self, flist=None): 
+        self.rmDebugWarnHap()
         self.lgr.debug('toUser')
         cpu = self.cell_config.cpuFromCell(self.target)
         self.run2User(cpu, flist)
@@ -1803,6 +1796,7 @@ class GenMonitor():
         self.toUser([f1])
 
     def toKernel(self, flist=None): 
+        self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.run2Kernel(cpu, flist=flist)
 
@@ -3197,7 +3191,12 @@ class GenMonitor():
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
         else:
            op_set = [operation]
-        self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
+        mod_comm = mod.getComm()
+        if mod_comm is None:
+            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
+        else:
+            # modify to use callback in dmod when comm running.
+            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
         #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
         return retval
 
@@ -3615,14 +3614,20 @@ class GenMonitor():
             else:
                 self.clearBookmarks(reuse_msg=reuse_msg)
 
-    def writeWord(self, address, value, target_cpu=None):
+    def writeWord(self, address, value, target_cpu=None, word_size=None):
         ''' NOTE: wipes out bookmarks! '''
         if target_cpu is None:
             target = self.target
+            target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
         cpu, comm, tid = self.task_utils[target].curThread() 
-        self.mem_utils[target].writeWord(cpu, address, value)
+        if word_size is None:
+            word_size = self.mem_utils[target].wordSize(target_cpu)
+        if word_size == 4:
+            self.mem_utils[target].writeWord32(cpu, address, value)
+        else:
+            self.mem_utils[target].writeWord(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
         if self.reverseEnabled():
@@ -4340,7 +4345,8 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True):
+            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
+            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -4394,7 +4400,7 @@ class GenMonitor():
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
-                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug)
+                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr)
 
         if go:
             self.injectIOInstance.go()
@@ -4486,9 +4492,13 @@ class GenMonitor():
             fh.write(byte_array)
         self.lgr.debug('saveMemory wrote %d bytes from 0x%x to file %s' % (size, addr, fname))
 
-    def pageInfo(self, addr, quiet=False):
+    def pageInfo(self, addr, quiet=False, cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=self.mem_utils[self.target].getKernelSavedCR3())
+        if cr3 is None:
+            use_cr3 = self.mem_utils[self.target].getKernelSavedCR3()
+        else:
+            use_cr3 = cr3
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3)
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5984,6 +5994,11 @@ class GenMonitor():
     def getSnapVersion(self):
         return self.snap_version
   
+    def trackingThreads(self):
+        if self.track_threads is None or self.target not in self.track_threads:
+            return False
+        else:
+            return True
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
