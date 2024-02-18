@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+#
+#  Send multiple UDP packets 
+#
+import sys
+import time
+import os
+import socket
+import argparse
+def sendUDP(host, port, header, infile_list):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_addr = (host, port)
+    #server_addr = ('localhost', port)
+    for infile in infile_list:
+        with open (infile, 'rb') as fh:
+            s = fh.read()
+            add_header = True
+            if header is not None:
+                if not s.decode().startswith(header):
+                    print('file does not start with %s' % header)
+                    add_header = False
+                    #exit(1)
+                parts = s.decode().split(header)
+                print('num messages is %d' % len(parts))
+                index = 1
+                if add_header:
+                    iter_list = parts[1:]
+                else:
+                    iter_list = parts
+                for p in iter_list:
+                    if add_header:
+                        packet = header+p
+                    else:
+                        packet = p
+                        add_header = True
+                    print('len packet is %d' % len(packet))
+                    sock.sendto(packet.encode(), server_addr)
+                    #time.sleep(.01)
+            else:
+                print('no UDP header, just send file')
+                sock.sendto(s, server_addr)
+        
+def main():
+    parser = argparse.ArgumentParser(prog='clientudpMult3', description='Send file content as UDP to a target.')
+    parser.add_argument('-i', '--ip', action='store', help='IP address.')
+    parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
+    parser.add_argument('-u', '--header', action='store', help='upd header.')
+    parser.add_argument('-f', '--file', action='store', help='File list.')
+    print('begin')
+    args = parser.parse_args()
+    file_list = args.file.split()
+    sendUDP(args.ip, args.port, args.header, file_list)
+
+if __name__ == '__main__':
+    sys.exit(main())
