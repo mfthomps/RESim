@@ -262,8 +262,8 @@ class TaskUtils():
         cur_task_rec = self.getCurThreadRec()
         #self.lgr.debug('taskUtils curThread cur_task_rec 0x%x' % cur_task_rec)
         pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
-        if pid > self.mem_utils.getUnsigned(0xf0000000):
-            self.lgr.error('taskUtils curThread cur_task_rec 0x%x got crazy pid %d, check saved' % (cur_task_rec, pid))
+        if pid is None or pid > self.mem_utils.getUnsigned(0xf0000000):
+            self.lgr.error('taskUtils curThread cur_task_rec 0x%x got crazy pid %d, check saved' % (cur_task_rec, str(pid)))
             #traceback.print_stack()
             self.mem_utils.checkSavedCR3(self.cpu)
             SIM_break_simulation('remove this cur_task_rec 0x%x' % cur_task_rec)
@@ -1168,3 +1168,10 @@ class TaskUtils():
         va = 0xdeadbeef
         self.lgr.debug('taskUtils getTIB TBD fix this')
         return va
+
+    def getTaskList(self):
+        task_list = self.getTaskStructs()
+        retval = []
+        for t in task_list:
+            retval.append(t)
+        return retval
