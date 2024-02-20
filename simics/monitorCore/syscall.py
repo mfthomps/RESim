@@ -902,7 +902,6 @@ class Syscall():
                 if call.subcall == 'execve':
                     cp = call
                     break
-        
             
         if cp is not None: 
             if cp.match_param.__class__.__name__ == 'Dmod':
@@ -917,7 +916,7 @@ class Syscall():
                 #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
                 if base.startswith(cp.match_param):
                     ''' is program file we are looking for.  do we care if it is a binary? '''
-                    self.lgr.debug('matches base')
+                    self.lgr.debug('checkExecve matches base')
                     wrong_type = False
                     if self.traceProcs is not None:
                         ftype = self.traceProcs.getFileType(tid)
@@ -931,8 +930,10 @@ class Syscall():
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
                     if not wrong_type:
+                        self.recordExecve(prog_string, arg_string, tid, comm)
                         if not self.top.trackingThreads():
-                            self.recordExecve(prog_string, arg_string, tid, comm)
+                            self.lgr.debug('checkExecve not tracking threads, remove the syscall param')
+                            self.top.rmSyscall(cp.name)
                         self.lgr.debug('checkExecve execve of %s now stop alone ' % prog_string)
                         SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
                     else:
@@ -996,8 +997,7 @@ class Syscall():
                 arg_string += arg_string_list[i]+' '
             else:
                 break
-        if self.top.trackingThreads():
-            self.recordExecve(prog_string, arg_string, tid, comm)
+        self.recordExecve(prog_string, arg_string, tid, comm)
         if len(arg_string_list) > 0:
             arg0 = arg_string_list[0]
         else:
@@ -1015,10 +1015,11 @@ class Syscall():
         if self.traceProcs is not None:
             self.traceProcs.setName(tid, prog_string, arg_string)
 
-        self.addElf(prog_string, tid)
-
-        if self.netInfo is not None:
-            self.netInfo.checkNet(prog_string, arg_string)
+        if self.top.trackingThreads():
+            self.lgr.debug('recordExecve tracking threads, record new program info.')
+            self.addElf(prog_string, tid)
+            if self.netInfo is not None:
+                self.netInfo.checkNet(prog_string, arg_string)
 
     def getSockParams(self, frame, syscall_info):
         domain = None
@@ -1360,7 +1361,7 @@ class Syscall():
                 self.lgr.error('syscall sendmsg not yet built for x86!')
                 return
                 ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString())
-            self.checkSendParams(syscall_info, exit_info, None, None)
+            self.checkSendParams(syscall_info, exit_info, None, None, None)
 
         elif socket_callname == "send" or socket_callname == "sendto":
             exit_info.old_fd = ss.fd
@@ -1391,7 +1392,12 @@ class Syscall():
                 #    SIM_break_simulation(ida_msg)
             else:
                 ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString())
-            self.checkSendParams(syscall_info, exit_info, ss, dest_ss)
+            max_len = max(ss.length, 300)
+            byte_array = self.mem_utils.getBytes(self.cpu, max_len, ss.addr)
+            s = None
+            if byte_array is not None:
+                s = resimUtils.getHexDump(byte_array[:max_len])
+            self.checkSendParams(syscall_info, exit_info, ss, dest_ss, s)
 
         elif socket_callname == 'listen':
             sock_param = self.sockwatch.getParam(tid, ss.fd)
@@ -2009,15 +2015,41 @@ class Syscall():
                 opt_name = 'SET_NAME'
             elif option == 16:
                 opt_name = 'GET_NAME'
-
             self.lgr.debug(ida_msg)
             if option == 15:
                 retval_addr = frame['param2']
                 new_comm = self.mem_utils.readString(self.cpu, retval_addr, 256)
                 ida_msg = '%s option: %s changed comm to: %s tid:%s (%s) cycle:0x%x' % (callname, opt_name, new_comm, tid, comm, self.cpu.cycles)
-                
             else:
                 ida_msg = '%s option: %s  %s   tid:%s (%s) cycle:0x%x' % (callname, opt_name, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
+        elif callname == 'msgsnd':
+            msqid = frame['param1']
+            msgp = frame['param2']
+            msgsz = frame['param3']
+            mtype = self.mem_utils.readWord32(self.cpu, msgp)
+            max_len = min(msgsz, 1024)
+            mtext_addr = msgp + 4
+            byte_array = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
+            s = None
+            if byte_array is not None:
+                s = resimUtils.getHexDump(byte_array[:max_len])
+            ida_msg = '%s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
+            self.lgr.debug(ida_msg.strip()) 
+        elif callname == 'msgrcv':
+            msqid = frame['param1']
+            msgp = frame['param2']
+            msgsz = frame['param3']
+            mtype = self.mem_utils.readWord32(self.cpu, msgp)
+            mtext_addr = msgp + 4
+            exit_info.old_fd = msqid
+            exit_info.retval_addr = msgp
+            exit_info.count = msgsz
+            ida_msg = '%s msqid: 0x%x msgsz: %d tid:%s (%s) cycle:0x%x' % (callname, msqid, msgsz, tid, comm, self.cpu.cycles)
+        elif callname == 'shmget':
+            key = frame['param1']
+            size = frame['param2']
+            flag = frame['param3']
+            ida_msg = '%s key: 0x%x size 0x%x flag: 0x%x tid:%s (%s) cycle:0x%x' % (callname, key, size, flag, tid, comm, self.cpu.cycles)
 
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
@@ -2810,8 +2842,9 @@ class Syscall():
         return retval
 
 
-    def checkSendParams(self, syscall_info, exit_info, ss, dest_ss):
+    def checkSendParams(self, syscall_info, exit_info, ss, dest_ss, s):
             for call_param in self.call_params:
+                self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
                 if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params.append(call_param)
@@ -2829,6 +2862,7 @@ class Syscall():
                 
                 elif type(call_param.match_param) is str and (call_param.subcall == 'send' or call_param.subcall == 'sendto') and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     ''' look for string in output '''
+                    self.lgr.debug('look in string %s' % s)
                     if call_param.match_param in s:
-                        self.lgr.debug('syscall %s found match string, watch exit for param%s' % (socket_callname, call_param.name))
+                        self.lgr.debug('syscall %s found match string, watch exit for param%s' % (call_param.subcall, call_param.name))
                         addParam(exit_info, call_param)
