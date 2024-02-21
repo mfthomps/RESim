@@ -731,7 +731,10 @@ class SharedSyscall():
             #if eax == 120:
             #    SIM_break_simulation('clone faux return?')
             #    return
-            self.top.recordStackBase(eax, exit_info.fname_addr)
+            if exit_info.fname_addr is not None:
+                self.top.recordStackBase(eax, exit_info.fname_addr)
+            else:
+                self.lgr.debug('exitHap clone fname_addr is None, cannot call recordStackBase')
             if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True):
                 trace_msg = ('\treturn from clone (tracing), new tid:%s  calling tid:%s (%s)\n' % (eax, tid, comm))
                 #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))
@@ -1192,7 +1195,8 @@ class SharedSyscall():
                 trace_msg = '\t return from call %s msqid: 0x%x failed code: 0x%x tid:%s (%s) cycle:0x%x' % (callname, msqid, eax, tid, comm, self.cpu.cycles)
                 self.lgr.debug(trace_msg.strip()) 
             else:
-                max_len = min(exit_info.count, 1024)
+                msgsz = exit_info.count
+                max_len = min(msgsz, 1024)
                 msgp = exit_info.retval_addr
                 mtext_addr = msgp + 4
                 byte_array = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
@@ -1200,11 +1204,11 @@ class SharedSyscall():
                 s = None
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:max_len])
-                trace_msg = '%s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
+                trace_msg = '\t return from %s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
                 self.lgr.debug(trace_msg.strip()) 
         elif callname == 'shmget':
             if eax > 0:
-                trace_msg = '%s return code 0x%x  tid:%s (%s) cycle:0x%x' % (callname, eax, tid, comm, self.cpu.cycles)
+                trace_msg = '\t return from %s return code 0x%x  tid:%s (%s) cycle:0x%x' % (callname, eax, tid, comm, self.cpu.cycles)
                 self.lgr.debug(trace_msg.strip()) 
             else:
                 trace_msg = '\t return from call %s failed code: 0x%x tid:%s (%s) cycle:0x%x' % (callname, eax, tid, comm, self.cpu.cycles)
