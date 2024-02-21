@@ -313,3 +313,10 @@ def isAdd(cpu, instruct, lgr=None):
         if armCond.condMet(cpu, mn):
             retval = True
     return retval
+
+def isRegInInstruct(reg, instruct):
+    operands = getOperands(instruct)
+    for operand in operands:
+        if operand is not None and regIsPart(reg, operand):
+            return True
+    return False 
