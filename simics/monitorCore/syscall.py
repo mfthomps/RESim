@@ -1929,6 +1929,7 @@ class Syscall():
                  cpu, self.mem_utils, self.lgr)
 
             ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
+            self.lgr.debug(ida_msg)
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
