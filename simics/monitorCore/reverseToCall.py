@@ -318,11 +318,31 @@ class reverseToCall():
         self.lgr.debug('doUncall, did reverse')
 
     def tryBackOne(self, my_args):
-        
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	        self.tryOneStopped, my_args)
         self.lgr.debug('tryBackOne from cycle 0x%x' % my_args.cpu.cycles)
         SIM_run_command('rev 1')
+
+    def tryBackToCall(self, my_args):
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+	        self.tryBackToCallStopped, my_args)
+        self.lgr.debug('tryBackToCall from cycle 0x%x' % my_args.cpu.cycles)
+        SIM_run_command('rev 1')
+
+    def tryBackToCallStopped(self, my_args, one, exception, error_string):
+        if self.stop_hap is None:
+            return
+        cur_cpu, comm, tid  = self.task_utils.curThread()
+        if tid != my_args.tid:
+            self.lgr.debug('tryBackToCallStopped tid:%s but expected %s' % (tid, my_args.tid))
+            return 
+        hap = self.stop_hap
+        SIM_run_alone(self.rmStopHap, hap) 
+        self.stop_hap = None
+        self.lgr.debug('tryBackToCallStopped tid:%s' % tid)
+        self.cleanup(None)
+        self.top.skipAndMail()
+        self.context_manager.setExitBreaks()
 
     def jumpStopped(self, my_args, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
@@ -409,6 +429,9 @@ class reverseToCall():
         else:
             return False
 
+    def rmStopHap(self, hap):
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+
     def tryOneStopped(self, my_args, one, exception, error_string):
         '''
         Invoked when the simulation stops after trying to go back one
@@ -417,9 +440,9 @@ class reverseToCall():
             self.lgr.error('stoppedReverseToCall invoked though hap is none')
             return
         self.lgr.debug('tryoneStopped delete stop hap')
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        hap = self.stop_hap
+        SIM_run_alone(self.rmStopHap, hap) 
         self.stop_hap = None
-        #cmd = 'reverse-step-instruction'
         if self.tooFarBack():
             self.lgr.debug('At start of recording, cycle: 0x%x' % self.cpu.cycles)
             print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
@@ -434,23 +457,30 @@ class reverseToCall():
         cpl = memUtils.getCPL(self.cpu)
         done = False
         if cpl > 0 or self.kernel:
-            self.lgr.debug('tryBackOne user space')
+            if cpl > 0:
+                self.lgr.debug('tryOneStopped user space')
+            else:
+                self.lgr.debug('tryOneStopped kernel space')
             if self.step_into or not self.isRet(instruct[1], eip):
-                self.lgr.debug('tryBackOne worked ok')
+                self.lgr.debug('tryOneStopped worked ok')
                 done = True
                 self.cleanup(None)
                 self.top.skipAndMail()
                 self.context_manager.setExitBreaks()
             elif self.isRet(instruct[1], eip):
                 ''' First step back from a reverse step over got a ret.  Assume previous instruction is a call '''
+                SIM_run_alone(tryBackToCall, my_args)
+
+                '''
                 cell = self.top.getCell()
                 self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, my_args.eip-1, 1, 0)
                 self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.uncallHapSimple, None)
-                self.lgr.debug('tryBackOne found ret, try runnning backwards to previous eip-1.  break %d set at 0x%x now do rev' % (self.uncall_break, my_args.eip-1))
+                self.lgr.debug('tryBackOne found ret, try running backwards to previous eip-1.  break %d set at 0x%x now do rev' % (self.uncall_break, my_args.eip-1))
                 #self.top.removeDebugBreaks()
                 self.lgr.debug('now rev')
                 SIM_run_alone(SIM_run_command, 'rev')
                 self.lgr.debug('did rev')
+                '''
                 done = True
 
         elif tid in self.sysenter_cycles and len(self.sysenter_cycles[tid]) > 0:
@@ -464,7 +494,7 @@ class reverseToCall():
                 page_cycles = self.sysenter_cycles[tid]
                 if self.page_faults is not None:
                     pass
-                    #self.lgr.debug('tryBackOne NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                    #self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
                     #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
                 for cycles in sorted(page_cycles):
                     if cycles > cur_cycles:
@@ -998,6 +1028,7 @@ class reverseToCall():
                                 done = True
                                 pc_addr = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
                                 if pc_addr is not None:
+                                    #TBD how do we know the instructions are linear?
                                     pc = self.task_utils.getMemUtils().readPtr(self.cpu, pc_addr)
                                     self.lgr.debug('cycleRegisterMod try uncalling pc_addr 0x%x  pc 0x%x' % (pc_addr, pc))
                                     cell = self.top.getCell()
@@ -1034,22 +1065,6 @@ class reverseToCall():
                 else:
                     self.lgr.debug('resumeAlone follow taint')
                     self.followTaint(self.save_reg_mod)
-
-    def uncallHapSimple(self, my_args, one, exception, error_string):
-        ''' Hit when an initial rev 1 from a reverse step over leads to a ret '''
-        if self.uncall_break is None:
-            return
-        eip = self.top.getEIP(self.cpu)
-        dum_cpu, comm, tid = self.task_utils.curThread()
-        self.lgr.debug('uncallHapSimple ip: 0x%x uncall_break %d tid: %s expected %s ' % (eip, self.uncall_break, 
-              tid, self.tid))
-        if tid == self.tid:
-            RES_delete_breakpoint(self.uncall_break)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.uncall_hap)
-            self.uncall_break = None
-            self.cleanup(None)
-            self.top.skipAndMail()
-            self.context_manager.setExitBreaks()
 
     def uncallHap(self, my_args, one, exception, error_string):
         ''' used in back-tracing registers '''
@@ -1256,7 +1271,8 @@ class reverseToCall():
         self.lgr.debug('reverseToCall cleanup')
         self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHap, hap)
             self.stop_hap = None
         self.rmBreaks()
         self.is_monitor_running.setRunning(False)
