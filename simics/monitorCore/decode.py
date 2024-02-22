@@ -43,6 +43,13 @@ def regIsPart(reg1, reg2):
         return True
     if reg2.endswith('x') and reg2[1] == reg1[0]:
         return True
+    if reg1.startswith('r') and reg2.startswith('r'):
+        if reg1.startswith('r1'):
+            if reg1[:3] == reg2[:3]:
+                return True
+        elif reg1[:2] == reg2[:2]:
+                return True
+        return False 
     if len(reg1) == 2 and len(reg2) == 2 and reg1[0] == reg2[0]:
         return True
     if len(reg1) == 3 and len(reg2) == 3 and reg1.endswith('x') and reg2.endswith('x') and reg1[1] == reg2[1]:
@@ -335,3 +342,10 @@ def isDirectMove(instruct):
         
 def isLDRB(cpu, instruct):
     return False
+
+def isRegInInstruct(reg, instruct):
+    operands = getOperands(instruct)
+    for operand in operands:
+        if operand is not None and regIsPart(reg, operand):
+            return True
+    return False 

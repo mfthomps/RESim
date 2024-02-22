@@ -181,8 +181,9 @@ class StackFrameManager():
             self.setStackBase()
 
     def recordStackBase(self, tid, sp):
-        self.lgr.debug('recordStackBase tid:%s 0x%x' % (tid, sp))
-        self.stack_base[tid] = sp
+        if tid is not None and sp is not None:
+            self.lgr.debug('recordStackBase tid:%s 0x%x' % (tid, sp))
+            self.stack_base[tid] = sp
 
     def recordStackClone(self, tid, parent):
         self.lgr.debug('recordStackClone tid: %s parent: %s' % (tid, parent))

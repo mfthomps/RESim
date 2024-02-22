@@ -119,9 +119,9 @@ echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
 
 
-export target_image_base=$(readpe "$target_path" | grep ImageBase | awk '{print$2}')
+export target_image_base=$(readpe "$target_path" 2>/dev/null | grep ImageBase | awk '{print$2}')
 if [ -z $target_image_base ]; then
-    export target_image_base=$(readelf -l "$target_path" | grep -m1 LOAD | awk '{print $3}')
+    export target_image_base=$(readelf -l "$target_path" 2>/dev/null | grep -m1 LOAD | awk '{print $3}')
     echo "read ELF header got image base $target_image_base"
 fi
 
@@ -130,10 +130,10 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" $ida_db_path
     #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
-    $idacmd -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" "$ida_db_path"
+    "$idacmd" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" "$ida_db_path"
     #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
-    $idacmd -o"$ida_db_path" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
+    "$idacmd" -o"$ida_db_path" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
 fi

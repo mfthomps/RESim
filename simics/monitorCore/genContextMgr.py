@@ -270,7 +270,7 @@ class GenContextMgr():
         self.ignore_threads = []
 
         self.watch_for_prog = []
-        self.watch_for_prog_callback = None
+        self.watch_for_prog_callback = {}
         self.current_tasks = []
 
         self.comm_prog_map = {}
@@ -664,6 +664,8 @@ class GenContextMgr():
 
         if self.onlyOrIgnore(tid, comm, new_addr):
             return 
+        else:
+            self.checkFirstSchedule(new_addr, tid, comm)
        
         if len(self.pending_watch_tids) > 0:
             ''' Are we waiting to watch tids that have not yet been scheduled?
@@ -847,16 +849,19 @@ class GenContextMgr():
             pass
 
     def watchingThis(self):
+        # DOES not imply debugging
         ctask = self.task_utils.getCurThreadRec()
         cur_tid  = self.task_utils.curTID()
         if cur_tid in self.tid_cache or ctask in self.watch_rec_list or cur_tid in self.task_rec_hap or cur_tid in self.demise_cache:
-            #self.lgr.debug('am watching tid:%s' % cur_tid)
+            #self.lgr.debug('contextManager watchingThis am watching tid:%s' % cur_tid)
+            #self.lgr.debug('cache %s  watch_rec_list %s task_rec_hap  %s  demise %s' % (str(self.tid_cache), str(self.watch_rec_list), str(self.task_rec_hap), self.demise_cache))
             return True
         else:
-            #self.lgr.debug('not watching %s' % cur_tid)
+            #self.lgr.debug('contextManager watchingThis not watching %s' % cur_tid)
             return False
 
     def amWatching(self, tid):
+        # Might imply debugging
         ctask = self.task_utils.getCurThreadRec()
         cur_tid  = self.task_utils.curTID()
       
@@ -1015,13 +1020,15 @@ class GenContextMgr():
                         self.addTask(tid)
 
     def setTaskHap(self, tid=None):
-        #print('genContextManager setTaskHap debugging_cell is %s' % self.debugging_cell)
+        #
+        # Set a hap on the address containing the pointer to the currently scheduled task
+        #
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
             #self.lgr.debug('genContextManager setTaskHap bp %d' % self.task_break)
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
-            #self.lgr.debug('setTaskHap cell %s break %s set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
+            self.lgr.debug('setTaskHap cell %s break %s set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
         dumb, comm, cur_tid  = self.task_utils.curThread()
         if tid is None or tid == cur_tid:
             self.onlyOrIgnore(tid, comm, None)
@@ -1283,7 +1290,7 @@ class GenContextMgr():
                 # TBD um, windows pid zero points to this process as being next?
                 self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
                 return False
-            self.lgr.debug('Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
+            self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
             #self.task_rec_bp[tid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
@@ -1297,6 +1304,7 @@ class GenContextMgr():
 
     def watchTaskHapAlone(self, tid):
         if tid in self.task_rec_bp and tid and self.task_rec_bp[tid] is not None:
+            self.lgr.debug('contextManager watchTaskHapAlone tid:%s' % tid)
             self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
 
     def auditExitBreaks(self):
@@ -1547,15 +1555,16 @@ class GenContextMgr():
 
     def callWhenFirstScheduled(self, comm, callback):
         self.watch_for_prog.append(comm)
-        self.watch_for_prog_callback = callback
+        self.watch_for_prog_callback[comm] = callback
         self.current_tasks = self.task_utils.getTaskList()
+        self.setTaskHap()
 
     def checkFirstSchedule(self, task_rec, tid, comm):
-        if task_rec not in self.current_tasks and comm in self.watch_for_prog and self.watch_for_prog_callback is not None:
-            self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s' % tid)
+        if task_rec not in self.current_tasks and comm in self.watch_for_prog and comm in self.watch_for_prog_callback:
+            self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
             self.watch_for_prog.remove(comm)
-            self.watch_for_prog_callback(tid)
-            self.watch_for_prog_callback = None
+            self.watch_for_prog_callback[comm](tid)
+            del self.watch_for_prog_callback[comm]
 
     def recordProcessText(self, tid):
         comm = self.task_utils.getCommFromTid(tid) 

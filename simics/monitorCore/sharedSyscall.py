@@ -731,7 +731,10 @@ class SharedSyscall():
             #if eax == 120:
             #    SIM_break_simulation('clone faux return?')
             #    return
-            self.top.recordStackBase(eax, exit_info.fname_addr)
+            if exit_info.fname_addr is not None:
+                self.top.recordStackBase(eax, exit_info.fname_addr)
+            else:
+                self.lgr.debug('exitHap clone fname_addr is None, cannot call recordStackBase')
             if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True):
                 trace_msg = ('\treturn from clone (tracing), new tid:%s  calling tid:%s (%s)\n' % (eax, tid, comm))
                 #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))
@@ -764,10 +767,14 @@ class SharedSyscall():
         elif callname == 'mkdir':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
             if exit_info.fname is None:
-                self.lgr.error('fname is None? in exit from mkdir tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
+                if exit_info.fname_addr is None:
+                    self.lgr.debug('fname_addr is None? Maybe from setExits in exit from mkdir tid:%s ' % (tid))
+                else:
+                    self.lgr.error('fname is None? in exit from mkdir tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
                 #SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
-            trace_msg = ('\treturn from mkdir tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+            else:
+                trace_msg = ('\treturn from mkdir tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 
         elif callname == 'open' or callname == 'openat':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
@@ -901,7 +908,10 @@ class SharedSyscall():
                                         # note rmDmod simply notes it has been removed so we know if future snapshot loads
                                         self.top.rmDmod(self.cell_name, dmod.getPath())
                                         #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
-                                        if not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
+                                        if dmod.getBreak():
+                                            self.top.notRunning(quiet=True)
+                                            SIM_break_simulation('dmod break_on_dmod,  on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+                                        elif not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
                                             self.top.notRunning(quiet=True)
                                             SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
                                     else:
@@ -1086,7 +1096,10 @@ class SharedSyscall():
                 self.lgr.debug('return from mmap tid:%s, addr: 0x%x so fname: %s' % (tid, ueax, exit_info.fname))
                 trace_msg = ('\treturn from mmap tid:%s, addr: 0x%x so fname: %s\n' % (tid, ueax, exit_info.fname))
                 if '/etc/ld.so.cache' not in exit_info.fname:
-                    self.soMap.addSO(tid, exit_info.fname, ueax, exit_info.count)
+                    if self.top.trackingThreads() or self.context_manager.amWatching(tid):
+                        self.soMap.addSO(tid, exit_info.fname, ueax, exit_info.count)
+                    else:
+                        self.lgr.debug('sharedSyscall %s not watching threads or debugging tid:%s.  SO not recorded.' % (callname, tid))
             else:
                 trace_msg = ('\treturn from mmap tid:%s, addr: 0x%x \n' % (tid, ueax))
         elif callname == 'ipc':
@@ -1174,6 +1187,32 @@ class SharedSyscall():
              trace_msg = ('\treturn from %s tid:%s  FD: %d\n' % (callname, tid, eax))
         elif callname == 'timerfd_create':
              trace_msg = ('\treturn from %s tid:%s  FD: %d\n' % (callname, tid, eax))
+
+        elif callname == 'msgrcv':
+            self.lgr.debug('is msgrcv')
+            msqid = exit_info.old_fd
+            if eax < 0:
+                trace_msg = '\t return from call %s msqid: 0x%x failed code: 0x%x tid:%s (%s) cycle:0x%x' % (callname, msqid, eax, tid, comm, self.cpu.cycles)
+                self.lgr.debug(trace_msg.strip()) 
+            else:
+                msgsz = exit_info.count
+                max_len = min(msgsz, 1024)
+                msgp = exit_info.retval_addr
+                mtext_addr = msgp + 4
+                byte_array = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
+                mtype = self.mem_utils.readWord32(self.cpu, msgp)
+                s = None
+                if byte_array is not None:
+                    s = resimUtils.getHexDump(byte_array[:max_len])
+                trace_msg = '\t return from %s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
+                self.lgr.debug(trace_msg.strip()) 
+        elif callname == 'shmget':
+            if eax > 0:
+                trace_msg = '\t return from %s return code 0x%x  tid:%s (%s) cycle:0x%x' % (callname, eax, tid, comm, self.cpu.cycles)
+                self.lgr.debug(trace_msg.strip()) 
+            else:
+                trace_msg = '\t return from call %s failed code: 0x%x tid:%s (%s) cycle:0x%x' % (callname, eax, tid, comm, self.cpu.cycles)
+                self.lgr.debug(trace_msg.strip()) 
         else:
             trace_msg = ('\treturn from call %s code: 0x%x  tid:%s\n' % (callname, ueax, tid))
 

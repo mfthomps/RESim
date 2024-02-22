@@ -406,9 +406,13 @@ class GenMonitor():
                 print('Cell %s using params from %s' % (cell_name, param_file))
                 self.lgr.debug('Cell %s using params from %s' % (cell_name, param_file))
                 if not os.path.isfile(param_file):
-                    print('Could not find param file at %s -- it will not be monitored' % param_file)
-                    self.lgr.debug('Could not find param file at %s -- it will not be monitored' % param_file)
-                    continue
+                    if cell_name != self.target:
+                        print('Could not find param file at %s -- it will not be monitored' % param_file)
+                        self.lgr.debug('Could not find param file at %s -- it will not be monitored' % param_file)
+                        continue
+                    else:
+                        self.lgr.error('Could not find param file for TARGET at %s -- Cannot continue.' % param_file)
+                        self.quit()
                 self.param[cell_name] = pickle.load( open(param_file, 'rb') ) 
                 ''' add new attributes of kParam here for compat with old param files '''
                 if not hasattr(self.param[cell_name], 'compat32_entry'):
@@ -1198,6 +1202,9 @@ class GenMonitor():
                         id_str = ''
                     if verbose:
                         prog = self.soMap[self.target].getProg(tid)
+                        if prog is None:
+                            if self.target in self.traceProcs:
+                                prog = self.traceProcs[self.target].getProg(tid)
                         if prog is not None:
                             name = os.path.basename(prog)
                         else:
@@ -1338,6 +1345,7 @@ class GenMonitor():
 
             if self.track_threads is not None:
                 # cheesy hack of setting dict to None if we don't want to track threads
+                self.lgr.debug('genMonitor debug call trackThreads becuase the hack is not None')
                 self.trackThreads()
                 ''' By default, no longer watch for new SO files '''
                 self.track_threads[self.target].stopSOTrack()
@@ -1432,6 +1440,7 @@ class GenMonitor():
              self.reg_set[self.target].swapContext()
 
     def trackThreads(self):
+        self.lgr.debug('trackThreads') 
         if self.track_threads is None:
             # undo hack
             self.track_threads = {}
@@ -1627,9 +1636,10 @@ class GenMonitor():
                 self.toExecve(prog=proc, flist=[], binary=binary)
 
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=False):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False):
         if not track_threads:
             # TBD fix this hack.  confusing since track_threads is a dict
+            self.lgr.debug('genMonitor debugProc track_threads set to None')
             self.track_threads = None
         if self.isWindows():
             self.rmDebugWarnHap()
@@ -1645,7 +1655,9 @@ class GenMonitor():
         #    print('Process name truncated to %s to match Linux comm name' % proc)
         self.rmDebugWarnHap()
         #self.stopTrace()
-        plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
+        plist = []
+        if not new:
+            plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
@@ -1663,12 +1675,15 @@ class GenMonitor():
                 flist.insert(0, fp)
             ''' If not yet loaded SO files, e.g., we just did a toProc, then execToText ''' 
             if self.soMap[self.target].getSOTid(plist[0]) is None:
-                self.lgr.debug('debugProc, no so yet, run to text.')
+                self.lgr.debug('debugProc, no so yet, run to text for proc %s.' % proc)
                 rtt = stopFunction.StopFunction(self.execToText, [], nest=True)
                 flist.insert(1, rtt)
             self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
-            self.lgr.debug('debugProc no process %s found, run until execve' % proc)
+            if not new:
+                self.lgr.debug('debugProc no process %s found, run until execve' % proc)
+            else:
+                self.lgr.debug('debugProc run until NEW execve of %s' % proc)
             #flist = [self.toUser, self.debug]
             ''' run to the execve, then start recording shared object mmaps and run
                 until we enter the text segment so we get the SO map '''
@@ -1716,11 +1731,11 @@ class GenMonitor():
         tid_list = list(tid_dict.keys())
         leader_prog = self.soMap[self.target].getProg(leader_tid)
         copy_list = list(tid_list)
-        for tid in copy_list:
-            prog = self.soMap[self.target].getProg(tid)
+        for l_tid in copy_list:
+            prog = self.soMap[self.target].getProg(l_tid)
             if prog != leader_prog:
                 self.lgr.debug('debugTidGroup prog %s does not match leader %s, remove it' % (prog, leader_prog))
-                tid_list.remove(tid)
+                tid_list.remove(l_tid)
       
         self.lgr.debug('debugTidGroup cell %s tid:%s found leader %s and %d tids' % (self.target, tid, leader_tid, len(tid_list)))
         if len(tid_list) == 0:
@@ -2601,10 +2616,12 @@ class GenMonitor():
             self.ignoreThreadList()
         return retval
  
-    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[]):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True):
         if target is None:
             target = self.target
 
+        if not track_threads:
+            self.track_threads = None 
         ''' trace all system calls. if a program selected for debugging, watch only that program '''
         self.lgr.debug('traceAll target %s begin' % target)
         if target not in self.cell_config.cell_context:
@@ -3184,7 +3201,7 @@ class GenMonitor():
             run = True
         else:
             run = False
-        self.lgr.debug('runToDmod file %s cellname %s operation: %s' % (dfile, cell_name, operation))
+        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, cell_name, operation))
         name = 'dmod-%s' % operation
         if operation == 'open':
            op_set = ['open', 'read','close','lseek','_llseek']
@@ -3195,9 +3212,14 @@ class GenMonitor():
         if mod_comm is None:
             self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
         else:
-            # modify to use callback in dmod when comm running.
-            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
-        #self.runTo(operation, call_params, cell_name=cell_name, run=run, background=False)
+            tids = self.task_utils[self.target].getTidsForComm(mod_comm)
+            if len(tids) == 0:
+                self.lgr.debug('runToDmod, %s has comm that is not runing, set callbacks.' % mod.toString())
+                mod.setCommCallback(op_set, call_params)
+                self.context_manager[self.target].callWhenFirstScheduled(mod_comm, mod.scheduled)
+            else:
+                self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
+                self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
         return retval
 
     def runToWrite(self, substring):
@@ -3253,6 +3275,12 @@ class GenMonitor():
 
     def runToSend(self, substring):
         call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
+        call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
+        self.lgr.debug('runToSend to %s' % substring)
+        self.runTo(call, call_params, name='send')
+
+    def runToSendTo(self, substring):
+        call = self.task_utils[self.target].socketCallName('sendto', self.is_compat32)
         call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
         self.lgr.debug('runToSend to %s' % substring)
         self.runTo(call, call_params, name='send')
@@ -3874,8 +3902,9 @@ class GenMonitor():
 
         version_file = os.path.join('./', name, 'version.pickle')
         pickle.dump( self.resim_version, open(version_file, "wb" ) )
-       
-        self.stackFrameManager[self.target].pickleit(name) 
+      
+        if self.target in self.stackFrameManager: 
+            self.stackFrameManager[self.target].pickleit(name) 
 
         debug_info_file = os.path.join('./', name, 'debug_info.pickle')
         debug_info = {}
@@ -5450,6 +5479,8 @@ class GenMonitor():
                     print('Jumpers for %s already loaded' % target)
             else:
                 print('No jumper file defined though ENV set for target %s.' % target)
+        else:
+            self.lgr.debug('LoadJumpersTarget No EXECUTION_JUMPERS defined for %s' % target)
 
     def getSyscallEntry(self, callname):
         retval = None

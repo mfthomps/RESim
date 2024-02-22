@@ -86,6 +86,12 @@ class SOMap():
             self.prog_start = so_pickle['prog_start']
             self.prog_end = so_pickle['prog_end']
             self.prog_local_path = so_pickle['prog_local_path']
+            if 'prog_base_map' in so_pickle:
+                self.prog_base_map = so_pickle['prog_base_map']
+            else:
+                for tid in self.text_prog:
+                    base = os.path.basename(self.text_prog[tid])
+                    self.prog_base_map[base] = self.text_prog[tid]
             if 'prog_info' in so_pickle:
                 self.so_addr_map = so_pickle['so_addr_map']
                 self.so_file_map = so_pickle['so_file_map']
@@ -115,6 +121,7 @@ class SOMap():
                     self.prog_info = so_pickle['prog_info']
             else:
                 # backward compatability, but only most recent
+                # TBD remove all this
                 for tid in self.text_prog:
                     prog = self.text_prog[tid]
                     if self.prog_start[tid] is not None:
@@ -152,6 +159,7 @@ class SOMap():
         so_pickle['text_prog'] = self.text_prog
         so_pickle['prog_local_path'] = self.prog_local_path
         so_pickle['prog_info'] = self.prog_info
+        so_pickle['prog_base_map'] = self.prog_base_map
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
         self.lgr.debug('SOMap pickleit to %s saved %d text_progs ' % (somap_file, len(self.text_prog)))
@@ -328,7 +336,7 @@ class SOMap():
             
     def addSO(self, tid_in, prog, addr, count):
         if '..' in prog:
-            prog = Path(prog).resolve()
+            prog = str(Path(prog).resolve())
         prog_basename = os.path.basename(prog)
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
@@ -715,7 +723,7 @@ class SOMap():
             cpu, comm, tid = self.task_utils.curThread() 
         map_tid = self.getSOTid(tid)
         if map_tid not in self.so_file_map:
-            self.lgr.error('soMap getLoadAddr tid %s not in so_file_map' % map_tid)
+            self.lgr.debug('soMap getLoadAddr tid %s not in so_file_map, perhaps a prog' % map_tid)
         else:
             for load_info in self.so_file_map[map_tid]:
                 #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(prog).lower(), ntpath.basename(section.fname).lower()))
@@ -792,9 +800,11 @@ class SOMap():
 
     def fullProg(self, prog_in):
         # if the given prog_in is a basename, use a prog_base_map to return the full path
+        prog = None
         if '/' not in prog_in:
             if prog_in in self.prog_base_map:
                 prog = self.prog_base_map[prog_in] 
+            
             else:
                 self.lgr.error('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
         else:

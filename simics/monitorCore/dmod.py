@@ -59,6 +59,12 @@ class Dmod():
         self.fd = None
         self.tid = None
         self.fname_addr = None
+        self.break_on_dmod = False
+
+        # used for callback when comm of the dmod is first scheduled
+        self.op_set = None
+        self.call_params = None
+
         if os.path.isfile(path):
             with open(path) as fh:
                done = False
@@ -91,6 +97,9 @@ class Dmod():
                                self.count = value
                            elif key == 'comm':
                                self.comm = value
+                           elif key == 'break':
+                               if value.lower() == 'true':
+                                   self.break_on_dmod = True
 
                self.lgr.debug('Dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, self.comm))
                if self.kind == 'full_replace':
@@ -351,9 +360,21 @@ class Dmod():
         return self.cell_name
 
     def toString(self):
-        retval = 'path: %s comm: %s operation: %s' % (self.getPath(), self.comm, self.operation)
+        retval = 'path: %s comm: %s operation: %s' % (self.path, self.comm, self.operation)
         return retval
+
+    def getBreak(self):
+        return self.break_on_dmod
         
+    def setCommCallback(self, op_set, call_params):
+        self.lgr.debug('Dmod %s setCommCallback opset %s' % (self.toString(), str(op_set)))
+        self.op_set = op_set
+        self.call_params = call_params
+
+    def scheduled(self, tid):
+        self.lgr.debug('Dmod %s scheduled tid %s' % (self.toString(), tid))
+        self.top.runTo(self.op_set, self.call_params, ignore_running=True)
+
 if __name__ == '__main__':
     print('begin')
     d = Dmod('dog.dmod')

@@ -35,9 +35,9 @@ class reverseToAddr():
         self.extra_back = extra_back
         self.is_monitor_running.setRunning(True)
         self.task_utils = task_utils
-        cpu, comm, pid  = task_utils.curThread()
+        cpu, comm, tid  = task_utils.curThread()
         self.cpu = cpu
-        self.pid = pid
+        self.tid = tid
         #resim = self.top.getRESimContext()
         #default = self.top.getDefaultContext()
         #self.the_break = SIM_breakpoint(default, Sim_Break_Linear, Sim_Access_Execute, 
@@ -69,17 +69,22 @@ class reverseToAddr():
         else:
             SIM_run_command('rev')
 
+    def rmStopHap(self, hap):
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+
     def stopHap(self, cpu, one, exception, error_string):
         if self.stop_hap is None:
             return
-        cpu, comm, pid  = self.task_utils.curThread()
+        cpu, comm, tid  = self.task_utils.curThread()
         eip = self.top.getEIP()
-        if pid != self.pid:
-            self.lgr.debug('reverseToAddr stopHap at 0x%x wrong pid got %d wanted %d cycles: 0x%x excpt: %s  errorstring %s' % (eip, pid, 
-                 self.pid, cpu.cycles, str(exception), str(error_string)))
+        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
+        if tid != self.tid:
+            self.lgr.debug('reverseToAddr stopHap at 0x%x wrong tid got %s wanted %s cycles: 0x%x excpt: %s  errorstring %s' % (eip, tid, 
+                 self.tid, cpu.cycles, str(exception), str(error_string)))
             SIM_run_alone(self.goBackAlone, None)
             return
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        hap = self.stop_hap
+        SIM_run_alone(self.rmStopHap, hap)
         self.stop_hap = None 
         RES_delete_breakpoint(self.the_break)
         self.the_break = None
@@ -90,7 +95,6 @@ class reverseToAddr():
             self.top.skipAndMail()
             return
  
-        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
         #self.top.gdbMailbox('0x%x' % eip)
         if self.extra_back > 0:
             self.lgr.debug('stopHap asked to go back extra %d' % self.extra_back)
@@ -112,7 +116,9 @@ class reverseToAddr():
         if self.one_stop_hap is None:
             self.lgr.error('backOneStopped invoked though hap is none')
             return
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.one_stop_hap)
+        hap = self.one_stop_hap
+        SIM_run_alone(self.rmStopHap, hap)
+        self.one_stop_hap = None 
         self.one_stop_hap = None
         eip = self.top.getEIP()
         self.lgr.debug('reverseToAddr backOneStopped eip: %x' % eip)
