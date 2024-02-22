@@ -5480,7 +5480,7 @@ class GenMonitor():
             else:
                 print('No jumper file defined though ENV set for target %s.' % target)
         else:
-            print('No EXECUTION_JUMPERS defined for %s' % target)
+            self.lgr.debug('LoadJumpersTarget No EXECUTION_JUMPERS defined for %s' % target)
 
     def getSyscallEntry(self, callname):
         retval = None
