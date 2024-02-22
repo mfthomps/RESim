@@ -203,7 +203,7 @@ def dumpImports(fname):
 
     print("Found %d import(s)..." % nimps)
     import_names = ImportNames()
-    for i in xrange(0, nimps):
+    for i in range(0, nimps):
         name = idaapi.get_import_module_name(i)
         if not name:
             print("Failed to get import module name for #%d" % i)
