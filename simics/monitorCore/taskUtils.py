@@ -566,56 +566,50 @@ class TaskUtils():
             return None
         # BEWARE uses PIDs and casts tid to pid
         retval = {}
-        self.lgr.debug('getGroupTids for %s' % leader_tid)
+        #self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
         leader_prog = None
         if leader_tid in self.exec_addrs:
             leader_prog = self.exec_addrs[leader_tid].prog_name
-        leader_tid = int(leader_tid)
+        leader_pid = int(leader_tid)
         leader_comm = None
         for ts in ts_list:
-            if ts_list[ts].pid == leader_tid:
+            if ts_list[ts].pid == leader_pid:
                 leader_rec = ts
                 leader_comm = ts_list[ts].comm
                 break
         if leader_rec is None:
             self.lgr.debug('taskUtils getGroupTids did not find record for leader tid %d' % leader_tid)
             return None 
-        self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
-        retval[str(leader_tid)] = leader_rec
+        #self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
+        retval[leader_tid] = leader_rec
+        decendents = []
         for ts in ts_list:
             #if ts_list[ts].comm != leader_comm:
             #    continue
+            if leader_rec == ts:
+                continue
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
-            if group_leader != ts:
-                if group_leader == leader_rec:
-                    pid = self.mem_utils.readWord32(self.cpu, ts + self.param.ts_pid)
-                    ''' skip if exiting as recorded by syscall '''
-                    #if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
-                    if not self.isExitTid(str(pid)):
-                        #retval.append(ts_list[ts].pid)
-                        retval[str(pid)] = ts
-                        #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
-            elif False:
-                # fix this.  Must be some thread structure to follow.  Using comm will mess up.
-                ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
-                # TBD FIX to use thread head list?  This will find procs that happen to have the same comm, e.g., /etc/init.d/foo
-                comm_leader_tid = int(self.getCommLeaderTid(ts))
-                ts_pid = str(ts_list[ts].pid)
-                self.lgr.debug('getGroupTids comm leader_tid %s leader_tid: %s ts_pid %s leader_comm %s this comm: %s' % (comm_leader_tid, leader_tid, ts_pid,
-                     leader_comm, ts_list[ts].comm))
-                if comm_leader_tid == leader_tid and ts_pid not in retval:
-                    self.lgr.debug('getGroupTids tid matched')
-                    #if ts_pid != self.exit_tid or self.cpu.cycles != self.exit_cycles:
-                    if not self.isExitTid(ts_pid):
-                        this_prog = None
-                        if ts_pid in self.exec_addrs:
-                            this_prog = self.exec_addrs[ts_pid].prog_name
-                        self.lgr.debug('getGroupTids added %s this_prog %s' % (ts_pid, this_prog))
-                        #retval.append(ts_pid)
-                        retval[ts_pid] = ts
-          
+            this_leader_pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+            this_leader_comm = self.mem_utils.readString(self.cpu, group_leader + self.param.ts_comm, COMM_SIZE)
+            #self.lgr.debug('getGroupTids tid %s  group leader got %s' % (ts_list[ts].pid, this_leader_pid))
+            if this_leader_pid == ts_list[ts].pid:
+                # alternate thread management strategy
+                group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_parent)
+                this_leader_pid = self.mem_utils.readWord32(self.cpu, group_leader + self.param.ts_pid)
+                this_leader_comm = self.mem_utils.readString(self.cpu, group_leader + self.param.ts_comm, COMM_SIZE)
+                #self.lgr.debug('getGroupTids TRY AGAIN tid %s  group leader got %s' % (ts_list[ts].pid, this_leader_pid))
+            #self.lgr.debug('getGroupTids this_leader_tid %s  leader_pid: %s this_leader_comm %s' % (this_leader_pid, leader_pid, this_leader_comm))
+            if (this_leader_pid == leader_pid or this_leader_pid in decendents) and leader_comm == this_leader_comm:
+                #self.lgr.debug('getGroupTids tid matches')
+                decendents.append(ts_list[ts].pid)
+                tid = str(ts_list[ts].pid)
+                #if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
+                if not self.isExitTid(tid):
+                    #retval.append(ts_list[ts].pid)
+                    retval[tid] = ts
+                    #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
         return retval
 
     def getTidsForComm(self, comm_in, ignore_exits=False):
