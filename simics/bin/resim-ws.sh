@@ -31,6 +31,7 @@ if [ "$1" == "-e" ]; then
     cp $RESIM_DIR/simics/workspace/clear-linux.ini .
     cp $RESIM_DIR/simics/workspace/clear64.param .
     cp $RESIM_DIR/simics/workspace/mapdriver.simics .
+    cp $RESIM_DIR/simics/workspace/README-cadet01.txt .
 fi
 here=`pwd`
 if [ ! -d ./targets/qsp-x86 ]; then
