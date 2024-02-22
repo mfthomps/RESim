@@ -1627,7 +1627,7 @@ class GenMonitor():
                 self.toExecve(prog=proc, flist=[], binary=binary)
 
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=False):
         if not track_threads:
             # TBD fix this hack.  confusing since track_threads is a dict
             self.track_threads = None
