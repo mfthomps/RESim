@@ -33,48 +33,55 @@ def keyValue(line):
 
     
 def getSocket():
-    host = 'localhost'
-    PORT = 6459
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect((host, PORT))
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     return sock
 
-def doCommand(command, sock):
+def doCommand(command, sock, target):
     fstr = 'RUN: ' + command  + ' =EOFX='
-    sock.send(fstr.encode())
-    ack=sock.recv(3)
-    sock.send('ack'.encode())
+    sock.sendto(fstr.encode(), target)
+    ack, source = sock.recvfrom(3)
+    sock.sendto('ack'.encode(), target)
 
-def doBackgroundCommand(command, sock):
+def doBackgroundCommand(command, sock, target):
     fstr = 'RUN_LONG: ' + command  + ' =EOFX='
-    sock.send(fstr.encode())
-    ack=sock.recv(3)
-    sock.send('ack'.encode())
+    sock.sendto(fstr.encode(), target)
+    ack, source = sock.recvfrom(3)
+    sock.sendto('ack'.encode(), target)
 
-def sendFiles(file_list, sock):
+def sendFiles(file_list, sock, target):
     for file in file_list: 
         flen = str(os.path.getsize(file))
         fstr = 'FILE: ' + flen + ' ' + os.path.basename(file) + ' =EOFX='
         print("- Send file: " + file + " (" + flen + ")")
-        sock.send(fstr.encode())
-        ack=sock.recv(3)
-        sock.send('ack'.encode())
+        sock.sendto(fstr.encode(), target)
+        ack, source = sock.recvfrom(3)
+        sock.sendto('ack'.encode(), target)
         print('before send got %s' % str(ack))
         #time.sleep(1)
-        #try:
-        if True:
-            with open(file, 'rb') as f:
-                print('now read')
-                fileData = f.read()
+        with open(file, 'rb') as f:
+            print('now read')
+            fileData = f.read()
+            remain = len(fileData)
+            ptr = 0
+            while remain > 0:
                 # Begin sending file
+                if remain >= 1024:
+                    end = ptr+1024
+                    send_this = fileData[ptr:end]
+                    remain = remain - 1024
+                    ptr = ptr + 1024
+                else:
+                    end = ptr+remain
+                    send_this = fileData[ptr:end]
+                    remain = 0 
                 print('now send %d bytes' % len(fileData))
-                sock.sendall(fileData)
+                sock.sendto(send_this, target)
                 #time.sleep(4)
-                sock.send('=EOFX='.encode())
-            f.close()
-            print('>> Transfer: ' + file + ' complete.\n')
-            ack=sock.recv(3)
-            print('got %s' % str(ack))
+            sock.sendto('=EOFX='.encode(), target)
+        f.close()
+        print('>> Transfer: ' + file + ' complete.\n')
+        ack, source = sock.recvfrom(3)
+        print('got %s' % str(ack))
 
 class Directive():
     def __init__(self, fname):
@@ -148,6 +155,9 @@ def main():
     directive = Directive(args.directives)
 
     sock = getSocket()
+    host = 'localhost'
+    PORT = 6459
+    target = (host, PORT)
 
     if args.server:
         client_cmd = 'serverTCP'
@@ -168,12 +178,12 @@ def main():
         client_cmd = 'clientudpMult3'
     if client_cmd is not None:
         client_mult_path = os.path.join(core_path, client_cmd)
-        sendFiles([client_mult_path], sock)
+        sendFiles([client_mult_path], sock, target)
     cmd='/bin/chmod a+x /tmp/%s' % client_cmd
-    doCommand(cmd, sock)
+    doCommand(cmd, sock, target)
     if args.disconnect:
         magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
-        sendFiles([magic_path], sock)
+        sendFiles([magic_path], sock, target)
 
     udir = os.path.join('/tmp', user_name)
     print('udir is %s' % udir)
@@ -191,7 +201,7 @@ def main():
     file_list = []
     for file in directive.file:
         file_list.append(file)
-    sendFiles(file_list, sock)
+    sendFiles(file_list, sock, target)
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
@@ -200,12 +210,12 @@ def main():
     driver_file.write(directive_line+'\n')
 
     driver_file.close()
-    sendFiles([remote_directives_file], sock)
+    sendFiles([remote_directives_file], sock, target)
     cmd = '/bin/chmod a+x /tmp/%s' % os.path.basename(remote_directives_file)
-    doCommand(cmd, sock)
+    doCommand(cmd, sock, target)
     cmd = '%s > /tmp/directive.log 2>&1 &' % directives_script
     #doBackgroundCommand(cmd, sock)
-    doCommand(cmd, sock)
+    doCommand(cmd, sock, target)
     print('cmd was %s' % cmd)
 
     sock.close()
