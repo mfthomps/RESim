@@ -2375,8 +2375,11 @@ class Syscall():
                                             self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d no params trace_all %r tid_sockets? %s' % (self.name, self.cell, 
                                                tid, syscall_info.callnum, tracing_all, str(self.tid_sockets)))
                                         self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
-                                    elif callname.startswith('mmap') and self.name == 'runToText' and exit_info.fname == self.mmap_fname:
+                                    elif callname.startswith('mmap') and self.name in ['runToText', 'trackSO'] and exit_info.fname == self.mmap_fname:
                                         self.lgr.debug('syscallHap is mmap and runToText an dmatch')
+                                        self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    elif callname == 'open' and self.name in ['runToText', 'trackSO']:
+                                        self.lgr.debug('syscallHap callname %s  my name %s, add exit' % (callname, self.name))
                                         self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                     else:
                                         self.lgr.debug('syscallHap not trace all and no exit_info call params, so no exit hap')
