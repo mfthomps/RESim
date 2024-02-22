@@ -79,12 +79,16 @@ if [[ -f $ida_db_path ]] || [[ -f $other_ida_db_path ]];then
     export IDA_DB_PATH=$ida_db_path
     # Get image base from readelf / readpe and set an env with it and have idaDump do a rebase
     # using ida_segment.rebase_program(offset, MSF_FIXONCE) and exit WITHOUT saving db
-    export target_image_base=$(readpe "$ida_target_path" | grep ImageBase | awk '{print$2}')
+    export target_image_base=$(readpe "$ida_target_path" 2>/dev/null | grep ImageBase | awk '{print$2}')
     if [ -z $target_image_base ]; then
         echo "read ELF header to get image base"
-        export target_image_base=$(readelf -l "$ida_target_path" | grep -m1 LOAD | awk '{print $3}')
+        export target_image_base=$(readelf -l "$ida_target_path" 2>/dev/null | grep -m1 LOAD | awk '{print $3}')
     fi
-    echo "image_base is $target_image_base"
+    if [ -z $target_image_base ]; then
+        echo "No readelf available, will use image base per IDA database."
+    else
+        echo "image_base is $target_image_base"
+    fi
     echo $idacmd -L/tmp/idaDump.log -A -a -S$RESIM_DIR/simics/ida/idaDump.py $ida_db_path
     $idacmd -L/tmp/idaDump.log -A -S$RESIM_DIR/simics/ida/idaDump.py "$ida_db_path" || tail /tmp/idaDump.log && exit 1
 else
