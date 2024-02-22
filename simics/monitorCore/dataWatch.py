@@ -2585,14 +2585,9 @@ class DataWatch():
                 self.lgr.debug('dataWatch finishCheckMoveHap may be a memcpy with no fun name trans_size 0x%x' % self.move_stuff.trans_size)
                 SIM_run_alone(self.stopForMemcpyCheck, None)
                 return 
-            wm = self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, 
-                     self.move_stuff.trans_size, ad_hoc=True, dest=self.last_ad_hoc)
-            self.setRange(dest_addr, self.move_stuff.trans_size, watch_mark=wm)
-            self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (self.move_stuff.addr, ad_hoc, dest_addr))
-            self.setBreakRange()
-            ''' TBD breaks something?'''
-            self.move_cycle = self.cpu.cycles
-            self.move_cycle_max = self.cpu.cycles+1
+ 
+            self.recordAdHocCopy(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.move_stuff.trans_size, dest=self.last_ad_hoc)
+
         elif self.move_stuff.function is not None:
             if dest_addr != self.move_stuff.addr:
                 self.lgr.debug('dataWatch finishCheckMove, function return value wrote to addr 0x%x  function %s' % (self.move_stuff.addr, self.move_stuff.function))
@@ -2622,6 +2617,14 @@ class DataWatch():
         self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
         self.finish_check_move_hap = None
 
+    def recordAdHocCopy(self, src, buf_start, buf_length, copy_size, dest):
+        wm = self.watchMarks.dataRead(src, buf_start, buf_length, copy_size, ad_hoc=True, dest=dest)
+        self.setRange(dest, copy_size, watch_mark=wm)
+        self.lgr.debug('dataWatch recordAdHocCopy src 0x%x dest 0x%x size 0x%x' % (src, dest, copy_size))
+        self.setBreakRange()
+        ''' TBD breaks something?'''
+        self.move_cycle = self.cpu.cycles
+        self.move_cycle_max = self.cpu.cycles+1
 
     class CheckMoveStuff():
         def __init__(self, addr, trans_size, start, length, dest_op, function=None, ip=None, cycle=None):
@@ -2853,12 +2856,12 @@ class DataWatch():
         next_instruct = instruct
         op2, op1 = self.decode.getOperands(next_instruct[1])
         track_sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        #self.lgr.debug('dataWatch loopAdHoc, sp from reg 0x%x' % track_sp)
+        self.lgr.debug('dataWatch loopAdHoc, sp from reg 0x%x' % track_sp)
         new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
         if new_sp is not None:
             #self.lgr.debug('dataWatch loopAdHoc, sp from adjustSP 0x%x' % new_sp)
             track_sp = new_sp
-        self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x instruct %s starting sp 0x%x' % (our_reg, eip, instruct[1], track_sp))
+        #self.lgr.debug('dataWatch loopAdHoc, our_reg %s, eip 0x%x instruct %s starting sp 0x%x' % (our_reg, eip, instruct[1], track_sp))
         our_reg_list = [our_reg]
         max_num = 10
         if our_reg.startswith('xmm'):
@@ -2882,7 +2885,7 @@ class DataWatch():
             #self.lgr.debug('dataWatch loopAdHoc in loop ip 0x%x instruc %s' % (next_ip, next_instruct[1]))
             ''' Normally bail on branch, but catch xmm mem copies that have a lot of processing. TBD this is broken since we can't follow branches properly'''
             if (decode.isBranch(self.cpu, next_instruct[1]) and not our_reg.startswith('xmm')) or next_instruct[1].startswith('ret'):
-                self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
+                #self.lgr.debug('dataWatch loopAdHoc is branch %s' % next_instruct[1])
                 break
             op2, op1 = self.decode.getOperands(next_instruct[1])
             #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
@@ -2897,8 +2900,16 @@ class DataWatch():
  
             if dest_addr is not None:
                 ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
-                if 'sp' in op2:
+                if 'sp' in op1:
                     adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
+                    if adhoc:
+                        self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
+                    break
+                elif self.checkNoTaint(op1, recent_instructs):
+                    #self.lgr.debug('dataWatch loopAdHoc dest addr base reg seems unchanged. %s' % op1)
+                    adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
+                    if adhoc:
+                        self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
                     break
                 else:                   
                     #self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
@@ -2909,8 +2920,8 @@ class DataWatch():
                         dest_op = op2
                     ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
                     self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
-                    #self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
-                    #      start, next_ip, self.cpu.current_context))
+                    self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
+                          start, next_ip, self.cpu.current_context))
                     self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
                              self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
                     break
@@ -2940,6 +2951,24 @@ class DataWatch():
         #self.lgr.debug('dataWatch loopAdHoc exit i is %d' % i)
         return adhoc
 
+    def checkNoTaint(self, op, recent):
+        # return True if the recent instructions do not seem to affect the register found in op
+        retval = True
+        if '[' in op: 
+            content = op.split('[', 1)[1].split(']')[0]
+            if '+' in content:
+                reg = content[:content.index('+')]
+            elif '-' in content:
+                reg = content[:content.index('-')]
+            else:
+                reg = content
+            self.lgr.debug('dataWatch recentNoTaint reg is %s' % reg)
+            for instruct in recent:
+                op2, op1 = self.decode.getOperands(instruct)
+                if op1 == reg:
+                    retval = False
+        return retval
+                
 
     def checkPushedData(self, track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size):
         adhoc = False
@@ -3017,7 +3046,7 @@ class DataWatch():
     def findCallReturn(self, ip, instruct):
         next_instruct = instruct
         next_ip = ip
-        limit = 10
+        limit = 20
         count = 0
         retval = None
         if self.fun_mgr is not None:
