@@ -518,6 +518,7 @@ class TaskUtils():
         retval = False
         etid = self.getExitTid()
         if etid is not None:
+            etid = str(etid)
             if '-' in etid:
                 if tid == etid:
                     retval = True
@@ -584,8 +585,8 @@ class TaskUtils():
         self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
         retval[str(leader_tid)] = leader_rec
         for ts in ts_list:
-            if ts_list[ts].comm != leader_comm:
-                continue
+            #if ts_list[ts].comm != leader_comm:
+            #    continue
             group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
             if group_leader != ts:
                 if group_leader == leader_rec:
@@ -596,7 +597,8 @@ class TaskUtils():
                         #retval.append(ts_list[ts].pid)
                         retval[str(pid)] = ts
                         #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
-            else:
+            elif False:
+                # fix this.  Must be some thread structure to follow.  Using comm will mess up.
                 ''' newer linux does not use group_leader like older ones did -- look for ancestor with same comm '''
                 # TBD FIX to use thread head list?  This will find procs that happen to have the same comm, e.g., /etc/init.d/foo
                 comm_leader_tid = int(self.getCommLeaderTid(ts))
