@@ -119,9 +119,9 @@ echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
 
 
-export target_image_base=$(readpe "$target_path" | grep ImageBase | awk '{print$2}')
+export target_image_base=$(readpe "$target_path" 2>/dev/null | grep ImageBase | awk '{print$2}')
 if [ -z $target_image_base ]; then
-    export target_image_base=$(readelf -l "$target_path" | grep -m1 LOAD | awk '{print $3}')
+    export target_image_base=$(readelf -l "$target_path" 2>/dev/null | grep -m1 LOAD | awk '{print $3}')
     echo "read ELF header got image base $target_image_base"
 fi
 
