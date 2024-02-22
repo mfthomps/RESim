@@ -109,7 +109,12 @@ class FunMgr():
         return fun
 
     def getFunName(self, addr):
-        return self.ida_funs.getFunName(addr)
+        retval = None
+        if self.ida_funs is None:
+            self.lgr.error('funMgr getFunName, ida_funs is not defined')
+        else: 
+            retval = self.ida_funs.getFunName(addr)
+        return retval
 
     def isIterator(self, addr):
         if self.user_iterators is not None:
