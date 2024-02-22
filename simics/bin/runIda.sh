@@ -111,7 +111,7 @@ export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
 mkdir -p "$ida_analysis_path" > /dev/null 2>&1
 
 echo "target is $target"
-tt=$(readpe -H "$target" | grep ImageBase | awk '{print $2}')
+tt=$(readpe -H "$target" 2>/dev/null | grep ImageBase | awk '{print $2}')
 export original_image_base=$tt
 echo "original_image_base is $tt"
 
