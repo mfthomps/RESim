@@ -1675,7 +1675,7 @@ class GenMonitor():
                 flist.insert(0, fp)
             ''' If not yet loaded SO files, e.g., we just did a toProc, then execToText ''' 
             if self.soMap[self.target].getSOTid(plist[0]) is None:
-                self.lgr.debug('debugProc, no so yet, run to text.')
+                self.lgr.debug('debugProc, no so yet, run to text for proc %s.' % proc)
                 rtt = stopFunction.StopFunction(self.execToText, [], nest=True)
                 flist.insert(1, rtt)
             self.run_to[self.target].toRunningProc(proc, plist, flist)
