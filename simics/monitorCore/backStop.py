@@ -36,7 +36,8 @@ class BackStop():
         if self.back_stop_cycle is None:
             return
         if self.cpu is not None:
-            #self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
+            if not self.top.hasAFL():
+                self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
             self.clearCycle()
             SIM_break_simulation('hit final cycle')
             '''
