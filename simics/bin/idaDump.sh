@@ -22,7 +22,7 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     echo "RESIM_IDA_DATA not defined."
     exit
 fi
-cp -u $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
+cp $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
 if [[ $# -eq 0 ]] || [[ "$1" = "-h" ]]; then
     echo "idaDump.sh [-64] <program>"
     exit
