@@ -162,7 +162,7 @@ def main():
     if args.server:
         client_cmd = 'serverTCP'
     elif directive.session == 'TCP':
-        client_cmd = 'clientTCP'
+        client_cmd = 'clientTCP3'
     elif args.replay:
         client_cmd = None
     elif args.broadcast:
