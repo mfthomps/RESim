@@ -5,6 +5,7 @@ from idaapi import simplecustviewer_t
 import gdbProt
 import json
 import os
+import sys
 import time
 import resimUtils
 class DataWatch(simplecustviewer_t):
@@ -118,8 +119,15 @@ class DataWatch(simplecustviewer_t):
             else:
                 cline = str(line)
             #print("added %s" % line)
-            retval.append(str(line))
-            self.AddLine(cline)
+            if sys.version_info[0] >= 3:
+                retval.append(line.decode())
+                new_cline = cline[2:]
+                if new_cline.startswith('b'):
+                    new_cline = new_cline[2:]
+                self.AddLine(new_cline)
+            else:
+                retval.append(str(line))
+                self.AddLine(cline)
             index += 1
         self.Refresh()
         command = '@cgc.nextWatchMark()'
