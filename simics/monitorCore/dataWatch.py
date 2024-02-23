@@ -1722,6 +1722,7 @@ class DataWatch():
                 SIM_break_simulation('max marks exceeded')
                 print('Data Watches removed')
             else:
+                self.lgr.debug('dataWatch max marks exceeded, call callback %s' % str(self.callback))
                 self.callback()
             return
 
