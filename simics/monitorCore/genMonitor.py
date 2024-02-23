@@ -5272,7 +5272,7 @@ class GenMonitor():
 
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
-        self.lgr.debug('backtraceAddr %x' % addr)
+        self.lgr.debug('backtraceAddr %x cycles: 0x%x' % (addr, cycles))
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
         if cycles is None:
@@ -6027,6 +6027,12 @@ class GenMonitor():
   
     def trackingThreads(self):
         if self.track_threads is None or self.target not in self.track_threads:
+            return False
+        else:
+            return True
+
+    def hasAFL(self):
+        if self.afl_instance is None:
             return False
         else:
             return True
