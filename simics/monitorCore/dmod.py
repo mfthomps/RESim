@@ -372,6 +372,9 @@ class Dmod():
         self.call_params = call_params
 
     def scheduled(self, tid):
+        SIM_run_alone(self.scheduledAlone, tid)
+
+    def scheduledAlone(self, tid):
         self.lgr.debug('Dmod %s scheduled tid %s' % (self.toString(), tid))
         self.top.runTo(self.op_set, self.call_params, ignore_running=True)
 
