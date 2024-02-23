@@ -84,6 +84,8 @@ class InjectIO():
             hang_callback = self.recordHang
         self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
+        if not self.top.hasAFL():
+            self.backstop.reportBackstop(True)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
         #if self.packet_count > 1: 
