@@ -23,7 +23,7 @@ class CallMark():
         return self.msg
 
 class CopyMark():
-    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None, truncated=None):
+    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None, truncated=None, fun_name=None):
         self.src = src
         self.dest = dest
         self.length = length
@@ -31,30 +31,33 @@ class CopyMark():
         self.op_type = op_type
         self.strcpy = strcpy
         self.sp = sp
+        self.fun_name = fun_name
         self.msg = None
         if src is None or dest is None:
             print('watchMarks CopyMark bad call, something is None')
             return
+        if fun_name is None:
+            fun_name = 'Copy'
         if op_type == Sim_Trans_Load:
             if buf_start is not None:
                 offset = src - buf_start
                 trunc_string = ''
                 if truncated is not None:
                     trunc_string = ' (trucated from %d)' % truncated        
-                self.msg = 'Copy %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%x)' % (length, trunc_string, src, dest, offset, buf_start)
+                self.msg = '%s %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%x)' % (fun_name, length, trunc_string, src, dest, offset, buf_start)
             else:
-                self.msg = 'Copy %d bytes from 0x%x to 0x%08x . (Source buffer starts before known buffers!)' % (length, src, dest)
+                self.msg = '%s %d bytes from 0x%x to 0x%08x . (Source buffer starts before known buffers!)' % (fun_name, length, src, dest)
         else:
             if buf_start is not None:
                 if dest == buf_start:
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to start of buffer at 0x%x)' % (length, src, dest, buf_start)
+                    self.msg = 'Modify %s %d bytes from 0x%08x to 0x%08x . (to start of buffer at 0x%x)' % (fun_name, length, src, dest, buf_start)
                 else:
                     offset = dest - buf_start
-                    self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (length, src, dest, offset, buf_start)
+                    self.msg = 'Modify %s %d bytes from 0x%08x to 0x%08x . (to offset %d into buffer at 0x%x)' % (fun_name, length, src, dest, offset, buf_start)
             elif length is not None:
-                self.msg = 'Modify Copy %d bytes from 0x%08x to 0x%08x . Buffer removed)' % (length, src, dest, )
+                self.msg = 'Modify %s %d bytes from 0x%08x to 0x%08x . Buffer removed)' % (fun_name, length, src, dest, )
             else:
-                self.msg = 'Modify Copy length is none, not where wth'
+                self.msg = 'Modify %s length is none, not where wth' % fun_name
     def getMsg(self):
         return self.msg
 
@@ -886,13 +889,13 @@ class WatchMarks():
         return sp, base
 
 
-    def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None):
+    def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None, fun_name=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
         if src is None or dest is None:
             self.lgr.error('watchMarks copy called with None for src, dest or buf_start?')
             return
-        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated)
+        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated, fun_name=fun_name)
         self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
         wm = self.addWatchMark(cm)

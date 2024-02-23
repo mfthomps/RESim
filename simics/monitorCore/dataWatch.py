@@ -55,7 +55,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'printf', 'fprintf', 'sprintf', 'vsnprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc']
+            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -1551,6 +1551,19 @@ class DataWatch():
             wm = self.watchMarks.dataToString(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
             self.setRange(self.mem_something.dest, self.mem_something.count, watch_mark=wm)
 
+        elif self.mem_something.fun == 'realloc':
+            new_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            if new_addr > 0:
+                # assume full source buffer moved
+                buf_index = self.findRangeIndex(self.mem_something.src)
+                count = self.length[buf_index] 
+                buf_start = self.start[buf_index] 
+                self.lgr.debug('%s src 0x%x count 0x%x retval addr 0x%x' % (self.mem_something.fun, self.mem_something.src, count, new_addr))
+                wm = self.watchMarks.copy(self.mem_something.src, new_addr, count, buf_start, Sim_Trans_Load, fun_name=self.mem_something.fun)
+                self.setRange(new_addr, count, watch_mark=wm)
+            else:
+                self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, new_addr))
+            
             
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -2246,6 +2259,10 @@ class DataWatch():
             self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp+3*word_size, size=word_size)
             self.lgr.debug('dataWatch getMemParams %s src 0x%x dest 0x%x count %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count))
 
+        elif self.mem_something.fun == 'realloc':
+            self.mem_something.dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
+            self.lgr.debug('dataWatch getMemParams %s src 0x%x' % (self.mem_something.fun, self.mem_something.src))
+
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
             if self.cpu.architecture == 'arm':
@@ -2352,7 +2369,8 @@ class DataWatch():
         else:
             return
         ''' TBD dynamically adjust cycle_dif limit?  make exceptions for some calls, e.g., xmlparse? '''
-        if eip != self.mem_something.called_from_ip or cycle_dif > 300000:
+        #if eip != self.mem_something.called_from_ip or cycle_dif > 300000:
+        if eip != self.mem_something.called_from_ip or cycle_dif > 0xF000000:
             if eip != self.mem_something.called_from_ip:
                 self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x' % (self.mem_something.called_from_ip, eip))
             else:
@@ -2441,7 +2459,7 @@ class DataWatch():
             self.stop_hap = None
         else:
             return
-        self.lgr.debug('memstuffStopHap, reverse to call at ip 0x%x' % self.mem_something.called_from_ip)
+        self.lgr.debug('memstuffStopHap, reverse to call fun %s at ip 0x%x' % (self.mem_something.fun, self.mem_something.called_from_ip))
         SIM_run_alone(self.revAlone, alternate_callback)
 
     def getStrLen(self, src):
