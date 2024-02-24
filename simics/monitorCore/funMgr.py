@@ -329,7 +329,8 @@ class FunMgr():
                         self.lgr.error('funMgr indirectCall did not get offset from %s' % instruct)
                         return None
                     ''' offset is from IP value following execution of instruction '''
-                    retval = eip + offset + instruct[0]
+                    addr_of_addr = eip + offset + instruct[0]
+                    retval = self.mem_utils.readAppPtr(self.cpu, addr_of_addr)
                     fun_name = self.funFromAddr(retval)
                 elif content.startswith('ebp+'):
                     #self.lgr.debug('funMgr indirectCall is relative to ebp, use it. content %s' % content)
