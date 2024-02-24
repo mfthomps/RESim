@@ -3474,9 +3474,15 @@ class DataWatch():
                 if self.checkFailedStackBufs(index):
                     self.lgr.debug('dataWatch readHap is a write to dead stack buf %d, skip it' % index)
                     return
-                new_value = SIM_get_mem_op_value_le(memory)
-                if self.cheapReuse(eip, addr, memory.size, new_value):
-                    return
+                if memory.size <= 8:
+                    new_value = SIM_get_mem_op_value_le(memory)
+                    if self.cheapReuse(eip, addr, memory.size, new_value):
+                        return
+                else:
+                    buf = SIM_get_mem_op_value_buf(memory)
+                    if all(v == 0 for v in buf):
+                        self.lgr.debug('dataWatch readHap wrote %d bytes value %s, remove buffer' % (memory.size, str(buf)))
+                        self.rmRange(addr) 
             else:
                 self.lgr.debug('dataWatch just a write to 0x%x that is part of a copy.  Ignore' % addr)
         else:
@@ -3659,7 +3665,7 @@ class DataWatch():
         fun_name = self.fun_mgr.funFromAddr(eip)
         self.lgr.debug('dataWatch cheapReuse is write addr 0x%x eip: 0x%x fun_name %s cycles: 0x%x size %d' % (addr, eip, fun_name, self.cpu.cycles, size))
         index = self.findRangeIndex(addr)
-        if index is not None and self.length[index] == size and new_value == 0:
+        if index is not None and self.length[index] <= size and new_value == 0:
             self.lgr.debug('dataWatch cheapReuse is write zero of same size as buffer, remove the buffer at index %d' % index)
             self.rmRange(addr) 
             return
