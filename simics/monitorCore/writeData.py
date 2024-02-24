@@ -523,7 +523,7 @@ class WriteData():
             #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         eip = self.top.getEIP(self.cpu)
-        #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
+        self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             if self.closed_fd:
                 #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
@@ -639,6 +639,11 @@ class WriteData():
             return eax
         self.pending_call = False
         remain = self.read_limit - self.total_read
+
+        if self.total_read >= self.read_limit and self.stop_on_read:
+            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
+            SIM_break_simulation('writeData doRetFixup no reset')
+            return None
         self.total_read = self.total_read + eax
         #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d' % (eax, self.read_limit, self.total_read, remain))
 
@@ -652,7 +657,7 @@ class WriteData():
                  if eax > remain:
                      if self.no_reset:
                          #self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
-                         SIM_break_simulation('writeData selectHap stop on read')
+                         SIM_break_simulation('writeData doRetFixup no reset')
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
                          #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
