@@ -107,7 +107,7 @@ class AFL():
         self.one_done = one_done
         self.page_faults = page_faults
         sor = os.getenv('AFL_STOP_ON_READ')
-        if sor is not None and sor.lower() == 'true':
+        if sor is not None and sor.lower() in ['true', 'yes']:
             self.stop_on_read = True
         # TBD why are sor and backstop mutually exclusive?
         if stop_on_read:
