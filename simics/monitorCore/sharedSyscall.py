@@ -455,6 +455,8 @@ class SharedSyscall():
             if self.read_fixup_callback is not None:
                 self.lgr.debug('sharedSyscall call read_fixup_callback eax was %d' % eax)
                 eax = self.read_fixup_callback(exit_info.old_fd)
+                if eax is None:
+                    return
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
@@ -840,6 +842,8 @@ class SharedSyscall():
             if self.read_fixup_callback is not None:
                 self.lgr.debug('sharedSyscall read call read_fixup_callback')
                 eax = self.read_fixup_callback(exit_info.old_fd)
+                if eax is None:
+                    return
             if eax < 0: 
                 for call_param in exit_info.call_params:
                     if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
