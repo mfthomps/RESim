@@ -77,7 +77,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None):
+    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None, byte_swap=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -105,6 +105,8 @@ class DataMark():
         self.sp = sp
         self.note = note
         self.value = value
+        if byte_swap is not None:
+            self.byte_swap = byte_swap
         ''' keep value after a reset '''
         self.was_ad_hoc = False
         #self.lgr.debug('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
@@ -127,14 +129,17 @@ class DataMark():
         elif self.ad_hoc or self.was_ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
             #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
+            op = 'Copy'
+            if self.byte_swap:
+                op = 'Byteswap'
             if self.start is not None:
                 if copy_length == self.length and self.start == self.addr:
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (copy_length, self.addr, self.dest)
+                    mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (op, copy_length, self.addr, self.dest)
                 else: 
                     offset = self.addr - self.start
-                    mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (copy_length, self.addr, self.dest, offset, self.start)
+                    mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (op, copy_length, self.addr, self.dest, offset, self.start)
             else:
-                mark_msg = 'Copy %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (copy_length, self.addr, self.dest)
+                mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (op, copy_length, self.addr, self.dest)
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
@@ -655,7 +660,7 @@ class WatchMarks():
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None): 
+    def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None, byte_swap=False): 
         if ip is None and cycles is not None:
             self.lgr.error('watchMarks dataRead cycles given but not ip')
         elif ip is None:
@@ -697,7 +702,7 @@ class WatchMarks():
                     sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
-                    dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp)
+                    dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, byte_swap=byte_swap)
                     wm = self.addWatchMark(dm)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
