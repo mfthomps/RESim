@@ -1102,6 +1102,11 @@ when large amounts of GDB data are exchanged.
 \subsubsection{Ghidra installation}
 See section \ref{ghidra} for information on installation and use of Ghidra with RESim.
 
+\subsubsection{AFL installation}
+Clone the AFL repo (\url{https://github.com/mfthomps/AFL.git})   Older environments may need to update binutils. Use {\tt make} to build the executable.
+Confirm your bash shell environment variables include AFL\_DIR and AFL\_DATA Path per the installation instructions at \ref{installation}.
+The shell from which you ssh to the Simics server that will run AFL must support X11.  If you have OSx, install XQuartz.
+
 \subsection{Getting started}
 \label{getting-started}
 This section describes steps for creating and running RESim simulations.
