@@ -4158,8 +4158,10 @@ class DataWatch():
             if eip != mark_ip:
                 self.lgr.warning('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x mark cycle: 0x%x' % (index, eip, mark_ip, cycle))
                 cli.quiet_run_command('rev 1')
-                resimUtils.skipToTest(self.cpu, cycle, self.lgr)
                 eip = self.top.getEIP(self.cpu)
+                if eip != mark_ip:
+                    resimUtils.skipToTest(self.cpu, cycle, self.lgr, disable_vmp=True)
+                    eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
                     self.lgr.error('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x mark cycle: 0x%x Second attempt' % (index, eip, mark_ip, cycle))
                     retval = None

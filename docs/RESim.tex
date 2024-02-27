@@ -799,7 +799,7 @@ generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} c
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
-\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run during {\tt trackIO} or {\tt injectIO} 
+\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run during {\tt trackIO} or {\tt injectIO}. Defaults to 9,000,000. 
 after the last data watch event, or the last code coverage hit.
 \item {\tt AFL\_BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last code coverage hit during an AFL session.
 \item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
@@ -1368,11 +1368,19 @@ The RESim {\tt readReplace} function triggers on the first reading of selected m
 by named programs and replace memory content with a given hexidecimal string.  The function takes as an
 input the name of a file containing one or more directives of the format:
 \begin{verbatim}
-    comm addr hexstring
+    operator lib:addr hexstring [comm]
 \end{verbatim}
-Where "comm" is the process comm name; addr is the address; and hexstring
+
+Where operator is either \textit{code} or \textit{data}.  If code, then the target
+address is determined by dereferencing a pointer in the instruction
+at the given address when it is reached.  If data, then the target
+address is the given address. The former is used when the address is not relative
+to any particular program load address. 
+The lib field is the name of a program or shared object and value
 is a hexidecimal string that will be unhexified and written to the given
-address the first time the address is read, e.g., {\tt deadbeef}
+address the first time the address is read.  
+The comm value is optional.  If given, the replace will only occur if the
+current thread matches the comm when the address is read.
 
 Use the {\tt READ\_REPLACE} environment variable to automate execution of this function.
 

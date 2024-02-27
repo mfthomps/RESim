@@ -329,7 +329,7 @@ class GenMonitor():
 
         self.trace_buffers = {}
 
-        self.resim_version = 23
+        self.resim_version = 24
         self.snap_version = 0
 
         ''' ****NO init data below here**** '''
@@ -1434,8 +1434,6 @@ class GenMonitor():
 
         self.loadJumpersTarget(self.target)
 
-        if self.target in self.read_replace:
-             self.read_replace[self.target].swapContext()
         if self.target in self.reg_set:
              self.reg_set[self.target].swapContext()
 
@@ -5670,7 +5668,7 @@ class GenMonitor():
             cell_name = self.target
         self.lgr.debug('readReplace %s' % fname)
         cpu, comm, tid = self.task_utils[cell_name].curThread() 
-        self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.lgr, snapshot=snapshot)
+        self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.soMap[cell_name], self.mem_utils[cell_name], self.lgr, snapshot=snapshot)
         return True
 
     def regSet(self, fname, cell_name=None, snapshot=None):
