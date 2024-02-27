@@ -86,16 +86,17 @@ class SOMap():
             self.prog_start = so_pickle['prog_start']
             self.prog_end = so_pickle['prog_end']
             self.prog_local_path = so_pickle['prog_local_path']
+            version = self.top.getSnapVersion() 
             if 'prog_base_map' in so_pickle:
                 self.prog_base_map = so_pickle['prog_base_map']
             else:
                 for tid in self.text_prog:
                     base = os.path.basename(self.text_prog[tid])
                     self.prog_base_map[base] = self.text_prog[tid]
+                
             if 'prog_info' in so_pickle:
                 self.so_addr_map = so_pickle['so_addr_map']
                 self.so_file_map = so_pickle['so_file_map']
-                version = self.top.getSnapVersion() 
                 if version < 23:
                     self.lgr.debug('soMap loadPickle version %d less than 23, hack backward compat' % version)
                     old_prog_info = so_pickle['prog_info']
@@ -117,8 +118,14 @@ class SOMap():
                              self.lgr.debug('soMap loadPickle no elf info for %s' % prog)
                              pass
                 else:
-                    self.lgr.debug('soMap loadPickle version %d has proper elf info, load from pickle' % version)
                     self.prog_info = so_pickle['prog_info']
+                    self.lgr.debug('soMap loadPickle version %d has proper elf info, load %d prog_info from pickle' % (version, len(self.prog_info)))
+                if version < 24:
+                    self.lgr.debug('version less than 24')
+                    for prog in self.prog_info:
+                        base = os.path.basename(prog)
+                        self.lgr.debug('soMap loadPickle base %s prog %s' % (base, prog))
+                        self.prog_base_map[base] = prog
             else:
                 # backward compatability, but only most recent
                 # TBD remove all this
@@ -162,7 +169,7 @@ class SOMap():
         so_pickle['prog_base_map'] = self.prog_base_map
         fd = open( somap_file, "wb") 
         pickle.dump( so_pickle, fd)
-        self.lgr.debug('SOMap pickleit to %s saved %d text_progs ' % (somap_file, len(self.text_prog)))
+        self.lgr.debug('SOMap pickleit to %s saved %d text_progs and %d prog_info' % (somap_file, len(self.text_prog), len(self.prog_info)))
 
     def isCode(self, address, tid):
         ''' is the given address within the text segment or those of SO libraries? '''
@@ -764,7 +771,7 @@ class SOMap():
     def addSOWatch(self, fname, callback, name=None):
         if name is None:
             name = 'NONE'
-        prog = self.fullProg(in_fname)
+        prog = self.fullProg(fname)
         if prog not in self.so_watch_callback:
             self.so_watch_callback[prog] = {}
         self.so_watch_callback[prog][name] = callback

@@ -71,7 +71,7 @@ def reverseEnabled():
         else:
             return False
 
-def skipToTest(cpu, cycle, lgr):
+def skipToTest(cpu, cycle, lgr, disable_vmp=False):
         limit=100
         count = 0
         while SIM_simics_is_running() and count<limit:
@@ -84,15 +84,16 @@ def skipToTest(cpu, cycle, lgr):
         if not reverseEnabled():
             lgr.error('Reverse execution is disabled.')
             return False
-        retval = True
-        '''
-        cli.quiet_run_command('pselect %s' % cpu.name)
-        result=cli.quiet_run_command('disable-vmp')
-        lgr.debug('skipToTest disable-vmp result %s' % str(result))
         already_disabled = False
-        if 'VMP already disabled' in result[1]:
-            already_disabled = True
-        '''
+        retval = True
+        if disable_vmp:
+            cli.quiet_run_command('pselect %s' % cpu.name)
+            result=cli.quiet_run_command('disable-vmp')
+            lgr.debug('skipToTest disable-vmp result %s' % str(result))
+            already_disabled = False
+            if 'VMP already disabled' in result[1]:
+                already_disabled = True
+        
         cmd = 'skip-to cycle = %d ' % cycle
         cli.quiet_run_command(cmd)
         
@@ -105,14 +106,15 @@ def skipToTest(cpu, cycle, lgr):
             if now != cycle:
                 lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
                 retval = False
-        '''
-        if not already_disabled:
-            try:
-                cli.quiet_run_command('enable-vmp')
-            #except cli_impl.CliError:
-            except:
-                pass
-        '''
+
+        if disable_vmp:
+            if not already_disabled:
+                try:
+                    cli.quiet_run_command('enable-vmp')
+                #except cli_impl.CliError:
+                except:
+                    pass
+
         return retval
 
 def getFree():
