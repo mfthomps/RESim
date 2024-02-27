@@ -696,6 +696,7 @@ class WatchMarks():
                         self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
                         pm.mark.addrRange(end_addr)
                         pm.cycle = self.cpu.cycles
+                        pm.ip = ip
                         create_new = False
                 if create_new:
                     self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
