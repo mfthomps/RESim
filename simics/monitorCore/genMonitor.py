@@ -1565,7 +1565,9 @@ class GenMonitor():
             sindex = 0
             full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
             self.lgr.debug('execToText, progname is %s  full: %s' % (prog_name, full_path))
-
+            if full_path is None:
+                self.lgr.error('execToText failed to get full_path for %s' % prog_name)
+                return
             prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
             if prog_info is not None:
                 if prog_info.addr is None:

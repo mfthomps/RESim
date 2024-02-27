@@ -301,6 +301,10 @@ class AFL():
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             analysis_path = self.top.getAnalysisPath(self.fname)
             self.coverage = self.top.getCoverage()
+            if self.coverage is None:
+                self.lgr.error('Failed to get coverage.')
+                self.top.quit()
+                return
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                 afl=True, fname=analysis_path, linear=self.linear, create_dead_zone=self.create_dead_zone, record_hits=False)
 

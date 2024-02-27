@@ -246,6 +246,9 @@ class SOMap():
         return retval
 
     def addText(self, path, prog, tid_in):
+        if path is None:
+            self.lgr.error('soMap addText called with path of None prog %s' % prog) 
+            return
         if tid_in in self.text_prog and self.text_prog[tid_in] == prog:
             self.lgr.debug('soMap addText prog %s already in text_prog as that tid (%s), bail' % (prog, tid_in))
             retval = self.getLoadInfo(tid=tid_in)
