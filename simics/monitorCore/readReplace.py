@@ -27,8 +27,13 @@ Manage dynamic replacement of memory content triggered by the
 first read of the memory address.  This is controlled by a
 "readReplace" file.  There should be no more than one such file
 per target.  The format of the file is:
-    lib:addr value [comm]
-Where lib is the name of a program or shared object and value
+    operator lib:addr value [comm]
+
+Where operator is either code or data.  If code, then the target
+address is determined by dereferencing a pointer in the instruction
+at the given address when it is reached.  If data, then the target
+address is the given address. 
+The lib field is the name of a program or shared object and value
 is a hexidecimal string that will be unhexified and written to the given
 address the first time the address is read.  
 The comm value is optional.  If given, the replace will only occur if the
@@ -40,23 +45,19 @@ is restored.
 '''
 from simics import *
 from resimHaps import *
+import decode
+import decodeArm
 import os
 import pickle
 import binascii
-class BreakRec():
-    def __init__(self, addr, comm, hexstring, hap):
-        self.addr = addr
-        self.comm = comm
-        self.hap = hap
-        self.hexstring = hexstring
-
 class ReplaceEntry():
-    def __init__(self, lib, addr, value, comm, lib_addr):
+    def __init__(self, lib, addr, value, comm, lib_addr, operation):
         self.lib = lib
         self.addr = addr
         self.value = value
         self.comm = comm
         self.lib_addr = lib_addr
+        self.operation = operation
         self.image_base = None
         self.hap = None
         self.phys_addr = None
@@ -70,6 +71,10 @@ class ReadReplace():
         self.so_map = so_map
         self.mem_utils = mem_utils
         self.lgr = lgr
+        if cpu.architecture == 'arm':
+            self.decode = decodeArm
+        else:
+            self.decode = decode
 
         self.breakpoints = {}
         self.hap = {}
@@ -88,14 +93,14 @@ class ReadReplace():
                 if line.strip().startswith('#') or len(line.strip())==0:
                     continue 
                 parts = line.strip().split()
-                if len(parts) < 2:
+                if len(parts) < 3:
                     self.lgr.error('readReplace: not enough fields in %s' % line)
                     return
-                if len(parts) > 2:
-                    comm = parts[2]
-                if ':' in parts[0]:
-                    lib_addr = parts[0]
-                    lib, addr_s = parts[0].split(':', 1)
+                if len(parts) > 3:
+                    comm = parts[3]
+                if ':' in parts[1]:
+                    lib_addr = parts[1]
+                    lib, addr_s = parts[1].split(':', 1)
                     try:
                         addr = int(addr_s,16)
                     except:
@@ -106,14 +111,15 @@ class ReadReplace():
                     return
                 ''' Set break unless lib/addr pair appears in the pickled list '''
                 if lib_addr not in self.done_list:
-                    hexstring = parts[1]
-                    self.handleEntry(addr, lib, hexstring, comm, lib_addr)
+                    hexstring = parts[2]
+                    operation = parts[0]
+                    self.handleEntry(addr, lib, hexstring, comm, lib_addr, operation)
         self.lgr.debug('readReplace: set %d breaks' % len(self.breakmap))
 
-    def handleEntry(self, addr, lib, hexstring, comm, lib_addr):
+    def handleEntry(self, addr, lib, hexstring, comm, lib_addr, operation):
         self.lgr.debug('readReplace handleEntry addr 0x%x lib %s hexstring %s' % (addr, lib, hexstring))
         image_base = self.so_map.getImageBase(lib)
-        replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr)
+        replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr, operation)
         if image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
             self.lgr.debug('readReplace handleEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
@@ -151,8 +157,12 @@ class ReadReplace():
         return phys_addr
 
     def setBreak(self, replace_entry, phys_addr):
+        if replace_entry.operation == 'code':
+            access = Sim_Access_Execute
+        else:
+            access = Sim_Access_Read
         self.lgr.debug('readReplace setBreak phys_addr 0x%x for %s' % (phys_addr, replace_entry.lib_addr))
-        breakpt = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+        breakpt = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, access, phys_addr, 1, 0)
         self.breakpoints[replace_entry.lib_addr] = breakpt
         hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.readHap, replace_entry, self.breakpoints[replace_entry.lib_addr])
 
@@ -161,13 +171,6 @@ class ReadReplace():
         replace_entry.phys_addr = phys_addr
         self.breakmap[breakpt] = replace_entry
 
-
-    #def addBreak(self, addr, comm, hexstring):
-    #            breakpt = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Read, addr, 1, 0)
-    #            self.lgr.debug('readReplace addBreak %d addr 0x%x context %s' % (breakpt, addr, self.cpu.current_context))
-    #            hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.readHap, None, breakpt)
-    #            self.breakmap[breakpt] = BreakRec(addr, comm, hexstring, hap)
-        
     def getProg(self, break_num):
         cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu) 
         entry_comm = self.breakmap[break_num].comm
@@ -188,8 +191,24 @@ class ReadReplace():
             self.lgr.debug('readReplace: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, prog))
         else:
             bstring = binascii.unhexlify(bytes(self.breakmap[break_num].value.encode())) 
-            self.lgr.debug('readReplace comm %s would write %s to phys 0x%x, linear addr of interest is 0x%x' % (prog, bstring, memory.physical_address, self.breakmap[break_num].linear_addr)) 
-            self.top.writeString(self.breakmap[break_num].linear_addr, bstring, target_cpu=self.cpu)
+            if replace_entry.operation == 'code':
+                ins_addr = self.breakmap[break_num].linear_addr
+                instruct = SIM_disassemble_address(self.cpu, ins_addr, 1, 0)
+                op2, op1 = self.decode.getOperands(instruct[1])
+                mod_addr = None
+                if '[' in op1:
+                    mod_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                elif '[' in op2:
+                    mod_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                if mod_addr is None:
+                    self.lgr.error('readReplace readHap failed to get modify address from %s' % instruct[1])
+                    return
+                self.lgr.debug('readReplace comm %s would write %s to  0x%x' % (prog, bstring, mod_addr))
+            else:
+                mod_addr = self.breakmap[break_num].linear_addr
+                self.lgr.debug('readReplace comm %s would write %s to phys 0x%x, linear addr of interest is 0x%x' % (prog, bstring, memory.physical_address, mod_addr))
+
+            self.top.writeString(mod_addr, bstring, target_cpu=self.cpu)
             #SIM_break_simulation('remove me')
             done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
             self.done_list.append(done) 
