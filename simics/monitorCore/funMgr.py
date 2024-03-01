@@ -70,7 +70,7 @@ class FunMgr():
  
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0, text_offset=0):
-        #self.lgr.debug('funMgr add path %s' % path)
+        self.lgr.debug('funMgr add path %s' % path)
         if path is None:
             self.lgr.debug('funMgr add called with path of None')
         elif self.ida_funs is not None:
@@ -261,7 +261,7 @@ class FunMgr():
                     try:
                         call_addr = int(parts[1],16)
                     except ValueError:
-                        self.lgr.debug('getFunName, %s not a hex' % parts[1])
+                        #self.lgr.debug('getFunName, %s not a hex' % parts[1])
                         pass
                 if call_addr is not None:
                     fun = self.funFromAddr(call_addr)
@@ -269,7 +269,7 @@ class FunMgr():
         if fun is not None and (fun.startswith('.') or fun.startswith('_')):
             fun = fun[1:]
         #if call_addr is not None:
-        #    self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
+            #self.lgr.debug('funMgr getFunNameFromInstruction returning 0x%x %s' % (call_addr, fun))
         return call_addr, fun
 
     def resolveCall(self, instruct, eip):      
@@ -394,4 +394,8 @@ class FunMgr():
         else:
             self.lgr.error('funMgr called but no IDA functions defined')
 
-
+    def getFunWithin(self, fun_name, start, end):
+        if self.ida_funs is not None:
+            return self.ida_funs.getFunWithin(fun_name, start, end)
+        else:
+            self.lgr.error('funMgr getFunWithin called but no IDA functions defined')
