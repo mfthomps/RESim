@@ -367,6 +367,7 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
                     # TBD why?
@@ -381,6 +382,7 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        self.top.traceBufferMarks(target=self.cell_name)
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
