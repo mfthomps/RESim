@@ -795,7 +795,7 @@ class GenMonitor():
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
-                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.lgr)
+                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.soMap[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -2907,6 +2907,8 @@ class GenMonitor():
             self.jumperEnable()
             if self.target in self.read_replace:
                 self.read_replace[self.target].enableBreaks()
+            if self.target in self.trace_buffers:
+                self.trace_buffers[self.target].restoreHaps()
 
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
@@ -2967,6 +2969,8 @@ class GenMonitor():
             self.jumperDisable()
             if self.target in self.read_replace:
                 self.read_replace[self.target].disableBreaks()
+            if self.target in self.trace_buffers:
+                self.trace_buffers[self.target].rmAllHaps(immediate=immediate)
         else:
             retval = False
         return retval
@@ -4165,6 +4169,8 @@ class GenMonitor():
 
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
+            if self.target in self.trace_buffers:
+                self.trace_buffers[self.target].markLogs(self.DataWatch[self.target])
 
         self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf,
                      call_list=call_list, run=run, just_input=True)
@@ -5897,6 +5903,12 @@ class GenMonitor():
                 return self.trace_buffers[target]
         return None
 
+    def traceBufferMarks(self, target=None):
+        if target is None:
+            target = self.target
+        if target in self.trace_buffers:
+            self.trace_buffers[target].markLogs(self.dataWatch[target])
+
     def toRunningProc(self, proc, plist, flist):
         self.run_to[self.target].toRunningProc(proc, plist, flist)
     
@@ -6036,6 +6048,11 @@ class GenMonitor():
             return False
         else:
             return True
+
+    def getFunWithin(self, fun_name, start, end):
+        return self.fun_mgr.getFunWithin(fun_name, start, end)
+    
+        
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
