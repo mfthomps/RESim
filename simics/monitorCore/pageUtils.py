@@ -489,6 +489,9 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
     dir_ptr_entry = memUtils.bitRange(addr, 30, 38)
     #lgr.debug('dir_ptr_entry is %d' % dir_ptr_entry)
 
+    if dir_ptr_base is None:
+        return ptable_info
+
     dir_base_addr = dir_ptr_base + (dir_ptr_entry * 8)
     #lgr.debug('dir_base_addr 0x%x' % dir_base_addr)
     ptable_info.pdir_addr = dir_base_addr
