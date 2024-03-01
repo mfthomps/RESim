@@ -1112,10 +1112,15 @@ class TaskUtils():
         return mode
 
     def getIds(self, address):
-        uid_addr = address + 4*self.mem_utils.WORD_SIZE
+        #uid_addr = address + 16
+        uid_addr = address 
         uid = self.mem_utils.readWord32(self.cpu, uid_addr)
-        e_uid_addr = address + 8*self.mem_utils.WORD_SIZE
+        #self.lgr.debug('getIDs address 0x%x uid_addr 0x%x read 0x%x' % (address, uid_addr, uid))
+
+        #e_uid_addr = address + 32
+        e_uid_addr = address + 16
         e_uid = self.mem_utils.readWord32(self.cpu, e_uid_addr)
+        #self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x read 0x%x' % (address, e_uid_addr, e_uid))
         return uid, e_uid
 
 
