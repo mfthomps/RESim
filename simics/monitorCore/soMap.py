@@ -329,6 +329,7 @@ class SOMap():
         if tid is None:
             self.lgr.error('soMap setFunMgr failed to getSOTid, tid_in was %s' % tid_in)
             return
+        self.lgr.debug('soMap setFunMgr %s' % tid_in)
         sort_map = {}
         for load_info in self.so_file_map[tid]:
             sort_map[load_info.addr] = load_info
@@ -846,3 +847,9 @@ class SOMap():
                 code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[map_tid][load_info])
                 retval.append(code_section) 
         return retval
+
+    def getProgSize(self, prog_in):
+        prog = self.fullProg(prog_in)
+        if prog in self.prog_info:
+            return self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+

@@ -811,3 +811,7 @@ class WinDLLMap():
     def getSOTid(self, tid):
         # compatability 
         return tid
+
+    def getProgSize(self, prog_in):
+        self.lgr.error('winDLL getProgSize not done yet')
+        return None
