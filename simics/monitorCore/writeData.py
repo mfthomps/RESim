@@ -641,23 +641,24 @@ class WriteData():
         remain = self.read_limit - self.total_read
 
         if self.total_read >= self.read_limit and self.stop_on_read:
-            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
-            SIM_break_simulation('writeData doRetFixup no reset')
+            self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
+            SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
             return None
         self.total_read = self.total_read + eax
-        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d' % (eax, self.read_limit, self.total_read, remain))
+        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         if self.stop_on_read and self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
                 self.kernel_buf_consumed = True
         if self.total_read > self.read_limit:
-            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
-                 if eax > remain:
-                     if self.no_reset:
-                         #self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
-                         SIM_break_simulation('writeData doRetFixup no reset')
+                 if eax > remain and not self.no_reset:
+                     #if self.no_reset:
+                     #    self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
+                     #    SIM_break_simulation('writeData doRetFixup no reset')
+                     #    return None
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
                          #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
@@ -681,6 +682,7 @@ class WriteData():
             else:
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  SIM_break_simulation('Over read limit')
+                 return None
                  #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         return eax
 
