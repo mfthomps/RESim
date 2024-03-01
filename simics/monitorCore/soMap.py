@@ -214,6 +214,13 @@ class SOMap():
                     retval = True 
         return retval           
 
+    def isLibc(self, address):
+        retval = False
+        so_file = self.getSOFile(address)
+        if so_file is not None and resimUtils.isClib(so_file):
+            retval = True
+        return retval
+
     def isMainText(self, address):
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)

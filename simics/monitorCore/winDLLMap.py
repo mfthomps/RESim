@@ -413,6 +413,13 @@ class WinDLLMap():
                     retval = True 
         return retval           
 
+    def isLibc(self, address):
+        retval = False
+        so_file = self.getSOFile(address)
+        if so_file is not None and resimUtils.isClib(so_file):
+            retval = True
+        return retval
+
     def getSOFile(self, addr_in):
         retval = None
         full = self.getSOFileFull(addr_in)
