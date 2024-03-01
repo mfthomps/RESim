@@ -128,6 +128,7 @@ class findKernelWrite():
 
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
+        self.context_manager.disableAll(direction='reverse')
         SIM_run_alone(SIM_run_command, 'reverse')
 
     def checkInitialBufferAlone(self, addr):
@@ -202,6 +203,7 @@ class findKernelWrite():
         if self.rev_write_hap is None:
             self.lgr.debug('revWriteCallback hit None')
             return
+        SIM_run_alone(self.context_manager.enableAll, None)
         orig_cycle = self.bookmarks.getFirstCycle()
         if self.cpu.cycles == orig_cycle:
             ida_message = 'revWriteCallback reversed to earliest bookmark'
@@ -261,6 +263,7 @@ class findKernelWrite():
     def brokenHap(self, cycles, one, exception, error_string):
         if self.broken_hap is None:
             return
+        SIM_run_alone(self.context_manager.enableAll, None)
         self.lgr.debug('brokenHap, address is 0x%x' % self.addr)
         SIM_run_alone(self.deleteBroken, None)
         orig_cycle = self.bookmarks.getFirstCycle()
