@@ -320,3 +320,21 @@ def isRegInInstruct(reg, instruct):
         if operand is not None and regIsPart(reg, operand):
             return True
     return False 
+
+def isScalarAdd(reg, instruct):
+    retval = None
+    mn = getMn(instruct)
+    op2, op1 = getOperands(instruct)
+    if op1 == reg:
+        if mn == 'add':
+            try:
+                retval = int(op2, 16)
+            except:
+                pass
+        elif mn == 'sub':
+            try:
+                retval = int(op2, 16)
+                retval = retval * -1
+            except:
+                pass
+    return retval 
