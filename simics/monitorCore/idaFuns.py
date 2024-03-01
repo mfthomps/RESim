@@ -14,7 +14,7 @@ def rmPrefix(fun):
 class IDAFuns():
 
     def __init__(self, path, lgr, offset=0):
-        ''' self.funs primary dict key is the address of the function per initial IDA/ghidra analysis '''
+        ''' self.funs primary dict key is the address of the function per initial IDA/ghidra analysis adjusted by the load address & offset '''
         self.funs = {}
         self.lgr = lgr
         self.offset = offset
@@ -88,7 +88,7 @@ class IDAFuns():
         else:
             self.did_paths.append(path)
         funfile = self.getFunPath(path)
-        #self.lgr.debug('idaFuns add path %s funfile %s' % (path, funfile))
+        self.lgr.debug('idaFuns add path %s funfile %s' % (path, funfile))
 
         add_mangle = []
         mpath = funfile[:-4]+'mangle' 
@@ -256,3 +256,19 @@ class IDAFuns():
                     big = size
                     retval = fun
         return retval
+
+    def getFunWithin(self, fun_name, start, end):
+        big = 0
+        retval = None
+        self.lgr.debug('idaFuns getFunWithin %s start 0x%x end 0x%x' % (fun_name, start, end))
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                self.lgr.debug('idaFuns getFunWithin %s matches, start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
+                if self.funs[fun]['start'] >= start and self.funs[fun]['end'] <= end:
+                    size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                    self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))
+                    if size > big:
+                        big = size
+                        retval = self.funs[fun]['start']
+        return retval
+            
