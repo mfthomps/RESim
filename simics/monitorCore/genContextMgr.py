@@ -63,7 +63,7 @@ class GenBreakpoint():
         SIM_enable_breakpoint(self.break_num)
 
 class GenHap():
-    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, immediate=True):
+    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, immediate=True):
         ''' breakpoint_start and breakpont_end are GenBreakpoint types '''
         self.hap_type = hap_type
         self.callback = callback
@@ -77,6 +77,7 @@ class GenHap():
         self.hap_num = None
         self.handle = handle
         self.name = name
+        self.disable_forward = disable_forward
         self.set(immediate)
 
     def show(self):
@@ -155,9 +156,10 @@ class GenHap():
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
 
-    def disable(self):
-        for bp in self.breakpoint_list:
-            bp.disable()
+    def disable(self, direction):
+        if not (direction == 'forward' and not self.disable_forward):
+            for bp in self.breakpoint_list:
+                bp.disable()
 
     def enable(self):
         for bp in self.breakpoint_list:
@@ -381,13 +383,13 @@ class GenContextMgr():
                 return
         #self.lgr.debug('genDeleteHap could not find hap_num %d' % hap_handle)
 
-    def genHapIndex(self, hap_type, callback, parameter, handle, name=None):
+    def genHapIndex(self, hap_type, callback, parameter, handle, name=None, disable_forward=True):
         #self.lgr.debug('genHapIndex break_handle %d' % handle)
         retval = None
         for bp in self.breakpoints:
             if bp.handle == handle:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name, disable_forward)
                 self.haps.append(hap)
                 retval = hap.handle
                 break
@@ -395,7 +397,7 @@ class GenContextMgr():
         #    self.lgr.error('genHapIndex failed to find break %d' % breakpoint)
         return retval
 
-    def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None):
+    def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None, disable_forward=True):
         #self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
         bp_start = None
         bp_list = []
@@ -404,7 +406,7 @@ class GenContextMgr():
                 bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, immediate=True)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, disable_forward, immediate=True)
                 #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
@@ -1588,9 +1590,9 @@ class GenContextMgr():
         ''' ugly dependency loop needed to set text on first schedule ''' 
         self.soMap = soMap
 
-    def disableAll(self):
+    def disableAll(self, direction=None):
         for hap in self.haps:
-            hap.disable()
-    def enableAll(self):
+            hap.disable(direction)
+    def enableAll(self, dumb=None):
         for hap in self.haps:
             hap.enable()
