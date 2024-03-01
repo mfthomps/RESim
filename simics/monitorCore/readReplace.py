@@ -51,9 +51,10 @@ import os
 import pickle
 import binascii
 class ReplaceEntry():
-    def __init__(self, lib, addr, value, comm, lib_addr, operation):
+    def __init__(self, lib, addr, value, comm, lib_addr, operation, fname):
         self.lib = lib
         self.addr = addr
+        # value is a hexstring
         self.value = value
         self.comm = comm
         self.lib_addr = lib_addr
@@ -62,6 +63,7 @@ class ReplaceEntry():
         self.hap = None
         self.phys_addr = None
         self.linear_addr = None
+        self.fname = fname
 
 class ReadReplace():
     def __init__(self, top, cpu, cell_name, fname, so_map, mem_utils, lgr, snapshot=None):
@@ -113,34 +115,61 @@ class ReadReplace():
                 if lib_addr not in self.done_list:
                     hexstring = parts[2]
                     operation = parts[0]
-                    self.handleEntry(addr, lib, hexstring, comm, lib_addr, operation)
+                    self.handleEntry(addr, lib, hexstring, comm, lib_addr, operation, fname)
         self.lgr.debug('readReplace: set %d breaks' % len(self.breakmap))
 
-    def handleEntry(self, addr, lib, hexstring, comm, lib_addr, operation):
+    def handleEntry(self, addr, lib, hexstring, comm, lib_addr, operation, fname):
         self.lgr.debug('readReplace handleEntry addr 0x%x lib %s hexstring %s' % (addr, lib, hexstring))
         image_base = self.so_map.getImageBase(lib)
-        replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr, operation)
-        if image_base is None:
-            # No process has loaded this image.  Set a callback for each load of the library
-            self.lgr.debug('readReplace handleEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
-            self.so_map.addSOWatch(lib, self.libLoadCallback, name=lib_addr)
-            self.pending_libs[lib_addr] = replace_entry
-        else:
-            # Library loaded by someone.  Get list of pids
-            replace_entry.image_base = image_base
-            loaded_pids = self.so_map.getSOPidList(lib)
-            if len(loaded_pids) == 0:
-                self.lgr.error('readReplace handleEntry expected at least one pid for %s' % lib)
-                return
-            self.lgr.debug('readReplace handleEntry has %d pids with lib loaded' % len(loaded_pids))
-            phys = None
-            for pid in loaded_pids:
-                load_addr = self.so_map.getLoadAddr(lib, tid=str(pid))
-                if load_addr is not None:
-                    self.lgr.debug('readReplace handleEntry pid %s load addr 0x%x, call getPhys' % (pid, load_addr))
-                    phys = self.getPhys(replace_entry, load_addr, pid)
-                    if phys is not None and phys != 0:
-                        self.setBreak(replace_entry, phys)
+        replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr, operation, fname)
+        did_write = False
+        mod_fname = self.getModFname(replace_entry)
+        if os.path.isfile(mod_fname):
+            with open(mod_fname) as fh:
+                line = fh.read()
+                parts = line.split()
+                if len(parts) != 2:
+                    self.lgr.error('readReplace handleEntry bad line in %s %s' % (mod_fname, line))
+                    return
+                if ':' in parts[0]:
+                    prog, addr_s = parts[0].split(':')
+                    try:
+                        addr = int(addr_s, 16)
+                    except:
+                        self.lgr.error('readReplace handleEntry bad addr %s in %s' % (addr_s, line))
+                        return
+                    hexstring = parts[1]
+                    phys_addr = self.mem_utils.v2p(self.cpu, addr)
+                    if phys_addr is not None and phys_addr != 0:
+                        bstring = binascii.unhexlify(hexstring.encode())
+                        self.top.writeString(addr, bstring, target_cpu=self.cpu)
+                        did_write = True
+                        self.lgr.debug('readReplace handleEntry did write of %s to addr 0x%x' % (hexstring, addr))
+                    else:
+                        self.lgr.debug('readReplace handleEntry addr 0x%x not yet mapped' % addr)
+        if not did_write:             
+            cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu) 
+            if image_base is None:
+                # No process has loaded this image.  Set a callback for each load of the library
+                self.lgr.debug('readReplace handleEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
+                self.so_map.addSOWatch(lib, self.libLoadCallback, name=lib_addr)
+                self.pending_libs[lib_addr] = replace_entry
+            else:
+                # Library loaded by someone.  Get list of pids
+                replace_entry.image_base = image_base
+                loaded_pids = self.so_map.getSOPidList(lib)
+                if len(loaded_pids) == 0:
+                    self.lgr.error('readReplace handleEntry expected at least one pid for %s' % lib)
+                    return
+                self.lgr.debug('readReplace handleEntry has %d pids with lib loaded' % len(loaded_pids))
+                phys = None
+                for pid in loaded_pids:
+                    load_addr = self.so_map.getLoadAddr(lib, tid=str(pid))
+                    if load_addr is not None:
+                        self.lgr.debug('readReplace handleEntry pid %s load addr 0x%x, call getPhys' % (pid, load_addr))
+                        phys = self.getPhys(replace_entry, load_addr, pid)
+                        if phys is not None and phys != 0:
+                            self.setBreak(replace_entry, phys)
 
     def getPhys(self, replace_entry, load_addr, pid):
         offset = load_addr - replace_entry.image_base
@@ -208,11 +237,26 @@ class ReadReplace():
                 mod_addr = self.breakmap[break_num].linear_addr
                 self.lgr.debug('readReplace comm %s would write %s to phys 0x%x, linear addr of interest is 0x%x' % (prog, bstring, memory.physical_address, mod_addr))
 
+            # actually writing bytes
             self.top.writeString(mod_addr, bstring, target_cpu=self.cpu)
             #SIM_break_simulation('remove me')
             done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
             self.done_list.append(done) 
-            SIM_run_alone(self.rmHap, break_num)
+            #SIM_run_alone(self.rmHap, break_num)
+            SIM_run_alone(self.rmAllHap, None)
+            mod_fname = self.getModFname(replace_entry)
+            line = '%s:0x%x %s' % (prog, mod_addr, replace_entry.value)
+            with open(mod_fname, 'w') as fh:
+                fh.write(line)
+
+    def getModFname(self, replace_entry):
+        mod_fname = '%s.%s.0x%x' % (replace_entry.fname, replace_entry.lib, replace_entry.addr)
+        return mod_fname
+ 
+    def rmAllHap(self, dumb):
+        map_copy = list(self.breakmap.keys())
+        for break_num in map_copy:
+            self.rmHap(break_num)
 
     def rmHap(self, break_num):
         if break_num in self.breakmap:
