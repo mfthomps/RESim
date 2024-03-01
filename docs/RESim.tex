@@ -512,7 +512,7 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
 to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py} (see \ref{drive-driver}).  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
-Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} as watch marks.  This may help display diagnostics
+Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} or {\tt TRACE\_BUFFERS} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
 
 The {\tt kbuf} option is used in conjunction with prepInjectWatch to record addresses of kernel buffers used when receiving the data.  Those kernel buffer addresses
