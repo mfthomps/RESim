@@ -44,6 +44,8 @@ class BufferInfo():
         self.lib = None
         self.addr = None
         self.image_base = None
+        self.hap = None
+        self.phys_addr = None
         
 class TraceBuffer():
     def __init__(self, top, buffer_file, cpu, cell_name, mem_utils, context_manager, so_map, lgr, msg=None):
@@ -55,20 +57,20 @@ class TraceBuffer():
         self.so_map = so_map
         self.context_manager = context_manager
         self.addr_info = {}
-        self.buf_haps = []
         self.pending_libs = {}
         self.pending_pages = {}
         self.return_hap = None
         self.did_files = []
-        self.breakpoints = {}
-        self.hap = {}
+        self.buffer_list = []
+        ''' for including buffer traces in watch marks '''
+        self.dataWatch = None
         if buffer_file is not None:
             if os.path.isfile(buffer_file) and buffer_file not in self.did_files:
                 self.did_files.append(buffer_file)
                 with open(buffer_file) as fh:
                     self.lgr.debug('traceBuffer loading from %s msg %s %s' % (buffer_file, msg, str(self.did_files)))
                     for line in fh:
-                        if line.startswith ('#'):
+                        if line.startswith ('#') or len(line.strip())==0:
                             continue
                         if line.startswith('call_reg') or line.startswith('string_reg'):
                             parts = line.strip().split()
@@ -83,6 +85,7 @@ class TraceBuffer():
                             reg = parts[2]
                             outfile = parts[3]
                             trace_info = BufferInfo(parts[0], reg, outfile)
+                            self.buffer_list.append(trace_info)
                             if trace_info.fh is None:
                                 self.lgr.error('traceBuffer unable to open outfile %s from %s' % (outfile, buffer_file))
                                 return
@@ -189,8 +192,11 @@ class TraceBuffer():
 
     def setBreak(self, trace_info, phys_addr):
         self.lgr.debug('traceBuffer setBreak phys_addr 0x%x for %s' % (phys_addr, trace_info.lib_addr))
-        self.breakpoints[trace_info.lib_addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
-        self.hap[trace_info.lib_addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.bufferHap, trace_info, self.breakpoints[trace_info.lib_addr])
+
+        proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+        hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.bufferHap, trace_info, proc_break, name='trace_buffer', disable_forward=False)
+        trace_info.phys_addr = phys_addr
+        trace_info.hap = hap
     
     class ReturnInfo():
         def __init__(self, trace_info, buf_addr):
@@ -198,6 +204,8 @@ class TraceBuffer():
             self.buf_addr = buf_addr               
 
     def bufferHap(self, trace_info, third, forth, memory):
+        if trace_info.hap is None:
+            return
         phys = memory.physical_address
         reg_value = self.mem_utils.getRegValue(self.cpu, trace_info.reg) 
         if reg_value is None:
@@ -218,21 +226,31 @@ class TraceBuffer():
             self.lgr.debug('traceBuffer bufferHap string_reg read: %s' % buf)
             trace_info.fh.write(buf+'\n')
             trace_info.fh.flush()
+            if self.dataWatch is not None:
+                self.dataWatch.markLog(buf, os.path.basename(trace_info.lib))
             
         else:
             self.lgr.error('traceBuffer bufferHap unknown kind: %s' % trace_info.kind)
 
-    def rmHap(self, hap):
-        self.context_manager.genDeleteHap(hap)
+    def rmHap(self, hap, immediate=False):
+        self.context_manager.genDeleteHap(hap, immediate=immediate)
 
-    def rmAllHaps(self):
-        for hap in self.buf_haps:
-            self.rmHap(hap)
-        self.buf_haps = []
+    def rmAllHaps(self, immediate=False):
+        self.lgr.debug('traceBuffer rmAllHaps')
+        for entry in self.buffer_list:
+            if entry.hap is not None:
+                self.rmHap(entry.hap, immediate=immediate)
+                entry.hap = None
         if self.return_hap is not None:
             hap = self.return_hap
-            self.rmHap(hap)
+            self.rmHap(hap, immediate=immediate)
             self.return_hap = None    
+
+    def restoreHaps(self):
+        self.lgr.debug('traceBuffer restoreHaps')
+        for entry in self.buffer_list:
+            if entry.phys_addr is not None:
+                self.setBreak(entry, entry.phys_addr)
 
     def returnHap(self, return_info, third, forth, memory):
         if self.return_hap is None:
@@ -242,6 +260,8 @@ class TraceBuffer():
         self.lgr.debug('traceBuffer returnHap read: %s' % buf)
         return_info.trace_info.fh.write(buf+'\n')
         return_info.trace_info.fh.flush()
+        if self.dataWatch is not None:
+            self.dataWatch.markLog(buf, os.path.basename(return_info.trace_info.lib))
         hap = self.return_hap
         SIM_run_alone(self.rmHap, hap)
         self.return_hap = None
@@ -249,3 +269,7 @@ class TraceBuffer():
     #def msg(self, msg):
     #    for addr in self.addr_info: 
     #        self.addr_info[addr].fh.write(msg+'\n')
+
+    def markLogs(self, dataWatch):
+        self.dataWatch = dataWatch
+        self.lgr.debug('traceBuffer dataWatch set to include buffer traces in watch marks.')
