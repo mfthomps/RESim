@@ -1557,9 +1557,17 @@ class Syscall():
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None and not quiet:
                 ''' filename not yet present in ram, do the two step '''
-                ''' TBD think we are triggering off kernel's own read of the fname, then again someitme it seems corrupted...'''
+                ''' TBD think we are triggering off kernel's own read of the fname, then again sometime it seems corrupted...'''
                 ''' Do not use context manager on superstition that filename could be read in some other task context.'''
                 self.lgr.debug('syscallParse, mkdir tid:%s filename not yet here... set break at 0x%x ' % (tid, exit_info.fname_addr))
+                self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
+                self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
+
+        if callname == 'creat':        
+            exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
+            if exit_info.fname is None and not quiet:
+                ''' filename not yet present in ram, do the two step '''
+                self.lgr.debug('syscallParse, creat tid:%s filename not yet here... set break at 0x%x ' % (tid, exit_info.fname_addr))
                 self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                 self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
 
@@ -2051,7 +2059,19 @@ class Syscall():
             size = frame['param2']
             flag = frame['param3']
             ida_msg = '%s key: 0x%x size 0x%x flag: 0x%x tid:%s (%s) cycle:0x%x' % (callname, key, size, flag, tid, comm, self.cpu.cycles)
-
+        elif callname in ['setuid', 'setgid']:
+            uid = frame['param1']
+            ida_msg = '%s id: %d tid:%s (%s) cycle:0x%x' % (callname, uid, tid, comm, self.cpu.cycles)
+        elif callname in ['unlink']:
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            ida_msg = '%s %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, tid, comm, self.cpu.cycles)
+        elif callname in ['rename']:
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            addr2 = frame['param2']
+            fname2 = self.mem_utils.readString(self.cpu, addr2, 256)
+            ida_msg = '%s %s to %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, fname2, tid, comm, self.cpu.cycles)
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
