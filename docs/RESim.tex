@@ -1589,6 +1589,9 @@ in the RESim ini file.
 Simics command file such as the {\tt mapdirver.simics} script found in the sample workspace.
 \end{itemize}
 
+\textbf{Note:} The drive-driver.py script is being replaced by a newer version described below at \ref{drive-driver3}  Use the new version when possible.
+Information below will be merged into that section and drive-driver will be deprecated.
+
 An example directive file for sending a UDP packet to a target is:
 \begin{verbatim}
     some.io 10.10.0.2 5678 UdPcc
@@ -1644,6 +1647,19 @@ configuration file styled parameters such as:
 \end{verbatim}
 In the above example, Scapy is used to spoof the source of IP and Port number in the UDP packets.  The FILE is a json containing a list of UPD packets.
 \end{itemize}
+
+\subsubsection{Using drive-driver3.py}
+\label{drive-driver3}
+This revision to drive-driver uses UDP to send data to driver.  This is typically much faster than using ssh, which can be very slow due to Simics 
+handling of "real network" TCP connections.  This revision uses directive file formats similar to drive-driver2 described above.  A simple directive
+for sending data to a TCP service might be:
+\begin{verbatim}
+FILE=somefile.io
+IP=192.168.31.1
+PORT=65009
+SESSION=TCP
+\end{verbatim}
+Note you do not now include the {\tt -t} option because the protocol type is specified in SESSION.
 
 \subsection{Tracking data}
 \label{tracking}
