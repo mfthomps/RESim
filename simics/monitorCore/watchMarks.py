@@ -158,17 +158,19 @@ class DataMark():
             self.ad_hoc = False
 
 class KernelMark():
-    def __init__(self, addr, count, callnum, call, fd, fname):
+    def __init__(self, addr, count, callnum, call, fd, fname, buffer_start):
         self.addr = addr
         self.count = count
         self.callnum = callnum
         self.call = call
         self.fd = fd
         self.fname = fname
+        self.buffer_start = buffer_start
+        delta = addr - buffer_start
         if fd is not None:
-            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) FD: %d' % (count, addr, callnum, call, fd)
+            self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) FD: %d' % (count, buffer_start, delta, addr, callnum, call, fd)
         elif fname is not None:
-            self.msg = 'Kernel read %d bytes from 0x%08x call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
+            self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) path: %s' % (count, buffer_start, delta, addr, callnum, call, fname)
     def getMsg(self):
         return self.msg
 
@@ -276,7 +278,8 @@ class SprintfMark():
         self.count = count    
         self.buf_start = buf_start    
         self.sp = sp    
-        self.msg = '%s src: 0x%08x dest 0x%08x len %d' % (fun, src, dest, count)
+        delta = src - buf_start
+        self.msg = '%s src: 0x%08x dest 0x%08x len %d %d bytes into buffer at 0x%x' % (fun, src, dest, count, delta, buf_start)
 
     def getMsg(self):
         return self.msg
@@ -913,15 +916,15 @@ class WatchMarks():
         self.addWatchMark(sm)
         self.lgr.debug('watchMarks memset %s' % (sm.getMsg()))
 
-    def kernel(self, addr, count, fd, fname, callnum, call):
-        km = KernelMark(addr, count, callnum, call, fd, fname)
+    def kernel(self, addr, count, fd, fname, callnum, call, buffer_start):
+        km = KernelMark(addr, count, callnum, call, fd, fname, buffer_start)
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernel %s' % (km.getMsg()))
 
-    def kernelMod(self, addr, count, frame):
+    def kernelMod(self, addr, count, frame, buffer_start):
         callnum = self.mem_utils.getCallNum(self.cpu)
         fd = frame['param1']
-        km = KernelModMark(addr, count, callnum, fd)
+        km = KernelModMark(addr, count, callnum, fd, buffer_start)
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernelMod %s' % (km.getMsg()))
 
