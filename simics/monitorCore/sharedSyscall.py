@@ -766,7 +766,7 @@ class SharedSyscall():
             #    self.lgr.debug('sharedSyscall adding clone %d to watched tids' % eax)
             #    self.context_manager.addTask(eax)
              
-        elif callname == 'mkdir':
+        elif callname in ['mkdir', 'creat']:
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
             if exit_info.fname is None:
                 if exit_info.fname_addr is None:
@@ -776,7 +776,7 @@ class SharedSyscall():
                 #SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
             else:
-                trace_msg = ('\treturn from mkdir tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+                trace_msg = ('\treturn from %s tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (callname, tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 
         elif callname == 'open' or callname == 'openat':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
