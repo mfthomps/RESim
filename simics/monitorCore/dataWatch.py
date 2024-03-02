@@ -940,16 +940,18 @@ class DataWatch():
                 callnum = 102
                 call = net.callname[frame['param1']].lower()
                 write_fd = frame['ss'].fd
-                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, fname, callnum, call)
+                buf_start = self.findRange(kernel_return_info.addr)
+                self.watchMarks.kernel(kernel_return_info.addr, eax, write_fd, fname, callnum, call, buf_start)
             else:
                 #callnum = self.mem_utils.getCallNum(self.cpu)
                 callnum = frame['syscall_num']
                 call = self.task_utils.syscallName(callnum, self.compat32)
                 self.lgr.debug('dataWatch kernelReturnHap got callnum %d call %s' % (callnum, call))
-                if call == 'open' or call.startswith('fstat') or call.startswith('stat'):
+                if call == 'open' or call.startswith('fstat') or call.startswith('stat') or call in ['creat', 'mkdir', 'rename']:
                     fname_addr = frame['param1']
                     fname = self.mem_utils.readString(self.cpu, fname_addr, 100)
                     count = len(fname)
+                    self.lgr.debug('dataWatch kernelReturnHap got fname %s count %d' % (fname, count))
                     src = fname_addr
                 elif call == 'writev':
                     # TBD only record the first buffer of an iov
@@ -960,9 +962,12 @@ class DataWatch():
                 else:
                     write_fd = frame['param1']
                     count = eax
+                    self.lgr.debug('dataWatch kernelReturnHap unknown count %d' % (count))
                     src = frame['param2']
-                wm = self.watchMarks.kernel(src, count, write_fd, fname, callnum, call)
-                self.lgr.debug('kernelReturnHap not socket, call %s, frame: %s' % (call, taskUtils.stringFromFrame(frame)))
+                buf_index, buf_start, buf_length = self.findRangeIndexForRange(src, count)
+                #buf_start = self.findRange(src)
+                wm = self.watchMarks.kernel(src, count, write_fd, fname, callnum, call, buf_start)
+                self.lgr.debug('kernelReturnHap not socket, call %s, frame: %s count was %d' % (call, taskUtils.stringFromFrame(frame), count))
             if write_fd is not None:
                 read_fd = self.getPipeReader(str(write_fd))
                 if read_fd is not None:
@@ -974,7 +979,8 @@ class DataWatch():
             callnum = frame['syscall_num']
             call = self.task_utils.syscallName(callnum, self.compat32)
             self.lgr.debug('dataWatch kernelReturnHap is modification, got callnum %d call %s' % (callnum, call))
-            self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame)
+            buf_start = self.findRange(kernel_return_info.addr)
+            self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame, buf_start)
  
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
@@ -1246,8 +1252,8 @@ class DataWatch():
             buf_start = self.findRange(self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
             mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
-            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
-                   self.mem_something.dest, self.mem_something.count))
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d buf_start: 0x%x' % (self.mem_something.fun, self.mem_something.src, 
+                   self.mem_something.dest, self.mem_something.count, buf_start))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.setBreakRange()
         elif self.mem_something.fun in ['fprintf', 'printf', 'syslog', 'output_processor']:
@@ -3955,11 +3961,14 @@ class DataWatch():
             #self.watch()
             if fun is not None and fun not in self.not_mem_something:
                 fun_name = self.fun_mgr.funFromAddr(fun)
-                if fun_name not in mem_funs: 
-                    self.lgr.debug('DataWatch lookForMemstuff not memsomething add fun 0x%x to not_mem_something fun_name %s' % (fun, fun_name))
-                    self.not_mem_something.append(fun)
+                if not self.so_map.isLibc(eip):
+                    if fun_name not in mem_funs: 
+                        self.lgr.debug('DataWatch lookForMemstuff not memsomething add fun 0x%x to not_mem_something fun_name %s' % (fun, fun_name))
+                        self.not_mem_something.append(fun)
+                    else:
+                        self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x is in local funs %s' % (fun, fun_name))
                 else:
-                    self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x is in local funs %s' % (fun, fun_name))
+                    self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x is clib %s' % (fun, fun_name))
             pass
         return retval
        
