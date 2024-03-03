@@ -687,12 +687,15 @@ class Syscall():
         #        #return None, None, None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         if callname == 'openat':
-            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s  dirfd: %d  tid:%s (%s)' % (callname, flags, 
-                mode, fname_addr, fname, frame['param1'], tid, comm)
+            ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s  dirfd: %d  tid:%s (%s)' % (callname, flags, 
+                oct(mode), fname_addr, fname, frame['param1'], tid, comm)
         else:
-            ida_msg = '%s flags: 0%o  mode: 0x%x  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, mode, fname_addr, fname, tid, comm)
+            ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, oct(mode), fname_addr, fname, tid, comm)
+
         self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
         self.lgr.debug(taskUtils.stringFromFrame(frame))
+        #SIM_break_simulation('remove this')
+         
 
         self.context_manager.setIdaMessage(ida_msg)
         #if fname is None:
@@ -2072,6 +2075,11 @@ class Syscall():
             addr2 = frame['param2']
             fname2 = self.mem_utils.readString(self.cpu, addr2, 256)
             ida_msg = '%s %s to %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, fname2, tid, comm, self.cpu.cycles)
+        elif callname in ['chmod']:
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            mode = oct(frame['param2'])
+            ida_msg = '%s %s mode: %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, mode, tid, comm, self.cpu.cycles)
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
