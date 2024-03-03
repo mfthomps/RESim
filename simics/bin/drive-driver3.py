@@ -131,7 +131,7 @@ class Directive():
             retval = retval + ' --header %s' % self.header
         farg = ''
         for f in self.file:
-            farg = farg + ' /tmp/%s' % f
+            farg = farg + ' /tmp/%s' % os.path.basename(f)
         retval = retval+' --file "%s"' % farg
         return retval
            
