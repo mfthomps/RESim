@@ -166,11 +166,14 @@ class KernelMark():
         self.fd = fd
         self.fname = fname
         self.buffer_start = buffer_start
-        delta = addr - buffer_start
-        if fd is not None:
-            self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) FD: %d' % (count, buffer_start, delta, addr, callnum, call, fd)
-        elif fname is not None:
-            self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) path: %s' % (count, buffer_start, delta, addr, callnum, call, fname)
+        if buffer_start is not None:
+            delta = addr - buffer_start
+            if fd is not None:
+                self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) FD: %d' % (count, buffer_start, delta, addr, callnum, call, fd)
+            elif fname is not None:
+                self.msg = 'Kernel read %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) path: %s' % (count, buffer_start, delta, addr, callnum, call, fname)
+        else:
+            self.msg = 'Kernel read %d bytes from addr 0x%x, unknown buffer call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
     def getMsg(self):
         return self.msg
 
