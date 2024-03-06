@@ -281,8 +281,11 @@ class SprintfMark():
         self.count = count    
         self.buf_start = buf_start    
         self.sp = sp    
-        delta = src - buf_start
-        self.msg = '%s src: 0x%08x dest 0x%08x len %d %d bytes into buffer at 0x%x' % (fun, src, dest, count, delta, buf_start)
+        if buf_start is not None:
+            delta = src - buf_start
+            self.msg = '%s src: 0x%08x dest 0x%08x len %d %d bytes into buffer at 0x%x' % (fun, src, dest, count, delta, buf_start)
+        else:
+            self.msg = '%s src: 0x%08x dest 0x%08x len %d Unknown buffer' % (fun, src, dest, count)
 
     def getMsg(self):
         return self.msg

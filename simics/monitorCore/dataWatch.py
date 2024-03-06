@@ -1252,8 +1252,12 @@ class DataWatch():
             buf_start = self.findRange(self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
             mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
-            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d buf_start: 0x%x' % (self.mem_something.fun, self.mem_something.src, 
-                   self.mem_something.dest, self.mem_something.count, buf_start))
+            if buf_start is not None:
+                self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d buf_start: 0x%x' % (self.mem_something.fun, self.mem_something.src, 
+                       self.mem_something.dest, self.mem_something.count, buf_start))
+            else:
+                self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x count %d NO BUFFER FOUND' % (self.mem_something.fun, self.mem_something.src, 
+                       self.mem_something.dest, self.mem_something.count))
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.setBreakRange()
         elif self.mem_something.fun in ['fprintf', 'printf', 'syslog', 'output_processor']:
@@ -2380,7 +2384,8 @@ class DataWatch():
         
         ''' we are at the call to a memsomething, get the parameters '''
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('DataWatch hitCallStopHap eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
+        first_cycle = self.top.getFirstCycle()
+        self.lgr.debug('DataWatch hitCallStopHap eip 0x%x cycles: 0x%x first_cycle: 0x%x' % (eip, self.cpu.cycles, first_cycle))
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
             self.lgr.debug('hitCallStopHap will delete call_stop_hap %d cycle_dif 0x%x' % (self.call_stop_hap, cycle_dif))
@@ -2394,9 +2399,14 @@ class DataWatch():
             return
         ''' TBD dynamically adjust cycle_dif limit?  make exceptions for some calls, e.g., xmlparse? '''
         #if eip != self.mem_something.called_from_ip or cycle_dif > 300000:
-        if eip != self.mem_something.called_from_ip or cycle_dif > 0xF000000:
+        if self.cpu.cycles == first_cycle:
+            self.lgr.debug('hitCallStopHap stopped at original bookmark, assume a ghost frame')
+            self.undo_pending = True
+            SIM_run_alone(self.undoAlone, self.mem_something)
+
+        elif eip != self.mem_something.called_from_ip or cycle_dif > 0xF000000:
             if eip != self.mem_something.called_from_ip:
-                self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x' % (self.mem_something.called_from_ip, eip))
+                self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x assume a ghost frame' % (self.mem_something.called_from_ip, eip))
             else:
                 self.lgr.debug('hitCallStopHap stopped too far back cycle_dif 0x%x, assume a ghost frame' % cycle_dif)
             self.undo_pending = True
