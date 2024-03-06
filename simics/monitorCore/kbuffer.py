@@ -179,8 +179,9 @@ class Kbuffer():
                     #self.lgr.debug('b is %d' % b)
                     if b != special:
                         bad_count += 1
-                        size = (last_good - src) + 1
-                        #self.lgr.debug('bad count now %d buf size %d' % (bad_count, size))
+                        if last_good is not None:
+                            size = (last_good - src) + 1
+                            #self.lgr.debug('bad count now %d buf size %d' % (bad_count, size))
                         if bad_count > max_bad:
                             done = True
                             break
