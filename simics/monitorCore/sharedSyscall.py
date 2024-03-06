@@ -776,7 +776,10 @@ class SharedSyscall():
                 #SIM_break_simulation('fname is none on exit of open')
                 exit_info.fname = 'unknown'
             else:
-                trace_msg = ('\treturn from %s tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (callname, tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+                if callname == 'creat':
+                    trace_msg = ('\treturn from %s tid:%s FD: %d file: %s flags: 0x%x mode: 0x%x\n' % (callname, tid, eax, exit_info.fname, exit_info.flags, exit_info.mode))
+                else:
+                    trace_msg = ('\treturn from %s tid:%s file: %s flags: 0x%x mode: 0x%x eax: 0x%x\n' % (callname, tid, exit_info.fname, exit_info.flags, exit_info.mode, eax))
                 
         elif callname == 'open' or callname == 'openat':
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
