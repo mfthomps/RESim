@@ -458,6 +458,11 @@ class SOMap():
         retval['group_leader'] = tid
         if tid in self.so_file_map:
             if tid in self.prog_start and self.prog_start[tid] is not None:
+                prog = self.text_prog[tid]
+                if prog in self.prog_info:
+                    retval['offset'] = self.prog_info[prog].text_offset
+                else:
+                    retval['offset'] = 0
                 retval['prog_start'] = self.prog_start[tid]
                 retval['prog_end'] = self.prog_end[tid]
                 retval['prog'] = self.text_prog[tid]
@@ -675,8 +680,8 @@ class SOMap():
                     self.lgr.debug('soMap knownHap tid:%s memory 0x%x NO mapping file %s' % (tid, value, fname))
 
                 SIM_run_alone(self.stopAlone, cpu)                
-            #else:
-            #    self.lgr.debug('soMap knownHap wrong tid, wanted %s got %s' % (tid, cur_tid))
+            else:
+                self.lgr.debug('soMap knownHap wrong tid, wanted %s got %s' % (tid, cur_tid))
         
     def runToKnown(self, skip=None):        
        cpu, comm, cur_tid = self.task_utils.curThread() 
@@ -684,9 +689,9 @@ class SOMap():
        if map_tid in self.prog_start: 
            start =  self.prog_start[map_tid] 
            length = self.prog_end[map_tid] - self.prog_start[map_tid] 
-           proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+           proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
-           #self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
+           self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
        else:
            self.lgr.debug('soMap runToKnown no text for %s' % map_tid)
        if map_tid in self.so_file_map:
