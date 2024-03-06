@@ -148,6 +148,8 @@ class bookmarkMgr():
         entry['tid'] = tid
         if fun is not None:
             entry['fun'] = fun
+        else:
+            entry['fun'] = ""
         if delta not in self.mark_json:
             self.mark_json[delta] = []
 
@@ -382,7 +384,11 @@ class bookmarkMgr():
         entry = {}
         entry['mark'] = 'origin'
         entry['cycle'] = cpu.cycles
+        entry['msg'] = ""
         eip = self.top.getEIP(cpu)
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        entry['instruct'] = instruct[1]
+        entry['fun'] = ""
         tid = self.top.getTID()
         entry['ip'] = eip
         entry['tid'] = tid
