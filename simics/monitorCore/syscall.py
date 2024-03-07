@@ -1592,10 +1592,12 @@ class Syscall():
             self.sockwatch.close(tid, fd)
 
             for call_param in self.call_params:
+                self.lgr.debug('syscall close call_param match_param %s' % str(call_param.match_param))
                 if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     ida_msg = 'Closed FD %d' % fd
+                    self.lgr.debug(ida_msg)
                     exit_info.call_params.append(call_param)
-                    if not self.linger:
+                    if not self.linger or self.name=='runToIO':
                         self.lgr.debug('closed fd %d, stop trace' % fd)
                         self.stopTrace()
                 elif call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
