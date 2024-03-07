@@ -175,10 +175,13 @@ class IDAFuns():
 
     def getFun(self, ip):
         ''' Returns the loaded function address of the fuction containing a given ip '''
-        for fun in self.funs:
-            #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
-            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                return fun
+        if ip is not None:
+            for fun in self.funs:
+                #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
+                if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                    return fun
+        else:
+            self.lgr.error('idaFuns getFun called with ip of None')
         return None
 
     def getFunName(self, ip):
