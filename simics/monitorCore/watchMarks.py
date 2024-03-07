@@ -178,12 +178,21 @@ class KernelMark():
         return self.msg
 
 class KernelModMark():
-    def __init__(self, addr, count, callnum, fd):
+    def __init__(self, addr, count, callnum, call, fd, buffer_start):
         self.addr = addr
         self.count = count
         self.callnum = callnum
+        self.call = call
         self.fd = fd
-        self.msg = 'Kernel overwrote %d bytes from 0x%x call_num: %d FD: %d' % (count, addr, callnum, fd)
+        self.buffer_start = buffer_start
+        if buffer_start is not None:
+            delta = addr - buffer_start
+            if fd is not None:
+                self.msg = 'Kernel overwrite %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) FD: %d' % (count, buffer_start, delta, addr, callnum, call, fd)
+            elif fname is not None:
+                self.msg = 'Kernel overwrite %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) path: %s' % (count, buffer_start, delta, addr, callnum, call, fname)
+        else:
+            self.msg = 'Kernel overwrite %d bytes from addr 0x%x, unknown buffer call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
     def getMsg(self):
         return self.msg
 
@@ -927,10 +936,9 @@ class WatchMarks():
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernel %s' % (km.getMsg()))
 
-    def kernelMod(self, addr, count, frame, buffer_start):
-        callnum = self.mem_utils.getCallNum(self.cpu)
+    def kernelMod(self, addr, count, frame, callnum, call, buffer_start):
         fd = frame['param1']
-        km = KernelModMark(addr, count, callnum, fd, buffer_start)
+        km = KernelModMark(addr, count, callnum, call, fd, buffer_start)
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernelMod %s' % (km.getMsg()))
 
