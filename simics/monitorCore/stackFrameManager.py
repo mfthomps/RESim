@@ -204,12 +204,15 @@ class StackFrameManager():
         #print(frames[1].dumpString())
         self.top.revToAddr(frames[1].ip)
 
-    def dumpStack(self, count=80):
+    def dumpStack(self, count=80, fname=None):
         cpu, comm, tid = self.task_utils.curThread() 
         offset = self.soMap.wordSize(tid)
         esp = self.mem_utils.getRegValue(self.cpu, 'sp')
         ptr = esp
         fun_mgr = self.top.getFunMgr()
+        fh = None
+        if fname is not None:
+            fh = open(fname, 'w')
         for i in range(count):
             if offset == 4:
                 value = self.mem_utils.readWord32(self.cpu, ptr) 
@@ -223,4 +226,8 @@ class StackFrameManager():
                     name = fun_mgr.getName(fun_addr)
                     self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
             print('%16x   %16x %s' % (ptr, value, name))
+            if fh is not None:
+                fh.write('%16x   %16x %s\n' % (ptr, value, name))
             ptr = ptr + offset
+        if fh is not None:
+            fh.close()
