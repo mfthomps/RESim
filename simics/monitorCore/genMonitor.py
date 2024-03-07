@@ -5851,8 +5851,8 @@ class GenMonitor():
     def down(self):
         self.stackFrameManager[self.target].down()
 
-    def dumpStack(self, count=80):
-        self.stackFrameManager[self.target].dumpStack(count)
+    def dumpStack(self, count=80, fname=None):
+        self.stackFrameManager[self.target].dumpStack(count, fname=fname)
 
     def tracking(self):
         return self.track_started
