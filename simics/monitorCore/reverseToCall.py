@@ -138,6 +138,7 @@ class reverseToCall():
 
             self.lgr.debug('__init__ bookmarks is %s' % self.bookmarks)
 
+            self.callmn = None
 
     def noWatchSysenter(self):
         if self.sysenter_hap is not None:
@@ -210,6 +211,10 @@ class reverseToCall():
                 self.lgr.debug('setup using arm decoder')
             else:
                 self.decode = decode
+            if self.cpu.architecture == 'arm':
+                self.callmn = 'bl'
+            else:
+                self.callmn = 'call'
         else:
             self.lgr.debug('setup already called')
 
@@ -324,10 +329,19 @@ class reverseToCall():
         SIM_run_command('rev 1')
 
     def tryBackToCall(self, my_args):
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-	        self.tryBackToCallStopped, my_args)
-        self.lgr.debug('tryBackToCall from cycle 0x%x' % my_args.cpu.cycles)
-        SIM_run_command('rev 1')
+        # Doing a step-over, we stepped into a ret.
+        # my_args.eip is where we came from.  find its previous instruction 
+        # mftmft 
+        call_addr = self.findCallBehind(my_args.eip)
+        if call_addr is not None:
+            cell = self.top.getCell()
+            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+    	        self.tryBackToCallStopped, my_args)
+            self.lgr.debug('tryBackToCall from cycle 0x%x' % my_args.cpu.cycles)
+            SIM_run_command('rev')
+        else:
+            self.lgr.error('tryBackToCall failed to find call behind 0x%x' % my_args.eip)
 
     def tryBackToCallStopped(self, my_args, one, exception, error_string):
         if self.stop_hap is None:
@@ -336,6 +350,8 @@ class reverseToCall():
         if tid != my_args.tid:
             self.lgr.debug('tryBackToCallStopped tid:%s but expected %s' % (tid, my_args.tid))
             return 
+        RES_delete_breakpoint(self.uncall_break)
+        self.uncall_break = None
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap) 
         self.stop_hap = None
@@ -469,7 +485,7 @@ class reverseToCall():
                 self.context_manager.setExitBreaks()
             elif self.isRet(instruct[1], eip):
                 ''' First step back from a reverse step over got a ret.  Assume previous instruction is a call '''
-                SIM_run_alone(tryBackToCall, my_args)
+                SIM_run_alone(self.tryBackToCall, my_args)
 
                 '''
                 cell = self.top.getCell()
@@ -545,7 +561,6 @@ class reverseToCall():
         self.step_into = step_into
         self.first_back = True
         self.lgr.debug('reservseToCall, call get procInfo')
-        self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
         eip = self.top.getEIP(self.cpu)
         my_args = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
         self.lgr.debug('reservseToCall, got my_args ')
@@ -1670,3 +1685,45 @@ class reverseToCall():
             self.lgr.debug('checkRegQueue, now back from followTaint for  %s' % reg_to_track.reg)
         else:
             self.cleanup(None)
+
+    def findCallBehind(self, return_to):
+        ''' given a returned to address, look backward for the address of the call instruction '''
+        retval = None
+        if self.cpu.architecture == 'arm':
+            eip = return_to - 4
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            self.lgr.debug('findCallBehind instruct is %s' % instruct[1])
+            if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+                self.lgr.debug('followCall arm eip 0x%x' % eip)
+                retval = eip
+        else:
+            eip = return_to - 2
+            self.lgr.debug('findCallBehind return_to is 0x%x  ip 0x%x' % (return_to, eip))
+            # TBD use instruction length to confirm it is a true call
+            # not always 2* word size?
+            count = 0
+            while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s' % (count, eip, instruct[1]))
+                ''' TBD hack.  Fix this by getting bb start and walking forward '''
+                if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1]:
+                    parts = instruct[1].split()
+                    if len(parts) == 2:
+                        try:
+                            dst = int(parts[1],16)
+                        except:
+                            retval = eip
+                            continue
+                        if self.top.isCode(dst, tid=self.tid):
+                            retval = eip
+                        else:
+                            self.lgr.debug('stackTrace dst not code 0x%x' % dst)
+                            eip = eip-1
+                    else:        
+                        retval = eip
+                elif 'illegal memory mapping' in instruct[1]:
+                    break
+                else:
+                    eip = eip-1
+                count = count+1
+        return retval
