@@ -81,8 +81,9 @@ class PageFaultGen():
             del self.pending_sigill[tid]
         
     def rmPDirHap(self, hap):
-        RES_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
-        RES_delete_breakpoint(self.pdir_break)
+        if hap is not None:
+            RES_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
+            RES_delete_breakpoint(self.pdir_break)
 
     def pdirWriteHap(self, prec, third, forth, memory):
         pdir_entry = SIM_get_mem_op_value_le(memory)
