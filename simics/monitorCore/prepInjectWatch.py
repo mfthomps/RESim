@@ -54,6 +54,11 @@ class PrepInjectWatch():
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
 
         if self.kbuffer is not None:
+            k_buf_len = self.kbuffer.getBufLength()
+            if k_buf_len is None or k_buf_len == 0:
+                self.lgr.error('prepInjectWatch kbuffer is empty.  Exit')
+                self.top.quit()
+            
             ''' Watch mark should leave us after the return '''
             self.ret_ip = self.top.getEIP(self.cpu)
            
@@ -81,35 +86,9 @@ class PrepInjectWatch():
             
             self.pickleit(kbufs[0])  
         else:
-            if isinstance(mark.mark, watchMarks.CallMark):
-                self.lgr.debug('doInject is call mark')
-                if 'ioctl' in mark.mark.getMsg():
-                    self.len_buf = mark.mark.recv_addr
-                    self.lgr.debug('is ioctl len_buf is 0x%x' % self.len_buf)
-                    self.ioctl_mark = watch_mark
-                    self.read_mark = watch_mark+1           
-     
-                    ''' Try to reverse and find where kernel keeps count data ''' 
-                    self.top.revTaintAddr(mark.mark.recv_addr, kernel=True, prev_buffer=True, callback=self.handleDelta)
-
-                else:
-                    self.lgr.debug('prepInjectWatch watch mark is not an ioctl call.')
-                    self.read_mark = watch_mark
-                    self.handleReadBuffer(callback=self.instrumentRead)
-            else:
-                self.lgr.debug('doInject not a CallMark')
+            self.lgr.error('prepInjectWatch called with no kbuffer.  Exit')
+            self.top.quit()
                
-    def handleDelta(self, buf_addr_list): 
-        ''' Assume backtrace stopped at something like rsb r6, r3, r6 
-            and then populated buf_addr_list with addresses that contribute to r3 and r6
-        '''
-        if len(buf_addr_list) != 2:
-            self.lgr.error('prepInjectWatch handleDelta unexpected length of buf_addr_list %d' % len(buf_addr_list))
-            return 
-        self.k_start_ptr = min(buf_addr_list[0], buf_addr_list[1]) 
-        self.k_end_ptr = max(buf_addr_list[0], buf_addr_list[1]) 
-        self.lgr.debug('prepInjectWatch handleDelta k_start_ptr 0x%x k_end_ptr 0x%x' % (self.k_start_ptr, self.k_end_ptr))
-        self.handleReadBuffer()
 
     def instrumentAlone(self, buf_addr_list): 
         self.dataWatch.goToMark(self.ioctl_mark)
@@ -147,42 +126,6 @@ class PrepInjectWatch():
             buf_addr = buf_addr_list[0]
         self.pickleit(buf_addr)
 
-    def handleReadBuffer(self, callback=None):
-        if callback is None:
-            callback = self.instrumentIO
-        # go to return from a read of interest.
-        self.dataWatch.goToMark(self.read_mark)
-        mark = self.dataWatch.getMarkFromIndex(self.read_mark)
-        self.lgr.debug('prepInjectWatch handleReadBuffer got mark %s' % mark.mark.getMsg())
-
-        #''' go forward one to user space and record the return IP '''
-        #SIM_run_command('pselect %s' % self.cpu.name)
-        #SIM_run_command('si')
-        self.ret_ip = self.top.getEIP(self.cpu)
-        ''' now record the call '''
-        # TBD replace below with call to precall?
-        frame, cycle = self.top.getPreviousEnterCycle()
-        frame_s = 'param1:0x%x param2:0x%x param3:0x%x param4:0x%x param5:0x%x param6:0x%x ' % (frame['param1'], 
-            frame['param2'], frame['param3'], frame['param4'], frame['param5'], frame['param6'])
-        self.lgr.debug('prepInjectWatch handleReadBuffer got recent cycle 0x%x frame %s' % (cycle, frame_s))
-        previous = cycle - 1
-        if not resimUtils.skipToTest(self.cpu, previous, self.lgr):
-            return
-        self.call_ip = self.top.getEIP(self.cpu)
-        self.lgr.debug('prepInjectWatch handleReadbuffer got call_ip 0x%x  ret_ip 0x%x' % (self.call_ip, self.ret_ip))
-
-        self.dataWatch.goToMark(self.read_mark)
-        if isinstance(mark.mark, watchMarks.CallMark):
-            self.lgr.debug('prepInjectWatch 2nd is call mark')
-            if 'read' in mark.mark.getMsg() or 'recv' in mark.mark.getMsg():
-                self.lgr.debug('is read, jump to prior to the call')
-                self.fd = mark.mark.fd
-                buf_addr = mark.mark.recv_addr
-                self.top.revTaintAddr(buf_addr, kernel=True, prev_buffer=True, callback=callback)
-            else:
-                self.lgr.debug('prepInjectWatch handleReadBuffer read mark does not look like a read mark: %s' % mark.mark.getMsg())
-        else:
-            self.lgr.debug('prepInjectWatch handleReadBuffer read mark is not a callMark')
 
     def pickleit(self, buf_addr):
         self.lgr.debug('prepInjectWatch  pickleit, begin')
