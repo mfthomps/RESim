@@ -25,7 +25,9 @@ Create a RESim workspace on your Simics host and copy these files into it, e.g.,
       cp $RESIM_DIR/simics/examples/network_file_system/* . 
    
 If you are running on NPS infrastructure, all images and the binaries named in the
-ubuntu\_driver.ini file should be already available through the NFS /mnt/re\_images.  
+ubuntu\_driver.ini file should be already available through the RESIM\_IMAGE
+environment variable.
+
 Otherwise, get the disk images and binary files from 
     https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk
 and untar the cgc-fs.tar.
@@ -34,6 +36,16 @@ And adjust paths in the ubuntu\_driver.ini as needed.
 You can then run the simulation:
 
       resim ubuntu_driver.ini
+
+It may take a few moments for the driver and target system to boot.
+The simulation will stop at the simics> prompt when it is booted.
+Use the "c" command at the simics prompt to run forward a while to get
+past all the Linux initialization.  Use the "ptime" command to watch time
+advance.  Use the "stop" stop command to stop the simuation when "Time"
+seems to be advancing close to or faster than real time.
+
+Create a snapshot so you can return to that point without rebooting:
+    @cgc.writeConfig('running')
 
 The driver username is mike, password is password.
 You can either login via the driver console, or use:
@@ -55,15 +67,15 @@ Subsequent injectIO and fuzzing will overwrite the kernel buffer, and we don't
 want additional spurrious data arriving after the snapshot is created.
 
 Use the poll.io to create a snapshot for use with fuzzing or injectIO:
-
+    Start from the "running" snapshot you created above.
     resim ubuntu_driver.ini -n
     run-command-file mapdriver.simics
-    run a bit
-    debugProc('Network_File_System')
+    @cgc.debugProc('Network_File_System')
     From another terminal in the workspace:
-      driver-driver.py poll.directive -t -d
-    trackIO(0, max_marks=50, kbuf=True)
-    prepInjectWatch(1, 'read0')
+      drive-driver.py poll.directive -t -d
+    @cgc.writeConfig('network_file_system')
+    @cgc.trackIO(0, max_marks=50, kbuf=True)
+    @cgc.prepInjectWatch(1, 'read0')
 
 The max\_marks option speeds up the trackIO, otherwise over 1000 data marks are generated from this input.
 The kbuf option tells the trackIO function to look for kernel buffer addresses.
@@ -76,7 +88,7 @@ The waa.io file was found using fuzzing (as performed latter in this README).
 Restart RESim and inject that crashing input:
 
      resim ubuntu_driver.ini -n
-     injectIO('waa.io')
+     @cgc.injectIO('waa.io')
    
 Attach to the debugger using the IDA Pro plugin or the Ghidra plugin.
 Use reverse data to locate the source of the corrupt address and its value.
