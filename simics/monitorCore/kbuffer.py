@@ -146,8 +146,6 @@ class Kbuffer():
             self.lgr.error('findArmBuf, expected str instruction, got %s' % instruct[1])
             
 
-                    
-
     def updateBuffers(self, src):
         if self.kbuf_len is not None and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len):
             ''' The read is from the same kernel buffer used on the previous read.'''
@@ -168,7 +166,7 @@ class Kbuffer():
             if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
                 # TBD this may need to be adjustable data files that require specific fields to force consumption of the entire kernel buffer.
                 # Better to parse the primer file  in writeData to identify the non-special characters and allow for them.
-                max_bad = 100
+                max_bad = 300
                 special = ord('Z')
                 done = False 
                 cur_addr = src
@@ -181,7 +179,7 @@ class Kbuffer():
                         bad_count += 1
                         if last_good is not None:
                             size = (last_good - src) + 1
-                            #self.lgr.debug('bad count now %d buf size %d' % (bad_count, size))
+                            self.lgr.debug('bad count now %d buf size %d' % (bad_count, size))
                         if bad_count > max_bad:
                             done = True
                             break
