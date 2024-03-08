@@ -189,10 +189,8 @@ class KernelModMark():
             delta = addr - buffer_start
             if fd is not None:
                 self.msg = 'Kernel overwrite %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) FD: %d' % (count, buffer_start, delta, addr, callnum, call, fd)
-            elif fname is not None:
-                self.msg = 'Kernel overwrite %d bytes from 0x%08x (%d bytes into 0x%x) call_num: %d (%s) path: %s' % (count, buffer_start, delta, addr, callnum, call, fname)
         else:
-            self.msg = 'Kernel overwrite %d bytes from addr 0x%x, unknown buffer call_num: %d (%s) path: %s' % (count, addr, callnum, call, fname)
+            self.msg = 'Kernel overwrite %d bytes from addr 0x%x, unknown buffer call_num: %d (%s) ' % (count, addr, callnum, call)
     def getMsg(self):
         return self.msg
 
