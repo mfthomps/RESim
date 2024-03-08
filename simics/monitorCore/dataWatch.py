@@ -285,7 +285,7 @@ class DataWatch():
                 called_from = f.ip
                 self.mem_something = MemSomething(f.fun_name, f.fun_addr, start, f.ret_addr, start, None, None, 
                       f.ip, None, length, start)
-                #self.lgr.debug('checkFread got fread')
+                self.lgr.debug('checkFread got fread')
                 SIM_run_alone(self.addFreadAlone, None)
                 retval = True
                 break
@@ -307,7 +307,7 @@ class DataWatch():
             return
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         start, dumb2, dumb = self.getCallParams(sp)
-        #self.lgr.debug('freadCallback call setRange with start 0x%x len %d' % (start, self.mem_something.length))
+        self.lgr.debug('freadCallback call setRange with start 0x%x len %d' % (start, self.mem_something.length))
         msg = 'fread to 0x%x %d bytes' % (start, self.mem_something.length)
         self.setRange(start, self.mem_something.length, msg=msg)
         self.top.restoreDebugBreaks(was_watching=True)
@@ -438,9 +438,10 @@ class DataWatch():
                     length = self.read_limit_trigger    
                     if msg is not None:
                         msg = msg+' Count truncated to given %d bytes' % length
-            if self.checkFread(start, length):
-                self.lgr.debug('dataWatch setRange was fread, return for now')
-                return
+            # TBD note on why file read is treated differently?
+            #if self.checkFread(start, length):
+            #    self.lgr.debug('dataWatch setRange was fread, return for now')
+            #    return
             if self.buffer_offset is not None:
                 start = start + self.buffer_offset 
                 length = self.buffer_length
@@ -980,7 +981,7 @@ class DataWatch():
             call = self.task_utils.syscallName(callnum, self.compat32)
             self.lgr.debug('dataWatch kernelReturnHap is modification, got callnum %d call %s' % (callnum, call))
             buf_start = self.findRange(kernel_return_info.addr)
-            self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame, buf_start)
+            self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame, callnum, call, buf_start)
  
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
@@ -2489,9 +2490,9 @@ class DataWatch():
     def memstuffStopHap(self, alternate_callback, one, exception, error_string):
         ''' We may have been in a memsomething and have stopped.  Set a break on the address 
             of the call to the function and reverse. '''
-        #self.lgr.debug('memstuffStopHap stopHap ')
+        self.lgr.debug('memstuffStopHap stopHap ')
         if self.stop_hap is not None:
-            #self.lgr.debug('memstuffStopHap stopHap will delete hap %s' % str(self.stop_hap))
+            self.lgr.debug('memstuffStopHap stopHap will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
         else:
@@ -3597,11 +3598,17 @@ class DataWatch():
                 SIM_break_simulation('remove this')
         else:
             start = self.start[index]
-            phys_of_start = self.mem_utils.v2p(self.cpu, start)
-            self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference phys addr 0x%x, start[%d] is 0x%x phys of start 0x%x' % (index, memory.physical_address, index, start, phys_of_start))
-            delta = phys_of_start - memory.physical_address
-            addr = start + delta
-            self.lgr.debug('dataWatch readHap delta 0x%x, set addr to 0x%x' % (delta, addr))
+            if start is not None:
+                phys_of_start = self.mem_utils.v2p(self.cpu, start)
+                if phys_of_start is not None:
+                    self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference phys addr 0x%x, start[%d] is 0x%x phys of start 0x%x' % (index, memory.physical_address, index, start, phys_of_start))
+                    delta = phys_of_start - memory.physical_address
+                    addr = start + delta
+                    self.lgr.debug('dataWatch readHap delta 0x%x, set addr to 0x%x' % (delta, addr))
+                else:
+                    self.lgr.error('dataWatch readHap no physical address for start address 0x%x' % start)
+            else:
+                self.lgr.error('dataWatch readHap no start address for index %s' % index)
            
     
         if op_type != Sim_Trans_Load:
