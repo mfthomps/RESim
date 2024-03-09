@@ -1073,7 +1073,7 @@ class Syscall():
             ''' must be 32-bit get params from struct '''
             socket_callnum = frame['param1']
             socket_callname = net.callname[socket_callnum].lower()
-            #self.lgr.debug('syscall socketParse is socketcall call %s from %d' % (socket_callname, tid))
+            #self.lgr.debug('syscall socketParse is socketcall call %s from %s' % (socket_callname, tid))
             if socket_callname == 'socket':
                 self.tid_sockets[tid] = self.getSockParams(frame, syscall_info)
  
@@ -1089,13 +1089,13 @@ class Syscall():
                         else:
                             got_bad = True
                 if got_bad and not got_good:
-                    self.lgr.debug('syscall socketParse tid:%s socketcall %s not in list, skip it' % (tid, socket_callname))
+                    #self.lgr.debug('syscall socketParse tid:%s socketcall %s not in list, skip it' % (tid, socket_callname))
                     return None
 
             if self.record_fd and socket_callname not in record_fd_list:
-                self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
+                #self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
                 return None
-            self.lgr.debug('socketParse tid:%s socket_callnum is %d name: %s record_fd: %r' % (tid, socket_callnum, socket_callname, self.record_fd))
+            #self.lgr.debug('socketParse tid:%s socket_callnum is %d name: %s record_fd: %r' % (tid, socket_callnum, socket_callname, self.record_fd))
             #if syscall_info.compat32:
             #    SIM_break_simulation('socketcall')
             exit_info.socket_callname = socket_callname
@@ -1103,10 +1103,10 @@ class Syscall():
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
                 if tid in self.tid_fd_sockets and ss.fd is not None and ss.fd in self.tid_fd_sockets[tid]:
                     ss.addParams(self.tid_fd_sockets[tid][ss.fd])
-                self.lgr.debug('syscall socketParse got SockStruct from param2: 0x%x %s' % (frame['param2'], ss.getString()))
+                #self.lgr.debug('syscall socketParse got SockStruct from param2: 0x%x %s' % (frame['param2'], ss.getString()))
         else:
             socket_callname = callname
-            self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
+            #self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
                 if tid in self.tid_fd_sockets and ss.fd is not None and ss.fd in self.tid_fd_sockets[tid]:
@@ -1118,7 +1118,7 @@ class Syscall():
         exit_info.sock_struct = ss
 
         if socket_callname == 'socket':
-            #self.lgr.debug('syscall socketParse is socket')
+            self.lgr.debug('syscall socketParse is socket')
             if self.cpu.architecture == 'arm':
                 domain = frame['param1']
                 sock_type_full = frame['param2']
@@ -1444,7 +1444,8 @@ class Syscall():
         else:
             ida_msg = '%s - %s %s   tid:%s (%s)' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid, comm)
 
-
+        #self.lgr.debug(ida_msg)
+        #SIM_break_simulation('remove this')
         return ida_msg
 
     def syscallParse(self, callnum, callname, frame, cpu, tid, comm, syscall_info, quiet=False):
@@ -1848,6 +1849,7 @@ class Syscall():
                         if mod.checkString(self.cpu, frame['param2'], count):
                             if mod.getCount() == 0:
                                 self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
+                                self.top.rmDmod(self.cell_name, mod.getPath())
                                 if not self.remainingDmod(call_param.name):
                                     #self.top.stopTrace(cell_name=self.cell_name, syscall=self)
                                     self.top.rmSyscall(call_param.name)
@@ -2240,6 +2242,13 @@ class Syscall():
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
+
+        #if tid == '1':
+        #    return
+
+        #if comm == 'tar':
+        #    return
+
 
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         if syscall_info.cpu != cpu:
