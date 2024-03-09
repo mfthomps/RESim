@@ -39,8 +39,11 @@ class Dmod():
         def __init__(self, match, was, becomes, cmds=[]):
             self.match = match
             self.was = was
-            mod = becomes.replace('\\n', '\n')
-            self.becomes = mod
+            if becomes is not None:
+                mod = becomes.replace('\\n', '\n')
+                self.becomes = mod
+            else:
+                self.becomes = None
             self.cmds = cmds        
 
 
@@ -262,12 +265,15 @@ class Dmod():
         ''' The match lets us stop looking regardless of whether or not the values are
             bad.  The "was" tells us a bad value, i.e., reason to run commands '''
         rm_this = None
-        #self.lgr.debug('look for match of %s in %s' % (fiddle.match, s))
+        #self.lgr.debug('look for match of %s in %s' % (self.fiddle.match, s))
         if re.search(self.fiddle.match, s, re.M|re.I) is not None:
             #self.lgr.debug('found match of %s in %s' % (self.fiddle.match, s))
             rm_this = self.fiddle
             if re.search(self.fiddle.was, s, re.M|re.I) is not None:
+                self.lgr.debug('found match in was of %s in %s' % (self.fiddle.was, s))
                 SIM_run_alone(self.stopAlone, self.fiddle)
+            #else:
+            #    self.lgr.debug('did NOT found match in was of %s in %s' % (self.fiddle.was, s))
         return rm_this
 
     def checkString(self, cpu, addr, count, tid=None, fd=None):
