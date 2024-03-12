@@ -1073,7 +1073,9 @@ class Syscall():
             ''' must be 32-bit get params from struct '''
             socket_callnum = frame['param1']
             socket_callname = net.callname[socket_callnum].lower()
-            #self.lgr.debug('syscall socketParse is socketcall call %s from %s' % (socket_callname, tid))
+            self.lgr.debug('syscall socketParse is socketcall call %s from %s' % (socket_callname, tid))
+            #SIM_break_simulation('remove this')
+            #return
             if socket_callname == 'socket':
                 self.tid_sockets[tid] = self.getSockParams(frame, syscall_info)
  
@@ -1083,17 +1085,17 @@ class Syscall():
             if self.name != 'traceAll' and socket_callname != 'socket':
                 for call_param in self.call_params:
                     if call_param is not None and call_param.subcall is not None:
-                        #self.lgr.debug('syscall socketParse subcall in call_param of %s' % call_param.subcall)
-                        if call_param.subcall == socket_callname:
+                        self.lgr.debug('syscall socketParse subcall in call_param of %s' % call_param.subcall)
+                        if call_param.subcall.lower() == socket_callname.lower():
                             got_good = True
                         else:
                             got_bad = True
                 if got_bad and not got_good:
-                    #self.lgr.debug('syscall socketParse tid:%s socketcall %s not in list, skip it' % (tid, socket_callname))
+                    self.lgr.debug('syscall socketParse tid:%s socketcall %s not in list, skip it' % (tid, socket_callname))
                     return None
 
             if self.record_fd and socket_callname not in record_fd_list:
-                #self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
+                self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
                 return None
             #self.lgr.debug('socketParse tid:%s socket_callnum is %d name: %s record_fd: %r' % (tid, socket_callnum, socket_callname, self.record_fd))
             #if syscall_info.compat32:
@@ -1106,7 +1108,7 @@ class Syscall():
                 #self.lgr.debug('syscall socketParse got SockStruct from param2: 0x%x %s' % (frame['param2'], ss.getString()))
         else:
             socket_callname = callname
-            #self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
+            self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
             if callname != 'socket':
                 ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
                 if tid in self.tid_fd_sockets and ss.fd is not None and ss.fd in self.tid_fd_sockets[tid]:
@@ -1190,6 +1192,7 @@ class Syscall():
               
         elif socket_callname == 'bind':
             ida_msg = '%s - %s tid:%s (%s) socket_string: %s' % (callname, socket_callname, tid, comm, ss.getString())
+            self.lgr.debug(ida_msg)
             #if ss.famName() == 'AF_CAN':
             #    frame_string = taskUtils.stringFromFrame(frame)
             #    self.lgr.debug('bind params %s' % frame_string)
