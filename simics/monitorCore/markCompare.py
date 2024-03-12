@@ -118,20 +118,23 @@ class MarkCompare():
     def findCompare(self):        
         eip = self.top.getEIP(self.cpu)
         our_reg = self.armLoadAfterCompare(eip)
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         if our_reg is not None:
             if self.armCompareOurRegNextLoad(eip, our_reg):
                 self.lgr.debug('markCompare findCompare got compare byte')
             else:
                 self.compare_before_reference = True
 
+        elif instruct[1].startswith('cmp') or instruct[1].startswith('test') or instruct[1].startswith('tst'):
+            self.compare_instruction = instruct[1]
+            self.compare_eip = eip
         else:
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.char_lookup = self.charLookup(eip, instruct)
             if self.char_lookup is None:
                 if instruct[1].startswith('ldr') or instruct[1].startswith('mov'):
                     op2, our_reg = self.decode.getOperands(instruct[1])
                     self.lgr.debug('markCompare  findCompare got %s, our_reg %s' % (instruct[1], our_reg))
-                eip = eip + instruct[0]
+                    eip = eip + instruct[0]
                 relevent = False
                 for i in range(9):
                     instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
