@@ -738,7 +738,7 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
-        #self.lgr.debug('mapSO loadAddr %s tid %s' % (in_fname, tid))
+        self.lgr.debug('mapSO loadAddr %s tid %s' % (in_fname, tid))
         retval = None
         prog = self.fullProg(in_fname)
         if tid is None:
@@ -748,7 +748,6 @@ class SOMap():
             self.lgr.debug('soMap getLoadAddr tid %s not in so_file_map, perhaps a prog' % map_tid)
         else:
             for load_info in self.so_file_map[map_tid]:
-                #self.lgr.debug('winDLLMap compare %s to %s' % (os.path.basename(prog).lower(), ntpath.basename(section.fname).lower()))
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
                     self.lgr.debug('mapSO got match for %s address 0x%x tid:%s' % (prog, retval, tid))
@@ -839,7 +838,7 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        if tid in self.prog_start:
+        if tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
                 image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
