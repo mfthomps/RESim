@@ -232,7 +232,7 @@ class FunMgr():
             try:
                 addr = int(addrbrack[1:-1], 16)
             except:
-                self.lgr.debug('funMgr expected jmp address %s' % instruct[1])
+                #self.lgr.debug('funMgr expected jmp address %s' % instruct[1])
                 return None, None
             fun = self.funFromAddr(addr)
             if fun is None:
