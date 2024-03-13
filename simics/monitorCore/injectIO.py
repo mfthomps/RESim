@@ -527,7 +527,7 @@ class InjectIO():
                 self.lgr.debug('injectIO addr_addr is 0x%x size %d' % (self.addr_addr, self.addr_size))
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
-            if 'addr_of_count' in so_pickle: 
+            if 'addr_of_count' in so_pickle and so_pickle['addr_of_count'] is not None: 
                 self.addr_of_count = so_pickle['addr_of_count']
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
         else:
