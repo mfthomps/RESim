@@ -1696,6 +1696,7 @@ class Syscall():
             for call_param in self.call_params:
                 if call_param.match_param == fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     exit_info.call_params.append(call_param)
+                    exit_info.matched_param = call_param
 
         elif callname == 'gettimeofday':        
             if not self.record_fd:
@@ -2630,12 +2631,12 @@ class Syscall():
             exit_info.sock_struct = ss
             socket_callnum = frame['param1']
             exit_info.socket_callname = net.callname[socket_callnum].lower()
-            ida_msg = 'syscall socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
-            self.lgr.debug('setExits socket parsed: %s' % ida_msg)
+            ida_msg = 'syscall handleReadOrSocket socketcall %s ss is %s' % (exit_info.socket_callname, ss.getString())
+            self.lgr.debug('syscall handleReadOrSocket setExits socket parsed: %s' % ida_msg)
             the_callname = exit_info.socket_callname
             if ss.addr is not None:
                 exit_info.retval_addr = ss.addr
-                self.lgr.debug('ss addr is 0x%x len is %d' % (ss.addr, ss.length))
+                self.lgr.debug('syscall handleReadOrSocket ss addr is 0x%x len is %d' % (ss.addr, ss.length))
             if the_callname == 'recvfrom' and callname == 'socketcall':        
                 addr_addr = frame['param2']+16
                 src_addr = self.mem_utils.readWord32(self.cpu, addr_addr)
@@ -2647,18 +2648,18 @@ class Syscall():
                     exit_info.count = src_addr_len
 
         else:
-            self.lgr.debug('setExits socket no ss struct, set old_fd to %d' % frame['param1'])
+            self.lgr.debug('syscall handleReadOrSocket setExits socket no ss struct, set old_fd to %d' % frame['param1'])
             exit_info.old_fd = frame['param1']
 
         if exit_info.old_fd is not None:
     
             retval = the_callname
-            self.lgr.debug('syscall setExists callname %s' % the_callname)
+            self.lgr.debug('syscall handleReadOrSocket setExists callname %s' % the_callname)
             if the_callname in ['accept', 'recv', 'recvfrom', 'read', 'recvmsg']:
                 for call_param in self.call_params:
-                    self.lgr.debug('syscall setExists subcall %s' % call_param.subcall)
+                    self.lgr.debug('syscall handleReadOrSocket subcall %s' % call_param.subcall)
                     if call_param.subcall is None or call_param.subcall == the_callname:
-                        self.lgr.debug('Syscall name %s setExits syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), exit_info.old_fd))
+                        self.lgr.debug('Syscall name %s handleReadOrSocket syscall %s subcall %s call_param.match_param is %s fd is %d' % (self.name, the_callname, call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                         ''' TBD why not do for any and all?'''
                         #if (call_param.subcall == 'accept' or self.name=='runToIO' or self.name=='runToInput') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
                         if call_param.match_param is not None and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
@@ -2666,9 +2667,9 @@ class Syscall():
                             exit_info.call_params.append(call_param)
                             if call_param.match_param == exit_info.old_fd:
                                 this_tid = self.top.getTID()
-                                self.lgr.debug('syscall setExits found fd %d, this tid:%s' % (exit_info.old_fd, this_tid))
+                                self.lgr.debug('syscall handleReadOrSocket found fd %d, this tid:%s' % (exit_info.old_fd, this_tid))
                             if self.kbuffer is not None:
-                                self.lgr.debug('syscall recv kbuffer for addr 0x%x' % exit_info.retval_addr)
+                                self.lgr.debug('syscall handleReadOrSocket recv kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                             break
        
