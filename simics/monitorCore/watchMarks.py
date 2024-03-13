@@ -77,7 +77,7 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None, byte_swap=None):
+    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None, byte_swap=None, ip=None):
         self.lgr = lgr
         self.addr = addr
         ''' offset into the buffer starting at start '''
@@ -109,7 +109,10 @@ class DataMark():
             self.byte_swap = byte_swap
         ''' keep value after a reset '''
         self.was_ad_hoc = False
+        self.ad_hoc_ip_list = []
         #self.lgr.debug('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
+        if ip is not None:
+            self.ad_hoc_ip_list.append(ip)
 
     def getMsg(self):
         if self.start is None:
@@ -146,10 +149,12 @@ class DataMark():
                  self.end_addr, copy_length, self.offset, self.start, self.length, self.mark_compare.toString())
         return mark_msg
 
-    def addrRange(self, addr):
+    def addrRange(self, addr, ip=None):
         if self.end_addr is not None or addr > self.addr:
             self.end_addr = addr
             self.loop_count += 1
+            if ip is not None:
+                self.ad_hoc_ip_list.append(ip)
             self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
 
     def noAdHoc(self):
@@ -688,13 +693,15 @@ class WatchMarks():
         if ip not in self.prev_ip and not ad_hoc and not note:
             value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
             mark_compare = self.getCmp(addr, trans_size)
-            dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
+            dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False), ip=ip)
             wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
             ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
             self.lgr.debug('watchMarks dataRead ad_hoc address 0x%x ' % (addr))
+            if ip is not None:
+                self.lgr.debug('watchMarks dataRead ad_hoc eip 0x%x ' % (ip))
             if len(self.mark_list) > 0:
                 pm = self.mark_list[-1]
                 create_new = True   
@@ -710,7 +717,7 @@ class WatchMarks():
                     if not skip_this:
                         end_addr = addr + trans_size - 1
                         self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
-                        pm.mark.addrRange(end_addr)
+                        pm.mark.addrRange(end_addr, ip=ip)
                         pm.cycle = self.cpu.cycles
                         pm.ip = ip
                         create_new = False
@@ -734,7 +741,7 @@ class WatchMarks():
                 pm = self.mark_list[-1]
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if isinstance(pm.mark, DataMark) and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
-                    pm.mark.addrRange(addr)
+                    pm.mark.addrRange(addr, ip=ip)
                     pm.cycle = self.cpu.cycles
                     if pm.mark.ad_hoc:
                         self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
@@ -1306,6 +1313,15 @@ class WatchMarks():
     def getCmp(self, addr, trans_size):
         mark_compare = markCompare.MarkCompare(self.top, self.cpu, self.mem_utils, addr, trans_size, self.lgr)
         return mark_compare
+
+    def ipIsAdHoc(self, ip):
+        retval = False
+        for mark in self.mark_list:
+           if isinstance(mark.mark, DataMark) and mark.mark.ad_hoc == True:
+               if ip in mark.mark.ad_hoc_ip_list:
+                   retval = True
+                   break
+        return retval
 
     def loadPickle(self, name):
         mark_file = os.path.join('./', name, self.cell_name, 'watchMarks.pickle')
