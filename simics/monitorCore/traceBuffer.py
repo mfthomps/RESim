@@ -231,6 +231,14 @@ class TraceBuffer():
             
         else:
             self.lgr.error('traceBuffer bufferHap unknown kind: %s' % trace_info.kind)
+ 
+    def msg(self, msg):
+        if len(self.buffer_list) > 0:
+            trace_info = self.buffer_list[0]
+            trace_info.fh.write(msg+'\n')
+            trace_info.fh.flush()
+        if len(self.buffer_list) > 1:
+            self.lgr.debug('traceBuffer only wrote msg to first trace_info buffer.  TBD')
 
     def rmHap(self, hap, immediate=False):
         self.context_manager.genDeleteHap(hap, immediate=immediate)
