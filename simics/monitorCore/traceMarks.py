@@ -50,16 +50,17 @@ class ReadMark():
         self.packet = packet
 
 class OrigRead():
-    def __init__(self, mark, read_count, prior_bytes_read):
+    def __init__(self, mark, read_count, prior_bytes_read, lgr):
         self.addr = mark['recv_addr']
         self.length = mark['length']
         self.cycle = mark['cycle']
         self.read_count = read_count
         self.prior_bytes_read = prior_bytes_read
-    def within(self, addr, cycle, lgr=None):
+        self.lgr = lgr
+    def within(self, addr, cycle):
         end = self.addr + self.length - 1
-        if lgr is not None:
-            lgr.debug('traceMarks OrigRead is 0x%x within 0x%x -> 0x%x and cycle 0x%x >= 0x%x' (addr, self.addr, end, cycle, self.cycle))
+        #if self.lgr is not None:
+        #    self.lgr.debug('traceMarks OrigRead is 0x%x within 0x%x -> 0x%x and cycle 0x%x >= 0x%x' (addr, self.addr, end, cycle, self.cycle))
         if addr >= self.addr and addr <= (self.addr + self.length) and cycle >= self.cycle:
             return True
         else:
@@ -134,11 +135,12 @@ class TraceMarks():
 
     def getOrigRead(self, addr, cycle):
         ''' Return the oldest OrigRead (if any) containing the given address and with a cyle less than the given'''
-        self.lgr.debug('traceMarks getOrigRead addr 0x%x cycle 0x%x' % (addr, cycle))
+        self.lgr.debug('traceMarks getOrigRead addr 0x%x cycle 0x%x there are %d orig_reads' % (addr, cycle, len(self.orig_reads)))
 
         if len(self.orig_reads) > 0:
             for orig in self.orig_reads[::-1]:
-                if orig.within(addr, cycle, self.lgr):
+                self.lgr.debug('traceMarks check %s' % orig)
+                if orig.within(addr, cycle):
                     offset = orig.offset(addr)
                     return orig, offset
         return None, None
@@ -305,7 +307,7 @@ class TraceMarks():
                     self.handlePipeRead(mark)        
                 else:
                     read_count += 1
-                    orig_read = OrigRead(mark, read_count, prior_bytes_read)
+                    orig_read = OrigRead(mark, read_count, prior_bytes_read, self.lgr)
                     self.lgr.debug('original addr %s' % orig_read.toString())
                     self.orig_reads.append(orig_read)
                     self.lgr.debug('len of orig_reads now %d' % len(self.orig_reads))
