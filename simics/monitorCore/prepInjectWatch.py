@@ -52,6 +52,15 @@ class PrepInjectWatch():
         self.dataWatch.stopWatch(immediate=True)
         self.dataWatch.goToMark(watch_mark)
         mark = self.dataWatch.getMarkFromIndex(watch_mark)
+        is_ioctl = False
+        if isinstance(mark.mark, watchMarks.CallMark):
+            msg = mark.mark.getMsg()
+            self.lgr.debug('prepInjectWatch given mark is %s' % msg)
+            if 'ioctl' in msg:
+                is_ioctl = True
+        else:
+            self.lgr.error('prepInjectWatch given mark not a call mark, is %s' % mark.mark.getMsg())
+            self.top.quit()
 
         if self.kbuffer is not None:
             k_buf_len = self.kbuffer.getBufLength()
@@ -63,15 +72,26 @@ class PrepInjectWatch():
             self.ret_ip = self.top.getEIP(self.cpu)
            
             ''' Jump to prior to call to record the call address ''' 
+            cycle_was = self.cpu.cycles
             self.top.precall()
             self.call_ip = self.top.getEIP(self.cpu)
 
-            ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
-            kcycle = self.kbuffer.getKernelCycleOfWrite() 
-            if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
-                self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
-                return
-            self.lgr.debug('prepInjectWatch doInject jumped to kcycle just before buffer copy 0x%x' % kcycle)
+            if not is_ioctl:
+                ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
+                kcycle = self.kbuffer.getKernelCycleOfWrite() 
+                if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
+                    self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
+                    self.top.quit()
+                    return
+                self.lgr.debug('prepInjectWatch doInject jumped to kcycle just before buffer copy 0x%x' % kcycle)
+            else:
+                if not resimUtils.skipToTest(self.cpu, cycle_was, self.lgr):
+                    self.lgr.error('prepInjectWatch doInject failed skipping to cycle_was 0x%x' % cycle_was)
+                    self.top.quit()
+                    return
+                self.lgr.debug('prepInjectWatch doInject is ioctl, skipped to return at cycle 0x%x' % self.cpu.cycles)
+                self.read_count_addr = mark.mark.recv_addr
+                self.lgr.debug('prepInjectWatch doInject read_count_addr found 0x%x' % self.read_count_addr)
             kbufs = self.kbuffer.getKbuffers()
             self.fd = mark.mark.fd
 
@@ -84,13 +104,14 @@ class PrepInjectWatch():
                    self.read_count_addr = read_count_addr_maybe.mark.recv_addr 
                    self.lgr.debug('prepInjectWatch doInject read_count_addr found 0x%x' % self.read_count_addr)
             
-            self.pickleit(kbufs[0])  
+            self.pickleit(kbufs[0], is_ioctl)  
         else:
             self.lgr.error('prepInjectWatch called with no kbuffer.  Exit')
             self.top.quit()
                
-
+    '''
     def instrumentAlone(self, buf_addr_list): 
+        # TBD remove not used
         self.dataWatch.goToMark(self.ioctl_mark)
         self.top.precall()
         self.lgr.debug("prepInjectWatch should be before call to ioctl");
@@ -101,33 +122,13 @@ class PrepInjectWatch():
         self.pickleit(buf_addr)
 
     def instrumentIO(self, buf_addr_list):
+        # TBD remove not used
         self.lgr.debug('prepInjectWatch in instrument IO buf_addr_list len is %d' % len(buf_addr_list));
         SIM_run_alone(self.instrumentAlone, buf_addr_list)
-
-    def instrumentRead(self, buf_addr_list):
-        self.lgr.debug('prepInjectWatch instrumentRead  buf_addr_list len is %d' % len(buf_addr_list));
-        self.dataWatch.goToMark(self.read_mark)
-        self.top.precall()
-        if len(buf_addr_list) > 1:
-            ''' TBD NOT USED '''
-            ''' assume x86 dual rep movs...  will be 2 sets of esi, edi '''
-            ''' where we found the first byte of the application buffer '''
-            app_esi = buf_addr_list[0]
-            ''' start of kernel buffer copy '''
-            k_esi = buf_addr_list[2]
-            ''' destination of kernel buffer copy, will preceed app_esi by some number of bytes.  IP stuff? '''
-            k_edi = buf_addr_list[3]
-            ''' offset into the kernel buffer where we think data begins '''
-            delta = app_esi - k_edi
-            ''' address within that kernel buffer '''
-            buf_addr = k_esi + delta
-            self.lgr.debug('instrumentRead x86 movsb dance, think buf_addr is 0x%x' % buf_addr)
-        else:
-            buf_addr = buf_addr_list[0]
-        self.pickleit(buf_addr)
+    '''
 
 
-    def pickleit(self, buf_addr):
+    def pickleit(self, buf_addr, is_ioctl):
         self.lgr.debug('prepInjectWatch  pickleit, begin')
         self.top.writeConfig(self.snap_name)
         pickDict = {}
@@ -159,6 +160,9 @@ class PrepInjectWatch():
                 self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len %d.  ' % (len(kbufs), k_buf_len))
         if self.top.isWindows():
             pickDict['addr_of_count'] = self.read_count_addr
+        elif is_ioctl:
+            pickDict['addr_of_count'] = self.read_count_addr
+            self.lgr.debug('prepInjectWatch pickleit saving addr_of_count 0x%x' % self.read_count_addr)
 
         afl_file = os.path.join('./', self.snap_name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
