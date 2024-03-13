@@ -5,6 +5,7 @@ import pickle
 import taskUtils
 import winDelay
 import winSocket
+import net
 from resimUtils import rprint
 from resimHaps import *
 class WriteData():
@@ -249,9 +250,6 @@ class WriteData():
             if self.addr_of_count is not None:
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, retval)
                 self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
-
-
-
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             #if self.dataWatch is not None:
@@ -507,6 +505,10 @@ class WriteData():
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
             frame = self.top.frameFromRegs()
+            if callname == 'socketcall':        
+                ''' must be 32-bit get params from struct '''
+                socket_callnum = frame['param1']
+                callname = net.callname[socket_callnum].lower()
             fd = frame['param1']
             if fd != self.fd:
                 #self.lgr.debug('writeData callHap wrong fd, skip it')
@@ -515,6 +517,9 @@ class WriteData():
                 self.lgr.warning('writeData fix this so we know if we are calling a read')
             elif callname not in ['recv', 'recvfrom', 'read']:
                 #self.lgr.debug('writeData callHap wrong call %s' % callname)
+                skip_it = True
+            if self.read_count == 0 and self.addr_of_count is not None:
+                # was an ioctl and we've not yet hit the read, so just let it go
                 skip_it = True
             #self.lgr.debug('writeData callHap eip: 0x%x callnum %d  call: %s fd: %d cycle: 0x%x context: %s' % (eip, callnum, 
             #     callname, fd, self.cpu.cycles, str(self.cpu.current_context)))
