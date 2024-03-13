@@ -37,6 +37,8 @@ def modifiesOp0(op):
 #2016-11-19 09:35:43,567 - DEBUG - cycleRegisterMod mn: mov op0: eax  op1: dword ptr [ebp+0x8]
 
 def regIsPart(reg1, reg2):
+    if reg1 is None or reg2 is None:
+        return False
     if reg1 == reg2:
         return True
     if reg1.endswith('x') and reg1[1] == reg2[0]:
@@ -346,7 +348,7 @@ def isLDRB(cpu, instruct):
 def isRegInInstruct(reg, instruct):
     operands = getOperands(instruct)
     for operand in operands:
-        if operand is not None and regIsPart(reg, operand):
+        if operand is not None and isReg(operand) and regIsPart(reg, operand):
             return True
     return False 
 
