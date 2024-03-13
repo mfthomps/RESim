@@ -65,6 +65,11 @@ def stripMailbox(msg):
             break
     return msg[len(MAILBOX):]
 
+def showSimicsMessage():
+    command = '@cgc.idaMessage()' 
+    simics_string = Evalx('SendGDBMonitor("%s");' % command)
+    print(simics_string)
+
 def getEIPWhenStopped(delay=0, kernel_ok=False):
     done = False
     retval = None
@@ -95,6 +100,7 @@ def getEIPWhenStopped(delay=0, kernel_ok=False):
                     print('Error: %s' % mail[2:])
                 #print 'getEIPWhenStopped found ip of %x, now empty mailbox' % retval
                 Evalx('SendGDBMonitor("@cgc.emptyMailbox()");')
+            showSimicsMessage()
         else:
             if type(simicsString) is str and not simicsString.strip().startswith('not stopped') \
                and not simicsString.strip().startswith('End of playback'):
