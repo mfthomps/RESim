@@ -146,7 +146,6 @@ class SOMap():
                         if prog not in self.prog_info:
                             end = text_seg.text_start + text_seg.text_size - 1
                             self.prog_info[prog] = ProgInfo(text_seg.text_start, end, text_seg.text_offset, 0, 0, None)
-                        self.lgr.debug('wtf %s text_seg.address 0x%x, offset 0x%x' % (prog, text_seg.address, text_seg.offset))
                         load_info = LoadInfo(text_seg.address, text_seg.size)
                         if tid not in self.so_file_map:
                             self.so_file_map[tid] = {}
