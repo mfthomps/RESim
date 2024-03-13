@@ -173,7 +173,7 @@ class Coverage():
             if phys_addr not in self.dead_map:
             
                 if phys_addr == 0 or phys_addr is None:
-                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     if self.afl:
@@ -206,7 +206,10 @@ class Coverage():
                 return
         self.loadBlocks(block_file)         
         self.offset = self.so_map.getLoadOffset(self.prog_path)
-        self.lgr.debug('cover offset 0x%x' % self.offset)
+        if self.offset is None:
+            self.lgr.error('cover offset for %s is None, bails' % (self.prog_path))
+            return
+        self.lgr.debug('cover offset for %s is 0x%x' % (self.prog_path, self.offset))
         if self.blocks is None:
             self.lgr.error('Coverge: No basic blocks defined')
             return
@@ -963,6 +966,7 @@ class Coverage():
             self.analysis_path = fname
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             #self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
+            self.prog_path = fname
         
         ida_path = self.top.getIdaData(self.analysis_path, target=self.cell_name)
         # dynamically alter control flow, e.g., to avoid CRC checks
