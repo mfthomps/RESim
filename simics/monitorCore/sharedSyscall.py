@@ -1023,13 +1023,16 @@ class SharedSyscall():
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x result: 0x%x written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result, exit_info.retval_addr))
+                        #if exit_info.cmd == 0x541b:
+                            
                     else:
-                        self.lgr.debug('sharedSyscall read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
+                        self.lgr.debug('sharedSyscall ioctl read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x eax: 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, eax))
                     # TBD fix to only apply to appropriate ioctl calls
+                    self.lgr.debug('sharedSyscall matched_param %s' % str(exit_info.matched_param))
                     if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
                         ''' in case we want to break on a read of waiting bytes '''
-                        self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True)
+                        self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True, fd=exit_info.old_fd)
                         if exit_info.syscall_instance.linger: 
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, no_backstop=True, i_am_alone=True)
