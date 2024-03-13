@@ -245,6 +245,14 @@ class WriteData():
             else:
                 self.writeKdata(self.in_data)
                 retval = len(self.in_data)
+
+            if self.addr_of_count is not None:
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, retval)
+                self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
+
+
+
+
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             #if self.dataWatch is not None:
             #    ''' Limit reads to buffer size '''
