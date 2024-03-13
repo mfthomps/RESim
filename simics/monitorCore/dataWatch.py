@@ -1164,8 +1164,8 @@ class DataWatch():
         elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp','mbscmp_l', 'strtok', 'buffer_caseless_compare']: 
             buf_start = self.findRange(self.mem_something.dest)
             self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.count, buf_start)
-            #self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
-            #       self.mem_something.src, self.mem_something.dest, self.mem_something.count))
+            self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
+                   self.mem_something.src, self.mem_something.dest, self.mem_something.count))
         elif self.mem_something.fun in ['strchr', 'strrchr']:
             buf_start = self.findRange(self.mem_something.src)
             if self.cpu.architecture != 'arm':
@@ -1928,9 +1928,12 @@ class DataWatch():
                     else:
                         self.lgr.debug('dataWatch getMemParams not via hit, not src, but found dest 0x%x in buf_start of 0x%x' % (self.mem_something.dest, buf_start))
                 else:
-                    self.mem_something.src = buf_start 
-                    self.mem_something.count = buf_length 
-                    self.mem_something.op_type = Sim_Trans_Load
+                    if 'cmp' in self.mem_something.fun:
+                        self.lgr.debug('dataWatch getMemParams not via hit, is cmp, do not mess with src')
+                    else:
+                        self.mem_something.src = buf_start 
+                        self.mem_something.count = buf_length 
+                        self.mem_something.op_type = Sim_Trans_Load
                     self.lgr.debug('dataWatch getMemParams not via hit, found src 0x%x in buf_start of 0x%x' % (self.mem_something.src, self.start[buf_index]))
             if not skip_fun:
                 if self.mem_something.ret_ip == 0:
@@ -2062,6 +2065,8 @@ class DataWatch():
                     self.mem_something.count = min(limit, self.getStrLen(self.mem_something.src))
                 else:
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
+                self.lgr.debug('gatherCallParams %s, src: 0x%x dest: 0x%x count: %d' % (self.mem_something.fun, self.mem_something.src, 
+                     self.mem_something.dest, self.mem_something.count))
         elif self.mem_something.fun in ['buffer_caseless_compare']:
             self.mem_something.dest, self.mem_something.count, self.mem_something.src = self.getCallParams(sp, word_size)
 
@@ -2439,8 +2444,13 @@ class DataWatch():
             return
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr:
-            self.lgr.error('dataWatch revAlone but entry 0x%x already in mem_fun_entires', self.mem_something.fun_addr)
-            return
+            
+            instruct = SIM_disassemble_address(self.cpu, self.mem_something.fun_addr, 1, 0)
+            if not instruct[1].startswith('jmp'):
+                self.lgr.error('dataWatch revAlone but entry 0x%x already in mem_fun_entires', self.mem_something.fun_addr)
+                return
+            else:
+                self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a jump.  TBD sort out multiple entry points', self.mem_something.fun_addr)
 
         self.cycles_was = self.cpu.cycles
         self.save_cycle = self.cycles_was - 1
@@ -2534,7 +2544,7 @@ class DataWatch():
             # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.memstuffStopHap, None)
-            self.lgr.debug('handleMemStuff now stop')
+            self.lgr.debug('handleMemStuff fun in mem_fun_entries now stop')
             SIM_break_simulation('handle memstuff')
 
         elif self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
@@ -2555,7 +2565,7 @@ class DataWatch():
             ''' run back to the call '''
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.memstuffStopHap, None)
-            self.lgr.debug('handleMemStuff now stop')
+            self.lgr.debug('handleMemStuff now stop to run back to call')
             SIM_break_simulation('handle memstuff')
             
     def getStartLength(self, index, addr):
@@ -3324,7 +3334,7 @@ class DataWatch():
         ''' Does this look like a move from memA=>reg=>memB ? '''
         ''' If so, return dest.  Also checks for regex references using reWatch module '''
         ''' The given eip is where the read happened.'''
-        self.lgr.debug('dataWatch checkMove %s' % instruct[1])
+        self.lgr.debug('dataWatch checkMove %s addr 0x%x' % (instruct[1], addr))
         adhoc = False
         was_checked = False
         self.recent_reused_index = None
@@ -3347,8 +3357,8 @@ class DataWatch():
             was_checked = True
         if not adhoc:
             if was_checked:
-                if eip not in self.not_ad_hoc_copy:
-                    #self.lgr.debug('dataWatch checkMove add 0x%x to not_ad_hoc_copy' % eip)
+                if eip not in self.not_ad_hoc_copy and not self.watchMarks.ipIsAdHoc(eip):
+                    self.lgr.debug('dataWatch checkMove addr 0x%x add 0x%x to not_ad_hoc_copy' % (addr, eip))
                     self.not_ad_hoc_copy.append(eip)
 
             if not self.checkReWatch(tid, eip, instruct, addr, start, length, trans_size):
@@ -4055,7 +4065,7 @@ class DataWatch():
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
-        self.lgr.debug('setStopHap set actions %s' % str(stop_action.flist))
+        self.lgr.debug('dataWatch setStopHap set actions %s' % str(stop_action.flist))
 
     def setShow(self):
         self.show_cmp = ~ self.show_cmp
