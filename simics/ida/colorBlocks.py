@@ -149,13 +149,15 @@ def colorBlocks():
             print('less_ida_data is %s' % less_ida_data)
             root = less_ida_data.split(os.path.sep)[1]
             print('root is %s' % root)
-            fname = idaversion.get_input_file_path()
+            if ida_analysis_path is not None:
+                fname = ida_analysis_path
+            else:
+                fname = idaversion.get_input_file_path()
             base = os.path.basename(fname)
             print('orig base %s' % base)
             #base = base.rsplit('.',1)[0]
             fname = os.path.join(resim_ida_data, root, base, base)
             latest_hits_file = fname+'.hits' 
-                
             
             if os.path.isfile(latest_hits_file):
                 print('Using latest_hits_file is %s' % latest_hits_file)

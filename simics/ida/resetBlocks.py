@@ -35,7 +35,7 @@ def resetBlocks(in_path=None):
     current_image_base = ida_nalt.get_imagebase()
     print('current_image_base 0x%x' % current_image_base)
 
-    orig_image_base = os.getenv('original_image_base')
+    orig_image_base = os.getenv('target_image_base')
     if orig_image_base is not None and len(orig_image_base.strip())>0:
         print('orig_image_base %s' % orig_image_base)
         offset = current_image_base - int(orig_image_base,16)

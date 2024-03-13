@@ -24,7 +24,6 @@ if arg_count > 1:
     resim_ida_arg=idc.eval_idc("ARGV[1]")
     print('In runsFirst arg_count %d resim_ida_arg %s ' % (arg_count, resim_ida_arg))
     if resim_ida_arg == 'color':
-        print('do color')
         '''
         if arg_count > 3:
             remote = idc.eval_idc("ARGV[3]")
@@ -41,7 +40,9 @@ if arg_count > 1:
             os.system(cmd)
         '''
             
+        print('do reset')
         resetBlocks.resetBlocks()
+        print('do color')
         colorBlocks.colorBlocks()
         print('did color')
         
