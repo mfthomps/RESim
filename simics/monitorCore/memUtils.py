@@ -240,7 +240,11 @@ class MemUtils():
             tid = str(pid)
             prec = self.top.getProcRecForTid(cpu, tid)
                 
-        mm_struct = self.readWord(cpu, prec+self.param.mm_struct)
+        try:
+            mm_struct = self.readWord(cpu, prec+self.param.mm_struct)
+        except AttributeError:
+            self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
+            return None
         table_base = self.readWord(cpu, mm_struct+self.param.mm_struct_offset)
         if cpu.architecture == 'arm':
             table_base = table_base | 0x164
