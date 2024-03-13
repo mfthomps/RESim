@@ -3307,18 +3307,18 @@ class GenMonitor():
         self.lgr.debug('runToRead to %s' % str(substring))
         self.runTo(['read'], call_params, name='read', ignore_running=ignore_running)
 
-    def runToAccept(self, fd, flist=None, proc=None, run=True):
+    def runToAccept(self, fd, flist=None, proc=None, run=True, linger=False):
         if not self.isWindows():
             call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         else:
             call = ['ACCEPT', '12083_ACCEPT', 'DuplicateObject']
         call_params = syscall.CallParams('runToAccept', 'accept', fd, break_simulation=True, proc=proc)        
            
-        self.lgr.debug('runToAccept on FD: %d call is: %s' % (fd, str(call)))
-        if flist is None and not self.isWindows():
-            linger = True
-        else:
-            linger = False
+        self.lgr.debug('runToAccept on FD: %d call is: %s linger %r' % (fd, str(call), linger))
+        #if flist is None and not self.isWindows():
+        #    linger = True
+        #else:
+        #    linger = False
         self.runTo(call, call_params, linger_in=linger, flist=flist, name='accept', run=run)
         
     def runToBind(self, addr, proc=None, run=True):
@@ -3394,13 +3394,13 @@ class GenMonitor():
                             calls.remove(c)
             else:
                 if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.mem_utils[target].WORD_SIZE == 8:
-                    calls = ['read', 'close']
+                    calls = ['read', 'close', 'ioctl']
                     for call in net.readcalls:
                         calls.append(call.lower())
                     if self.mem_utils[target].WORD_SIZE == 8:
                         calls.remove('recv')
                 else: 
-                    calls = ['read', 'close', 'socketcall']
+                    calls = ['read', 'close', 'socketcall', 'ioctl']
 
             skip_and_mail = True
             if flist_in is not None:
@@ -3435,7 +3435,7 @@ class GenMonitor():
             if run_fun is not None:
                 SIM_run_alone(run_fun, None) 
             if run:
-                self.lgr.debug('runToIO now run')
+                self.lgr.debug('runToIO now run, context is %s' % str(cpu.current_context))
                 SIM_continue(0)
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
@@ -6005,7 +6005,10 @@ class GenMonitor():
 
     def pageCallback(self, addr, callback, name=None, use_pid=None):
         # TBD pass cell name and set for any target!
-        self.page_callbacks[self.target].setCallback(addr, callback, name=name, use_pid=use_pid)
+        if self.target in self.page_callbacks:
+            self.page_callbacks[self.target].setCallback(addr, callback, name=name, use_pid=use_pid)
+        else:
+            self.lgr.error('pageCallback called, but no page_callbacks are set')
 
     def getTIB(self):
         return self.task_utils[self.target].getTIB()
