@@ -131,7 +131,7 @@ class MarkCompare():
         else:
             self.char_lookup = self.charLookup(eip, instruct)
             if self.char_lookup is None:
-                if instruct[1].startswith('ldr') or instruct[1].startswith('mov'):
+                if instruct[1].startswith('ldr') or (instruct[1].startswith('mov') and not instruct[1].startswith('movs')):
                     op2, our_reg = self.decode.getOperands(instruct[1])
                     self.lgr.debug('markCompare  findCompare got %s, our_reg %s' % (instruct[1], our_reg))
                     eip = eip + instruct[0]
@@ -159,6 +159,7 @@ class MarkCompare():
                             break
                         
                     else:
+                        self.lgr.debug('markCompare findCompare is our_reg %s in instruct %s' % (our_reg, instruct[1]))
                         if our_reg is not None and self.decode.isRegInInstruct(our_reg, instruct[1]):
                             relevent = True
                         eip = eip + instruct[0]
