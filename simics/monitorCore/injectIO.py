@@ -61,16 +61,16 @@ class InjectIO():
         self.count = count
         self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
         if fname is not None:
-            self.offset = self.so_map.getLoadOffset(fname, tid=tid)
+            offset = self.so_map.getLoadOffset(fname, tid=tid)
         else:
-            self.offset = None
+            offset = None
         self.break_on = break_on
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
-            if self.offset is None:
+            if offset is None:
                 self.lgr.error('injectIO break_on set, but no offset for %s' % fname)
                 return
-            self.break_on = self.break_on + self.offset
+            self.break_on = self.break_on + offset
             self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
         self.in_data = None
         self.backstop_cycles =   9000000
@@ -284,6 +284,9 @@ class InjectIO():
                 self.context_manager.watchOnlyThis()
 
         self.bookmarks = self.top.getBookmarksInstance()
+        if self.bookmarks is None:
+            self.lgr.debug('injectIO failed to get bookmarks instance')
+             
         force_default_context = False
         if self.bookmarks is None:
             force_default_context = True
@@ -334,7 +337,10 @@ class InjectIO():
                     self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
-                    self.bookmarks.setOrigin(self.cpu)
+                    if self.bookmarks is not None:
+                        self.bookmarks.setOrigin(self.cpu)
+                    else:
+                        self.lgr.error('injectIO did not set origin, no bookmarks?')
                     cli.quiet_run_command('disable-reverse-execution')
                     cli.quiet_run_command('enable-reverse-execution')
                     eip = self.top.getEIP(self.cpu)
@@ -541,9 +547,9 @@ class InjectIO():
             packet = self.write_data.getCurrentPacket()
         self.lgr.debug('injectIO saveJson packet %d' % packet)
         if save_file is None and self.save_json is not None:
-            self.dataWatch.saveJson(self.save_json, packet=packet, offset=self.offset)
+            self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
-            self.dataWatch.saveJson(save_file, packet=packet, offset=self.offset)
+            self.dataWatch.saveJson(save_file, packet=packet)
         self.top.stopTrackIO()
 
     def setDfile(self, dfile):
