@@ -4740,8 +4740,8 @@ class DataWatch():
     def pickleit(self, name):
         self.watchMarks.pickleit(name)
 
-    def saveJson(self, fname, packet=1):
-        self.watchMarks.saveJson(fname, packet=packet)
+    def saveJson(self, fname, packet=1, offset=None):
+        self.watchMarks.saveJson(fname, packet=packet, offset=offset)
 
     def getMarkFromIndex(self, index):
         return self.watchMarks.getMarkFromIndex(index)

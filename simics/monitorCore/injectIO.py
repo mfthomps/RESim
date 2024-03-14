@@ -60,14 +60,17 @@ class InjectIO():
         self.lgr = lgr
         self.count = count
         self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
+        if fname is not None:
+            self.offset = self.so_map.getLoadOffset(fname, tid=tid)
+        else:
+            self.offset = None
         self.break_on = break_on
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
-            offset = self.so_map.getLoadOffset(fname, tid=tid)
-            if offset is None:
+            if self.offset is None:
                 self.lgr.error('injectIO break_on set, but no offset for %s' % fname)
                 return
-            self.break_on = self.break_on + offset
+            self.break_on = self.break_on + self.offset
             self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
         self.in_data = None
         self.backstop_cycles =   9000000
@@ -538,9 +541,9 @@ class InjectIO():
             packet = self.write_data.getCurrentPacket()
         self.lgr.debug('injectIO saveJson packet %d' % packet)
         if save_file is None and self.save_json is not None:
-            self.dataWatch.saveJson(self.save_json, packet=packet)
+            self.dataWatch.saveJson(self.save_json, packet=packet, offset=self.offset)
         elif save_file is not None:
-            self.dataWatch.saveJson(save_file, packet=packet)
+            self.dataWatch.saveJson(save_file, packet=packet, offset=self.offset)
         self.top.stopTrackIO()
 
     def setDfile(self, dfile):
