@@ -1338,7 +1338,7 @@ class WatchMarks():
         self.lgr.debug('watchMarks pickleit to %s recent_buf_addres: %s' % (mark_file, str(self.recent_buf_address)))
         pickle.dump( pickDict, open( mark_file, "wb") ) 
 
-    def saveJson(self, fname, packet=1, offset=None):
+    def saveJson(self, fname, packet=1):
         my_marks = []
         start_index = 1
         self.lgr.debug('watchMarks saveJson %d marks to file %s packet %d' % (len(self.mark_list), fname, packet))
@@ -1350,7 +1350,7 @@ class WatchMarks():
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
-        new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index, offset=offset)
+        new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
             combined = {}
@@ -1402,14 +1402,12 @@ class WatchMarks():
         self.lgr.debug('getAllJson returning %d marks' % len(all_marks))
         return all_marks
 
-    def getJson(self, mark_list, packet=1, start_index=1, offset=None):
+    def getJson(self, mark_list, packet=1, start_index=1):
         my_marks = []
         index = start_index
-        if offset is None:
-            offset = 0
         for mark in mark_list:
             entry = {}
-            entry['ip'] = mark.ip + offset
+            entry['ip'] = mark.ip
             entry['cycle'] = mark.cycle
             entry['tid'] = mark.tid
             entry['packet'] = packet
