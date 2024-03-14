@@ -36,7 +36,8 @@ def onedone(top):
     max_marks = None 
     if max_marks_s is not None:
         max_marks = int(max_marks_s)
-    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, max_marks=max_marks)
+    fname=os.getenv('ONE_DONE_PARAM5')
+    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, max_marks=max_marks, fname=fname)
     myinject.setExitCallback(reportExit)
     myinject.go()
 

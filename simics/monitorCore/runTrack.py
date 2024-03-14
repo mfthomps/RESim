@@ -31,7 +31,7 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, stop_threads, lgr, instance_path):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, fname, stop_threads, lgr, instance_path):
     if instance_path is not None:
         os.chdir(instance_path)
     here = os.getcwd()
@@ -45,6 +45,8 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_m
         os.environ['ONE_DONE_PARAM3']='True'
     if max_marks is not None:
         os.environ['ONE_DONE_PARAM4']=max_marks
+    if fname is not None:
+        os.environ['ONE_DONE_PARAM5']=fname
     with open(log, 'wb') as fh:
         for f in afl_list:
             #os.chdir(here)
@@ -102,6 +104,7 @@ def main():
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when needed, will miss SEGV.')
     parser.add_argument('-m', '--max_marks', action='store', help='Optional maximum watch marks to record before stopping simulation.')
+    parser.add_argument('-f', '--fname', action='store', help='Optional name of library.')
     
     args = parser.parse_args()
     resim_ini = args.ini
@@ -137,7 +140,7 @@ def main():
     stop_threads=False
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, lambda: stop_threads, lgr, None))
+    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.fname, lambda: stop_threads, lgr, None))
     thread_list.append(track_thread)
     track_thread.start()
    

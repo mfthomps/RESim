@@ -4579,7 +4579,7 @@ class GenMonitor():
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''
-        ''' Intended for use with trackIO '''
+        ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
             analysis_path = self.getAnalysisPath(fname)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
