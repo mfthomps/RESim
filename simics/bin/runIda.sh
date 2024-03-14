@@ -112,8 +112,8 @@ mkdir -p "$ida_analysis_path" > /dev/null 2>&1
 
 echo "target is $target"
 tt=$(readpe -H "$target" 2>/dev/null | grep ImageBase | awk '{print $2}')
-export original_image_base=$tt
-echo "original_image_base is $tt"
+export target_image_base=$tt
+echo "target_image_base is $tt"
 
 echo "dbpath $ida_db_path"
 echo "resim_ida_arg is $resim_ida_arg"
