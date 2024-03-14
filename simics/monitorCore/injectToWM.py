@@ -35,6 +35,7 @@ import aflPath
 import findTrack
 class InjectToWM():
     def __init__(self, top, addr, dataWatch, lgr, fname=None):
+        # TBD why optional fname?
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
         self.top = top
@@ -44,7 +45,7 @@ class InjectToWM():
         here = os.getcwd()
         self.target = os.path.basename(here)
         print('target is %s' % self.target)
-        self.lgr.debug('InjectToWM addr: 0x%x target is %s' % (addr, self.target))
+        self.lgr.debug('InjectToWM addr: 0x%x target is %s fname %s' % (addr, self.target, fname))
         result = self.findOneTrack(addr)
         if result is not None:
             self.mark_index = result.mark['index']
@@ -53,7 +54,7 @@ class InjectToWM():
             print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=False)
+            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=True)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
@@ -102,7 +103,8 @@ class InjectToWM():
         expaths = aflPath.getAFLTrackList(self.target)
         self.lgr.debug('findOneTrack 0x%x %d paths' % (addr, len(expaths)))
         for index in range(len(expaths)):
-            result = findTrack.findTrack(expaths[index], addr, True, quiet=True, lgr=self.lgr)
+            # NOTE addr given to injectToWM are load addresses, so do not let findTrack apply offsets
+            result = findTrack.findTrack(expaths[index], addr, True, None, quiet=True, lgr=self.lgr)
             if result is not None:
                 self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d' % (addr, result.mark['index']))
                 if result.mark['packet'] < least_packet:
