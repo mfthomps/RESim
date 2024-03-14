@@ -609,3 +609,31 @@ def isClib(lib_file):
             if 'msvcr' in lf or 'msvcp' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
                 retval = True
     return retval
+
+def getLoadOffsetFromSO(so_json, prog, lgr=None):
+    retval = None
+    wrong_file = False
+    if prog is None:
+        if lgr is not None: 
+            lgr.debug('resimUtils getLoadOffsetFromSO prog is None, returning offset 0')
+        return 0
+    offset = 0
+    if lgr is not None: 
+        lgr.debug('resimUtils getLoadOffsetFromSO prog: %s  so_json[proc] %s' % (prog, so_json['prog']))
+    so_prog = os.path.basename(so_json['prog'])
+    if so_prog == prog:
+       #print('0x%x is in prog' % bb['start_ea'])  
+       if lgr is not None:
+           lgr.debug('resimUtils getLoadOffsetFromSO is prog: %s TBD assuming offset zero, fix this' % prog) 
+       pass
+    else:
+       wrong_file = True
+       for section in so_json['sections']:
+           #print('section file is %s' % section['file'])
+           if section['file'].endswith(prog):
+               offset = section['locate']
+               #print('got section, offset is 0x%x' % offset)
+               wrong_file = False
+    if not wrong_file:
+        retval = offset
+    return retval 
