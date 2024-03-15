@@ -53,7 +53,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l',
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
+            'xmlParseChunk', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc']
@@ -1600,13 +1600,17 @@ class DataWatch():
         elif self.mem_something.fun == 'FreeXMLDoc':
             self.lgr.debug('dataWatch returnHap, return from %s' % (self.mem_something.fun))
             self.watchMarks.freeXMLDoc()
-        elif self.mem_something.fun == 'xmlParseFile' or self.mem_something.fun == 'xml_parse':
+        elif self.mem_something.fun in ['xmlParseFile', 'xml_parse', 'xmlParseChunk']:
             self.lgr.debug('dataWatch returnHap, return from %s' % (self.mem_something.fun))
-            if self.cpu.architecture == 'arm':
-                xml_doc = self.mem_utils.getRegValue(self.cpu, 'r0')
+            if self.mem_something.fun == 'xmlParseChunk':
+                xml_doc = self.mem_something.src
             else:
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                xml_doc = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
+                # TBD why not gotten on the way in?
+                if self.cpu.architecture == 'arm':
+                    xml_doc = self.mem_utils.getRegValue(self.cpu, 'r0')
+                else:
+                    sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                    xml_doc = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
 
             self.top.stopTraceMalloc()
             self.me_trace_malloc = False
@@ -2310,10 +2314,13 @@ class DataWatch():
         elif self.mem_something.fun == 'FreeXMLDoc':
             self.mem_something.count = 0
 
-        elif self.mem_something.fun == 'xmlParseFile' or self.mem_something.fun == 'xml_parse':
+        elif self.mem_something.fun in ['xmlParseFile', 'xml_parse', 'xmlParseChunk']:
             self.me_trace_malloc = True
             self.top.traceMalloc()
             self.lgr.debug('gatherCallParams xml parse')
+            if self.mem_something.fun == 'xmlParseChunk':
+                  dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
+      
         return skip_fun             
 
 
@@ -3993,9 +4000,9 @@ class DataWatch():
                         self.lgr.debug('DataWatch lookForMemstuff not memsomething add fun 0x%x to not_mem_something fun_name %s' % (fun, fun_name))
                         self.not_mem_something.append(fun)
                     else:
-                        self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x is in local funs %s' % (fun, fun_name))
+                        self.lgr.debug('DataWatch lookForMemstuff fun 0x%x is in local funs %s' % (fun, fun_name))
                 else:
-                    self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x is clib %s' % (fun, fun_name))
+                    self.lgr.debug('DataWatch lookForMemstuff not memsomething fun 0x%x eip 0x%x is clib %s' % (fun, eip, fun_name))
             pass
         return retval
        
@@ -4635,7 +4642,10 @@ class DataWatch():
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                    if frame.fun_addr is not None:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                    else:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr None(maybe got jmp) ip: 0x%x sp: 0x%x' % (i, fun, frame.ip, frame.sp))
                 elif frame.fun_addr is not None:
                     if frame.ip is not None and frame.sp is not None:
                         self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
@@ -4660,7 +4670,8 @@ class DataWatch():
                     if fun in local_mem_funs:
                         fun_precidence = self.funPrecidence(fun)
                         self.lgr.debug('fun in local_mem_funs %s, set fun_precidence to %d' % (fun, fun_precidence))
-                        if fun_precidence == 0 and i > 3:
+                        # TBD tune this, maybe by clib?  sscanf is at level 4 sometimes.
+                        if fun_precidence == 0 and i > 4:
                             ''' Is it some clib calling some other clib?  ghosts?'''
                             start = i - 1
                             if clibFuns.allClib(frames, start):
