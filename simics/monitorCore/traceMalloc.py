@@ -34,11 +34,11 @@ class TraceMalloc():
 
     def setBreaks(self):
         if self.fun_mgr is not None:
-            malloc_fun_addr, end = self.fun_mgr.getAddr('malloc')
+            malloc_fun_addr = self.fun_mgr.getFunEntry('malloc')
             if malloc_fun_addr is not None:
                 malloc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, malloc_fun_addr, 1, 0)
                 self.malloc_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocHap, None, malloc_break, 'malloc')
-                free_fun_addr, end = self.fun_mgr.getAddr('free')
+                free_fun_addr = self.fun_mgr.getFunEntry('free')
                 free_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, free_fun_addr, 1, 0)
                 self.free_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.freeHap, None, free_break, 'free')
 
