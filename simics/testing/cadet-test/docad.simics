@@ -7,6 +7,7 @@
 #       param cgc : string = ""
 #}
 echo "starting docad"
+@cgc.runToCycle(0x8d17abac4)
 @cgc.debugProc('cadet01')
 c 900000000
 @cgc.writeConfig('cadet')
