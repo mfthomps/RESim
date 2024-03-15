@@ -4275,6 +4275,8 @@ class GenMonitor():
         self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
         self.track_finished = True
 
+    def goToWatchMark(self, index):
+        return self.goToDataMark(index)
     def goToDataMark(self, index):
         if index is None:
             print('goToDataMark called with no index, perhaps that mark does not exist?')
@@ -6054,7 +6056,18 @@ class GenMonitor():
 
     def getFunWithin(self, fun_name, start, end):
         return self.fun_mgr.getFunWithin(fun_name, start, end)
-    
+
+    def getSnapProg(self):
+        ''' get the program that was being debugged when the snapshot was made'''
+        retval = None
+        if self.debug_info is not None and 'tid' in self.debug_info:
+            tid = self.debug_info['tid']
+            leader_tid = self.task_utils[self.target].getGroupLeaderTid(tid)
+            if leader_tid is None:
+                self.lgr.error('getSnapProg leader_tid is None, asked about %s' % tid)
+            else: 
+                retval = self.soMap[self.target].getProg(leader_tid)
+        return retval
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
