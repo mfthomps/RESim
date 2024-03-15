@@ -10,6 +10,7 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 import findBB
+import resimUtils
 
 '''
 Return a list of queue files that hit a given BB start address
@@ -82,23 +83,8 @@ def getWatchMark(trackio, bb, prog, quiet=False):
         return retval
     index = 1
     somap = tjson['somap']
-    wrong_file = False
-    offset = 0
-    #print('prog: %s  somap[proc] %s' % (prog, somap['prog']))
-    so_prog = os.path.basename(somap['prog'])
-    if so_prog == prog:
-       #print('0x%x is in prog' % bb['start_ea'])  
-       pass
-    else:
-       got_section = False
-       wrong_file = True
-       for section in somap['sections']:
-           #print('section file is %s' % section['file'])
-           if section['file'].endswith(prog):
-               offset = section['locate']
-               #print('got section, offset is 0x%x' % offset)
-               wrong_file = False
-    if not wrong_file:
+    offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=None)
+    if offset != None:
         #print('not wrong file')
         mark_list = tjson['marks']
         for mark in mark_list:

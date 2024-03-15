@@ -20,7 +20,7 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet):
+def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, lgr):
     retval = []
     count = 0
     #print('in findBNTForFun')
@@ -37,6 +37,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                         read_mark = None
                         packet_num = None
                         before_read = ''
+                        lgr.debug('bb_hit 0x%x has branch 0x%x not in hits' % (bb_hit, branch))
                         if show_read_marks:
                             queue_list = findBB.findBB(target, bb_hit, True) 
                             least_packet = 100000
@@ -48,7 +49,8 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                 read_mark, packet_num = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 if read_mark is not None:
                                     ''' Look for the best mark '''
-                                    result = findTrack.findTrack(trackio, read_mark, True, quiet=True)
+                                    result = findTrack.findTrack(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
+                                    lgr.debug('found read_mark 0x%x  result %s' % (read_mark, str(result)))
                                     if result is not None:
                                         if result.mark['packet'] < least_packet:
                                             least_packet = result.mark['packet']
@@ -61,6 +63,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                         elif result.mark['packet'] == least_packet and result.num_marks < least_size:
                                             least_size = result.num_marks
                                             best_result = result
+
                                 if best_result is not None:
                                     read_mark = best_result.mark['ip']
                                     packet_num = best_result.mark['packet']
@@ -78,6 +81,8 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                 elif first_read is not None and bb_cycle < first_read:
                                     before_read = 'pre-read' 
                                 '''
+                            if best_result is None:
+                                lgr.debug('found no read marks')
  
                         if not no_print:
                             mark_info = ''
@@ -126,12 +131,12 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in sorted(blocks):
-            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
+            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, lgr)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet)
+                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, lgr)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
