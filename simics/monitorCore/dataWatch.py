@@ -53,7 +53,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l',
             'j_memcpy', 'strchr', 'strrchr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'xmlParseChunk', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
+            'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc']
@@ -1645,6 +1645,16 @@ class DataWatch():
             else: 
                 self.mem_something.count = self.mem_utils.getRegValue(self.cpu, 'eax')
             self.watchMarks.returnInt(self.mem_something.count, self.mem_something.fun)
+        elif self.mem_something.fun == 'xmlrpc_base64_decode':
+            retaddr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            self.mem_something.count = self.mem_utils.readWord(self.cpu, retaddr)
+            self.mem_something.dest = self.mem_utils.readWord(self.cpu, retaddr+2*word_size)
+            self.lgr.debug('dataWatch returnHap %s count %d from 0x%x dest 0x%x' % (self.mem_something.fun, self.mem_something.count, self.mem_something.src, self.mem_something.dest))
+            buf_start = self.findRange(self.mem_something.src)
+            wm = self.watchMarks.base64Decode(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
+            self.setRange(self.mem_something.dest, self.mem_something.count, watch_mark=wm)
+            
+
         elif self.mem_something.fun in reg_return_funs:
             #adhoc = self.lookPushedReg()
             self.lgr.debug('return from %s' % self.mem_something.fun)
@@ -2310,6 +2320,13 @@ class DataWatch():
                 self.mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
             else:
                 self.mem_something.src = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
+        elif self.mem_something.fun == 'xmlrpc_base64_decode':
+            if self.cpu.architecture == 'arm':
+                self.mem_something.src = self.mem_utils.getRegValue(self.cpu, 'r0')
+            else:
+                offset = sp+word_size
+                self.mem_something.src = self.mem_utils.readAppPtr(self.cpu, offset, size=word_size)
+            #SIM_break_simulation('remove this, src 0x%x sp 0x%x' % (self.mem_something.src, sp))
 
         elif self.mem_something.fun == 'FreeXMLDoc':
             self.mem_something.count = 0
@@ -4023,7 +4040,7 @@ class DataWatch():
         self.lgr.debug('DataWatch setBreakRange num_existing_haps %d, len of self.start %d' % (num_existing_haps, len(self.start)))
         for index in range(num_existing_haps, len(self.start)):
             if self.start[index] is None:
-                self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
+                #self.lgr.debug('DataWatch setBreakRange index %d is 0' % index)
                 self.read_hap.append(None)
                 continue
             ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_tid is not set while
