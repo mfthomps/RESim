@@ -39,7 +39,10 @@ def stringFromFrame(frame):
         retval = ''
         for item in frame:
             if item.startswith('param') and frame[item] is not None:
-                retval = retval + ' %s:0x%x' % (item, frame[item])
+                try:
+                    retval = retval + ' %s:0x%x' % (item, frame[item])
+                except:
+                    print('taskUtils stringFromFrame not an integer in frame[%s]? %s' % (item, str(frame[item])))
     
     return retval
 class ListHead(object):
