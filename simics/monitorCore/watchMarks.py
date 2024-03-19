@@ -565,6 +565,21 @@ class CharAppendMark():
         self.addr = addr
         self.end_addr = addr+old_delta+1
 
+class Base64Decode():
+    def __init__(self, fun, src, dest, count, buf_start):
+        self.fun = fun
+        self.src = src
+        self.dest = dest
+        self.count = count
+        self.buf_start = buf_start
+    def getMsg(self):
+        if self.buf_start is not None:
+            offset = self.src - self.buf_start
+            msg = '%s from 0x%x (%d bytes into 0x%x) to 0x%x' % (self.fun, self.src, offset, self.buf_start, self.dest)
+        else:
+            msg = '%s from 0x%x (unknown buffer) to 0x%x' % (self.fun, self.src, self.dest)
+        return msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -589,13 +604,13 @@ class WatchMarks():
             i = 1
             for mark in self.stale_marks:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x\n' % (i, the_str, mark.ip, mark.tid, mark.cycle))
+                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x %s\n' % (i, the_str, mark.ip, mark.tid, mark.cycle, mark.fname))
                 i += 1
             fh.write('\n\nBegin active watch marks.\n\n')
             i = 1
             for mark in self.mark_list:
                 the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x\n' % (i, the_str, mark.ip, mark.tid, mark.cycle))
+                fh.write('%d %s  ip:0x%x tid:%s cycle: 0x%x %s\n' % (i, the_str, mark.ip, mark.tid, mark.cycle, mark.fname))
                 i += 1
 
     def showMarks(self, old=False, verbose=False):
@@ -614,22 +629,26 @@ class WatchMarks():
         i = 1
         for mark in self.mark_list:
             cycle = ' '
+            fname = ''
             if verbose:
                 cycle = ' 0x%x ' % mark.cycle
-            the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
-            print('%d%s%s  ip:0x%x tid:%s' % (i, cycle, the_str, mark.ip, mark.tid))
+                fname = mark.fname
+            #the_str = mark.mark.getMsg().encode('utf-8', 'ignore')
+            the_str = mark.mark.getMsg()
+            print('%d%s%s  ip:0x%x tid:%s %s' % (i, cycle, the_str, mark.ip, mark.tid, fname))
             i += 1
         self.lgr.debug('watchMarks, showed %d marks' % len(self.mark_list))
         
 
     class WatchMark():
         ''' Objects that are listed as watch marks -- highest level stored in mark_list'''
-        def __init__(self, return_cycle, call_cycle, ip, tid, mark):
+        def __init__(self, return_cycle, call_cycle, ip, tid, fname, mark):
             self.cycle = return_cycle
             self.call_cycle = call_cycle
             self.ip = ip
             self.tid = tid
             self.mark = mark
+            self.fname = fname
         def getJson(self, origin):
             retval = {}
             retval['cycle'] = self.cycle - origin
@@ -863,7 +882,7 @@ class WatchMarks():
         return retval
         
                 
-    def addWatchMark(self, mark, cycles=None, ip=None):
+    def addWatchMark(self, mark, cycles=None, ip=None, fname=None):
         if self.so_map is None:
             self.so_map = json.loads(self.top.getSOMap(quiet=True))
             if self.so_map is None:
@@ -875,7 +894,12 @@ class WatchMarks():
         tid = self.top.getTID()
         if cycles is None:
             cycles = self.cpu.cycles
-        wm = self.WatchMark(cycles, self.call_cycle, ip, tid, mark)
+        fname_ret = self.top.getSO(ip)
+        if fname_ret is not None and ':' in fname_ret:
+            fname = fname_ret.split(':')[0]
+        else:
+            fname = None
+        wm = self.WatchMark(cycles, self.call_cycle, ip, tid, fname, mark)
         self.mark_list.append(wm)
         #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
         return wm
@@ -1173,7 +1197,12 @@ class WatchMarks():
         cm = CharAppendMark(fun, this, addr)
         wm = self.addWatchMark(cm)
         return wm
- 
+
+    def base64Decode(self, fun, src, dest, count, buf_start): 
+        bm = Base64Decode(fun, src, dest, count, buf_start)
+        wm = self.addWatchMark(bm)
+        return wm
+
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
         self.addWatchMark(fm)
