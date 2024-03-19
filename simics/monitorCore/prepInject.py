@@ -80,6 +80,7 @@ class PrepInject():
     def finishNoCall(self, read_original=True):
         # TBD point of runToIO check?
         #syscall = self.top.getSyscall(self.cell_name, 'runToIO')
+        orig_buffer = None
         if True or syscall is not None:
             if read_original:
                 length = self.getLength()
