@@ -249,7 +249,7 @@ class WriteData():
 
             if self.addr_of_count is not None:
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, retval)
-                self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
+                #self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             #if self.dataWatch is not None:
@@ -654,11 +654,11 @@ class WriteData():
         remain = self.read_limit - self.total_read
 
         if self.total_read >= self.read_limit and self.stop_on_read:
-            self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
+            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
             SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
             return None
         self.total_read = self.total_read + eax
-        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         if self.stop_on_read and self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
