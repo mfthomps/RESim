@@ -23,6 +23,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 import dataWatch
+import decode
+import decodeArm
 from simics import *
 class ReverseTrack():
     def __init__(self, top, dataWatch, context_manager, mem_utils, reverse_to_call, lgr):
@@ -38,6 +40,7 @@ class ReverseTrack():
         self.reg = None
         self.value = None
         self.top_command_callback = None
+        self.decode = None
 
     def revTaintReg(self, reg, bookmarks, kernel=False, no_increments=False):
         ''' back track the value in a given register '''
@@ -49,36 +52,43 @@ class ReverseTrack():
         self.reg = reg
         tid, cpu = self.context_manager.getDebugTid() 
         self.cpu = cpu
+        if cpu.architecture == 'arm':
+            self.decode = decodeArm
+        else:
+            self.decode = decode
         value = self.mem_utils.getRegValue(cpu, reg)
+        num_bytes = self.decode.regSize(reg)
         self.value = value
-        self.lgr.debug('revTaintReg tid:%s for %s value 0x%x' % (tid, reg, value))
+        self.lgr.debug('reverseTrack revTaintReg tid:%s for %s value 0x%x, num_bytes %d' % (tid, reg, value, num_bytes))
         if self.top.reverseEnabled():
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
                 self.lgr.debug('revTaintReg stack trace is None, wrong tid?')
                 return
+            self.lgr.debug('reverseTrack revTaintReg get stack trace to see if we are in a memsomething call, if so, go there')
             frames = st.getFrames(20)
             mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)
             if mem_stuff is not None:
                 self.mem_something = dataWatch.MemSomething(mem_stuff.fun, mem_stuff.fun_addr, None, mem_stuff.ret_addr, None, None, None, 
                       mem_stuff.called_from_ip, None, None, None, ret_addr_addr = mem_stuff.ret_addr_addr)
                 call_ip = mem_stuff.called_from_ip
-                self.lgr.debug('revTaintReg mem_stuff.fun is %s' % mem_stuff.fun)
+                self.lgr.debug('reverseTrack revTaintReg mem_stuff.fun is %s  reverse to the call and then call handleCall' % mem_stuff.fun)
                 self.top.setCommandCallback(self.handleCall)
                 self.top.revToAddr(call_ip)
             else:
+                self.lgr.debug('reverseTrack revTaintReg. Not in call to memsomething')
                 self.top.removeDebugBreaks()
                 cell_name = self.top.getTopComponentName(cpu)
                 eip = self.top.getEIP(cpu)
                 instruct = SIM_disassemble_address(cpu, eip, 1, 0)
                 reg_num = cpu.iface.int_register.get_number(reg)
                 value = cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('revTaintReg for reg value %x' % value)
+                self.lgr.debug('reverseTrack revTaintReg for reg value %x num_bytes %d' % (value, num_bytes))
                 track_num = self.bookmarks.setTrackNum()
                 bm='backtrack START:%d 0x%x inst:"%s" track_reg:%s track_value:0x%x' % (track_num, eip, instruct[1], reg, value)
                 self.bookmarks.setDebugBookmark(bm)
                 self.context_manager.setIdaMessage('')
-                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel, no_increments=no_increments)
+                self.reverse_to_call.doRevToModReg(reg, taint=True, kernel=kernel, no_increments=no_increments, num_bytes=num_bytes)
         else:
             print('reverse execution disabled')
             self.top.skipAndMail()

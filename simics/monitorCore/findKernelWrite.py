@@ -92,6 +92,9 @@ class findKernelWrite():
             self.decode = decode
         self.start_cycles = None
         self.stop_cycles = None
+        # Hacks around simics reversing woes
+        self.previous_cpu_cycle = 0
+        self.future_hits = 0
 
         self.go(addr)
 
@@ -219,9 +222,17 @@ class findKernelWrite():
             location = memory.logical_address
             phys = memory.physical_address
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            VT_in_time_order(self.vt_handler, my_memory)
+            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x prev: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, self.previous_cpu_cycle, eip))
+            if self.cpu.cycles == self.previous_cpu_cycle:
+                self.lgr.debug('revWriteCallback hit same cycle as before, bail')
+                #SIM_run_alone(self.cleanup, False)
+                #self.top.skipAndMail()
+                self.vt_handler(my_memory)
+            else:
+                self.previous_cpu_cycle = self.cpu.cycles
+                my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
+                VT_in_time_order(self.vt_handler, my_memory)
+            self.future_hits = 0
         else:
             location = memory.logical_address
             phys = memory.physical_address
@@ -229,6 +240,12 @@ class findKernelWrite():
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+            self.future_hits = self.future_hits+1
+            if self.future_hits > 20:
+                self.lgr.error('revWriteCallback to many future hits, bail')
+                self.vt_handler(my_memory)
+                #SIM_run_alone(self.cleanup, False)
+                #self.top.skipAndMail()
 
     def addStopHapForWriteAlone(self, offset):
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
@@ -693,7 +710,7 @@ class findKernelWrite():
             if self.decode.isIndirect(op1):
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
                 #address = self.cpu.iface.int_register.read(reg_num)
-                address = self.mem_utils.getRegValue(op1)
+                address = self.mem_utils.getRegValue(self.cpu, op1)
                 new_address = address+offset
                 if not '[' in op0:
                     self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))

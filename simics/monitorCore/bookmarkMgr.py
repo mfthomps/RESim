@@ -98,6 +98,7 @@ class bookmarkMgr():
         else:
             current = cycles
             steps = steps
+            self.lgr.debug('setDebugBookmark called with cycles 0x%x' % cycles)
         #SIM_run_command('set-bookmark %s' % mark)
         #if not mark.startswith('protected_memory') and not mark.startswith('_start+1'):
      
@@ -331,6 +332,7 @@ class bookmarkMgr():
                             self.lgr.error('goToDebugBookmark, 2nd simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
             else:
                 self.lgr.error('goToDebugBookmark failed skipToTest')
+                return None
 
         self.context_mgr.setExitBreaks()
         self.context_mgr.resetBackStop()

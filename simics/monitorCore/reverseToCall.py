@@ -139,6 +139,7 @@ class reverseToCall():
             self.lgr.debug('__init__ bookmarks is %s' % self.bookmarks)
 
             self.callmn = None
+            self.num_bytes = None
 
     def noWatchSysenter(self):
         if self.sysenter_hap is not None:
@@ -774,10 +775,26 @@ class reverseToCall():
         self.offset =  offset 
         self.taint = taint
         self.value = value
-        self.num_bytes = num_bytes
+
+        reg_size = decode.regSize(reg)
+        if self.num_bytes is None:
+            if num_bytes is None:
+                self.num_bytes = reg_size
+            else:
+                if num_bytes is not None:
+                    if num_bytes < reg_size:
+                        self.num_bytes = num_bytes
+                    else:
+                        self.lgr.debug('doRevToModReg forced num_bytes to reg size %d' % reg_size)
+                        self.num_bytes = reg_size 
+                else:
+                    self.num_bytes = reg_size 
         self.kernel = kernel
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, taint, kernel))
+        if self.num_bytes is not None:
+            self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r, num_bytes: %d' % (eip, self.cpu.cycles, reg, offset, taint, kernel, self.num_bytes))
+        else:
+            self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r num_bytes is NONE' % (eip, self.cpu.cycles, reg, offset, taint, kernel))
         self.reg = reg
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
@@ -1218,14 +1235,14 @@ class reverseToCall():
             self.lgr.debug('followTaint, see if %s is an address' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
             if address is not None:
-                self.lgr.debug('followTaint, yes, address is 0x%x' % address)
+                self.lgr.debug('followTaint, yes, address is 0x%x self.offset is 0x%x' % (address, self.offset))
                 if self.decode.isByteReg(op0):
                     value = self.task_utils.getMemUtils().readByte(self.cpu, address)
                 else:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
-                newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
-                if newvalue is not None and value is not None: 
-                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
+                new_address = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
+                if new_address is not None and value is not None: 
+                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for address 0x%x num_bytes %d' % (eip, value, address, op0, new_address, self.num_bytes))
                 if not mn.startswith('mov'):
                     self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
@@ -1233,7 +1250,7 @@ class reverseToCall():
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel)
+                self.top.stopAtKernelWrite(new_address, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=self.num_bytes)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))

@@ -96,6 +96,21 @@ def isByteReg(reg):
     else:
        return False
 
+def regSize(reg):
+    if reg is None:
+        return None
+    elif isByteReg(reg):
+        return 1    
+    elif reg in ia32_regs:
+        return 4
+    elif reg in ia64_regs:
+        return 8
+    elif len(reg) == 2 and reg.endswith('x'):
+        return 2
+    else:
+        return None
+
+
 def getTopComponentName(cpu):
      names = cpu.name.split('.')
      return names[0]
