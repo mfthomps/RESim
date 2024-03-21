@@ -85,7 +85,7 @@ class ExitMaze():
         self.function_ret = None
         self.just_return = False
         self.compare_hap = None
-        self.stack_frames = []
+        #self.stack_frames = []
         self.broke_out_count = 0
         self.planted_break_sets = 0
         if cpu.architecture == 'arm':
@@ -127,6 +127,9 @@ class ExitMaze():
 
     def recordStack(self):
         st = self.top.getStackTraceQuiet()
+        if st is None:
+            self.lgr.error('ExitMaze no stack frames')
+            return
         count = st.countFrames()
         if count == 0:
             self.lgr.error('ExitMaze no stack frames')
@@ -258,7 +261,7 @@ class ExitMaze():
         if self.debugging:
             self.lgr.debug('ExitMaze Disabling reverse execution')
             SIM_run_command('disable-reverse-execution')
-        self.recordStack()
+        #self.recordStack()
         self.call_level = 0
         self.syscall.resetTimeofdayCount(self.tid)
         self.timeofday_count_start = 0
@@ -502,7 +505,7 @@ class ExitMaze():
         if self.stop_hap is not None:
             cpu, comm, tid = self.task_utils.curThread() 
             if tid != self.tid:
-                self.lgr.debug('ExitMaze stopHap wrong tid, wanted %d got %d' % (self.tid, tid))
+                self.lgr.debug('ExitMaze stopHap wrong tid, wanted %s got %s' % (self.tid, tid))
                 return
             self.lgr.debug('ExitMaze in stopHap tid:%s' % tid)
             #if self.one_proc:
@@ -554,7 +557,7 @@ class ExitMaze():
             self.breakout_addr = eip
             SIM_run_alone(self.addStopAlone, None)
         else:
-            self.lgr.debug('ExitMaze breakoutHap for wrong tid:%s, expeced %d' % (tid, self.tid))
+            self.lgr.debug('ExitMaze breakoutHap for wrong tid:%s, expeced %s' % (tid, self.tid))
        
     def getStatus(self):
         return self.tid, self.planted_break_sets, self.broke_out_count 

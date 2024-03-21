@@ -612,14 +612,18 @@ class SharedSyscall():
     def exitHap(self, dumb, context, break_num, memory):
         if self.context_manager.isReverseContext():
             return
+        #self.lgr.debug('sharedSyscall call curThread')
         cpu, comm, tid = self.task_utils.curThread() 
         if cpu is None:
             self.lgr.error('sharedSyscall exitHap got nothing from curThread')
             return
         #self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
         if tid == '1' and self.hack_exit_tid != '1':
+            self.lgr.debug('sharedSyscall exitHap tid 1 bail')
+            return
             self.lgr.debug('sharedSyscall exitHap tid 1 !!!!!!!  prev tid was %s set to that.' % self.hack_exit_tid)
             tid = self.hack_exit_tid
+            SIM_break_simulation('remove this')
         did_exit = False
         if tid in self.exit_info:
             for name in self.exit_info[tid]:

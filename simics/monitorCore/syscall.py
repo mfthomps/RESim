@@ -2567,7 +2567,7 @@ class Syscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                rprint("Tid %d seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
+                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
                 SIM_break_simulation('timer loop?')
   
     def rmModeHap(self, hap): 

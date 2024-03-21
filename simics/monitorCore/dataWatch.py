@@ -3783,7 +3783,11 @@ class DataWatch():
             self.stopWatch()
             SIM_run_alone(self.setStopHap, None)
 
-        if self.start[index] is None:
+        if index >= len(self.start):
+            self.lgr.debug('dataWatch readHap index %d is beyond range of start?.' % index)
+            return 
+ 
+        elif self.start[index] is None:
             self.lgr.debug('dataWatch readHap index %d has no start value, likely deleted but not immediate.' % index)
             return 
 

@@ -132,7 +132,7 @@ class ReportCrash():
             reg_find = re.findall(r'\[.*?\]', op1) 
             self.lgr.debug('reportCrash found in brackets for %s is %s' % (op1, str(reg_find)))
             if len(reg_find) > 0:
-                if self.mem_utils.isReg(op2):
+                if op2 is not None and self.mem_utils.isReg(op2):
                     value = self.mem_utils.getRegValue(self.cpu, op2)
                     self.lgr.debug('op2 is reg: %s value: 0x%x' % (op2, value))
                     self.crash_report.write('Corrupt write from reg: %s value: 0x%x\n' % (op2, value))
