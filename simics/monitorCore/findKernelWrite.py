@@ -693,7 +693,7 @@ class findKernelWrite():
             if self.decode.isIndirect(op1):
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
                 #address = self.cpu.iface.int_register.read(reg_num)
-                address = self.mem_utils.getRegValue(op1)
+                address = self.mem_utils.getRegValue(self.cpu, op1)
                 new_address = address+offset
                 if not '[' in op0:
                     self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
