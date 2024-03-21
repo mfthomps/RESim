@@ -39,6 +39,7 @@ class ReportCrash():
         except:
             pass
         self.crash_report = None
+        self.report_path = None
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
@@ -58,10 +59,10 @@ class ReportCrash():
                 report_file = 'crash_report_%05d' % self.index
             else:
                 report_file = 'crash_report_%05d' % self.report_index
-            report_path = os.path.join(self.report_dir, report_file)
-            print('Creating crash report at %s' % report_path)
-            self.lgr.debug('Creating crash report at %s' % report_path)
-            self.crash_report = open(report_path, 'w')
+            self.report_path = os.path.join(self.report_dir, report_file)
+            print('Creating crash report at %s' % self.report_path)
+            self.lgr.debug('Creating crash report at %s' % self.report_path)
+            self.crash_report = open(self.report_path, 'w')
       
             SIM_run_alone(self.goAlone, None)
          else:
@@ -107,6 +108,7 @@ class ReportCrash():
         self.top.setCommandCallback(None)
         sys.stdout = orig_stdout 
         self.crash_report.close()
+        print('report written to %s' % self.report_path)
         self.index += 1
         self.lgr.debug('crashReport doneBackward now go index %d' % self.index)
         self.go() 
@@ -280,3 +282,5 @@ class ReportCrash():
                 self.tryCorruptRef(instruct)
            
         #SIM_run_alone(self.goAlone, None)
+    def addMsg(self, msg):
+        self.crash_report.write(msg)

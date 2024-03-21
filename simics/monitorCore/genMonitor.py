@@ -332,6 +332,8 @@ class GenMonitor():
         self.resim_version = 24
         self.snap_version = 0
 
+        self.report_crash = None
+
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -4999,9 +5001,9 @@ class GenMonitor():
         ''' generate crash reports for all crashes in a given AFL target diretory -- or a given specific file '''
         self.lgr.debug('crashReport %s' % fname)
         cpu, comm, tid = self.task_utils[self.target].curThread() 
-        rc = reportCrash.ReportCrash(self, cpu, tid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
+        self.report_crash = reportCrash.ReportCrash(self, cpu, tid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
               target=target, targetFD=targetFD, trackFD=trackFD, report_dir=report_dir)
-        rc.go()
+        self.report_crash.go()
 
     def trackAFL(self, target):
         track_afl = trackAFL.TrackAFL(self, target, self.lgr)
@@ -5312,6 +5314,8 @@ class GenMonitor():
             print(msg)
             self.context_manager[self.target].setIdaMessage(msg)
             self.lgr.debug(msg)
+        if self.report_crash is not None:
+            self.report_crash.addMsg('Backtrace summary: \n %s' % msg)
 
     def amWatching(self, tid):
         return self.context_manager[self.target].amWatching(tid)
