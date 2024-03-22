@@ -39,14 +39,16 @@ class ReportCrash():
         except:
             pass
         self.crash_report = None
+        self.report_path = None
         if self.cpu.architecture == 'arm':
             self.decode = decodeArm
         else:
             self.decode = decode
         ''' Will be None if ReportCrash to inject data, otherwise the FD to trackIO on '''
         self.trackFD = trackFD
-        #self.afl_list = [f for f in os.listdir(self.afl_dir) if os.path.isfile(os.path.join(self.afl_dir, f))]
-        #self.crash_report = open('/tmp/crash_report.txt', 'w')
+
+        if self.dataWatch is not None:
+            self.dataWatch.setMaxMarksCallback(self.maxMarksCallback)
 
     def go(self):
          if self.index > 0 and self.target is not None:
@@ -58,10 +60,10 @@ class ReportCrash():
                 report_file = 'crash_report_%05d' % self.index
             else:
                 report_file = 'crash_report_%05d' % self.report_index
-            report_path = os.path.join(self.report_dir, report_file)
-            print('Creating crash report at %s' % report_path)
-            self.lgr.debug('Creating crash report at %s' % report_path)
-            self.crash_report = open(report_path, 'w')
+            self.report_path = os.path.join(self.report_dir, report_file)
+            print('Creating crash report at %s' % self.report_path)
+            self.lgr.debug('Creating crash report at %s' % self.report_path)
+            self.crash_report = open(self.report_path, 'w')
       
             SIM_run_alone(self.goAlone, None)
          else:
@@ -82,7 +84,7 @@ class ReportCrash():
         ''' Either inject or track '''
         if self.trackFD is None:
             self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
-                   targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True, no_reset=True)
+                   targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True, no_reset=True, max_marks=400)
             #       targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
             ''' Be sure we are debugging and then do the trackIO '''
@@ -107,6 +109,7 @@ class ReportCrash():
         self.top.setCommandCallback(None)
         sys.stdout = orig_stdout 
         self.crash_report.close()
+        print('report written to %s' % self.report_path)
         self.index += 1
         self.lgr.debug('crashReport doneBackward now go index %d' % self.index)
         self.go() 
@@ -280,3 +283,9 @@ class ReportCrash():
                 self.tryCorruptRef(instruct)
            
         #SIM_run_alone(self.goAlone, None)
+
+    def addMsg(self, msg):
+        self.crash_report.write(msg)
+
+    def maxMarksCallback(self):
+        SIM_run_alone(SIM_continue, 0)
