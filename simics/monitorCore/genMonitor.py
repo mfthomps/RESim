@@ -6072,6 +6072,11 @@ class GenMonitor():
             else: 
                 retval = self.soMap[self.target].getProg(leader_tid)
         return retval
+
+    def getProgPath(self, prog):
+        prog = self.soMap[self.target].getFullPath(prog)
+        return prog
+
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
