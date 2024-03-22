@@ -148,7 +148,7 @@ class DataWatch():
         self.added_mem_fun_entry = False
 
         ''' limit number of marks gathered '''
-        self.max_marks = None
+        self.max_marks = 2000
         self.resetState()
 
         ''' hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
@@ -4475,7 +4475,10 @@ class DataWatch():
         #self.rev_to_call.preCallFD(fd) 
         if max_marks is not None:
            self.max_marks = max_marks
-           self.lgr.debug('DataWatch trackIO call watch max_marks set to %s' % max_marks)
+           self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % max_marks)
+        else:
+           self.max_marks = 2000
+           self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
         self.watch(break_simulation=False)
         ''' what to do when backstop is reached (N cycles with no activity '''
         self.setCallback(callback)
