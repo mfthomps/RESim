@@ -3621,6 +3621,9 @@ class DataWatch():
         '''
         if self.return_hap is not None or self.context_manager.isReverseContext():
             return
+        if index >= len(self.start):
+            self.lgr.debug('dataWatch readHap index %d but len of start is %d addr 0x%x' % (index, len(self.start), memory.logical_address))
+            return
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
@@ -4359,10 +4362,13 @@ class DataWatch():
         origin_watches = []
         for data_watch in data_watch_list:
             if data_watch['cycle'] <= cycle:
-                self.setRange(data_watch['start'], data_watch['length']) 
-                origin_watches.append(data_watch)
+                if data_watch['start'] is not None:
+                    self.setRange(data_watch['start'], data_watch['length']) 
+                    origin_watches.append(data_watch)
+                else:
+                    self.lgr.debug('dataWatch resetOrigin  watch has no start %s' % str(data_watch))
             else:
-                self.lgr.debug('clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
+                self.lgr.debug('dataWatch resetOrigin clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
                 break
         self.lgr.debug('dataWatch resetOrigin now call watchmarks')
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
