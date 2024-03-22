@@ -164,6 +164,7 @@ class findKernelWrite():
             return
         offset = 0
         eip = self.top.getEIP(self.cpu)
+        self.deleteBrokenHap()
         if memory.logical_address == 0:
             ''' TBD this would reflect an error or corruption in Simics due to reality leaks.  Replace with error message. '''
             phys_block = self.cpu.iface.processor_info.logical_to_physical(self.addr, Sim_Access_Write)
@@ -184,6 +185,7 @@ class findKernelWrite():
             self.rev_write_hap = None 
             self.lgr.debug('vt_handler deleted rev_write_hap')
         self.memory_transaction = memory
+        SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_alone(self.addStopHapForWriteAlone, offset)
 
     def deleteBrokenAlone(self, hap):
@@ -195,20 +197,25 @@ class findKernelWrite():
             self.physical_address = physical_address 
             self.size = size 
 
-    def revWriteCallback(self, cpu, third, forth, memory):
-        #self.lgr.debug('revWriteCallback hit third %s  forth %s' % (third, forth))
+    def deleteBrokenHap(self):
         if self.broken_hap is not None:
-            SIM_run_alone(self.deleteBrokenAlone, self.broken_hap)
+            hap = self.broken_hap
+            SIM_run_alone(self.deleteBrokenAlone, hap)
             self.broken_hap = None
+            self.lgr.debug('deleteBroken_hap removed broken_hap')
+
+    def revWriteCallback(self, cpu, the_object, break_num, memory):
+        #self.lgr.debug('revWriteCallback hit the_object %s  break_num %s' % (third, forth))
         if self.rev_write_hap is None:
             self.lgr.debug('revWriteCallback hit None')
             return
-        SIM_run_alone(self.context_manager.enableAll, None)
         orig_cycle = self.bookmarks.getFirstCycle()
         if self.cpu.cycles == orig_cycle:
             ida_message = 'revWriteCallback reversed to earliest bookmark'
             self.lgr.debug(ida_message)
             self.context_manager.setIdaMessage(ida_message)
+            self.deleteBrokenHap()
+            SIM_run_alone(self.context_manager.enableAll, None)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
         elif self.cpu.cycles == self.start_cycles:
@@ -255,17 +262,12 @@ class findKernelWrite():
         self.stop_cycles = self.cpu.cycles
         SIM_run_alone(self.thinkWeWrote, 0)
 
-    def deleteBroken(self, dumb):
-        if self.broken_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.broken_hap)
-            self.broken_hap = None
-  
     def brokenHap(self, cycles, one, exception, error_string):
         if self.broken_hap is None:
             return
         SIM_run_alone(self.context_manager.enableAll, None)
         self.lgr.debug('brokenHap, address is 0x%x' % self.addr)
-        SIM_run_alone(self.deleteBroken, None)
+        self.deleteBrokenHap()
         orig_cycle = self.bookmarks.getFirstCycle()
         eip = self.top.getEIP(self.cpu)
         bm = None
