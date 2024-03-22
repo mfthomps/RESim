@@ -1766,6 +1766,7 @@ class DataWatch():
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
             self.lgr.debug('dataWatch max marks exceeded')
             if self.callback is None:
+                self.lgr.debug('dataWatch max marks exceeded no callback')
                 self.stopWatch()
                 self.clearWatches()
                 SIM_break_simulation('max marks exceeded')
@@ -3675,20 +3676,22 @@ class DataWatch():
                 self.rmSubRange(addr, memory.size)
                 return
    
-        #if self.watchMarks.markCount() == 186:
-        #    print('is 186')
-        #    SIM_break_simulation("FIX THIS")
-        #    return
         if self.max_marks is not None and self.watchMarks.markCount() >= self.max_marks:
-            self.lgr.debug('dataWatch max marks exceeded read haps: %d' % len(self.read_hap))
+            self.lgr.debug('dataWatch readHap max marks exceeded read haps: %d' % len(self.read_hap))
             ''' hap echos? '''
             if len(self.read_hap) == 0:
                 return
-            self.lgr.debug('dataWatch max marks exceeded')
-            self.stopWatch()
-            self.clearWatches()
-            SIM_break_simulation('max marks exceeded')
-            print('Data Watches removed')
+
+            self.lgr.debug('dataWatch readHap max marks exceeded')
+            if self.callback is None:
+                self.lgr.debug('dataWatch readHap max marks exceeded no callback')
+                self.stopWatch()
+                self.clearWatches()
+                SIM_break_simulation('max marks exceeded')
+                print('Data Watches removed')
+            else:
+                self.lgr.debug('dataWatch readHap max marks exceeded, call callback %s' % str(self.callback))
+                self.callback()
             return
 
         ''' ad hoc sanitity check for wayward programs, fuzzed, etc.'''
@@ -4373,10 +4376,14 @@ class DataWatch():
             self.function_no_watch = functionNoWatch.FunctionNoWatch(self.top, self, self.cpu, def_file, self.cell_name, self.mem_utils, self.context_manager, self.so_map, self.lgr)
 
     def setCallback(self, callback):
-        ''' what should backStop call when no activity for N cycles? '''
-        self.lgr.debug('dataWatch setCallback, call to backstop to set callback')
+        ''' what should backStop call when no activity for N cycles?  Or if max marks exceeded'''
+        self.lgr.debug('dataWatch setCallback, call to backstop to set callback %s' % str(callback))
         self.back_stop.setCallback(callback)
         # use if max marks exceeded
+        self.callback = callback
+
+    def setMaxMarksCallback(self, callback):
+        self.lgr.debug('dataWatch setMaxMarksCallback to %s' % str(callback))
         self.callback = callback
 
     def showWatchMarks(self, old=False, verbose=False):
