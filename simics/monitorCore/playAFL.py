@@ -326,11 +326,18 @@ class PlayAFL():
             full_path = None
             if self.fname is None:
                 analysis_path = self.top.getAnalysisPath(self.target_proc)
+                prog_path = self.top.getProgPath(self.target_proc)
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
-            self.lgr.debug('playAFL call enableCoverage analysis_path is %s' % analysis_path)
+                if '/' not in self.fname:
+                    prog_path = self.top.getProgPath(self.fname)
+                    print('Relative path given, guessing you mean %s' % prog_path)
+                    self.lgr.debug('playAFL Relative path given, guessing you mean %s' % prog_path)
+                else:
+                    prog_path = self.fname
+            self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s' % (analysis_path, prog_path))
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path)
+               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path, prog_path=prog_path)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
             if self.linear:
@@ -544,10 +551,12 @@ class PlayAFL():
             if self.repeat:
                 #if self.repeat_counter > 20:
                 #    return
+                self.lgr.debug('playAFL goAlone repeat set, do continue')
                 SIM_continue(0)
                 self.lgr.debug('playAFL goAlone repeat set, did continue')
                 pass
             else:
+                self.lgr.debug('playAFL goAlone repeat not set, do continue')
                 SIM_continue(0)
                 self.lgr.debug('playAFL goAlone repeat not set, did continue')
                 pass
