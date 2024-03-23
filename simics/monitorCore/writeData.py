@@ -250,8 +250,7 @@ class WriteData():
                 retval = len(self.in_data)
 
             if self.addr_of_count is not None:
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, retval)
-                self.ioctl_flag = 0
+                self.ioctl_flag = 1
                 self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
@@ -646,21 +645,18 @@ class WriteData():
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
 
-    def doRetIOCtl(self, fd, callname=None):
+    def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
         retval = None
         if callname is not None and callname != 'ioctl':
-            return
+            return self.doRetFixup(fd)
         tid = self.top.getTID()
         if tid == self.tid and fd == self.fd:
             if self.ioctl_flag is not None:
-                if self.ioctl_flag == 0:
-                    # our first return
-                    self.lgr.debug('writeData doRetIOCtl our first return, set flag to 1')
-                    self.ioctl_flag = 1
-                else:
                     # must be second call, return zero
-                    self.lgr.debug('writeData doRetIOCtl set return value to zero')
-                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, 0)
+                    if addr_of_count is None:
+                        addr_of_count = self.addr_of_count
+                    self.lgr.debug('writeData doRetIOCtl set return value to zero to addr 0x%x' % addr_of_count)
+                    self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
         return retval
                 
     def doRetFixup(self, fd, callname=None):
