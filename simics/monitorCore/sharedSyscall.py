@@ -1024,10 +1024,10 @@ class SharedSyscall():
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x could not read bye written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result_ptr))
 
                 else:
-                    if False and self.read_fixup_callback is not None:
+                    if self.read_fixup_callback is not None:
                         result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                         self.lgr.debug('sharedSyscall ioctl call read_fixup_callback result was 0x%x' % result) 
-                        self.read_fixup_callback(exit_info.old_fd, callname=callname)
+                        self.read_fixup_callback(exit_info.old_fd, callname=callname, addr_of_count=exit_info.retval_addr)
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
 
