@@ -359,6 +359,12 @@ class InjectIO():
                             self.addr += 1
                         if self.addr_addr is not None:
                             self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+                    else:
+                        if self.addr_of_count is not None and not self.top.isWindows():
+                            self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                            if self.dataWatch is not None:
+                                self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                                self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
                     if not self.no_rop:
                         self.top.watchROP()
                 else:
