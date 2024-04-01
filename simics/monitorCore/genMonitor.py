@@ -123,6 +123,7 @@ import dmodMgr
 import runToReturn
 import recordLogEvents
 import pageCallbacks
+import loopN
 
 #import fsMgr
 import json
@@ -333,6 +334,7 @@ class GenMonitor():
         self.snap_version = 0
 
         self.report_crash = None
+        self.loop_n = {}
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -1213,6 +1215,10 @@ class GenMonitor():
                             name = tasks[t].comm
                     else:
                         name = tasks[t].comm
+                    # catch garbage
+                    if type(tasks[t].next) is not int:
+                        print('Error getting task info at task rec 0x%x' % t)
+                        break
                     print('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
                         name, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
                     if fh is not None:
@@ -1221,10 +1227,14 @@ class GenMonitor():
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
-        self.lgr.debug('setDebugBookmark')
-        SIM_run_command('enable-reverse-execution')
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
-        self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
+        if self.bookmarks is not None:
+            self.lgr.debug('setDebugBookmark')
+            if not self.rev_execution_enabled:
+                SIM_run_command('enable-reverse-execution')
+            tid, cpu = self.context_manager[self.target].getDebugTid() 
+            self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
+        else:
+            self.lgr.debug('setDebugBookmark, but self.bookmarks is None')
 
     def debugGroup(self):
         self.debug(group=True)
@@ -6072,6 +6082,36 @@ class GenMonitor():
             else: 
                 retval = self.soMap[self.target].getProg(leader_tid)
         return retval
+
+    def findBytes(self, byte_string):
+        byte_array = bytes.fromhex(byte_string)
+        print('len of byte_array %d' % len(byte_array))
+        load_info = self.soMap[self.target].getLoadInfo()
+        base = load_info.addr
+        print('start at 0x%x' % base)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        for i in range(2000000):
+            offset=0
+            got_one = True
+            for b in byte_array:
+                mem_byte = self.mem_utils[self.target].readByte(cpu, base+i+offset)
+                #print('compare b 0x%x to mem 0x%x' % (b, mem_byte))
+                if b != mem_byte:
+                    got_one = False
+                    break
+                else:
+                    print('matched 0x%x' % b)
+                    offset = offset + 1
+            if got_one:
+                print('got one at 0x%x' % (base+i))
+                break
+
+    def loopN(self, count):
+        if self.target not in self.loop_n:
+            self.loop_n[self.target] = loopN.LoopN(self, count, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        else:
+            self.loop_n[self.target].go()
+    
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
