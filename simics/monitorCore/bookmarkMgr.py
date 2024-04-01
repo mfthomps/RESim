@@ -137,7 +137,10 @@ class bookmarkMgr():
         self.__mark_msg[mark] = msg
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
         if not mark.startswith('protected_memory'):
-            self.lgr.debug('setDebugBookmark %s cycle on %s is %x step:0x%x eip: %x %s' % (mark, cell_name, current, steps, eip, instruct[1]))
+            if steps is not None:
+                self.lgr.debug('setDebugBookmark %s cycle on %s is %x step:0x%x eip: %x %s' % (mark, cell_name, current, steps, eip, instruct[1]))
+            else:
+                self.lgr.debug('setDebugBookmark %s cycle on %s is %x (steps not recorded) eip: %x %s' % (mark, cell_name, current, eip, instruct[1]))
         entry = {}
         entry['mark'] = mark
         entry['msg'] = msg
