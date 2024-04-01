@@ -14,7 +14,7 @@ def getHits(paths):
     cover = json.load(open(paths), object_pairs_hook=OrderedDict)
 
 def main():
-    parser = argparse.ArgumentParser(prog='dataDiff', description='Genereate a hits file for a target.')
+    parser = argparse.ArgumentParser(prog='genHitsFile', description='Genereate a hits file for a target.')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('-a', '--all', action='store_true', help='Look at all queue files, not just unique files.')
     args = parser.parse_args()
@@ -22,7 +22,7 @@ def main():
     hits = []
     for path in expaths1:
         cover = json.load(open(path))
-        #print('doing %s' % path)
+        print('doing %s' % path)
         for hit in cover:
             hit = int(hit)
             if hit not in hits:
