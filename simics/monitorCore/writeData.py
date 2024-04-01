@@ -155,6 +155,8 @@ class WriteData():
             self.ioctl_op_map = None
 
         self.pending_call = True
+        # know when to return 0 from ioctl
+        self.ioctl_flag = None
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -248,8 +250,8 @@ class WriteData():
                 retval = len(self.in_data)
 
             if self.addr_of_count is not None:
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, retval)
-                #self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
+                self.ioctl_flag = 1
+                self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             #if self.dataWatch is not None:
@@ -432,7 +434,10 @@ class WriteData():
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
         else:
             #self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
-            self.shared_syscall.setReadFixup(self.doRetFixup)
+            if self.addr_of_count is not None:
+                self.shared_syscall.setReadFixup(self.doRetIOCtl)
+            else:
+                self.shared_syscall.setReadFixup(self.doRetFixup)
 
     def selectHap(self, dumb, third, break_num, memory):
         ''' Hit a call to select or poll'''
@@ -639,8 +644,22 @@ class WriteData():
                         self.backstop.setFutureCycle(self.backstop_cycles)
                 if self.write_callback is not None:
                     SIM_run_alone(self.write_callback, count)
+
+    def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
+        retval = None
+        if callname is not None and callname != 'ioctl':
+            return self.doRetFixup(fd)
+        tid = self.top.getTID()
+        if tid == self.tid and fd == self.fd:
+            if self.ioctl_flag is not None:
+                    # must be second call, return zero
+                    if addr_of_count is None:
+                        addr_of_count = self.addr_of_count
+                    self.lgr.debug('writeData doRetIOCtl set return value to zero to addr 0x%x' % addr_of_count)
+                    self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
+        return retval
                 
-    def doRetFixup(self, fd):
+    def doRetFixup(self, fd, callname=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()

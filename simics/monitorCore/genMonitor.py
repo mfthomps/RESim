@@ -123,6 +123,7 @@ import dmodMgr
 import runToReturn
 import recordLogEvents
 import pageCallbacks
+import loopN
 
 #import fsMgr
 import json
@@ -333,6 +334,7 @@ class GenMonitor():
         self.snap_version = 0
 
         self.report_crash = None
+        self.loop_n = {}
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -1213,6 +1215,10 @@ class GenMonitor():
                             name = tasks[t].comm
                     else:
                         name = tasks[t].comm
+                    # catch garbage
+                    if type(tasks[t].next) is not int:
+                        print('Error getting task info at task rec 0x%x' % t)
+                        break
                     print('tid: %d taks_rec: 0x%x  comm: %s state: %d next: 0x%x leader: 0x%x parent: 0x%x tgid: %d %s' % (tasks[t].pid, t, 
                         name, tasks[t].state, tasks[t].next, tasks[t].group_leader, tasks[t].real_parent, tasks[t].tgid, id_str))
                     if fh is not None:
@@ -1221,10 +1227,14 @@ class GenMonitor():
             
 
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
-        self.lgr.debug('setDebugBookmark')
-        SIM_run_command('enable-reverse-execution')
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
-        self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
+        if self.bookmarks is not None:
+            self.lgr.debug('setDebugBookmark')
+            if not self.rev_execution_enabled:
+                SIM_run_command('enable-reverse-execution')
+            tid, cpu = self.context_manager[self.target].getDebugTid() 
+            self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
+        else:
+            self.lgr.debug('setDebugBookmark, but self.bookmarks is None')
 
     def debugGroup(self):
         self.debug(group=True)
@@ -4385,7 +4395,7 @@ class GenMonitor():
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None):
+            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -4439,7 +4449,7 @@ class GenMonitor():
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
-                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr)
+                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc)
 
         if go:
             self.injectIOInstance.go()
@@ -6077,6 +6087,35 @@ class GenMonitor():
         prog = self.soMap[self.target].getFullPath(prog)
         return prog
 
+    def findBytes(self, byte_string):
+        byte_array = bytes.fromhex(byte_string)
+        print('len of byte_array %d' % len(byte_array))
+        load_info = self.soMap[self.target].getLoadInfo()
+        base = load_info.addr
+        print('start at 0x%x' % base)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        for i in range(2000000):
+            offset=0
+            got_one = True
+            for b in byte_array:
+                mem_byte = self.mem_utils[self.target].readByte(cpu, base+i+offset)
+                #print('compare b 0x%x to mem 0x%x' % (b, mem_byte))
+                if b != mem_byte:
+                    got_one = False
+                    break
+                else:
+                    print('matched 0x%x' % b)
+                    offset = offset + 1
+            if got_one:
+                print('got one at 0x%x' % (base+i))
+                break
+
+    def loopN(self, count):
+        if self.target not in self.loop_n:
+            self.loop_n[self.target] = loopN.LoopN(self, count, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        else:
+            self.loop_n[self.target].go()
+    
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -453,8 +453,8 @@ class SharedSyscall():
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
             if self.read_fixup_callback is not None:
-                self.lgr.debug('sharedSyscall call read_fixup_callback eax was %d' % eax)
-                eax = self.read_fixup_callback(exit_info.old_fd)
+                self.lgr.debug('sharedSyscall recv call read_fixup_callback eax was %d' % eax)
+                eax = self.read_fixup_callback(exit_info.old_fd, callname=socket_callname)
                 if eax is None:
                     return
             if eax >= 0:
@@ -848,7 +848,7 @@ class SharedSyscall():
             #self.lgr.debug('is read eax 0x%x' % eax)
             if self.read_fixup_callback is not None:
                 self.lgr.debug('sharedSyscall read call read_fixup_callback')
-                eax = self.read_fixup_callback(exit_info.old_fd)
+                eax = self.read_fixup_callback(exit_info.old_fd, callname=callname)
                 if eax is None:
                     return
             if eax < 0: 
@@ -1024,9 +1024,15 @@ class SharedSyscall():
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x could not read bye written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result_ptr))
 
                 else:
+                    if self.read_fixup_callback is not None:
+                        result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
+                        self.lgr.debug('sharedSyscall ioctl call read_fixup_callback result was 0x%x' % result) 
+                        self.read_fixup_callback(exit_info.old_fd, callname=callname, addr_of_count=exit_info.retval_addr)
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
+
                         trace_msg = ('\treturn from ioctl tid:%s FD: %d cmd: 0x%x result: 0x%x written to 0x%x\n' % (tid, exit_info.old_fd, exit_info.cmd, result, exit_info.retval_addr))
+                        self.lgr.debug(trace_msg)
                         #if exit_info.cmd == 0x541b:
                             
                     else:

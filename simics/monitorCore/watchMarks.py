@@ -1308,9 +1308,9 @@ class WatchMarks():
         for mark in reversed(self.mark_list):
            if mark.call_cycle is not None and mark.call_cycle > self.cpu.cycles:
                continue
-           self.lgr.debug('watchMarks whichRead mark.mark %s' % str(mark.mark))
+           #self.lgr.debug('watchMarks whichRead mark.mark %s' % str(mark.mark))
            if isinstance(mark.mark, CallMark):
-               if mark.mark.recv_addr is not None:
+               if mark.mark.recv_addr is not None and 'ioctl' not in mark.mark.getMsg():
                    num_reads += 1
                    self.lgr.debug('num_reads now %d' % num_reads)
                    if mark.call_cycle is not None and mark.call_cycle >= self.cpu.cycles:

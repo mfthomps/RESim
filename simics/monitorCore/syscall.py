@@ -2499,6 +2499,7 @@ class Syscall():
             if killed:
                 self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
                 self.stop_action.rmFun(self.top.skipAndMail)
+        
             self.lgr.debug('syscall handleExit retain_so %r ida_msg is %s' % (retain_so, ida_msg))
             if self.traceMgr is not None:
                 self.traceMgr.write(ida_msg+'\n')
@@ -2508,10 +2509,10 @@ class Syscall():
                     self.lgr.debug('syscall handleExit not watching, call soMap.handleExit')
                     self.soMap.handleExit(tid, killed)
             else:
-                self.lgr.debug('syscallHap exit soMap is None, tid:%s' % (tid))
+                self.lgr.debug('syscall exit soMap is None, tid:%s' % (tid))
             last_one = self.context_manager.rmTask(tid, killed)
             debugging_tid, dumb = self.context_manager.getDebugTid()
-            self.lgr.debug('syscallHap handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
+            self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
             if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
@@ -2521,6 +2522,11 @@ class Syscall():
                 self.sharedSyscall.stopTrace()
                 ''' record exit so we don't see this proc, e.g., when going to debug its next instantiation '''
                 self.task_utils.setExitTid(tid)
+
+                frame, cycle = self.top.getRecentEnterCycle()
+                enter_cycle = cycle-1
+                self.lgr.debug('syscall handleExit frame %s  cycle 0x%x' % (str(frame), cycle))
+                self.top.setDebugBookmark('Process exit', cpu=self.cpu, cycles=enter_cycle, eip = frame['pc'])
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
                 print('exit tid:%s' % tid)

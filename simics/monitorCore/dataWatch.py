@@ -1115,7 +1115,9 @@ class DataWatch():
                 else:
                     self.lgr.debug('dataWatch cpyish from findRangeIndexForRange buf_index %d, buf_start 0x%x, buf_length %d' % (buf_index, buf_start, buf_length))
                     self.mem_something.src = buf_start 
-                    self.mem_something.count = buf_length 
+                    if buf_length < self.mem_something.count:
+                        self.mem_something.truncated = self.mem_something.count 
+                        self.mem_something.count = buf_length 
                     #buf_start = self.start[buf_index]
                     #if self.length[buf_index] < self.mem_something.count:
                     #    self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
@@ -1774,6 +1776,7 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch max marks exceeded, call callback %s' % str(self.callback))
                 self.callback()
+                self.callback = None
             return
 
         ret_to = self.getReturnAddr()
@@ -3621,6 +3624,9 @@ class DataWatch():
         '''
         if self.return_hap is not None or self.context_manager.isReverseContext():
             return
+        if index >= len(self.start):
+            self.lgr.debug('dataWatch readHap index %d but len of start is %d addr 0x%x' % (index, len(self.start), memory.logical_address))
+            return
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
@@ -4359,10 +4365,13 @@ class DataWatch():
         origin_watches = []
         for data_watch in data_watch_list:
             if data_watch['cycle'] <= cycle:
-                self.setRange(data_watch['start'], data_watch['length']) 
-                origin_watches.append(data_watch)
+                if data_watch['start'] is not None:
+                    self.setRange(data_watch['start'], data_watch['length']) 
+                    origin_watches.append(data_watch)
+                else:
+                    self.lgr.debug('dataWatch resetOrigin  watch has no start %s' % str(data_watch))
             else:
-                self.lgr.debug('clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
+                self.lgr.debug('dataWatch resetOrigin clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
                 break
         self.lgr.debug('dataWatch resetOrigin now call watchmarks')
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)

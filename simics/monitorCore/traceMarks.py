@@ -180,7 +180,7 @@ class TraceMarks():
         pipe_refs = self.getPipeRefs(mark['fd'])
         dest = mark['recv_addr']
         if len(pipe_refs) == 0:
-            self.lgr.debug('traceRefs did not find any pipeRef for fd %d' % write_fd)
+            self.lgr.debug('traceRefs did not find any pipeRef for fd %s' % mark['fd'])
             return
         else:
             remaining_bytes = mark['length']

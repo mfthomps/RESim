@@ -619,6 +619,7 @@ class findKernelWrite():
                             self.rev_to_call.cleanup(self.k_buffer_addrs)
                     else:
                         eip = self.top.getEIP(self.cpu)
+                        src_addr = src_addr - self.mem_utils.wordSize(self.cpu)
                         bm = "eip:0x%x content of memory:0x%x from %s from 0x%x" % (eip, self.addr, instruct[1], src_addr)
                         self.bookmarks.setBacktrackBookmark(bm)
                         self.top.stopAtKernelWrite(src_addr, rev_to_call=self.rev_to_call, num_bytes=self.num_bytes, kernel=self.kernel)
