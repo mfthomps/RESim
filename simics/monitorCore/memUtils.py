@@ -848,7 +848,7 @@ class MemUtils():
                               new_xs_base, self.param.delta, self.param.current_task))
                         #self.adjustParam(self.param.delta)
                         if self.WORD_SIZE == 4:
-                            self.param.current_task = self.param.current_task + delta
+                            self.param.current_task = self.param.current_task + self.param.delta
                         self.lgr.debug('getCurrentTask now 0x%x' % self.param.current_task)
                     cpl = getCPL(cpu)
                     #current_task = self.param.current_task + self.param.delta
