@@ -2524,7 +2524,7 @@ class Syscall():
                 self.task_utils.setExitTid(tid)
 
                 frame, cycle = self.top.getRecentEnterCycle()
-                enter_cyle = cycle-1
+                enter_cycle = cycle-1
                 self.lgr.debug('syscall handleExit frame %s  cycle 0x%x' % (str(frame), cycle))
                 self.top.setDebugBookmark('Process exit', cpu=self.cpu, cycles=enter_cycle, eip = frame['pc'])
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
