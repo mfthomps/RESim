@@ -800,7 +800,8 @@ generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} c
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
-\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run during {\tt trackIO} or {\tt injectIO}. Defaults to 9,000,000. 
+\item {\tt BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run during {\tt trackIO}, {\tt injectIO} or {\tt playAFL} without the
+afl\_mode flag. Defaults to 9,000,000. 
 after the last data watch event, or the last code coverage hit.
 \item {\tt AFL\_BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last code coverage hit during an AFL session.
 \item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
