@@ -41,7 +41,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -168,6 +168,7 @@ class InjectIO():
         self.run = run
         self.reset_debug = reset_debug
         self.src_addr = src_addr
+        self.malloc = malloc
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -374,6 +375,8 @@ class InjectIO():
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
+                if self.malloc:
+                    self.top.traceMalloc()
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     cli.quiet_run_command('c')
@@ -434,6 +437,8 @@ class InjectIO():
         else:
             self.top.jumperStop()
         self.bookmarks = self.top.getBookmarksInstance()
+        if self.malloc:
+            self.top.traceMalloc()
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
                 self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count)
