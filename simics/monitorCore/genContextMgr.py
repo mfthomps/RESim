@@ -1238,6 +1238,7 @@ class GenContextMgr():
 
     def setExitCallback(self, callback):
         ''' callback to be invoked when/if program exits.  intended for use recording exits that occur during playAFL'''
+        #self.lgr.debug('contextManager setExitCallback to %s' % str(callback))
         self.exit_callback = callback
 
     def watchGroupExits(self, tid=None):
@@ -1248,8 +1249,8 @@ class GenContextMgr():
         leader_tid = self.task_utils.getGroupLeaderTid(cur_tid)
         if leader_tid is None:
             self.lgr.error('contextManager watchGroupExits no group leader for %s' % cur_tid) 
-        #self.lgr.debug('contextManager watchGroupExit cur_tid %s, leader %s' % (cur_tid, leader_tid))
         tid_dict = self.task_utils.getGroupTids(leader_tid)
+        #self.lgr.debug('contextManager watchGroupExits cur_tid %s, leader %s, got %d items from getGroupTids' % (cur_tid, leader_tid, len(tid_dict)))
         for tid in tid_dict:
             self.watchExit(rec=tid_dict[tid], tid=tid)
 
@@ -1261,7 +1262,7 @@ class GenContextMgr():
         #self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
-            self.lgr.debug('watchExit for tid 1, ignore')
+            self.lgr.debug('contextManager watchExit for tid 1, ignore')
             return False
         if tid is None:
             tid = cur_tid
@@ -1276,7 +1277,7 @@ class GenContextMgr():
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
                 has no place in the task list? OR all threads share the same next_ts pointer'''
-            #self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
+            self.lgr.debug('contextManager watchExit failed to get list_addr tid %s cur_tid %s rec 0x%x' % (tid, cur_tid, rec))
             return False
         
         if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
@@ -1284,15 +1285,15 @@ class GenContextMgr():
             watch_tid, watch_comm = self.task_utils.getTidCommFromNext(list_addr)
             if not self.top.isWindows(target=self.cell_name):
                 if watch_tid == '0':
-                    self.lgr.debug('genContext watchExit, try group next')
+                    self.lgr.debug('contextManager watchExit, try group next')
                     watch_tid, watch_comm = self.task_utils.getTidCommFromGroupNext(list_addr)
                     if self.debugging_tid is not None and self.amWatching(watch_tid):
                         cell = self.resim_context
             if watch_tid == '0' and not self.top.isWindows():
                 # TBD um, windows pid zero points to this process as being next?
-                self.lgr.debug('genContext watchExit, seems to be pid 0, ignore it')
+                self.lgr.debug('contextManager watchExit, seems to be pid 0, ignore it')
                 return False
-            self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
+            #self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
             #self.task_rec_bp[tid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
@@ -1551,6 +1552,7 @@ class GenContextMgr():
         return retval
 
     def checkExitCallback(self):
+        self.lgr.debug('contextManager checkExitCallback callback is %s' % str(self.exit_callback))
         if self.exit_callback is not None:
             self.exit_callback()
 
