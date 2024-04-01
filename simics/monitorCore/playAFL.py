@@ -210,6 +210,7 @@ class PlayAFL():
             self.top.resetOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback)
+        self.did_exit = False
 
     def ranToIO(self, dumb):
         self.commence_coverage = self.target_cpu.cycles - self.initial_cycle
@@ -379,6 +380,7 @@ class PlayAFL():
         self.index = -1
         self.hit_total = 0
         self.findbb = findbb
+        self.did_exit = False
         SIM_run_alone(self.goAlone, False)
 
     def backstopCallback(self):
@@ -611,7 +613,6 @@ class PlayAFL():
             else:
                 self.top.stopCoverage() 
                 
-
     def getHitsPath(self, index):
         queue_dir = os.path.dirname(self.afl_list[index])
         queue_parent = os.path.dirname(queue_dir)
@@ -624,6 +625,20 @@ class PlayAFL():
         except:
             pass
         fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
+        return fname
+
+    def getExitsPath(self, index):
+        queue_dir = os.path.dirname(self.afl_list[index])
+        queue_parent = os.path.dirname(queue_dir)
+        if os.path.basename(queue_dir) == 'manual_queue':
+            exits_dir = os.path.join(queue_parent, 'manual_exits')
+        else:
+            exits_dir = os.path.join(queue_parent, 'coverage')
+        try:
+            os.makedirs(exits_dir)
+        except:
+            pass
+        fname = os.path.join(exits_dir, os.path.basename(self.afl_list[self.index])) 
         return fname
 
     def recordHits(self, hit_bbs):
@@ -643,6 +658,19 @@ class PlayAFL():
             hit = int(hit)
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
+
+    def recordExits(self, path):
+        ''' exits will go in a "exits" directory along side queue, etc. '''
+        self.lgr.debug('playAFL recorddExits for %s' % path)
+        fname = self.getExitsPath(self.index)
+        if not os.path.isfile(fname):
+            self.lgr.debug('playAFL recordExits, assume ad-hoc path')
+            print('Assume ad-hoc path, exits stored in /tmp/exits.txt')
+            fname = '/tmp/exits.txt'
+        with open(fname, 'w') as fh:
+            #json.dump(hit_list, fh) 
+            msg = '%s : %s\n' % (path, self.context_manager.getIdaMessage())
+            fh.write(msg)
 
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('playAFL in stopHap')
@@ -673,8 +701,10 @@ class PlayAFL():
                 elif not self.repeat:
                     self.recordHits(hit_bbs)
                     self.coverage.saveDeadFile()
-                if self.coverage.didExit():
+                if self.coverage.didExit() or self.did_exit:
+                    self.lgr.debug('playAFL stopHap coverage says didExit, add to exit_list')
                     self.exit_list.append(self.afl_list[self.index])
+                    self.recordExits(self.afl_list[self.index])
 
                 if self.top.hasPendingPageFault(self.tid):
                     print('TID %s has pending page fault' % self.tid)
@@ -704,6 +734,7 @@ class PlayAFL():
         return retval
 
     def reportExit(self):
+        self.did_exit = True
         SIM_run_alone(self.reportExitAlone, None)
 
     def reportExitAlone(self, dumb):
