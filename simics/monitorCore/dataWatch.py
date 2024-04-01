@@ -1115,7 +1115,9 @@ class DataWatch():
                 else:
                     self.lgr.debug('dataWatch cpyish from findRangeIndexForRange buf_index %d, buf_start 0x%x, buf_length %d' % (buf_index, buf_start, buf_length))
                     self.mem_something.src = buf_start 
-                    self.mem_something.count = buf_length 
+                    if buf_length < self.mem_something.count:
+                        self.mem_something.truncated = self.mem_something.count 
+                        self.mem_something.count = buf_length 
                     #buf_start = self.start[buf_index]
                     #if self.length[buf_index] < self.mem_something.count:
                     #    self.lgr.debug('dataWatch returnHap copy more than our buffer, truncate to %d' % self.length[buf_index])
@@ -1774,6 +1776,7 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch max marks exceeded, call callback %s' % str(self.callback))
                 self.callback()
+                self.callback = None
             return
 
         ret_to = self.getReturnAddr()
