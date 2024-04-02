@@ -24,6 +24,7 @@ class RopCop():
             self.decode = decodeArm
         else:
             self.decode = decode
+        self.is_signal = False
 
     def watchROP(self, watching=True):
         self.watching = watching
@@ -69,7 +70,7 @@ class RopCop():
         #eip = return_to - 8
         eip = return_to - 2*word_size
         done = False
-        #self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
+        self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
         while not done and eip < return_to:
             # TBD use instruction length to confirm it is a true call
             try:
@@ -96,6 +97,9 @@ class RopCop():
                 if instruct[1].startswith('int') or instruct[1].startswith('sysenter'):
                     dumb, comm, cur_tid  = self.task_utils.curThread()
                     self.lgr.debug('ropCop found signal in tid %s' % cur_tid)
+                    self.in_process = True
+                    self.is_signal = True
+                    SIM_run_alone(self.stopAlone, return_to)
                     done = True
                     break
           
@@ -134,8 +138,12 @@ class RopCop():
 
     def stopAlone(self, ret_addr):
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
-        print('Possible ROP')
-        SIM_break_simulation('ROP ?')
+        if self.is_signal:
+            print('Possible signal handler')
+            SIM_break_simulation('Signal handler ?')
+        else:
+            print('Possible ROP')
+            SIM_break_simulation('ROP ?')
 
     def stopHap(self, ret_addr, one, exception, error_string):
         if self.stop_hap is None:  
@@ -146,7 +154,10 @@ class RopCop():
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
+        if self.is_signal:
+            bm = "Signal handler eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
+        else:
+            bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
         dumb, comm, cur_tid  = self.task_utils.curThread()
         self.lgr.debug('ropCop stopHap %s tid:%s' % (bm, cur_tid))
         self.top.removeDebugBreaks()
