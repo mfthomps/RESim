@@ -1898,7 +1898,7 @@ class GenMonitor():
         self.gdbMailbox('0x%x' % eip)
         print('Monitor done')
 
-    def skipAndMail(self, cycles=1):
+    def skipAndMail(self, cycles=1, restore_debug=True):
         self.lgr.debug('skipAndMail...')
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         if cpu is None:
@@ -1940,7 +1940,7 @@ class GenMonitor():
                 # TBD skipping back to prior to call makes no sense
                 self.lgr.debug('skipAndMail left in kernel')
                 
-            if self.debugging():
+            if self.debugging() and restore_debug:
                 self.lgr.debug('skipAndMail, restoreDebugBreaks')
                 SIM_run_alone(self.restoreDebugBreaks, False)
 
