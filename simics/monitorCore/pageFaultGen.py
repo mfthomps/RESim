@@ -1,9 +1,34 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 from simics import *
 import os
 import memUtils
 import pageUtils
 import hapCleaner
 import resimUtils
+import cycleCallback
 from resimHaps import *
 '''
 Watch page faults for indications of a SEGV exception
@@ -63,7 +88,7 @@ class PageFaultGen():
         ''' TIDS that have returned to user space to find the fault is not resolved.  Assumes reschedule on fault and lazy
             return to the user space without resoving it. 
         '''
-        self.pending_double_faults = []
+        self.pending_double_faults = {}
 
     def rmExit(self, tid):
         if tid in self.exit_break:
@@ -137,7 +162,8 @@ class PageFaultGen():
         self.ptable_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.ptableWriteHap, prec, self.ptable_break)
   
     def hapAlone(self, prec):
-        self.top.removeDebugBreaks()
+        self.top.removeDebugBreaks(keep_coverage=False)
+        self.top.stopTrackIO(immediate=True)
        
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, prec)
         self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
@@ -284,7 +310,8 @@ class PageFaultGen():
                   
                 if phys_addr is not None:  
                     if tid in self.pending_double_faults:
-                        self.pending_double_faults.remove(tid)
+                        self.pending_double_falts[tid].cancel()
+                        del self.pending_double_faults[tid]
                     del self.pending_faults[tid]
                     if self.ptable_hap is not None:
                         hap = self.ptable_hap
@@ -310,8 +337,8 @@ class PageFaultGen():
                         self.lgr.debug('pageFaultHap tid:%s user_eip: 0x%x is kernel.  TBD misses kernel ref to passed pointers' % (tid, self.user_eip))
                         del self.pending_faults[tid]
                     elif tid not in self.pending_double_faults:
-                        self.pending_double_faults.append(tid)
-                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped. Instruct %s.  Watch for double fault' % (prec.cr2, instruct[1]))
+                        self.pending_double_faults[tid] = cycleCallback.CycleCallback(0xfff, self.cycleCallback, self.cpu, tid, self.lgr)
+                        self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped. Instruct %s.  Watch for double fault cycle now 0x%x' % (prec.cr2, instruct[1], self.cpu.cycles))
                     else:
                         self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped, DOUBLE fault. Instruct %s' % (prec.cr2, instruct[1]))
                         SIM_run_alone(self.hapAlone, self.pending_faults[tid])
@@ -529,8 +556,8 @@ class PageFaultGen():
             self.lgr.debug('SEGV with no bookmarks.  Not yet debugging?')
         self.lgr.debug('pageFaultGen call to stop trackIO and then skip and mail')
         self.stopWatchPageFaults()
-        self.top.stopTrackIO()
-        self.top.skipAndMail()
+        self.top.stopTracking()
+        self.top.skipAndMail(restore_debug=False)
 
     def stopAlone(self, prec):
         RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
@@ -695,3 +722,8 @@ class PageFaultGen():
                         #self.lgr.debug('pageFaultGen added probe 0x%x' % probe)
         
     
+
+    def cycleCallback(self, tid):
+        self.lgr.debug('pageFaultGen cycleCallback assume dump or such')
+        SIM_run_alone(self.hapAlone, self.pending_faults[tid])
+        SIM_run_alone(self.rmModeHapAlone, None) 
