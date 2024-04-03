@@ -364,17 +364,18 @@ class Coverage():
             else:
                 self.value = None
         
-    def delModeAlone(self, dumb):
-        if self.mode_hap is not None:
-            SIM_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-            self.mode_hap = None
+    def delModeAlone(self, hap):
+        if hap is not None:
+            SIM_hap_delete_callback_id("Core_Mode_Change", hap)
 
     def modeChanged(self, mem_trans, one, old, new):
         if self.mode_hap is None:
             return
         #self.lgr.debug('modeChanged after table updated, check pages in table')
         self.tableUpdated(mem_trans)
-        SIM_run_alone(self.delModeAlone, None)
+        hap = self.mode_hap
+        SIM_run_alone(self.delModeAlone, hap)
+        self.mode_hap = None
     
     def tableHap(self, dumb, third, break_num, memory):
         length = memory.size
@@ -390,7 +391,12 @@ class Coverage():
                 else:
                     self.lgr.error('tableHap op_type is not store')
             else:
-                self.lgr.error('coverage tableHap for 64 bits not yet handled')
+                #self.lgr.error('coverage tableHap for 64 bits not yet handled')
+                if op_type is Sim_Trans_Store:
+                    mem_trans = self.MyMemTrans(memory)
+                    self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
+                else:
+                    self.lgr.error('tableHap op_type is not store')
         else:
             self.lgr.debug('coverage tableHap breaknum should have not hap %d' % break_num) 
 
@@ -402,7 +408,11 @@ class Coverage():
             op_type = mem_trans.op_type
             type_name = mem_trans.type_name
             physical = mem_trans.physical
-            #self.lgr.debug('tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
+            if physical not in self.missing_tables:
+                self.lgr.error('tableUpdated phys 0x%x NOT in missing_tables.  len %d  type %s ' % (physical, length, type_name))
+                return
+      
+            self.lgr.debug('tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
             #if length == 4 and self.cpu.architecture == 'arm':
             if True or length == 4:
                 if op_type is Sim_Trans_Store:
