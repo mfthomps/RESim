@@ -3384,7 +3384,7 @@ class GenMonitor():
             if not just_input:
                 accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
                 # add open to catch Dmods for open_replace
-                calls = ['open', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'bind']
+                calls = ['open', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
@@ -6081,6 +6081,15 @@ class GenMonitor():
                 self.lgr.error('getSnapProg leader_tid is None, asked about %s' % tid)
             else: 
                 retval = self.soMap[self.target].getProg(leader_tid)
+        return retval
+
+    def getProgPath(self, prog_in):
+        retval = None
+        self.lgr.debug('getProgPath for %s' % prog_in)
+        if prog_in is not None:
+            retval = self.soMap[self.target].getFullPath(prog_in)
+        else:
+            self.lgr.debug('getProgPath for None')
         return retval
 
     def findBytes(self, byte_string):
