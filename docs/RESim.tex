@@ -386,7 +386,7 @@ gather its shared library data prior to the process being loaded.
 
 \begin{itemize}
 
-\item {\tt debugProc(process name)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
+\item {\tt debugProc(process\_name, trace\_threads=True, new=False)} – Initiate the debugger server for the given process name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching process.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
 
 The process name is searched against the comm names, which are fifteen characters.  RESim will trucate input names to 15 characters.
                                                                
@@ -398,6 +398,8 @@ found via showSOMap prior to attaching the debugger.  If you have run reTrack or
 detect and report mem operations, e.g., memcpy -- and then refresh the IDA Data Watch window. 
 
 If you prefix the given process name with {\tt sh }, (sh followed by a space), RESim will look for a shell invocation of the script name that follows the sh.
+The {\tt trace\_threads} flag controls whether shared libraries of other processes will be tracked while looking for the given process.  The {\tt new} flag ignores any currently 
+running process and looks for a new creation.  This is useful for processes that start, die, and start again for whatever reason.
 
 \item {\tt debugTidGroup(tid)} -- Initiate the debugger server for a given TID.  Intended for use after starting a session from a checkpoint created using
 {\tt writeConfig}.  This assumes process information had been generated in a previous session that was saved.  
