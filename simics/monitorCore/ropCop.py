@@ -70,7 +70,7 @@ class RopCop():
         #eip = return_to - 8
         eip = return_to - 2*word_size
         done = False
-        self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
+        #self.lgr.debug("rop_cop_ret_callback current_eip: %x return_to %x" % (eip, return_to))
         while not done and eip < return_to:
             # TBD use instruction length to confirm it is a true call
             try:
@@ -88,6 +88,8 @@ class RopCop():
         if not done and self.cpu.architecture != 'arm':
             ''' is the return to a signal handler? '''
             ''' hacky look for int 80 or sysenter '''
+            dumb, comm, cur_tid  = self.task_utils.curThread()
+            self.lgr.debug('ropCop not following call?  tid %s eip: 0x%x cycle: 0x%x' % (cur_tid, eip, self.cpu.cycles))
             for eip in range(return_to, return_to+40):
                 try:
                     instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -95,7 +97,6 @@ class RopCop():
                     self.lgr.error('ropCop looking for sighandler failed to disassble instruct %x ' % (eip))
                     return
                 if instruct[1].startswith('int') or instruct[1].startswith('sysenter'):
-                    dumb, comm, cur_tid  = self.task_utils.curThread()
                     self.lgr.debug('ropCop found signal in tid %s' % cur_tid)
                     self.in_process = True
                     self.is_signal = True
@@ -155,7 +156,8 @@ class RopCop():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         if self.is_signal:
-            bm = "Signal handler eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
+            pending_fault = self.top.pendingFault()
+            bm = "Signal handler eip:0x%x esp:0x%x would return to 0x%x pending_fault %r" % (eip, esp, ret_addr, pending_fault)
         else:
             bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)
         dumb, comm, cur_tid  = self.task_utils.curThread()
