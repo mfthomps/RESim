@@ -251,7 +251,7 @@ class WriteData():
 
             if self.addr_of_count is not None:
                 self.ioctl_flag = 1
-                self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
+                #self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
             #if self.dataWatch is not None:
@@ -541,7 +541,7 @@ class WriteData():
             #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
+        #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
             if self.closed_fd:
                 #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
@@ -683,7 +683,7 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr):
                 self.kernel_buf_consumed = True
         if self.total_read > self.read_limit:
-            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain and not self.no_reset:
