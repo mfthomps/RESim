@@ -16,7 +16,7 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 def main():
-    parser = argparse.ArgumentParser(prog='showTrackData', description='Show values for data marks of a given address')
+    parser = argparse.ArgumentParser(prog='showTrackTids', description='Show tids that recorded watch marks for a given target.  Intended to see if mulitple tids touched data.')
     parser.add_argument('target', action='store', help='The target')
     args = parser.parse_args()
     flist = aflPath.getAFLTrackList(args.target)
