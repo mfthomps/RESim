@@ -219,6 +219,7 @@ class SyscallManager():
         self.lgr.debug('syscallManager watchSyscall given context %s name: %s' % (context, name))
         retval = None 
         if context is None:
+            # NOTE may return default context
             context = self.getDebugContextName()
             self.lgr.debug('syscallManager watchSyscall given context was none, now set to %s' % context)
 

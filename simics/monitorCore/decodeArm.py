@@ -338,3 +338,7 @@ def isScalarAdd(reg, instruct):
             except:
                 pass
     return retval 
+
+def regLen(reg):
+    # TBD fix when introduce 64 bit arm 
+    return 4

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 '''
-Shows data values for watch marks TIDs for all tracks for a given afl target.
-Intended for use in determining if multiple TIDs reference input data.
+Shows kernel call numbers for kernel watch marks.
+Intended for use in determining if input data used in mkdir, open or create...
 '''
 import sys
 import os
@@ -16,12 +16,11 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 def main():
-    parser = argparse.ArgumentParser(prog='showTrackTids', description='Show tids that recorded watch marks for a given target.  Intended to see if mulitple tids touched data.')
+    parser = argparse.ArgumentParser(prog='showTrackSyscalls', description='Show kernel call numbers from watch marks, e.g., to see if any input data is used in a create')
     parser.add_argument('target', action='store', help='The target')
     args = parser.parse_args()
     flist = aflPath.getAFLTrackList(args.target)
-    wgot = []
-    tid_list = []
+    call_list = []
     for track in flist:
         #print('track: %s' % track)
         if not os.path.isfile(track):
@@ -32,11 +31,11 @@ def main():
             continue
         mark_list = jtrack['marks']
         for mark in mark_list:
-            tid = mark['tid']
-            if tid not in tid_list:
-                tid_list.append(tid)
-                print('tid is %s' % tid)
-        
+            if mark['mark_type'] == 'kernel':
+                call_num = mark['callnum']
+                if call_num not in call_list:
+                    print(call_num)
+                    call_list.append(call_num)
 
          
 

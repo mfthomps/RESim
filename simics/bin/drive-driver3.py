@@ -92,6 +92,7 @@ class Directive():
         self.src_port = None
         self.session = None
         self.header = None
+        self.iface = None
         self.file = []
         self.load(fname)
 
@@ -103,6 +104,7 @@ class Directive():
                 if len(line.strip()) == 0:
                     continue
                 key, value = keyValue(line)
+                key = key.upper()
                 if key == 'DEVICE':
                     self.device = value
                 elif key == 'IP':
@@ -119,6 +121,8 @@ class Directive():
                     self.header = value
                 elif key == 'FILE':
                     self.file.append(value)
+                elif key == 'IFACE':
+                    self.iface = value
     def getArgs(self):
         retval = ' --ip %s --port %s' % (self.ip, self.port)
         if self.src_ip is not None:
@@ -134,14 +138,13 @@ class Directive():
             farg = farg + ' /tmp/%s' % os.path.basename(f)
         retval = retval+' --file "%s"' % farg
         return retval
-           
+
 def main():
     parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
     parser.add_argument('-b', '--broadcast', action='store_true', help='Use broadcast.')
     parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
-    parser.add_argument('-s', '--server', action='store_true', help='Accept TCP connections from a client, and send the data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
     parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
@@ -159,8 +162,8 @@ def main():
     PORT = 6459
     target = (host, PORT)
 
-    if args.server:
-        client_cmd = 'serverTCP'
+    if directive.session == 'serverTCP':
+        client_cmd = 'serverTCP3'
     elif directive.session == 'TCP':
         client_cmd = 'clientTCP3'
     elif args.replay:
@@ -179,8 +182,8 @@ def main():
     if client_cmd is not None:
         client_mult_path = os.path.join(core_path, client_cmd)
         sendFiles([client_mult_path], sock, target)
-    cmd='/bin/chmod a+x /tmp/%s' % client_cmd
-    doCommand(cmd, sock, target)
+        cmd='/bin/chmod a+x /tmp/%s' % client_cmd
+        doCommand(cmd, sock, target)
     if args.disconnect:
         magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
         sendFiles([magic_path], sock, target)
@@ -202,6 +205,18 @@ def main():
     for file in directive.file:
         file_list.append(file)
     sendFiles(file_list, sock, target)
+    dev = None
+    host = None
+    if directive.iface is not None:
+        if ':' in directive.iface:
+            dev, host = directive.iface.split(':')
+        else:
+            print('Expected : in iface field, e.g., ens25:10.0.0.3')
+            exit(1)
+        cmd = 'ip addr add %s dev %s' % (host, dev)
+        driver_file.write(cmd+'\n')
+        cmd = 'ip link set dev %s up' % dev
+        driver_file.write(cmd+'\n')
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
