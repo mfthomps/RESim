@@ -221,6 +221,9 @@ class SOMap():
         return retval
 
     def isMainText(self, address):
+        if address is None:
+            self.lgr.error('soMap isMainText called with None')
+            return False
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
         if tid is None:
