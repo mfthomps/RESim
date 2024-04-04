@@ -173,7 +173,6 @@ class WriteData():
         if self.k_bufs is None:
             ''' TBD remove this, all kernel buffers should now use k_bufs'''
             self.lgr.error('writeKdata, missing k_bufs')
-            #self.mem_utils.writeString(self.cpu, self.addr, data) 
         else:
             remain = len(data)
             offset = 0
@@ -195,7 +194,7 @@ class WriteData():
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -286,9 +285,11 @@ class WriteData():
         if self.top.isWindows():
             word_size = self.top.getWordSize()
             if word_size == 4:
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                #self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=4)
             else: 
-                self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
+                #self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
+                self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=8)
             #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
@@ -652,17 +653,25 @@ class WriteData():
         tid = self.top.getTID()
         if tid == self.tid and fd == self.fd:
             if self.ioctl_flag is not None:
+                if not self.no_reset:
                     # must be second call, return zero
                     if addr_of_count is None:
                         addr_of_count = self.addr_of_count
                     self.lgr.debug('writeData doRetIOCtl set return value to zero to addr 0x%x' % addr_of_count)
-                    self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
+                    #self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
+                    self.top.writeWord(addr_of_count, 0, target_cpu=self.cpu, word_size=4)
+                else:
+                    SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
+                    self.lgr.debug('writeData doRetIOCtl would adjust count to zero, but no reset')
         return retval
                 
     def doRetFixup(self, fd, callname=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
+        #self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
+        # hack
+        self.top.flushTrace()
         if tid != self.tid or fd != self.fd:
             return eax
         eax = self.mem_utils.getSigned(eax)
@@ -683,7 +692,7 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr):
                 self.kernel_buf_consumed = True
         if self.total_read > self.read_limit:
-            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain and not self.no_reset:
@@ -693,11 +702,11 @@ class WriteData():
                      #    return None
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
 
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
-                     #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
                      #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                      self.kernel_buf_consumed = True
