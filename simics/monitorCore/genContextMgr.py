@@ -1153,6 +1153,10 @@ class GenContextMgr():
 
 
     def deadParrot(self, tid):
+        if self.task_utils.isExitTid(tid):
+            self.lgr.debug('contextManager deadParrot tid %s already reported, remove this task and ignore death' % tid)
+            self.rmTask(tid, killed=True)
+            return
         ''' who knew? death comes betweeen the breakpoint and the "run alone" scheduling '''
         self.lgr.debug('contextManager deadParrot tid %s' % tid)
         exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
@@ -1360,7 +1364,7 @@ class GenContextMgr():
         return self.ida_message
 
     def getDebugTid(self):
-        #self.lgr.debug('contextManager return debugging_tid of %s' % self.debugging_tid)
+        self.lgr.debug('contextManager return debugging_tid of %s' % self.debugging_tid)
         return self.debugging_tid, self.cpu
 
     def getSavedDebugTid(self):
