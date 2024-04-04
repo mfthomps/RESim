@@ -416,7 +416,7 @@ class StackTrace():
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
             #if True:
-            if not (self.soMap.isMainText(eip) and self.soMap.isMainText(ret_to)):
+            if ret_to is not None and not (self.soMap.isMainText(eip) and self.soMap.isMainText(ret_to)):
                 ''' TBD trying to be smarter to avoid bogus frames.  Cannot only rely on not being main because such things are called in static-linked programs. '''
                 #self.lgr.debug('doX86 is call do findReturnFromCall esp 0x%x  eip 0x%x' % (esp, eip))
                 delta = bp - esp
