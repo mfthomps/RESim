@@ -1230,9 +1230,11 @@ class GenMonitor():
         if self.bookmarks is not None:
             self.lgr.debug('setDebugBookmark')
             if not self.rev_execution_enabled:
-                SIM_run_command('enable-reverse-execution')
-            tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
+                self.lgr.warning('setDebugBookmark called, but reverse not enabled, will ignore')
+                #SIM_run_command('enable-reverse-execution')
+            else:
+                tid, cpu = self.context_manager[self.target].getDebugTid() 
+                self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
         else:
             self.lgr.debug('setDebugBookmark, but self.bookmarks is None')
 
@@ -1670,6 +1672,8 @@ class GenMonitor():
         plist = []
         if not new:
             plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
+        else:
+            self.stopDebug()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
@@ -2705,10 +2709,10 @@ class GenMonitor():
         self.noWatchSysEnter()
         self.context_manager[self.target].restoreDefaultContext()
 
-    def stopDebug(self):
-        ''' stop all debugging.  called by injectIO and user when process dies and we know it will be recreated '''
+    def stopDebug(self, rev=False):
+        ''' stop all debugging.  called by injectIO and debugProc (with new=True) and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
-        if self.rev_execution_enabled:
+        if not rev and self.rev_execution_enabled:
             cmd = 'disable-reverse-execution'
             SIM_run_command(cmd)
             self.rev_execution_enabled = False
@@ -2719,6 +2723,7 @@ class GenMonitor():
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
         self.noWatchSysEnter()
+        self.stopTracking()
         self.context_manager[self.target].stopDebug()
 
     def restartDebug(self):
@@ -4195,25 +4200,29 @@ class GenMonitor():
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
-    def stopTrackIOAlone(self, immediate=False, check_crash=True):
+    def pendingFault(self):
+        retval = False
         thread_tids = self.context_manager[self.target].getThreadTids()
-        self.lgr.debug('stopTrackIO got %d thread_tids immediate: %r' % (len(thread_tids), immediate))
+        self.lgr.debug('pendingFault got %d thread_tids' % (len(thread_tids)))
+        for tid in thread_tids:
+            prec =  self.page_faults[self.target].getPendingFault(tid)
+            if prec is not None:
+                comm = self.task_utils[self.target].getCommFromTid(tid)
+                if prec.page_fault:
+                    print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
+                    self.lgr.debug('pendingFault tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
+                    leader = self.task_utils[self.target].getGroupLeaderTid(tid)
+                    self.page_faults[self.target].handleExit(tid, leader)
+                    retval = True 
+                else:
+                    print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+                    self.lgr.debug('pendingFault tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+        return retval
+
+    def stopTrackIOAlone(self, immediate=False, check_crash=True):
         crashing = False 
         if check_crash:
-            for tid in thread_tids:
-                prec =  self.page_faults[self.target].getPendingFault(tid)
-                if prec is not None:
-                    comm = self.task_utils[self.target].getCommFromTid(tid)
-                    if prec.page_fault:
-                        print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
-                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                        leader = self.task_utils[self.target].getGroupLeaderTid(tid)
-                        self.page_faults[self.target].handleExit(tid, leader)
-                        crashing = True 
-                    else:
-                        print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
-                        self.lgr.debug('stopTrackIOAlone tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
-               
+            crashing = self.pendingFault()               
         self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
