@@ -910,7 +910,7 @@ class StackTrace():
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''
             #if not been_above_clib and (ptr - self.prev_frame_sp) > 1500:
-            if self.mindTheGap(ptr) or self.mind_the_gap:
+            if self.cpu.architecture != 'arm' and (self.mindTheGap(ptr) or self.mind_the_gap):
                 self.mind_the_gap = False
                 fun_addr = self.frames[-1].fun_addr
                 if fun_addr is None:
