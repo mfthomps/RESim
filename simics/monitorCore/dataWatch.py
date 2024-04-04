@@ -1366,8 +1366,6 @@ class DataWatch():
                     else:
                         self.lgr.warning('dataWatch string return size %d, confused? skipping' % r1val)
                         skip_it = True
-                        #SIM_break_simulation('remove this')
-                        #return
                 else:
                     ''' TBD is this right for x86? '''
                     self.mem_something.count = self.getStrLen(self.mem_something.src)        
@@ -1561,9 +1559,6 @@ class DataWatch():
                 self.lgr.debug(msg)
             self.watchMarks.charLookupMark(self.mem_something.addr, msg, length)
             self.mem_something.re_watch.stopMapWatch()
-            #if self.mem_something.fun == 'charLookupY':
-            #    SIM_break_simulation('remove this')
-            #    return
         elif self.mem_something.fun.startswith('UuidToStringA'):
             self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, self.mem_something.ret_addr_addr, size=word_size)
             self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.dest, self.mem_something.count)
@@ -2330,7 +2325,6 @@ class DataWatch():
             else:
                 offset = sp+word_size
                 self.mem_something.src = self.mem_utils.readAppPtr(self.cpu, offset, size=word_size)
-            #SIM_break_simulation('remove this, src 0x%x sp 0x%x' % (self.mem_something.src, sp))
 
         elif self.mem_something.fun == 'FreeXMLDoc':
             self.mem_something.count = 0
@@ -3014,13 +3008,16 @@ class DataWatch():
                             dest_op = op2
                         ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
                         self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
+                        # set these here since we know the max.  note though, we may decide this was not a move.  safe?
+                        self.move_cycle = self.cpu.cycles
+                        self.move_cycle_max = self.cpu.cycles+i+1
                         self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
                               start, next_ip, self.cpu.current_context))
                         self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
                                  self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
                         break
-            elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
-                    #self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
+            elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
+                    self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
                     our_reg_list.append(op1)
             elif self.cpu.architecture != 'arm' and next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
                 # TBD fix for arm
@@ -3865,6 +3862,9 @@ class DataWatch():
             self.lgr.debug('dataWatch cheapReuse is write zero of same size as buffer, remove the buffer at index %d' % index)
             self.rmRange(addr) 
             return
+        elif index is not None and self.length[index] < size:
+            self.lgr.debug('dataWatch cheapReuse is write %d bytes greater than size %d, remove the buffer at index %d' % (size, self.length[index], index))
+            self.rmRange(addr) 
         if fun_name is not None:
             if self.top.isWindows(target=self.cell_name):
                 if fun_name in mem_funs:
@@ -3895,7 +3895,7 @@ class DataWatch():
                     retval = True
         if not retval:
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('cheapReuse, check arm buf set to zero instruct %s' % instruct[1])
+            self.lgr.debug('dataWatch cheapReuse, eip 0x%x check arm buf set to zero instruct %s' % (eip, instruct[1]))
             if self.cpu.architecture == 'arm' and instruct[1].startswith('str'):
                 self.lgr.debug('cheapReuse, check arm buf set to zero is str')
                 op2, op1 = self.decode.getOperands(instruct[1])
