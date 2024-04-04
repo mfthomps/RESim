@@ -1674,6 +1674,7 @@ class GenMonitor():
             plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         else:
             self.stopDebug()
+            self.stopTracking()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
 
@@ -2723,8 +2724,8 @@ class GenMonitor():
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
         self.noWatchSysEnter()
-        self.stopTracking()
         self.context_manager[self.target].stopDebug()
+        # DO NOT call stopTracking here, breaks restoreDebug function.
 
     def restartDebug(self):
         self.lgr.debug('restartDebug')
