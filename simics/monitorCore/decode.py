@@ -61,6 +61,18 @@ def regIsPart(reg1, reg2):
         return True
     return False
 
+def regLen(reg):
+    if reg.startswith('r'):
+        return 8
+    elif reg.startswith('e'):
+        return 4
+    elif reg.endswith('l') or reg.endswith('h'):
+        return 2
+    elif len(reg) == 2 and not reg.endswith('x'):
+        return 1
+    else:
+        return 4
+
 def regIsPartList(reg1, reg2_list):
     for reg2 in reg2_list:
         if regIsPart(reg1, reg2):
