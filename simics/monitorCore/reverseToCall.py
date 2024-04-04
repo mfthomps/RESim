@@ -1145,7 +1145,7 @@ class reverseToCall():
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
+                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=4)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
@@ -1200,7 +1200,8 @@ class reverseToCall():
             esp = self.top.getReg('esp', self.cpu) 
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
             self.cleanup(None)
-            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel)
+            word_size = self.top.getWordSize()
+            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size)
 
         elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
@@ -1233,7 +1234,8 @@ class reverseToCall():
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel)
+                num_bytes = self.decode.regLen(op0)
+                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
