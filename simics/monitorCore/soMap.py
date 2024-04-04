@@ -755,6 +755,7 @@ class SOMap():
 
         if retval is None and map_tid in self.text_prog:
             if os.path.basename(self.text_prog[map_tid]) == os.path.basename(prog):
+                self.lgr.debug('mapSO just using prog_start for map_tid %s' % (map_tid))
                 retval = self.prog_start[map_tid]
         return retval
 
@@ -838,14 +839,19 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
+        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d' % (tid, len(self.prog_start)))
         if tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
                 image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                 retval = load_addr - image_base
+                self.lgr.debug('soMap getLoadOffset tid is return offset %d' % retval)
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
+            self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? prog_start is %s' % (tid, str(self.prog_start)))
+            if tid in self.text_prog:
+                self.lgr.debug('soMap getLoadOffset text_prog[%s] is %s and prog_in is %s' % (tid, self.text_prog[tid], prog_in))
             retval = self.getLoadAddr(prog, tid)
         return retval
 

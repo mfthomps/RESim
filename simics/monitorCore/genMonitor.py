@@ -6083,6 +6083,10 @@ class GenMonitor():
                 retval = self.soMap[self.target].getProg(leader_tid)
         return retval
 
+    def getProgPath(self, prog):
+        prog = self.soMap[self.target].getFullPath(prog)
+        return prog
+
     def findBytes(self, byte_string):
         byte_array = bytes.fromhex(byte_string)
         print('len of byte_array %d' % len(byte_array))

@@ -953,7 +953,7 @@ class Coverage():
         else:
             self.lgr.debug('coverage startDataSession with no previous hits')
 
-    def enableCoverage(self, tid, fname=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
+    def enableCoverage(self, tid, fname=None, prog_path=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
                        create_dead_zone=False, no_save=False, only_thread=False, record_hits=True):
         self.enabled = True
         self.tid = tid
@@ -965,8 +965,11 @@ class Coverage():
         if fname is not None:
             self.analysis_path = fname
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
-            #self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
-            self.prog_path = fname
+            self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
+            if prog_path is not None:
+                self.prog_path = prog_path
+            else:
+                self.prog_path = fname
         
         ida_path = self.top.getIdaData(self.analysis_path, target=self.cell_name)
         # dynamically alter control flow, e.g., to avoid CRC checks
@@ -975,9 +978,9 @@ class Coverage():
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
         if self.backstop_cycles is not None:
-            self.lgr.debug('cover enableCoverage fname is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
+            self.lgr.debug('cover enableCoverage hits_path is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
         else:
-            self.lgr.debug('cover enableCoverage fname is %s linear: %r no backstop given' % (self.hits_path, linear))
+            self.lgr.debug('cover enableCoverage hits_path is %s linear: %r no backstop given' % (self.hits_path, linear))
         # force use of linear breakpoints vice physical memory
         self.linear = linear
         self.afl = afl
