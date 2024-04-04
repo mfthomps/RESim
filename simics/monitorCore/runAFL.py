@@ -18,6 +18,7 @@ import shlex
 import time
 import glob
 import threading
+import shutil
 import select
 import aflPath
 import resimUtils
@@ -189,24 +190,27 @@ def runAFLTilRestart(args, lgr):
         lgr.error('Ini file %s not found.' % args.ini)
         exit(1)
     afl_out = os.path.join(afl_data, 'output', afl_name)
-    if args.continue_run == True:
-        afl_seeds = '-'
-    else:
-        afl_seeds = os.path.join(afl_data, 'seeds', afl_name)
-
     try:
         os.makedirs(afl_out)
     except:
         pass
-    try:
-        os.makedirs(afl_seeds)
-    except:
-        pass
+    glist = glob.glob('resim_*/')
+    if args.continue_run == True:
+        afl_seeds = '-'
+        print('aflout is %s' % afl_out)
+        doManual(afl_out, glist)    
+        #print('remove this')
+        #exit(0)
+    else:
+        afl_seeds = os.path.join(afl_data, 'seeds', afl_name)
+        try:
+            os.makedirs(afl_seeds)
+        except:
+            pass
     if args.remote:
         master_slave = '-S'
     else:
         master_slave = '-M'
-    glist = glob.glob('resim_*/')
 
     if args.tcp:
         os.environ['ONE_DONE_PARAM2']='tcp'
@@ -315,6 +319,38 @@ def runAFLTilRestart(args, lgr):
         do_restart = doOne(afl_path, afl_seeds, afl_out, size_str,port, afl_name, args.ini, read_array, 
                            resim_path, resim_procs, dict_path, args.seconds, background, args.dirty, lgr)
     return do_restart
+
+def doManual(afl_out, glist):
+    manual_queue = os.path.join(afl_out, 'manual_queue')
+    if os.path.isdir(manual_queue):
+        if len(glist) > 0:
+            q_mask = os.path.join(afl_out, '*resim_1/queue')
+            qlist = glob.glob(q_mask)
+            if len(qlist) == 1:
+                qdir = qlist[0]
+                print('qdir is %s' % qdir)
+            else:
+                print('Failed to get parallel queue dir for %s ' % qmask)
+                exit(1)
+        else:
+            qdir = os.path.join(aflout, 'queue')
+        qlist = os.listdir(qdir)
+        # account for . and ..
+        next_id = 'id:%06d,sync:manual' % (len(qlist)-1)
+        print('next id would be %s' % next_id)
+        manual_list = os.listdir(manual_queue)
+        for manual_file in manual_list:
+            manual_mask = os.path.join(qdir, '*_manual_%s' % manual_file)
+            manual_list = glob.glob(manual_mask)
+            if len(manual_list) == 0:
+                new_queue = '%s_%s' % (next_id, manual_file)
+                new_path = os.path.join(qdir, new_queue)
+                manual_path = os.path.join(manual_queue, manual_file)
+                print('copy from %s to %s' % (manual_path, new_path))
+                shutil.copyfile(manual_path, new_path)
+            else:
+                print('%s already in queue %s' % (manual_file, manual_list[0]))
+            
 
 def runAFL(args, lgr):
     while runAFLTilRestart(args, lgr):
