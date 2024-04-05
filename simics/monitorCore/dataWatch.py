@@ -3629,8 +3629,8 @@ class DataWatch():
         dum_cpu, comm, tid = self.task_utils.curThread()
         tid = self.task_utils.curTID()
         cpl = memUtils.getCPL(self.cpu)
+        addr = memory.logical_address
         if cpl > 0:
-            addr = memory.logical_address
             if addr == 0:
                 self.lgr.error('readHap memory logical address zero???, index %d' % index)
                 SIM_break_simulation('remove this')
@@ -4769,6 +4769,7 @@ class DataWatch():
          return self.watchMarks.getMarkCopyOffset(address)
 
     def getCopyMark(self):
+        self.lgr.debug('dataWatch getCopyMark')
         retval =  self.watchMarks.getCopyMark()
         latest_cycle = self.watchMarks.latestCycle()
         call_cycle = self.watchMarks.getCallCycle()
