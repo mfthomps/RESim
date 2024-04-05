@@ -101,13 +101,13 @@ class SyscallInstance():
                 self.lgr.debug('syscallManager SyscallInstance %s addCallParams set self.param_call_list[%s] to %s' % (self.name, param.name, call_names))
         self.syscall.addCallParams(call_params)
 
-    def rmCallParam(self, call_param_name):
+    def rmCallParam(self, call_param_name, immediate=False):
         self.lgr.debug('syscallManager SyscallInstance %s rmCallParam param %s' % (self.name, call_param_name))
         retval = REMOVED_OK
         self.syscall.rmCallParamName(call_param_name)
         if len(self.param_call_list) == 1:
             if call_param_name in self.param_call_list:
-                self.syscall.stopTrace()
+                self.syscall.stopTrace(immediate=immediate)
                 retval = LAST_PARAM
                 self.lgr.debug('syscallManager SyscallInstance %s rmCallParam param %s, last one, stop trace' % (self.name, call_param_name))
             else:
@@ -342,9 +342,9 @@ class SyscallManager():
             del self.syscall_dict[context][call_instance.name]
             self.lgr.debug('syscallManager rmSyscall context %s.  Remove all set.   Param %s' % (context, call_param_name))
         else:
-            self.lgr.debug('syscallManager rmSyscall call_param_name %s context %s' % (call_param_name, context))
+            self.lgr.debug('syscallManager rmSyscall call_param_name %s context %s immediate %r' % (call_param_name, context, immediate))
 
-            result = call_instance.rmCallParam(call_param_name)
+            result = call_instance.rmCallParam(call_param_name, immediate=immediate)
             if result is None:
                 return
             elif result == REMOVED_OK:
@@ -503,30 +503,6 @@ class SyscallManager():
         return retval
 
     #def stopTrace(self, param_name):
-
-    def stopTracexx(self, syscall):
-        ''' TBD not done'''
-        dup_traces = self.call_traces[cell_name].copy()
-        for call in dup_traces:
-            syscall_trace = dup_traces[call]
-            if syscall is None or syscall_trace == syscall: 
-                #self.lgr.debug('genMonitor stopTrace cell %s of call %s' % (cell_name, call))
-                syscall_trace.stopTrace(immediate=True)
-                #self.lgr.debug('genMonitor back from stopTrace')
-                self.rmCallTrace(cell_name, call)
-
-        if cell_name in self.trace_all and (syscall is None or self.trace_all[cell_name]==syscall):
-            self.lgr.debug('call stopTrace for trace_all')
-            self.trace_all[cell_name].stopTrace(immediate=False)
-            del self.trace_all[cell_name]
-
-            for exit in self.exit_maze:
-                exit.rmAllBreaks()
-        if cell_name not in self.trace_all and len(self.call_traces[cell_name]) == 0:
-            self.traceMgr[cell_name].close()
-
-        #if self.instruct_trace is not None:
-        #    self.stopInstructTrace()
 
     def remainingCallTraces(self, exception=None, context=None):
         ''' Are there any call traces remaining, if so return True
