@@ -549,7 +549,7 @@ class AFL():
 
         self.write_data.write()
         # TBD why again and again?
-        self.page_faults.watchPageFaults()
+        self.page_faults.watchPageFaults(afl=True)
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()

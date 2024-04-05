@@ -541,7 +541,7 @@ class PlayAFL():
 
             self.lgr.debug('playAFL goAlone watch page faults for tid:%s cell %s' % (self.target_tid, self.target_cell))
             if not self.no_page_faults:
-                self.top.watchPageFaults(tid=self.target_tid, target=self.target_cell)
+                self.top.watchPageFaults(tid=self.target_tid, target=self.target_cell, afl=self.afl_mode)
             else:
                 self.lgr.debug('playAFL goAlone will not watch page faults, will miss segv')
                 self.top.stopWatchPageFaults()

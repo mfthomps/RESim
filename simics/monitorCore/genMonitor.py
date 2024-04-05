@@ -2217,13 +2217,13 @@ class GenMonitor():
         ''' TBD broken '''
         self.pfamily[self.target].traceExecve(comm)
 
-    def watchPageFaults(self, tid=None, target=None):
+    def watchPageFaults(self, tid=None, target=None, afl=False):
         if target is None:
             target = self.target
         if tid is None:
             tid, cpu = self.context_manager[target].getDebugTid() 
         self.lgr.debug('genMonitor watchPageFaults tid %s' % tid)
-        self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32)
+        self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32, afl=afl)
         #self.lgr.debug('genMonitor watchPageFaults back')
 
     def stopWatchPageFaults(self, tid=None, target=None, immediate=False):

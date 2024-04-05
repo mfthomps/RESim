@@ -83,6 +83,7 @@ class PageFaultGen():
         self.mode_hap = None
         self.ignore_probes = []
         self.user_eip = None
+        self.afl = False
         ''' hack to tell context manager to call back to PageFaultGen on context switches to watched processes '''
         context_manager.callMe(self)
         ''' TIDS that have returned to user space to find the fault is not resolved.  Assumes reschedule on fault and lazy
@@ -387,11 +388,12 @@ class PageFaultGen():
                 self.lgr.error('pageFaultGen pageFaultHapAlone got zilch')
 
 
-    def watchPageFaults(self, tid=None, compat32=False):
+    def watchPageFaults(self, tid=None, compat32=False, afl=False):
         if self.fault_hap1 is not None or self.fault_hap is not None:
             self.lgr.debug('pageFaultGen watchPageFaults, already watching, do reset.  current context %s' % self.cpu.current_context)
             self.stopWatchPageFaults(tid=tid)
             #return
+        self.afl = alf
         #if self.top.isWindows(target=self.target):
         #    ''' TBD fix for windows '''
         #    return 
@@ -721,9 +723,12 @@ class PageFaultGen():
                         self.ignore_probes.append(probe)
                         #self.lgr.debug('pageFaultGen added probe 0x%x' % probe)
         
-    
 
     def cycleCallback(self, tid):
         self.lgr.debug('pageFaultGen cycleCallback assume dump or such')
-        SIM_run_alone(self.hapAlone, self.pending_faults[tid])
-        SIM_run_alone(self.rmModeHapAlone, None) 
+        if self.afl:
+            self.lgr.debug('pageFaultGen cycleCallback afl, just stop')
+            SIM_break_simulation('cycleCallback')
+        else:
+            SIM_run_alone(self.hapAlone, self.pending_faults[tid])
+            SIM_run_alone(self.rmModeHapAlone, None) 
