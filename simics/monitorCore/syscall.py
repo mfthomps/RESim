@@ -629,7 +629,7 @@ class Syscall():
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.background_hap)
             self.background_break = None
             self.background_hap = None
-        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell)
+        self.sharedSyscall.rmExitBySyscallName(self.name, self.cell, immediate=True)
         #self.lgr.debug('stopTraceAlone done')
 
 
