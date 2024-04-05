@@ -1482,11 +1482,14 @@ class reverseToCall():
                     elif callname == 'socketcall':        
                         ''' must be 32-bit get params from struct '''
                         socket_callnum = frame['param1']
-                        socket_callname = net.callname[socket_callnum].lower()
-                        #self.lgr.debug('sysenterHap socket_callnum is %d name %s' % (socket_callnum, socket_callname))
-                        if socket_callname != 'socket' and socket_callname != 'setsockopt':
-                            ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
-                            frame['ss'] = ss
+                        if socket_callnum < len(net.callname):
+                            socket_callname = net.callname[socket_callnum].lower()
+                            #self.lgr.debug('sysenterHap socket_callnum is %d name %s' % (socket_callnum, socket_callname))
+                            if socket_callname != 'socket' and socket_callname != 'setsockopt':
+                                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
+                                frame['ss'] = ss
+                        else:
+                            self.lgr.error('sysenterHap socket_callnum %d out of range for net.callname len %d' % (socket_callnum, len(net.callname)))
 
                     self.sysenter_cycles[tid][cycles] = frame 
                     if tid in self.recent_cycle:
