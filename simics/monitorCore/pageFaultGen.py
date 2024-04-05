@@ -475,6 +475,7 @@ class PageFaultGen():
         #self.faulting_cycles.clear()
         self.pending_faults.clear()
         self.pending_sigill.clear()
+        self.pending_double_faults.clear()
         if self.mode_hap is not None:
             self.lgr.debug('pageFaultGen stopWatchPageFaults remove mode hap')
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
@@ -723,11 +724,12 @@ class PageFaultGen():
                         self.ignore_probes.append(probe)
                         #self.lgr.debug('pageFaultGen added probe 0x%x' % probe)
         
-
     def cycleCallback(self, tid):
         self.lgr.debug('pageFaultGen cycleCallback assume dump or such')
         if self.afl:
-            self.lgr.debug('pageFaultGen cycleCallback afl, just stop')
+            SIM_run_alone(self.rmModeHapAlone, None) 
+            self.lgr.debug('pageFaultGen cycleCallback afl, stop')
+            self.handleExit(tid, tid, report_only=True)
             SIM_break_simulation('cycleCallback')
         else:
             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
