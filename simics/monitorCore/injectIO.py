@@ -337,13 +337,8 @@ class InjectIO():
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
                     self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
-                    self.lgr.debug('injectIO not traceall, about to set origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
-                    if self.bookmarks is not None:
-                        self.bookmarks.setOrigin(self.cpu)
-                    else:
-                        self.lgr.error('injectIO did not set origin, no bookmarks?')
-                    cli.quiet_run_command('disable-reverse-execution')
-                    cli.quiet_run_command('enable-reverse-execution')
+                    self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
+                    self.top.resetOrigin(cpu=self.cpu)
                     eip = self.top.getEIP(self.cpu)
                     self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
@@ -401,6 +396,8 @@ class InjectIO():
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
+                    self.lgr.debug('injectIO call to runToIO')
+                    self.top.resetOrigin(cpu=self.cpu)
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
@@ -454,12 +451,6 @@ class InjectIO():
             self.write_data.restoreCallHap()
     
 
-    def resetOrigin(self, dumb):
-        if self.bookmarks is not None:
-            self.bookmarks.setOrigin(self.cpu)
-        SIM_run_command('disable-reverse-execution') 
-        SIM_run_command('enable-reverse-execution') 
-
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
         if self.no_reset:
@@ -469,7 +460,8 @@ class InjectIO():
                 packet_num = self.write_data.getCurrentPacket() - 1
                 self.saveJson(packet=packet_num)
                 self.lgr.debug('injectIO, handling subsequent packet number %d, must reset watch marks and bookmarks, and save trackio json ' % packet_num)
-                self.resetOrigin(None)
+                #self.resetOrigin(None)
+                self.top.resetOrigin(cpu=self.cpu)
                 self.dataWatch.clearWatchMarks(record_old=True)
             if count != 0:
                 self.lgr.debug('resetReverseAlone call setRange')
