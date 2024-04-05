@@ -326,7 +326,7 @@ class RunTo():
             return False
 
     def setOriginWhenStopped(self):
-        f1 = stopFunction.StopFunction(self.top.setOrigin, [], nest=False)
+        f1 = stopFunction.StopFunction(self.top.resetOrigin, [], nest=False)
         self.lgr.debug('runTo setOriginWhenStopped')
         self.stop_action.addFun(f1)
 
