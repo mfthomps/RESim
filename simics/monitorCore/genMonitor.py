@@ -2699,17 +2699,6 @@ class GenMonitor():
             self.trace_all[target].setExits(frames, context_override=context)
 
 
-    def noDebugXXXXXXXXXX(self, dumb=None):
-        # TBD clarify difference between this and stopDebug.  remove this one?
-        self.lgr.debug('noDebug')
-        cmd = 'disable-reverse-execution'
-        SIM_run_command(cmd)
-        self.rev_execution_enabled = False
-        self.removeDebugBreaks(keep_watching=True, keep_coverage=False)
-        self.sharedSyscall[self.target].setDebugging(False)
-        self.noWatchSysEnter()
-        self.context_manager[self.target].restoreDefaultContext()
-
     def stopDebug(self, rev=False):
         ''' stop all debugging.  called by injectIO and debugProc (with new=True) and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
@@ -5526,13 +5515,6 @@ class GenMonitor():
             self.lgr.error('getSyscallEntry got no call number for %s' % callname)
             
         return retval
-
-    def setOrigin(self, dumb=None):
-        ''' Reset the origin for the current target cpu '''
-        tid = self.getTID()
-        self.lgr.debug('setOrigin from genMonitor tid:%s' % tid)
-        cpu = self.cell_config.cpuFromCell(self.target)
-        self.bookmarks.setOrigin(cpu) 
 
     def isCode(self, addr, tid=None):
         if tid is None:
