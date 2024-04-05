@@ -638,7 +638,7 @@ class findKernelWrite():
         if self.addr == self.prev_addr:
             self.iter_count += 1
             if self.iter_count > 5:
-                self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))
+                self.lgr.debug('findKernelWrite backOneAlone, cannot track values back beyond %s' % str(instruct))
                 bm = 'eip:0x%x inst:"%s Seems to be iteration, bailing"' % (eip, instruct[1])
                 self.bookmarks.setBacktrackBookmark(bm)
                 SIM_run_alone(self.cleanup, False)
@@ -649,12 +649,12 @@ class findKernelWrite():
             self.iter_count = 0
             
         dumb, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('backOne user space tid: %s write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
+        self.lgr.debug('findKernelWrite backOne user space tid: %s write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
                value, self.addr, current, eip, offset))
         if not self.forward:
             previous = current - 1
             if SIM_simics_is_running():
-                self.lgr.error('backOneAlone, simics is still running, is this not part of a stop hap???')
+                self.lgr.error('findKernelWrite backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
             orig_eip = eip
             resimUtils.skipToTest(self.cpu, previous, self.lgr)
@@ -669,13 +669,13 @@ class findKernelWrite():
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
-            self.lgr.debug('backOneAlone, was going forward')
+            self.lgr.debug('findKernelWrite backOneAlone, was going forward')
         if self.forward_break is not None:
-            self.lgr.debug('backOne alone delete forward_break')
+            self.lgr.debug('findKernelWrite backOne alone delete forward_break')
             RES_delete_breakpoint(self.forward_break)
             self.forward_break = None
         mn = self.decode.getMn(instruct[1])
-        self.lgr.debug('backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
+        self.lgr.debug('findKernelWrite backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
         bm = 'eip:0x%x inst:"%s"' % (eip, instruct[1])
         self.bookmarks.setBacktrackBookmark(bm)
         self.lgr.debug('BT bookmark: %s' % bm)
@@ -684,14 +684,14 @@ class findKernelWrite():
         if self.prev_buffer:
             taint = False
         if self.decode.modifiesOp0(mn):
-            self.lgr.debug('backOneAlone get operands from %s' % instruct[1])
+            self.lgr.debug('findKernelWrite backOneAlone get operands from %s' % instruct[1])
             op1, op0 = self.decode.getOperands(instruct[1])
             actual_addr = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
             if actual_addr is None:
                 self.lgr.error('failed to get op0 address from %s' % instruct[1])
                 return
             offset = self.addr - actual_addr
-            self.lgr.debug('backOneAlone cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
+            self.lgr.debug('findKernelWrite backOneAlone cycleRegisterMod mn: %s op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (mn, 
                  op0, op1, actual_addr, self.addr, offset))
             if self.decode.isIndirect(op1):
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
@@ -699,10 +699,10 @@ class findKernelWrite():
                 address = self.mem_utils.getRegValue(self.cpu, op1)
                 new_address = address+offset
                 if not '[' in op0:
-                    self.lgr.debug('backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
+                    self.lgr.debug('findKernelWrite backOneAlone, %s is indirect, check for write to 0x%x' % (op1, new_address))
                     self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel)
                 else:
-                    self.lgr.debug('backOneAlone is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
+                    self.lgr.debug('findKernelWrite backOneAlone is indirect reg point to magic page, or move to memory, find mod of the reg vice the address content')
                     self.rev_to_call.doRevToModReg(op1, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
  
             elif self.decode.isReg(op1):
@@ -715,7 +715,7 @@ class findKernelWrite():
                 value = self.mem_utils.getRegValue(self.cpu, op1)
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
                 #value = self.cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                self.lgr.debug('findKernelWrite backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
                 #if op1.startswith('xmm'):
                 #    SIM_break_simulation('remove this')
                 #    return
@@ -728,31 +728,36 @@ class findKernelWrite():
                    pass
                 if value is not None:
                     ''' stumped, constant loaded into memory '''
-                    self.lgr.debug('backOneAlone, found constant %x, stumped' % value)
+                    self.lgr.debug('findKernelWrite backOneAlone, found constant %x, stumped' % value)
                     SIM_run_alone(self.cleanup, False)
                     self.top.skipAndMail()
         elif instruct[1].startswith('rep movs'):
-            src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
-            if self.prev_buffer:
-                self.k_buffer_addrs.append(src_addr)
-                if True or len(self.k_buffer_addrs) > 2:
-                    SIM_run_alone(self.cleanup, False)
-                    self.lgr.debug('got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
-                    self.rev_to_call.cleanup(self.k_buffer_addrs)
+            #copy_addr, offset, mark = self.dataWatch.getMarkCopyOffset(self.addr)
+            #if copy_addr is not None:
+            #    self.lgr.debug('findKernelWrite backOneAlone got copy mark addr 0x%x offset 0x%x' % (copy_addr, offset))
+            #else:
+            if True:
+                src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+                if self.prev_buffer:
+                    self.k_buffer_addrs.append(src_addr)
+                    if True or len(self.k_buffer_addrs) > 2:
+                        SIM_run_alone(self.cleanup, False)
+                        self.lgr.debug('got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
+                        self.rev_to_call.cleanup(self.k_buffer_addrs)
+                    else:
+                        self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
                 else:
                     self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
-            else:
-                self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
         
         elif mn == 'push':
             op1, op0 = self.decode.getOperands(instruct[1])
-            self.lgr.debug('backOneAlone push op0 is %s' % op0)
+            self.lgr.debug('findKernelWrite backOneAlone push op0 is %s' % op0)
             if self.decode.isReg(op0): 
-                self.lgr.debug('backOneAlone is push reg %s, find mod', op0)
+                self.lgr.debug('findKernelWrite backOneAlone is push reg %s, find mod', op0)
                 self.rev_to_call.doRevToModReg(op0, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
             else:
                 new_address = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
-                self.lgr.debug('backOneAlone is push addr 0x%x', new_address)
+                self.lgr.debug('findKernelWrite backOneAlone is push addr 0x%x', new_address)
                 self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
 
         elif self.cpu.architecture == 'arm' and mn.startswith('stm'):
@@ -760,16 +765,16 @@ class findKernelWrite():
             self.lgr.debug('back from armSTM reg: %s cycle 0x%x' % (reg, self.cpu.cycles))
             if reg is not None:
                 rval = self.mem_utils.getRegValue(self.cpu, reg)
-                self.lgr.debug('backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
+                self.lgr.debug('findKernelWrite backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
         elif self.cpu.architecture == 'arm' and mn.startswith('str'):
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
             if reg is not None:
-                self.lgr.debug('backOneAlone is str... reg %s, find mod', reg)
+                self.lgr.debug('findKernelWrite backOneAlone is str... reg %s, find mod', reg)
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, offset=offset, kernel=self.kernel)
 
         else:
-            self.lgr.debug('backOneAlone, cannot track values back beyond %s' % str(instruct))
+            self.lgr.debug('findKernelWrite backOneAlone, cannot track values back beyond %s' % str(instruct))
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
 
