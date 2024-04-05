@@ -393,7 +393,7 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen watchPageFaults, already watching, do reset.  current context %s' % self.cpu.current_context)
             self.stopWatchPageFaults(tid=tid)
             #return
-        self.afl = alf
+        self.afl = afl
         #if self.top.isWindows(target=self.target):
         #    ''' TBD fix for windows '''
         #    return 
