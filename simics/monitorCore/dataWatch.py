@@ -2457,10 +2457,6 @@ class DataWatch():
         status = SIM_simics_is_running()
         self.lgr.debug('dataWatch revAlone, resim running? %r  simics status %r' % (is_running, status))
 
-        self.top.removeDebugBreaks(immediate=True)
-        self.stopWatch(immediate=True)
-        #self.context_manager.disableAll(direction='reverse')
-
         if self.mem_something is None:
             self.lgr.error('dataWatch revAlone with mem_something of None')
             return
@@ -2468,11 +2464,19 @@ class DataWatch():
                and self.mem_something.fun not in funs_need_addr:
             
             instruct = SIM_disassemble_address(self.cpu, self.mem_something.fun_addr, 1, 0)
-            if not instruct[1].startswith('jmp'):
+            if self.mem_something.op_type != Sim_Trans_Load:
+                self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a store, so ignore?', self.mem_something.fun_addr)
+                SIM_continue(0)
+                return
+            elif not instruct[1].startswith('jmp'):
                 self.lgr.error('dataWatch revAlone but entry 0x%x already in mem_fun_entires', self.mem_something.fun_addr)
                 return
             else:
                 self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a jump.  TBD sort out multiple entry points', self.mem_something.fun_addr)
+
+        self.top.removeDebugBreaks(immediate=True)
+        self.stopWatch(immediate=True)
+        #self.context_manager.disableAll(direction='reverse')
 
         self.cycles_was = self.cpu.cycles
         self.save_cycle = self.cycles_was - 1
