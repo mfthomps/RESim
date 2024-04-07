@@ -100,7 +100,9 @@ class RopCop():
                     self.lgr.debug('ropCop found signal in tid %s' % cur_tid)
                     self.in_process = True
                     self.is_signal = True
-                    SIM_run_alone(self.stopAlone, return_to)
+                    # TBD distinguish runs of trackIO/crashReport from others so thost stopHaps handle it
+                    #SIM_run_alone(self.stopAlone, return_to)
+                    SIM_break_simulation('ropCop signal detected')
                     done = True
                     break
           
