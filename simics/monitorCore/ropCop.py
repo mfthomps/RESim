@@ -17,6 +17,7 @@ class RopCop():
         self.rop_hap = None
         self.stop_hap = None
         self.watching = False
+        self.callback = None
         ''' hack to keep hap from invoking twice '''
         self.in_process = False
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
@@ -26,9 +27,10 @@ class RopCop():
             self.decode = decode
         self.is_signal = False
 
-    def watchROP(self, watching=True):
+    def watchROP(self, watching=True, callback=None):
         self.watching = watching
-        self.lgr.debug('watchROP %r' % watching)
+        self.callback = callback
+        self.lgr.debug('watchROP %r, callback %s' % (watching, str(callback)))
         if watching:
             self.setHap()
         else:
@@ -102,7 +104,12 @@ class RopCop():
                     self.is_signal = True
                     # TBD distinguish runs of trackIO/crashReport from others so thost stopHaps handle it
                     #SIM_run_alone(self.stopAlone, return_to)
-                    SIM_break_simulation('ropCop signal detected')
+                    if self.callback is not None:
+                        self.lgr.debug('ropCop found signal call callback %s' % str(self.callback))
+                        self.callback()
+                    else:
+                        self.lgr.debug('ropCop found signal no callback, just stop')
+                        SIM_break_simulation('ropCop signal detected')
                     done = True
                     break
           

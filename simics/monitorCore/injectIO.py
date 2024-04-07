@@ -270,7 +270,7 @@ class InjectIO():
                 self.top.stopWatchPageFaults()
             if self.no_rop:
                 self.lgr.debug('injectIO stop ROP')
-                self.top.watchROP(watching=False)
+                self.top.watchROP(watching=False, callback=self.callback)
             self.top.jumperStop()
             self.top.stopThreadTrack(immediate=True)
         elif self.instruct_trace and self.target_proc is None:
@@ -362,7 +362,7 @@ class InjectIO():
                                 self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                                 self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
                     if not self.no_rop:
-                        self.top.watchROP()
+                        self.top.watchROP(callback=self.callback)
                 else:
                     self.lgr.debug('injectIO call traceAll')
                     call_params = syscall.CallParams('injectIO', None, self.fd)

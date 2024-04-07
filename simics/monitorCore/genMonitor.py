@@ -4583,12 +4583,12 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
-    def watchROP(self, watching=True):
+    def watchROP(self, watching=True, callback=None):
         self.lgr.debug('watchROP')
         for t in self.ropCop:
             self.lgr.debug('ropcop instance %s' % t)
         if self.target in self.ropCop:
-            self.ropCop[self.target].watchROP(watching=watching)
+            self.ropCop[self.target].watchROP(watching=watching, callback=callback)
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''
