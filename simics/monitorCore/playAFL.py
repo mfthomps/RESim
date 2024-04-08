@@ -642,7 +642,7 @@ class PlayAFL():
         if os.path.basename(queue_dir) == 'manual_queue':
             exits_dir = os.path.join(queue_parent, 'manual_exits')
         else:
-            exits_dir = os.path.join(queue_parent, 'coverage')
+            exits_dir = os.path.join(queue_parent, 'exits')
         try:
             os.makedirs(exits_dir)
         except:
@@ -659,6 +659,7 @@ class PlayAFL():
             self.lgr.debug('playAFL record hits, assume ad-hoc path')
             print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
             fname = '/tmp/playAFL.hits'
+        self.lgr.debug('playAFL recordHits to file %s' % fname)
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             json.dump(hit_bbs, fh) 
@@ -670,7 +671,7 @@ class PlayAFL():
 
     def recordExits(self, path):
         ''' exits will go in a "exits" directory along side queue, etc. '''
-        self.lgr.debug('playAFL recorddExits for %s' % path)
+        self.lgr.debug('playAFL recordExits for %s' % path)
         fname = self.getExitsPath(self.index)
         if not os.path.isfile(fname):
             self.lgr.debug('playAFL recordExits, assume ad-hoc path')
