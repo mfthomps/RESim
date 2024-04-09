@@ -673,14 +673,12 @@ class PlayAFL():
         ''' exits will go in a "exits" directory along side queue, etc. '''
         self.lgr.debug('playAFL recordExits for %s' % path)
         fname = self.getExitsPath(self.index)
-        if not os.path.isfile(fname):
-            self.lgr.debug('playAFL recordExits, assume ad-hoc path')
-            print('Assume ad-hoc path, exits stored in /tmp/exits.txt')
-            fname = '/tmp/exits.txt'
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             msg = '%s : %s\n' % (path, self.context_manager.getIdaMessage())
             fh.write(msg)
+            fh.flush()
+            self.lgr.debug('playAFL recordExits msg: %s' % msg)
 
     def stopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('playAFL in stopHap')
