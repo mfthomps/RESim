@@ -764,7 +764,7 @@ class WatchMarks():
             #self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
             # looking for multiple iterations over data range at same instruction
-            self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
+            #self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
@@ -774,7 +774,7 @@ class WatchMarks():
                     if pm.mark.ad_hoc:
                         self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
-                    self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
+                    self.lgr.debug('watchMarks dataRead eip 0x%x range 0x%x' % (ip, addr))
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
