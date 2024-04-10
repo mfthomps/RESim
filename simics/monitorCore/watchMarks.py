@@ -351,6 +351,15 @@ class MallocMark():
     def getMsg(self):
         return self.msg
 
+class MallocSizeMark():
+    def __init__(self, addr, size):
+        self.addr = addr
+        self.size = size
+        self.msg = 'Passed addr: 0x%08x as size to malloc call.  size: %d' % (addr, size)
+
+    def getMsg(self):
+        return self.msg
+
 class FreeMark():
     def __init__(self, addr, fun):
         self.addr = addr
@@ -1087,6 +1096,12 @@ class WatchMarks():
         im = IteratorMark(fun, src, buf_start)
         self.addWatchMark(im)
         self.lgr.debug('watchMarks iterator %s' % (im.getMsg()))
+
+    def mallocSize(self, addr, size):
+        # a buffer value from given address is passed to malloc as a size.
+        mm = MallocSizeMark(addr, size)
+        self.addWatchMark(mm)
+        self.lgr.debug('watchMarks mallocSize %s' % (mm.getMsg()))
 
     def malloc(self, addr, size):
         mm = MallocMark(addr, size)
