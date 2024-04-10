@@ -2687,7 +2687,7 @@ class DataWatch():
 
         elif self.move_stuff.function is not None:
             if dest_addr != self.move_stuff.addr:
-                self.lgr.debug('dataWatch finishCheckMove, function return value wrote to addr 0x%x  function %s' % (self.move_stuff.addr, self.move_stuff.function))
+                #self.lgr.debug('dataWatch finishCheckMove, function return value wrote to addr 0x%x  function %s' % (self.move_stuff.addr, self.move_stuff.function))
                 wm = self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, 
                          self.move_stuff.trans_size, note=self.move_stuff.function, dest=dest_addr)
                 self.setRange(dest_addr, self.move_stuff.trans_size, watch_mark=wm)
@@ -2708,7 +2708,7 @@ class DataWatch():
             else:
                 self.watchMarks.dataRead(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, 
                          self.move_stuff.trans_size, ip=self.move_stuff.ip, cycle=self.move_stuff.cycle)
-        self.lgr.debug('dataWatch finishCheckMove now delete hap')
+        #self.lgr.debug('dataWatch finishCheckMove now delete hap')
         if self.finish_check_move_hap is None:
             self.lgr.error('it is none')
         self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
@@ -3407,6 +3407,11 @@ class DataWatch():
             if not self.checkReWatch(tid, eip, instruct, addr, start, length, trans_size):
                 self.lgr.debug('dataWatch checkMove not a reWatch')
                 self.watchMarks.dataRead(addr, start, length, trans_size)
+                if self.finish_check_move_hap is not None:
+                    self.lgr.debug('DataWatch checkMove delete finish_check_move_hap')
+                    hap = self.finish_check_move_hap
+                    self.context_manager.genDeleteHap(hap, immediate=False)
+                    self.finish_check_move_hap = None
 
     def checkReWatch(self, tid, eip, instruct, addr, start, length, trans_size):
         retval = False
