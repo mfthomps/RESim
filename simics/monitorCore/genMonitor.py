@@ -3504,15 +3504,19 @@ class GenMonitor():
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
-    def getSO(self, eip, show_orig=False):
+    def getSO(self, eip, show_orig=False, target_cpu=None):
         retval = None
-        fname, start, end = self.soMap[self.target].getSOInfo(eip)
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        fname, start, end = self.soMap[target].getSOInfo(eip)
         if fname is None:
             self.lgr.debug('getSO no library found for 0x%x' % eip)
         else:
             if show_orig:
-                cpu, comm, tid = self.task_utils[self.target].curThread() 
-                image_base = self.soMap[self.target].getImageBase(fname)
+                cpu, comm, tid = self.task_utils[target].curThread() 
+                image_base = self.soMap[target].getImageBase(fname)
                 delta = eip - start
                 orig = image_base+delta  
                 self.lgr.debug('getSO eip 0x%x start 0x%x image_base 0x%x' % (eip, start, image_base))
@@ -4583,12 +4587,12 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
-    def watchROP(self, watching=True):
+    def watchROP(self, watching=True, callback=None):
         self.lgr.debug('watchROP')
         for t in self.ropCop:
             self.lgr.debug('ropcop instance %s' % t)
         if self.target in self.ropCop:
-            self.ropCop[self.target].watchROP(watching=watching)
+            self.ropCop[self.target].watchROP(watching=watching, callback=callback)
 
     def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
         ''' Enable code coverage '''
@@ -4760,7 +4764,7 @@ class GenMonitor():
         self.lgr.debug('genMonitor traceMalloc')
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
-        self.trace_malloc = traceMalloc.TraceMalloc(self.fun_mgr, self.context_manager[self.target], 
+        self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
                self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr)
 
     def showMalloc(self):
@@ -6112,6 +6116,13 @@ class GenMonitor():
             self.loop_n[self.target] = loopN.LoopN(self, count, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         else:
             self.loop_n[self.target].go()
+
+    def isLibc(self, addr, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        return self.soMap[target].isLibc(addr)
     
         
 if __name__=="__main__":        
