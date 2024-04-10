@@ -659,6 +659,7 @@ class PlayAFL():
             self.lgr.debug('playAFL record hits, assume ad-hoc path')
             print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
             fname = '/tmp/playAFL.hits'
+        self.lgr.debug('playAFL recordHits to file %s' % fname)
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             json.dump(hit_bbs, fh) 
