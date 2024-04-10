@@ -2988,38 +2988,8 @@ class DataWatch():
                 self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
  
             if dest_addr is not None:
-                ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
-                if 'sp' in op1:
-                    adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
-                    if adhoc:
-                        self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
-                    break
-                else:
-                    offset = self.checkNoTaint(op1, recent_instructs)
-                    if offset is not None:
-                        self.lgr.debug('dataWatch loopAdHoc dest addr base reg seems unchanged, or scalar. %s offset 0x%x' % (op1, offset))
-                        dest_addr = dest_addr + offset
-                        adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length, byte_swap=byte_swap)
-                        if adhoc:
-                            self.recordAdHocCopy(addr, start, length, trans_size, dest_addr, byte_swap=byte_swap)
-                        break
-                    else:                   
-                        #self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
-                        adhoc = True
-                        break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
-                        dest_op = op1
-                        if self.cpu.architecture == 'arm':
-                            dest_op = op2
-                        ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
-                        self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
-                        # set these here since we know the max.  note though, we may decide this was not a move.  safe?
-                        self.move_cycle = self.cpu.cycles
-                        self.move_cycle_max = self.cpu.cycles+i+1
-                        self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
-                              start, next_ip, self.cpu.current_context))
-                        self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                                 self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
-                        break
+                ad_hoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i)
+                break
             elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                     self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
                     our_reg_list.append(op1)
@@ -3054,6 +3024,50 @@ class DataWatch():
         #self.lgr.debug('dataWatch loopAdHoc exit i is %d' % i)
         return adhoc
 
+    def gotAdHocDest(self, next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i):
+        adhoc = False
+        ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
+        if 'sp' in op1:
+            if next_instruct[1].startswith('mov') and '[' in op1 and 'sp' in op1 and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
+                # is this a size to malloc?
+                next_next_ip = next_ip + next_instruct[0]
+                next_next_instruct = SIM_disassemble_address(self.cpu, next_next_ip, 1, 0)
+                fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(next_next_instruct, next_next_ip)
+                self.lgr.debug('dataWatch loopAdHoc reg %s moved to SP and call to %s' % (op2, fun))
+                if fun is not None and 'malloc' in fun:
+                    self.lgr.debug('dataWatch loopAdHoc is malloc')
+                    adhoc = True
+                    val = self.mem_utils.getRegValue(self.cpu, op2)
+                    self.watchMarks.mallocSize(addr, val)
+            if not adhoc:
+                adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
+                if adhoc:
+                    self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
+        else:
+            offset = self.checkNoTaint(op1, recent_instructs)
+            if offset is not None:
+                self.lgr.debug('dataWatch loopAdHoc dest addr base reg seems unchanged, or scalar. %s offset 0x%x' % (op1, offset))
+                dest_addr = dest_addr + offset
+                adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length, byte_swap=byte_swap)
+                if adhoc:
+                    self.recordAdHocCopy(addr, start, length, trans_size, dest_addr, byte_swap=byte_swap)
+            else:                   
+                #self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
+                adhoc = True
+                break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
+                dest_op = op1
+                if self.cpu.architecture == 'arm':
+                    dest_op = op2
+                ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
+                self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
+                # set these here since we know the max.  note though, we may decide this was not a move.  safe?
+                self.move_cycle = self.cpu.cycles
+                self.move_cycle_max = self.cpu.cycles+i+1
+                self.lgr.debug('dataWatch loopAdHoc addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
+                      start, next_ip, self.cpu.current_context))
+                self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
+                         self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
+        return adhoc
     def testCompare(self, mn, op1, op2, recent):
         # look at test/cmp instructions and return flgs.  TBD needs to be built out.
         retval = None
