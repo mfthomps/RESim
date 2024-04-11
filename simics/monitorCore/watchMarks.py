@@ -17,6 +17,7 @@ class CallMark():
         self.max_len = max_len
         self.recv_addr = recv_addr
         self.len = length
+        self.end_addr = recv_addr+length-1
         self.fd = fd
         self.is_lib = is_lib
     def getMsg(self):
@@ -1364,6 +1365,17 @@ class WatchMarks():
            if isinstance(mark.mark, DataMark) and mark.mark.ad_hoc == True:
                if ip in mark.mark.ad_hoc_ip_list:
                    retval = True
+                   break
+        return retval
+
+    def origBuffer(self, addr):
+        retval = None, None, None
+        read_count = 0
+        for mark in self.mark_list:
+           if isinstance(mark.mark, CallMark) and mark.mark.recv_addr is not None and 'ioctl' not in mark.mark.getMsg():
+               read_count = read_count + 1
+               if mark.mark.recv_addr <= addr and mark.mark.end_addr >= addr:
+                   retval = mark.mark.recv_addr, mark.mark.len, read_count
                    break
         return retval
 
