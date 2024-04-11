@@ -124,6 +124,7 @@ import runToReturn
 import recordLogEvents
 import pageCallbacks
 import loopN
+import spotFuzz
 
 #import fsMgr
 import json
@@ -1673,6 +1674,7 @@ class GenMonitor():
         if not new:
             plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         else:
+            self.lgr.debug('genMonitor debugProc is new, stop debug and stop tracking')
             self.stopDebug()
             self.stopTracking()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
@@ -3664,15 +3666,15 @@ class GenMonitor():
             target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
-        cpu, comm, tid = self.task_utils[target].curThread() 
+        if target_cpu is None:
+            self.lgr.error('writeWord, cpu is None')
+            return
         if word_size is None:
             word_size = self.mem_utils[target].wordSize(target_cpu)
         if word_size == 4:
-            self.mem_utils[target].writeWord32(cpu, address, value)
+            self.mem_utils[target].writeWord32(target_cpu, address, value)
         else:
-            self.mem_utils[target].writeWord(cpu, address, value)
-        #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-        #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
+            self.mem_utils[target].writeWord(target_cpu, address, value)
         if self.reverseEnabled():
             self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
             self.clearBookmarks()
@@ -6123,6 +6125,11 @@ class GenMonitor():
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
         return self.soMap[target].isLibc(addr)
+
+    def spotFuzz(self, fuzz_addr, break_at, reg, dfile):
+        self.rmDebugWarnHap()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], fuzz_addr, break_at, reg, self.lgr)
     
         
 if __name__=="__main__":        
