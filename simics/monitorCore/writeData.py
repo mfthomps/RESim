@@ -12,7 +12,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None, no_reset=False):
+                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -72,6 +72,7 @@ class WriteData():
         self.write_callback = write_callback
         self.lgr = lgr
         self.limit_one = limit_one
+        self.set_ret_hap = set_ret_hap
         self.max_packets = os.getenv('AFL_MAX_PACKETS')
         if self.max_packets is not None:
             self.max_packets = int(self.max_packets)
@@ -259,8 +260,9 @@ class WriteData():
             #else:
             ''' Limit reads to buffer size using a hap on the read return '''
             ''' TBD can we stop tracking total read now that sharedSyscall is used to adjust values?'''
-            #self.lgr.debug('writeData call setRetHap')
-            self.setRetHap()
+            self.lgr.debug('writeData call setRetHap')
+            if self.set_ret_hap:
+                self.setRetHap()
             self.read_limit = retval
             self.total_read = 0
             self.in_data = ''
@@ -648,6 +650,7 @@ class WriteData():
 
     def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
         retval = None
+        #self.lgr.debug('writeData doRetIOCtl fd %d' % fd)
         if callname is not None and callname != 'ioctl':
             return self.doRetFixup(fd)
         tid = self.top.getTID()
