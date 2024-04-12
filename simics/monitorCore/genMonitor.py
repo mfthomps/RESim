@@ -2336,7 +2336,7 @@ class GenMonitor():
         self.lgr.debug('revTaintSP')
         self.revTaintAddr(value)
         
-    def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None):
+    def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None, num_bytes=None):
         '''
         back track the value at a given memory location, where did it come from?
         prev_buffer of True causes tracking to stop when an address holding the
@@ -2344,6 +2344,8 @@ class GenMonitor():
         The callback is used with prev_buffer=True, which always assumes the
         find will occur in the reverseToCall module.
         '''
+        if num_bytes is None:
+            num_bytes = self.getWordSize() 
         self.lgr.debug('revTaintAddr for 0x%x' % addr)
         if self.reverseEnabled():
             self.lgr.debug('revTaintAddr disable vmp')
@@ -2353,7 +2355,14 @@ class GenMonitor():
             cell_name = self.getTopComponentName(cpu)
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-            value = self.mem_utils[self.target].readWord32(cpu, addr)
+            if num_bytes == 1:
+                value = self.mem_utils[self.target].readByte(cpu, addr)
+            elif num_bytes == 2:
+                value = self.mem_utils[self.target].readWord16(cpu, addr)
+            elif num_bytes == 4:
+                value = self.mem_utils[self.target].readWord32(cpu, addr)
+            else:
+                value = self.mem_utils[self.target].readWord(cpu, addr)
             if value is None:
                 print('Could not get value from address 0x%x' % addr)
                 self.skipAndMail()
@@ -2365,7 +2374,7 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage('')
             if callback is not None:
                 self.rev_to_call[self.target].setCallback(callback)
-            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer)
+            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer, num_bytes=num_bytes)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
