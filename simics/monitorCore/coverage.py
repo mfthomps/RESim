@@ -412,7 +412,7 @@ class Coverage():
                 self.lgr.error('tableUpdated phys 0x%x NOT in missing_tables.  len %d  type %s ' % (physical, length, type_name))
                 return
       
-            self.lgr.debug('tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
+            #self.lgr.debug('tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
             #if length == 4 and self.cpu.architecture == 'arm':
             if True or length == 4:
                 if op_type is Sim_Trans_Store:

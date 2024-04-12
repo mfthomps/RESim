@@ -195,7 +195,7 @@ class WriteData():
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -260,7 +260,7 @@ class WriteData():
             #else:
             ''' Limit reads to buffer size using a hap on the read return '''
             ''' TBD can we stop tracking total read now that sharedSyscall is used to adjust values?'''
-            self.lgr.debug('writeData call setRetHap')
+            #self.lgr.debug('writeData call setRetHap')
             if self.set_ret_hap:
                 self.setRetHap()
             self.read_limit = retval
@@ -705,11 +705,11 @@ class WriteData():
                      #    return None
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
 
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
-                     self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
                      #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                      self.kernel_buf_consumed = True
