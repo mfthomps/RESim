@@ -43,12 +43,13 @@ class SpotFuzz():
         self.breakpoint = None
         self.stop_hap = None
         self.rand = None
-        if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
-            self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
-            self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
-        else:
-            self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-            self.backstop_cycles =   1000000
+        #if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
+        #    self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
+        #    self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
+        #else:
+        #    self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
+        #    self.backstop_cycles =   1000000
+        self.backstop_cycles =   1000000
         self.top.debugSnap()
         random.seed(12345)
         #self.inject(dfile, snapname)
