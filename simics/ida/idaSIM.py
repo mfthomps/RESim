@@ -252,11 +252,13 @@ class IdaSIM():
         print('Running backwards to find write to address 0x%x' % addr)
         self.wroteToAddress(addr)
     
-    def trackAddressPrompt(self):
-        addr = self.getUIAddress('Run backwards to find source of data at this address')
+    def trackAddressPrompt(self, prompt=None, num_bytes=None):
+        if prompt is None:
+            prompt = 'Run backwards to find source of data at this address'
+        addr = self.getUIAddress(prompt)
         if addr is not None:
-            print('Running backwards to find source of content of address 0x%x' % addr)
-            self.trackAddress(addr)
+            print('%s 0x%x' % (prompt, addr))
+            self.trackAddress(addr, num_bytes=num_bytes)
             self.showSimicsMessage()
             bookmark_list = self.bookmark_view.updateBookmarkView()
     
@@ -278,9 +280,12 @@ class IdaSIM():
             print('Previous instruction  wrote to 0x%x' % (target_addr))
         self.bookmark_list = self.bookmark_view.updateBookmarkView()
     
-    def trackAddress(self, target_addr):
+    def trackAddress(self, target_addr, num_bytes=None):
         disabledSet = bpUtils.disableAllBpts(None)
-        command = '@cgc.revTaintAddr(0x%x)' % target_addr
+        num_bytes_string = 'None'
+        if num_bytes is not None:
+            num_bytes_string = '%d' % num_bytes
+        command = '@cgc.revTaintAddr(0x%x, num_bytes=%s)' % (target_addr, num_bytes_string)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
