@@ -914,8 +914,8 @@ class StackTrace():
                 self.mind_the_gap = False
                 fun_addr = self.frames[-1].fun_addr
                 if fun_addr is None:
-                    self.lgr.error('stackTrace large gap but no function address num frames %d' % len(self.frames))
-                    SIM_break_simulation('remove this')
+                    self.lgr.debug('stackTrace large gap but no function address num frames %d' % len(self.frames))
+                    #SIM_break_simulation('remove this')
                     self.lgr.debug('offending frame: %s' % self.frames[-1].dumpString())
                     return
 

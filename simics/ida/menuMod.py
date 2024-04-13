@@ -144,6 +144,17 @@ class TrackAddressHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class TrackAddressByteHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        prompt = 'Run backwards to find source of byte at this address'
+        self.isim.trackAddressPrompt(prompt=prompt, num_bytes=1)
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class WroteToRegisterHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -397,6 +408,12 @@ def register(isim):
         TrackAddressHandler(isim),
         'Ctrl+Shift+a')
 
+    track_address_byte_action = idaapi.action_desc_t(
+        'track_address_byte:action',
+        '^ track byte at address', 
+        TrackAddressByteHandler(isim),
+        'Ctrl+Shift+a')
+
     wrote_register_action = idaapi.action_desc_t(
         'wrote_register:action',
         '^ Wrote to register', 
@@ -508,6 +525,7 @@ def register(isim):
     idaapi.register_action(do_wrote_to_sp_action)
     idaapi.register_action(do_wrote_to_address_action)
     idaapi.register_action(track_address_action)
+    idaapi.register_action(track_address_byte_action)
     idaapi.register_action(wrote_register_action)
     idaapi.register_action(track_register_action)
     idaapi.register_action(satisfy_condition_action)
@@ -608,6 +626,10 @@ def attach():
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/backtrack/',
         'track_address:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/ReSIM/backtrack/',
+        'track_address_byte:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/ReSIM/backtrack/',

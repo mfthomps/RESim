@@ -17,6 +17,7 @@ class CallMark():
         self.max_len = max_len
         self.recv_addr = recv_addr
         self.len = length
+        self.end_addr = recv_addr+length-1
         self.fd = fd
         self.is_lib = is_lib
     def getMsg(self):
@@ -348,6 +349,15 @@ class MallocMark():
         self.addr = addr
         self.size = size
         self.msg = 'malloc addr: 0x%08x size: %d' % (addr, size)
+    def getMsg(self):
+        return self.msg
+
+class MallocSizeMark():
+    def __init__(self, addr, size):
+        self.addr = addr
+        self.size = size
+        self.msg = 'Passed addr: 0x%08x as size to malloc call.  size: %d' % (addr, size)
+
     def getMsg(self):
         return self.msg
 
@@ -755,7 +765,7 @@ class WatchMarks():
             #self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
             # looking for multiple iterations over data range at same instruction
-            self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
+            #self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
             if len(self.prev_ip) > 0:
                 pm = self.mark_list[-1]
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
@@ -765,7 +775,7 @@ class WatchMarks():
                     if pm.mark.ad_hoc:
                         self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
-                    self.lgr.debug('watchMarks dataRead 0x%x range 0x%x' % (ip, addr))
+                    self.lgr.debug('watchMarks dataRead eip 0x%x range 0x%x' % (ip, addr))
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
@@ -1088,6 +1098,12 @@ class WatchMarks():
         self.addWatchMark(im)
         self.lgr.debug('watchMarks iterator %s' % (im.getMsg()))
 
+    def mallocSize(self, addr, size):
+        # a buffer value from given address is passed to malloc as a size.
+        mm = MallocSizeMark(addr, size)
+        self.addWatchMark(mm)
+        self.lgr.debug('watchMarks mallocSize %s' % (mm.getMsg()))
+
     def malloc(self, addr, size):
         mm = MallocMark(addr, size)
         self.addWatchMark(mm)
@@ -1349,6 +1365,17 @@ class WatchMarks():
            if isinstance(mark.mark, DataMark) and mark.mark.ad_hoc == True:
                if ip in mark.mark.ad_hoc_ip_list:
                    retval = True
+                   break
+        return retval
+
+    def origBuffer(self, addr):
+        retval = None, None, None
+        read_count = 0
+        for mark in self.mark_list:
+           if isinstance(mark.mark, CallMark) and mark.mark.recv_addr is not None and 'ioctl' not in mark.mark.getMsg():
+               read_count = read_count + 1
+               if mark.mark.recv_addr <= addr and mark.mark.end_addr >= addr:
+                   retval = mark.mark.recv_addr, mark.mark.len, read_count
                    break
         return retval
 

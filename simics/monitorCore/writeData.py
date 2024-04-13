@@ -12,7 +12,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None, no_reset=False):
+                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -72,6 +72,7 @@ class WriteData():
         self.write_callback = write_callback
         self.lgr = lgr
         self.limit_one = limit_one
+        self.set_ret_hap = set_ret_hap
         self.max_packets = os.getenv('AFL_MAX_PACKETS')
         if self.max_packets is not None:
             self.max_packets = int(self.max_packets)
@@ -194,7 +195,7 @@ class WriteData():
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -260,7 +261,8 @@ class WriteData():
             ''' Limit reads to buffer size using a hap on the read return '''
             ''' TBD can we stop tracking total read now that sharedSyscall is used to adjust values?'''
             #self.lgr.debug('writeData call setRetHap')
-            self.setRetHap()
+            if self.set_ret_hap:
+                self.setRetHap()
             self.read_limit = retval
             self.total_read = 0
             self.in_data = ''
@@ -648,6 +650,7 @@ class WriteData():
 
     def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
         retval = None
+        #self.lgr.debug('writeData doRetIOCtl fd %d' % fd)
         if callname is not None and callname != 'ioctl':
             return self.doRetFixup(fd)
         tid = self.top.getTID()
@@ -702,11 +705,11 @@ class WriteData():
                      #    return None
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
 
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
-                     self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
                      #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                      self.kernel_buf_consumed = True

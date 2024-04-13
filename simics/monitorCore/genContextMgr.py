@@ -1206,7 +1206,7 @@ class GenContextMgr():
             self.demise_cache.remove(tid)
 
     def taskRecHap(self, tid, third, forth, memory):
-        self.lgr.debug('taskRecHap tid %s' % tid)
+        self.lgr.debug('taskRecHap tid %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if tid not in self.task_rec_hap or tid in self.demise_cache:
             return
         cur_tid  = self.task_utils.curTID()
@@ -1311,8 +1311,11 @@ class GenContextMgr():
 
     def watchTaskHapAlone(self, tid):
         if tid in self.task_rec_bp and tid and self.task_rec_bp[tid] is not None:
-            self.lgr.debug('contextManager watchTaskHapAlone tid:%s' % tid)
-            self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
+            if tid not in self.task_rec_hap or self.task_rec_hap[tid] is None:
+                self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
+                self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
+            else:
+                self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x ALREADY has hap' % (tid, self.task_rec_bp[tid]))
 
     def auditExitBreaks(self):
         for tid in self.task_rec_watch:

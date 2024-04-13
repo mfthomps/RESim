@@ -1055,6 +1055,12 @@ class MemUtils():
 
     def writeWord32(self, cpu, address, value):
         phys = self.v2p(cpu, address)
+        if phys is None:
+            self.lgr.error('memUtils writeWord32 phys is None for addr 0x%x' % address)
+            return
+        if value is None:
+            self.lgr.error('memUtils writeWord32 value given is None')
+            return
         SIM_write_phys_memory(cpu, phys, value, 4)
 
     def writeBytes(self, cpu, address, byte_tuple):

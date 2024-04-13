@@ -124,6 +124,7 @@ import runToReturn
 import recordLogEvents
 import pageCallbacks
 import loopN
+import spotFuzz
 
 #import fsMgr
 import json
@@ -1673,6 +1674,7 @@ class GenMonitor():
         if not new:
             plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
         else:
+            self.lgr.debug('genMonitor debugProc is new, stop debug and stop tracking')
             self.stopDebug()
             self.stopTracking()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
@@ -2334,7 +2336,7 @@ class GenMonitor():
         self.lgr.debug('revTaintSP')
         self.revTaintAddr(value)
         
-    def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None):
+    def revTaintAddr(self, addr, kernel=False, prev_buffer=False, callback=None, num_bytes=None):
         '''
         back track the value at a given memory location, where did it come from?
         prev_buffer of True causes tracking to stop when an address holding the
@@ -2342,6 +2344,8 @@ class GenMonitor():
         The callback is used with prev_buffer=True, which always assumes the
         find will occur in the reverseToCall module.
         '''
+        if num_bytes is None:
+            num_bytes = self.getWordSize() 
         self.lgr.debug('revTaintAddr for 0x%x' % addr)
         if self.reverseEnabled():
             self.lgr.debug('revTaintAddr disable vmp')
@@ -2351,7 +2355,14 @@ class GenMonitor():
             cell_name = self.getTopComponentName(cpu)
             eip = self.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-            value = self.mem_utils[self.target].readWord32(cpu, addr)
+            if num_bytes == 1:
+                value = self.mem_utils[self.target].readByte(cpu, addr)
+            elif num_bytes == 2:
+                value = self.mem_utils[self.target].readWord16(cpu, addr)
+            elif num_bytes == 4:
+                value = self.mem_utils[self.target].readWord32(cpu, addr)
+            else:
+                value = self.mem_utils[self.target].readWord(cpu, addr)
             if value is None:
                 print('Could not get value from address 0x%x' % addr)
                 self.skipAndMail()
@@ -2363,7 +2374,7 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage('')
             if callback is not None:
                 self.rev_to_call[self.target].setCallback(callback)
-            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer)
+            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer, num_bytes=num_bytes)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -3504,15 +3515,19 @@ class GenMonitor():
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
-    def getSO(self, eip, show_orig=False):
+    def getSO(self, eip, show_orig=False, target_cpu=None):
         retval = None
-        fname, start, end = self.soMap[self.target].getSOInfo(eip)
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        fname, start, end = self.soMap[target].getSOInfo(eip)
         if fname is None:
             self.lgr.debug('getSO no library found for 0x%x' % eip)
         else:
             if show_orig:
-                cpu, comm, tid = self.task_utils[self.target].curThread() 
-                image_base = self.soMap[self.target].getImageBase(fname)
+                cpu, comm, tid = self.task_utils[target].curThread() 
+                image_base = self.soMap[target].getImageBase(fname)
                 delta = eip - start
                 orig = image_base+delta  
                 self.lgr.debug('getSO eip 0x%x start 0x%x image_base 0x%x' % (eip, start, image_base))
@@ -3660,15 +3675,15 @@ class GenMonitor():
             target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
-        cpu, comm, tid = self.task_utils[target].curThread() 
+        if target_cpu is None:
+            self.lgr.error('writeWord, cpu is None')
+            return
         if word_size is None:
             word_size = self.mem_utils[target].wordSize(target_cpu)
         if word_size == 4:
-            self.mem_utils[target].writeWord32(cpu, address, value)
+            self.mem_utils[target].writeWord32(target_cpu, address, value)
         else:
-            self.mem_utils[target].writeWord(cpu, address, value)
-        #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
-        #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
+            self.mem_utils[target].writeWord(target_cpu, address, value)
         if self.reverseEnabled():
             self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
             self.clearBookmarks()
@@ -4760,7 +4775,7 @@ class GenMonitor():
         self.lgr.debug('genMonitor traceMalloc')
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
-        self.trace_malloc = traceMalloc.TraceMalloc(self.fun_mgr, self.context_manager[self.target], 
+        self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
                self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr)
 
     def showMalloc(self):
@@ -6121,6 +6136,18 @@ class GenMonitor():
             self.loop_n[self.target] = loopN.LoopN(self, count, self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         else:
             self.loop_n[self.target].go()
+
+    def isLibc(self, addr, target_cpu=None):
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        return self.soMap[target].isLibc(addr)
+
+    def spotFuzz(self, fuzz_addr, break_at, reg, dfile):
+        self.rmDebugWarnHap()
+        cpu = self.cell_config.cpuFromCell(self.target)
+        spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], fuzz_addr, break_at, reg, self.lgr)
     
         
 if __name__=="__main__":        
