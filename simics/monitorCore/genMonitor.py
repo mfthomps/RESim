@@ -4923,7 +4923,7 @@ class GenMonitor():
                      only_thread=only_thread, target=target, fname=fname)
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, no_page_faults=False):
+            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, no_page_faults=False, show_new_hits=False):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -4945,7 +4945,8 @@ class GenMonitor():
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
-              repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults)
+              repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults,
+              show_new_hits=show_new_hits)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
@@ -5545,8 +5546,16 @@ class GenMonitor():
         for call in self.call_traces[self.target]:
             print('%s  -- %s' % (call, self.call_traces[self.target][call].name))
 
+    # also see pendingFault
     def hasPendingPageFault(self, tid):
-        return self.page_faults[self.target].hasPendingPageFault(tid)
+        tid_list = self.task_utils[self.target].getGroupTids(tid)
+        self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
+        for t in tid_list:
+            fault = self.page_faults[self.target].hasPendingPageFault(t)
+        
+            if fault:
+                return True
+        return False
 
     def getCred(self):
         return self.task_utils[self.target].getCred()

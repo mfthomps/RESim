@@ -43,7 +43,7 @@ class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -77,6 +77,7 @@ class PlayAFL():
         self.targetFD = targetFD
         self.count = count
         self.trace_all = trace_all
+        self.show_new_hits = show_new_hits
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
         self.afl_list = []
@@ -590,7 +591,8 @@ class PlayAFL():
                     count = 0
                     for hit in self.all_hits:
                         if hit not in all_prev_hits:
-                            print('New hit found at 0x%x' % hit)
+                            if self.show_new_hits:
+                                print('New hit found at 0x%x' % hit)
                             gotone = True
                             count = count+1
                     if count == 0:
