@@ -4216,7 +4216,7 @@ class DataWatch():
             recv_addr, length, read_count = self.watchMarks.origBuffer(addr)
             if recv_addr is not None:
                 retval = recv_addr
-                self.lgr.debug('findRange addr 0x%x found in call buffer # %d, addr 0x%x' % (read_count, recv_addr))
+                self.lgr.debug('findRange addr 0x%x found in call buffer # %d, addr 0x%x' % (addr, read_count, recv_addr))
             else:
                 for index in range(len(self.start)):
                     if self.start[index] is not None:
