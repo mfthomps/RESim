@@ -563,10 +563,11 @@ class TaskUtils():
                 break
         return retval
 
-    def getGroupTids(self, leader_tid):
-        if leader_tid is None:
-            self.lgr.error('taskUtils getGroupTids called with leader_tid of None')
+    def getGroupTids(self, tid):
+        if tid is None:
+            self.lgr.error('taskUtils getGroupTids called with tid of None')
             return None
+        leader_tid = self.getGroupLeaderTid(tid)
         # BEWARE uses PIDs and casts tid to pid
         retval = {}
         #self.lgr.debug('getGroupTids for %s' % leader_tid)

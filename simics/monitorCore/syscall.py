@@ -2404,7 +2404,7 @@ class Syscall():
                     return
             else: 
                 ida_msg = '%s tid:%s (%s)' % (callname, tid, comm)
-            self.lgr.debug('syscallHap %s exit of tid:%s stop_on_exit: %r' % (self.name, tid, self.top.getStopOnExit(target=self.cell_name)))
+            self.lgr.debug('syscallHap %s exit of tid:%s callname %s stop_on_exit: %r' % (self.name, tid, callname, self.top.getStopOnExit(target=self.cell_name)))
             if callname == 'exit_group':
                 self.handleExit(tid, ida_msg, exit_group=True)
             elif callname == 'tgkill' and sig == 6:
@@ -2504,8 +2504,9 @@ class Syscall():
             if self.traceMgr is not None:
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
+            am_watching = self.context_manager.amWatching(tid)
             if self.soMap is not None:
-                if not retain_so and not self.context_manager.amWatching(tid):
+                if not retain_so and not am_watching:
                     self.lgr.debug('syscall handleExit not watching, call soMap.handleExit')
                     self.soMap.handleExit(tid, killed)
             else:
@@ -2513,7 +2514,8 @@ class Syscall():
             last_one = self.context_manager.rmTask(tid, killed)
             debugging_tid, dumb = self.context_manager.getDebugTid()
             self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
-            if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
+            #if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
+            if (killed or last_one or (exit_group and am_watching)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
                     self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % tid)
@@ -2531,9 +2533,14 @@ class Syscall():
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
                 print('exit tid:%s' % tid)
+                self.lgr.debug('syscall hangleExit call stopAlone and checkExitCallback')
+                #if self.top.pendingFault():
+                if self.top.hasPendingPageFault(tid):
+                    self.lgr.debug('syscall hangleExit killed or group exit %s HAD pending fault, do something!' % tid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
                 self.context_manager.checkExitCallback()
             else:
+                #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
                     self.lgr.debug('syscall hangleExit %s HAD pending fault, do something!' % tid)
 
