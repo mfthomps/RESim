@@ -527,21 +527,25 @@ class GenContextMgr():
         return retval
 
     def alterWatches(self, new_task, prev_task, tid):
+        # Change context depending...
         if self.isSuspended(new_task):
             SIM_run_alone(self.restoreSuspendContext, None)
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
             if not self.isDebugContext():
                 #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
-                SIM_run_alone(self.restoreDebugContext, None)
-                #self.restoreDebugContext()
+                #SIM_run_alone(self.restoreDebugContext, None)
+                self.restoreDebugContext()
             else:
                 #self.lgr.debug('contextManager alterWatches tid:%s already was debug context' % tid)
                 pass
         elif self.isDebugContext():
             #self.lgr.debug('contextManager alterWatches tid:%s restored default context' % tid)
-            SIM_run_alone(self.restoreDefaultContext, None)
-            #self.restoreDefaultContext()
+            #SIM_run_alone(self.restoreDefaultContext, None)
+            self.restoreDefaultContext()
+        elif self.debugging_tid is None:
+            #SIM_run_alone(self.restoreDefaultContext, None)
+            self.restoreDefaultContext()
 
     def onlyOrIgnore(self, tid, comm, new_addr):
 
@@ -622,6 +626,7 @@ class GenContextMgr():
             Also manages breakpoints/haps for maze exits.  TBD alter so that if 
             maze is not an issue, no breakpoints are deleted or restored and we
             only rely on context. '''
+        self.lgr.debug('contextManager changedThread')
         if self.task_hap is None or self.reverse_context:
             return
         # get the value that will be written into the current thread address
@@ -645,6 +650,7 @@ class GenContextMgr():
         comm = self.mem_utils.readString(cpu, proc_addr + self.param.ts_comm, 16)
         
         #DEBUG BLOCK  Every thing until END can be commented out for performance/noise
+        # SEE alterWatches for context juggling
         # TBD fix to use prev_tid
         #if self.top.isWindows():
         #    prev_proc = self.task_utils.getCurProcRec()
@@ -1367,7 +1373,7 @@ class GenContextMgr():
         return self.ida_message
 
     def getDebugTid(self):
-        self.lgr.debug('contextManager return debugging_tid of %s' % self.debugging_tid)
+        #self.lgr.debug('contextManager return debugging_tid of %s' % self.debugging_tid)
         return self.debugging_tid, self.cpu
 
     def getSavedDebugTid(self):
