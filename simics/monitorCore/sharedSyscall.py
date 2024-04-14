@@ -669,7 +669,7 @@ class SharedSyscall():
            a paramter buried in exit_info (see ExitInfo class).
         '''
         trace_msg = ''
-        if tid == 0:
+        if tid == '0':
             #self.lgr.debug('exitHap cell %s tid is zero' % (self.cell_name))
             return False
         ''' If this is a new tid, assume it is a child clone or fork return '''
@@ -1060,10 +1060,10 @@ class SharedSyscall():
                 if timer_syscall is not None:
                     timer_syscall.checkTimeLoop('gettimeofday', tid)
 
-        elif callname == 'waittid': 
-            timer_syscall = self.top.getSyscall(self.cell_name, 'waittid')
+        elif callname == 'waitpid': 
+            timer_syscall = self.top.getSyscall(self.cell_name, 'waitpid')
             if timer_syscall is not None:
-                timer_syscall.checkTimeLoop('waittid', tid)
+                timer_syscall.checkTimeLoop('waitpid', tid)
             else:
                 self.lgr.debug('timer_syscall is None')
 
