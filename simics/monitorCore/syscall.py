@@ -362,8 +362,8 @@ def hasParamMatchRequest(call_params):
             retval = False
     return retval
 
-''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waittid are included for exitMaze '''
-record_fd_list = ['connect', 'bind', 'accept', 'open', 'socketcall', 'gettimeofday', 'waittid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
+''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
+record_fd_list = ['connect', 'bind', 'accept', 'open', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
 skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
 class Syscall():
 
@@ -1459,8 +1459,8 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, str(self.call_params), 
-            str(self.cpu.current_context), self.cpu.cycles))
+        #self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, str(self.call_params), 
+        #    str(self.cpu.current_context), self.cpu.cycles))
 
         do_stop_from_call = False
         # Optimization to see if call parameters exclude this sytem call
@@ -1707,7 +1707,7 @@ class Syscall():
                 self.checkTimeLoop(callname, tid)
                 exit_info = None
 
-        elif callname == 'waittid':        
+        elif callname == 'waitpid':        
             if not self.record_fd:
                 wait_tid = frame['param1']
                 ida_msg = 'waitfor tid:%s (%s) wait_tid: %d' % (tid, comm, wait_tid)
@@ -2606,7 +2606,7 @@ class Syscall():
         delta_limit = 0x12a05f200
         if tid not in self.timeofday_count:
             self.timeofday_count[tid] = 0
-        self.lgr.debug('checkTimeLoop tid:%s timeofday_count: %d' % (tid, self.timeofday_count[tid]))
+        #self.lgr.debug('checkTimeLoop tid:%s timeofday_count: %d' % (tid, self.timeofday_count[tid]))
         ''' crude measure of whether we are in a delay loop '''
         if self.timeofday_count[tid] == 0:
             self.timeofday_start_cycle[tid] = self.cpu.cycles
