@@ -593,7 +593,6 @@ class PlayAFL():
                         if hit not in all_prev_hits:
                             if self.show_new_hits:
                                 print('New hit found at 0x%x' % hit)
-                            gotone = True
                             count = count+1
                     if count == 0:
                         print('No new hits.')
