@@ -2540,7 +2540,7 @@ class GenMonitor():
         ''' TBD clean up or remove '''
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         call_list = ['vfork','fork', 'clone','execve','open','openat','pipe','pipe2','close','dup','dup2','socketcall', 
-                     'exit', 'exit_group', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
+                     'exit', 'exit_group', 'waitpid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
         #             'exit', 'exit_group', 'waittid', 'ipc', 'read', 'write', 'gettimeofday', 'mmap', 'mmap2']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             call_list.remove('socketcall')
@@ -2551,7 +2551,7 @@ class GenMonitor():
             call_list.remove('ipc')
             call_list.remove('send')
             call_list.remove('recv')
-            call_list.remove('waittid')
+            call_list.remove('waitpid')
             call_list.append('waitid')
 
         calls = ' '.join(s for s in call_list)
@@ -5563,6 +5563,9 @@ class GenMonitor():
 
     # also see pendingFault
     def hasPendingPageFault(self, tid):
+        if tid is None:
+            self.lgr.error('hasPendingFault called with tid of None')
+            return
         tid_list = self.task_utils[self.target].getGroupTids(tid)
         self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
         for t in tid_list:
