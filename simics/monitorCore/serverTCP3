@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+#
+#  Accept a TCP connection on a given host/port and send a file to
+#  the client once connected.  
+#
+import sys
+import time
+import os
+import socket
+import argparse
+import logging
+import logging.handlers
+def deal_with_client(newsocket, infile):    
+    for infile in infile_list:    
+        with open (infile) as fh:
+            s = fh.read()
+            newsocket.sendall(s) 
+            lgr.debug('sent %d bytes' % len(s))
+            got = newsocket.recv(1024)
+            lgr.debug('got %s' % got)
+        time.sleep(1)
+
+    newsocket.settimeout(1.0)
+    while True:
+        got = newsocket.recv(1024)
+        if got is None or len(got)==0:
+            lgr.debug('got none, closed?')
+            break 
+        lgr.debug('got %s' % got)
+
+def doServer(this_host, port, infile_list):
+    lgr = logging.getLogger('serverTCPlog')
+    #lhStdout = lgr.handlers[0]
+    lgr.setLevel(logging.DEBUG)
+    fh = logging.FileHandler('/tmp/serverTCP.log')
+    fh.setLevel(logging.DEBUG)
+    frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fh.setFormatter(frmt)
+    lgr.addHandler(fh)
+    #lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
+    #lgr.removeHandler(lhStdout)
+    lgr.info('Start of log from serverTCP')
+    
+    
+    lgr.debug('ip %s' % this_host)
+    lgr.debug('port %d' % port)
+    bindsocket = socket.socket()
+    bindsocket.bind((this_host, port))
+    bindsocket.listen(5)
+    lgr.debug('server begin listen on %s:%d\n' % (this_host, port))
+    count = 0
+    while True:
+        ''' wait for client to open connection '''
+        newsocket, fromaddr = bindsocket.accept()
+        lgr.debug('Connection from %s\n' % str(fromaddr))
+        count += 1
+        deal_with_client(newsocket, infile_list[0])
+        lgr.debug('close socket\n')
+        try:
+            newsocket.shutdown(socket.SHUT_RDWR)
+            newsocket.close()
+        except:
+            pass
+        
+def main():
+    parser = argparse.ArgumentParser(prog='serverTCP3', description='Bind and accept to a TCP port and send stuff.')
+    parser.add_argument('-i', '--ip', action='store', help='Host address to bind to, e.g., 0.0.0.0')
+    parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
+    parser.add_argument('-f', '--file', action='store', help='File list.')
+    print('begin')
+    args = parser.parse_args()
+    file_list = args.file.split()
+    doServer(args.ip, args.port, file_list)
+
+if __name__ == '__main__':
+    sys.exit(main())
