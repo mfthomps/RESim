@@ -564,18 +564,21 @@ class TaskUtils():
         return retval
 
     def getGroupTids(self, tid):
+        retval = {}
         if tid is None:
             self.lgr.error('taskUtils getGroupTids called with tid of None')
-            return None
+            return retval
         leader_tid = self.getGroupLeaderTid(tid)
         # BEWARE uses PIDs and casts tid to pid
-        retval = {}
-        #self.lgr.debug('getGroupTids for %s' % leader_tid)
+        self.lgr.debug('getGroupTids for %s' % leader_tid)
         ts_list = self.getTaskStructs()
         leader_rec = None
         leader_prog = None
         if leader_tid in self.exec_addrs:
             leader_prog = self.exec_addrs[leader_tid].prog_name
+        if leader_tid is None:
+            self.lgr.debug('taskUtils getGroupTids no leader tid found for tid %s, use self.' % tid)
+            leader_tid = tid
         leader_pid = int(leader_tid)
         leader_comm = None
         for ts in ts_list:
@@ -584,8 +587,9 @@ class TaskUtils():
                 leader_comm = ts_list[ts].comm
                 break
         if leader_rec is None:
-            self.lgr.debug('taskUtils getGroupTids did not find record for leader tid %d' % leader_tid)
-            return None 
+            self.lgr.debug('taskUtils getGroupTids did not find record for leader pid %d. Assume process exited add self and return' % leader_pid)
+            retval[tid]=None
+            return retval 
         #self.lgr.debug('getGroupTids leader_tid %s leader_comm: %s leader_rec 0x%x leader_prog %s' % (leader_tid, leader_comm, leader_rec, leader_prog))
         retval[leader_tid] = leader_rec
         decendents = []
@@ -608,11 +612,11 @@ class TaskUtils():
             if (this_leader_pid == leader_pid or this_leader_pid in decendents) and leader_comm == this_leader_comm:
                 #self.lgr.debug('getGroupTids tid matches')
                 decendents.append(ts_list[ts].pid)
-                tid = str(ts_list[ts].pid)
+                this_tid = str(ts_list[ts].pid)
                 #if str(pid) != self.exit_tid or self.cpu.cycles != self.exit_cycles:
-                if not self.isExitTid(tid):
+                if not self.isExitTid(this_tid):
                     #retval.append(ts_list[ts].pid)
-                    retval[tid] = ts
+                    retval[this_tid] = ts
                     #self.lgr.debug('getGroupTids set retval(%d) to 0x%x' % (pid, ts))
         return retval
 
