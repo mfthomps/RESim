@@ -10,7 +10,7 @@ import socket
 import argparse
 import logging
 import logging.handlers
-def deal_with_client(newsocket, infile):    
+def deal_with_client(newsocket, infile_list, lgr):    
     for infile in infile_list:    
         with open (infile) as fh:
             s = fh.read()
@@ -54,7 +54,7 @@ def doServer(this_host, port, infile_list):
         newsocket, fromaddr = bindsocket.accept()
         lgr.debug('Connection from %s\n' % str(fromaddr))
         count += 1
-        deal_with_client(newsocket, infile_list[0])
+        deal_with_client(newsocket, infile_list, lgr)
         lgr.debug('close socket\n')
         try:
             newsocket.shutdown(socket.SHUT_RDWR)
