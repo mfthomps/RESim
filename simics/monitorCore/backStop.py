@@ -113,7 +113,7 @@ class BackStop():
     def setFutureCycle(self, cycles, now=False):
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
             self.lgr.debug('backStop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x' % (self.hang_cycles_delta, self.cpu.cycles))
-            self.hang_callback(self.cpu.cycles)
+            SIM_run_alone(self.hang_callback, self.cpu.cycles)
         if self.hang_cycles is None and self.hang_cycles_delta >0:
             # crude way to defer hang cycle watch until first data read
             SIM_run_alone(self.setHangCallbackAlone, None)
