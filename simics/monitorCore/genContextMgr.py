@@ -626,7 +626,7 @@ class GenContextMgr():
             Also manages breakpoints/haps for maze exits.  TBD alter so that if 
             maze is not an issue, no breakpoints are deleted or restored and we
             only rely on context. '''
-        self.lgr.debug('contextManager changedThread')
+        #self.lgr.debug('contextManager changedThread')
         if self.task_hap is None or self.reverse_context:
             return
         # get the value that will be written into the current thread address
