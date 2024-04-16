@@ -119,17 +119,23 @@ def main():
     if args.index is None and args.instance is None:
         flist = aflPath.getAFLCoverageList(args.target)
         #flist = getPathList(args.target)
+        hit_dict = {}
         for f in flist:
             base = os.path.basename(f)
             parent = os.path.dirname(f)
             instance = os.path.dirname(parent)
             queue = os.path.join(instance, 'queue', base)
             num_hits, num_funs = getCover(f, funs) 
+            hit_dict[queue] = num_hits
             if udp_header is not None:
                 num_packets = getPackets(queue, udp_header)
-                print('hits: %04d  funs: %04d packets: %02d  %s' % (num_hits, num_funs, num_packets, f))
+                #print('hits: %04d  funs: %04d packets: %02d  %s' % (num_hits, num_funs, num_packets, f))
             else:
-                print('hits: %04d  funs: %04d   %s' % (num_hits, num_funs, f))
+                #print('hits: %04d  funs: %04d   %s' % (num_hits, num_funs, f))
+                pass
+        sorted_hits = dict(sorted(hit_dict.items(), key=lambda item: item[1]))
+        for f in sorted_hits:
+            print('%d %s' % (sorted_hits[f], f))
         blocks = getBlocks(analysis_path)
         total_blocks = totalBlocks(blocks)
         print('%d sessions' % len(flist))

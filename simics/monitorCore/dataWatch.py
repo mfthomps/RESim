@@ -2626,7 +2626,8 @@ class DataWatch():
                 ''' Re-use of ad-hoc buffer '''
                 self.lgr.debug('dataWatch adHocCopy, reuse of ad-hoc buffer index %d? addr 0x%x start 0x%x' % (existing_index, addr, start))
                 self.recent_reused_index = existing_index
-                pass
+                self.last_ad_hoc.append(dest_addr)
+                retval = True
         else:
             self.lgr.debug('dataWatch adHocCopy dest is same as addr')
         return retval
@@ -2643,13 +2644,13 @@ class DataWatch():
             return
         self.lgr.debug('dataWatch finishCheckMoveHap dest_op %s' % self.move_stuff.dest_op)
         dest_addr = self.decode.getAddressFromOperand(self.cpu, self.move_stuff.dest_op, self.lgr)
-        ad_hoc = False
+        adhoc = False
         if self.move_stuff.function is None and our_reg is not None:
             if our_reg.startswith('xmm'):
                 '''  TBD bad assumption?  think it is always like a memcpy '''
-                ad_hoc = True
+                adhoc = True
             else:
-                ad_hoc = self.adHocCopy(self.move_stuff.addr, self.move_stuff.trans_size, dest_addr, self.move_stuff.start, self.move_stuff.length)
+                adhoc = self.adHocCopy(self.move_stuff.addr, self.move_stuff.trans_size, dest_addr, self.move_stuff.start, self.move_stuff.length)
             
             '''
             if dest_addr != move_stuff.addr:
@@ -2658,7 +2659,7 @@ class DataWatch():
                 if existing_index is None:
                     self.lgr.debug('dataWatch finishCheckMoveHap will add address 0x%x' % dest_addr)
                     self.last_ad_hoc=dest_addr
-                    ad_hoc = True
+                    adhoc = True
                 else:
                     self.lgr.debug('dataWatch finishCheckMoveHap, reuse of ad-hoc buffer? addr 0x%x start 0x%x' % (move_stuff.addr, move_stuff.start))
                     self.recent_reused_index = existing_index
@@ -2669,7 +2670,7 @@ class DataWatch():
         else: 
             self.lgr.debug('dataWatch finishCheckMove Hap move_stuff function is None')
 
-        if ad_hoc:
+        if adhoc:
             self.lgr.debug('dataWatch finishCheckMoveHap is ad hoc')
             if self.move_stuff.trans_size >= 16:
                 f = self.frames[1]
@@ -2984,7 +2985,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
  
             if dest_addr is not None:
-                ad_hoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i, word_size)
+                adhoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i, word_size)
                 break
             elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                     self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
@@ -3566,13 +3567,13 @@ class DataWatch():
                     self.lgr.debug('dataWatch finishReadHap, found a rep move, call set break range')
                     self.setBreakRange()
                 else: 
-                    ad_hoc = False
+                    adhoc = False
                     ''' see if an ad-hoc move. checkMove will update watch marks '''
                     if eip not in self.not_ad_hoc_copy:
                         self.checkMove(addr, trans_size, start, length, eip, instruct, tid)
                         self.lgr.debug('dataWatch back from checkMove')
                     else:
-                        self.lgr.debug('dataWatch eip 0x%x is in non_ad_hoc_copy list' % eip)
+                        self.lgr.debug('dataWatch eip 0x%x is in not_ad_hoc_copy list' % eip)
                         if not self.checkReWatch(tid, eip, instruct, addr, start, length, trans_size):
                             self.lgr.debug('dataWatch checkMove xx not a reWatch')
                             self.watchMarks.dataRead(addr, start, length, trans_size)
@@ -3939,8 +3940,9 @@ class DataWatch():
                     self.lgr.debug('cheapReuse, looks like memcpy of 1 was handled and this is just the write')
                     retval = True
                 elif isinstance(recent.mark, watchMarks.DataMark) and recent.mark.ad_hoc:
-                    last_copy = recent.mark.dest + recent.mark.loop_count - 1
-                    self.lgr.debug('cheapReuse, looks maybe like ad hoc copy last_copy src: 0x%x dest: 0x%x len %d gibber was 0x%x addr: 0x%x cycle: 0x%x' % (recent.mark.addr,
+                    last_copy = recent.mark.dest + recent.mark.loop_count
+                    #last_copy = recent.mark.dest + recent.mark.loop_count - 1 
+                    self.lgr.debug('cheapReuse, looks maybe like ad hoc copy last_copy src: 0x%x dest: 0x%x len %d last_copy was 0x%x addr: 0x%x cycle: 0x%x' % (recent.mark.addr,
                        recent.mark.dest, recent.mark.length, last_copy, addr, self.cpu.cycles))
                     if addr == last_copy:
                         retval = True
@@ -5060,7 +5062,7 @@ class DataWatch():
             ''' recorded in mem_something as part of obscure memcpy check '''
             dest_addr = self.mem_something.dest
             self.setRange(dest_addr, self.move_stuff.trans_size, watch_mark=wm)
-            #self.lgr.debug('dataWatch memcpyCheck is ad hoc addr 0x%x  ad_hoc %r, dest 0x%x' % (self.move_stuff.addr, ad_hoc, dest_addr))
+            #self.lgr.debug('dataWatch memcpyCheck is ad hoc addr 0x%x  adhoc %r, dest 0x%x' % (self.move_stuff.addr, adhoc, dest_addr))
             self.setBreakRange()
             self.move_cycle = self.cpu.cycles
             self.move_cycle_max = self.cpu.cycles+1

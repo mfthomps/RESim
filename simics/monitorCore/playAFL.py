@@ -351,7 +351,9 @@ class PlayAFL():
             if self.commence_coverage is not None:
                 self.coverage.disableAll()
             else:
-                self.backstop.setHangCallback(self.coverage.recordHang, self.hang_cycles)
+                self.lgr.debug('playAFL, call setHangCallback %d cycles' % self.hang_cycles)
+                #self.backstop.setHangCallback(self.coverage.recordHang, self.hang_cycles)
+                self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
             if False:
                 ''' STOP USING prog file TBD'''
@@ -561,7 +563,7 @@ class PlayAFL():
             else:
                 self.lgr.debug('playAFL goAlone repeat not set, do continue')
                 SIM_continue(0)
-                self.lgr.debug('playAFL goAlone repeat not set, did continue')
+                self.lgr.debug('playAFL goAlone repeat not set, back from did continue')
                 pass
         else:
             self.lgr.info('playAFL did all sessions.')
