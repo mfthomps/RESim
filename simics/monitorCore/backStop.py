@@ -88,7 +88,7 @@ class BackStop():
 
     def clearCycle(self):
         if self.cycle_event is not None:
-            #self.lgr.debug('backStop clearCycle')
+            self.lgr.debug('backStop clearCycle')
             #SIM_event_cancel_time(cpu, self.cycle_event, self.cpu, 0, None)
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = None
@@ -116,6 +116,7 @@ class BackStop():
             SIM_run_alone(self.hang_callback, self.cpu.cycles)
         if self.hang_cycles is None and self.hang_cycles_delta >0:
             # crude way to defer hang cycle watch until first data read
+            #self.lgr.debug('backStop setFutureCycles call setHangCallbackAlone')
             SIM_run_alone(self.setHangCallbackAlone, None)
          
         if not now:
@@ -123,8 +124,10 @@ class BackStop():
         else:
             self.setFutureCycleAlone(cycles)
 
-        if self.hang_event is not None:
-            SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
+        # TBD why was this being canceled?
+        #if self.hang_event is not None:
+        #    self.lgr.debug('setFutureCycle cancle hang_event')
+        #    SIM_event_cancel_time(self.cpu, self.hang_event, self.cpu, None, None)
            
 
     def hang_handler(self, obj, cycles):
@@ -139,7 +142,7 @@ class BackStop():
         self.hang_callback = callback
         if now:
             self.hang_cycles = self.cpu.cycles + cycles
-            #self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
+            self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
             if self.hang_event is None:
                 self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
             SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
