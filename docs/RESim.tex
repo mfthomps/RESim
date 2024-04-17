@@ -806,7 +806,7 @@ to configure the driver platform after it boots, but before other platforms will
 afl\_mode flag. Defaults to 9,000,000. 
 after the last data watch event, or the last code coverage hit.
 \item {\tt AFL\_BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last code coverage hit during an AFL session.
-\item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
+\item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL or playAFL until it is considered hung.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
 \item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
 doing so after enabling reverse execution (which should be avoided due to Simics foibles).  Do not use the name \textit{init.simics}, it seems
@@ -2520,6 +2520,10 @@ A sample ini file and parameter file for the ARM5 Integrator platform is at:
 \begin{verbatim}
 imics/examples/integrator
 \end{verbatim}
+
+\subsection{Custom devices}
+Sample custom devices can be found in {\tt simics/modules/sample-i2c-device}.
+Add {\tt export SIGN\_ON\_BUILD} to the config.mk before making (new in March 24 release of Simics).
 
 
 \section{Implementation strategy}
