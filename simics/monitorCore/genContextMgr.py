@@ -1611,3 +1611,9 @@ class GenContextMgr():
     def enableAll(self, dumb=None):
         for hap in self.haps:
             hap.enable()
+
+    def watchingExit(self, tid):
+        if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
+            return True
+        else:
+            return False
