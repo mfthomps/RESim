@@ -1246,7 +1246,11 @@ class DataWatch():
         elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf']:
             if self.mem_something.dest is None:
                 self.lgr.debug('dataWatch %s dest is None' % self.mem_something.fun)
+            if self.mem_something.addr is None:
+                self.lgr.error('dataWatch returnHap mem_something.addr is None')
+                return
             self.mem_something.src = self.mem_something.addr
+            self.lgr.debug('dataWatch returnHap printfish mem_something.src is 0x%x' % self.mem_something.src)
             buf_start = self.findRange(self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
             mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
@@ -1259,6 +1263,8 @@ class DataWatch():
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.setBreakRange()
         elif self.mem_something.fun in ['fprintf', 'printf', 'syslog', 'output_processor','fputs']:
+            if self.mem_something.src is None:
+                self.mem_something.src = self.mem_something.addr
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fprintf(self.mem_something.fun, self.mem_something.src)
         elif self.mem_something.fun == 'fwrite' or self.mem_something.fun == 'IO_do_write':
