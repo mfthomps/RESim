@@ -2318,12 +2318,12 @@ class GenMonitor():
                 self.lgr.error('stopAtKernelWrite failed to read from addr 0x%x' % addr)
                 self.skipAndMail()
                 return
-            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d cycles: 0x%x' % (value, addr, num_bytes, cpu.cycles))
+            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d rev_to_call %s cycles: 0x%x' % (value, addr, num_bytes, str(rev_to_call), cpu.cycles))
             cell = self.cell_config.cell_context[self.target]
             if self.find_kernel_write is None:
                 self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                    self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call, 
-                    num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
+                    self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
+                    num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
             else:
                 self.find_kernel_write.go(addr)
         else:
@@ -2374,7 +2374,7 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage('')
             if callback is not None:
                 self.rev_to_call[self.target].setCallback(callback)
-            self.stopAtKernelWrite(addr, self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer, num_bytes=num_bytes)
+            self.stopAtKernelWrite(addr, rev_to_call=self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer, num_bytes=num_bytes)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -4166,6 +4166,10 @@ class GenMonitor():
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
             return
+        if not self.fun_mgr.hasIDAFuns():
+            print('No functions defined, needs IDA or Ghidar analysis.')
+            return
+           
         if commence is not None:
             self.dataWatch[self.target].commenceWith(commence)
         self.track_started = True
