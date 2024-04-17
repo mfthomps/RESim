@@ -806,7 +806,7 @@ to configure the driver platform after it boots, but before other platforms will
 afl\_mode flag. Defaults to 9,000,000. 
 after the last data watch event, or the last code coverage hit.
 \item {\tt AFL\_BACK\_STOP\_CYCLES} Limits how far ahead a simulation will run after the last code coverage hit during an AFL session.
-\item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL until it is considered hung.
+\item {\tt HANG\_CYCLES} Limits how many cycles a simulation will run under AFL or playAFL until it is considered hung.
 \item {\tt MONITOR} If set to NO, monitoring is not performed.
 \item{\tt INIT\_SCRIPT} Simics script to be run using run-command-file.  For example, use this to attach real networks to avoid
 doing so after enabling reverse execution (which should be avoided due to Simics foibles).  Do not use the name \textit{init.simics}, it seems
@@ -1669,6 +1669,15 @@ SESSION=TCP
 \end{verbatim}
 Note you do not now include the {\tt -t} option because the protocol type is specified in SESSION.
 
+The {\tt IFACE} directive will define a new IP address for a given ethernet intereface.  For example:
+\begin{verbatim}
+FILE=z2000.io
+iface=ens12:172.33.15.101
+PORT=80
+ip=0.0.0.0
+SESSION=serverTCP
+\end{verbatim}
+
 \subsection{Tracking data}
 \label{tracking}
 RESim provides several functions for tracking data consumed by processes.  A {\tt Data Watch} data structure tracks input buffers into which
@@ -2512,6 +2521,10 @@ A sample ini file and parameter file for the ARM5 Integrator platform is at:
 imics/examples/integrator
 \end{verbatim}
 
+\subsection{Custom devices}
+Sample custom devices can be found in {\tt simics/modules/sample-i2c-device}.
+Add {\tt export SIGN\_ON\_BUILD} to the config.mk before making (new in March 24 release of Simics).
+
 
 \section{Implementation strategy}
 \label{implementation}
@@ -2948,11 +2961,17 @@ but that may need to be greatly reduced for fuzzing.
 
 If you are limited to a single instance of Simics, try using the {\tt -k} option to runAFL to force use of AFL's quick and dirty mode.
 
-Some system may take a long time to create the process you are interested in.  This may be exacerbated by monitoring such as occurs during
+Some systems may take a long time to create the process you are interested in.  This may be exacerbated by monitoring such as occurs during
 a runTo or debugProc (e.g., some script is in a loop failing on create of a process, which may happen millions of times.)  Consider using
 runToCycle to run forward to a desired cpu cycle with the least amount of overhead.
 
 Use {\tt system-perfmeter sample\_time = N} where N is in seconds to view current performance.  Use {\tt -deactive} to turn it off.
+
+Some programs behave crudely while waiting for events.  E.g., calls to waitpid or timeofday can sometimes occur at ridiculous frequencies.
+If RESim is tracking context switches, e.g., a process is being debugged or only/ignore is employed, performance can become ridiculous.
+Usually, if you disable debugging or whatever is causing RESim to watch context switches, you'll see the system run quite fast.
+Try doing what you can without causing RESim to watch context switches.  For example, if you want to run forward until some process accepts
+on an FD, do so without setting debug.  Then, once the accept is done, you can switch to debug.
 
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in

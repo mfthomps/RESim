@@ -1874,7 +1874,7 @@ class DataWatch():
                     skip_fun = True
 
                 if (self.mem_something.fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[self.mem_something.fun]) and 'printf' not in self.mem_something.fun and \
-                                     'syslog' not in self.mem_something.fun and 'fgetsXXXXXXXXXXXXXXXXXXXXXXXXXX' not in self.mem_something.fun:
+                                     'syslog' not in self.mem_something.fun and 'memset' not  in self.mem_something.fun:
                     ret_addr_offset = None
                     if self.mem_something.ret_addr_addr is not None:
                         ret = self.mem_utils.readAppPtr(self.cpu, self.mem_something.ret_addr_addr, size=word_size)
@@ -2639,7 +2639,7 @@ class DataWatch():
         return retval
 
     def finishCheckMoveHap(self, our_reg, an_object, breakpoint, memory):
-        ''' Hap invoked when we reach the end of a canidate ad hoc move '''
+        ''' Hap invoked when we reach the end of a candidate ad hoc move '''
         if self.finish_check_move_hap is None:
             return
         if self.call_hap is not None:
@@ -3048,6 +3048,7 @@ class DataWatch():
             if not adhoc:
                 adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length)
                 if adhoc:
+                    self.move_cycle_max = self.cpu.cycles+i+1
                     self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
         else:
             offset = self.checkNoTaint(op1, recent_instructs)
@@ -3057,6 +3058,7 @@ class DataWatch():
                 adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length, byte_swap=byte_swap)
                 if adhoc:
                     self.recordAdHocCopy(addr, start, length, trans_size, dest_addr, byte_swap=byte_swap)
+                    self.move_cycle_max = self.cpu.cycles+i+1
             else:                   
                 #self.lgr.debug('dataWatch loopAdHoc dest addr found to be 0x%x, not relative to SP' % dest_addr)
                 adhoc = True
