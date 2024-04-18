@@ -34,7 +34,7 @@ import resimUtils
 import aflPath
 import findTrack
 class InjectToWM():
-    def __init__(self, top, addr, dataWatch, lgr, fname=None):
+    def __init__(self, top, addr, dataWatch, lgr, fname=None, max_marks=None):
         # TBD why optional fname?
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
@@ -42,10 +42,11 @@ class InjectToWM():
         self.dataWatch = dataWatch
         self.addr = addr
         self.lgr = lgr
+        self.max_marks = max_marks
         here = os.getcwd()
         self.target = os.path.basename(here)
         print('target is %s' % self.target)
-        self.lgr.debug('InjectToWM addr: 0x%x target is %s fname %s' % (addr, self.target, fname))
+        self.lgr.debug('InjectToWM addr: 0x%x target is %s fname %s max_marks %s' % (addr, self.target, fname, max_marks))
         result = self.findOneTrack(addr)
         if result is not None:
             self.mark_index = result.mark['index']
@@ -54,7 +55,7 @@ class InjectToWM():
             print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=True)
+            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=True, max_marks=max_marks)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
@@ -77,8 +78,10 @@ class InjectToWM():
             SIM_run_alone(self.top.setDebugBookmark,'injectToWM')
         status = SIM_simics_is_running()
         if status:
+            self.lgr.debug('InjectToWM doStop thinks simics running, call stopAndGo')
             self.top.stopAndGo(self.gowm)
         else:
+            self.lgr.debug('InjectToWM doStop thinks NOT simics running, call gowm')
             self.gowm()
 
     def gowm(self):
