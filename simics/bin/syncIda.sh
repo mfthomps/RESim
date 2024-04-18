@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# use rsync to copy ida_data files for a program from a remove server (e.g., blade)
+# use rsync to copy ida_data files for a program from a remote server (e.g., blade)
 # to the local machine, e.g., where IDA runs.  Run from the RESIM_ROOT_PREFIX directory
 #
 if [ -z "$RESIM_IDA_DATA" ]; then
