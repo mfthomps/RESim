@@ -4159,7 +4159,7 @@ class GenMonitor():
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None):
-        self.lgr.debug('trackIO') 
+        self.lgr.debug('trackIO max_marks %s' % max_marks) 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
@@ -4420,7 +4420,7 @@ class GenMonitor():
             the instance is not defined until it is done.
             use no_reset True to stop the tracking if RESim would need to reset the origin.'''
         self.track_started = True
-        self.lgr.debug('injectIO')
+        self.lgr.debug('injectIO max_marks %s' % max_marks)
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
@@ -5293,8 +5293,8 @@ class GenMonitor():
     def injectToBB(self, bb, fname=None):
         ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
 
-    def injectToWM(self, addr, fname=None):
-        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname)
+    def injectToWM(self, addr, fname=None, max_marks=None):
+        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname, max_marks=max_marks)
 
     def getParam(self):
         return self.param[self.target]
