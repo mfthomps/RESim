@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# use rsync to copy ida_data files for a program from a remove server (e.g., blade)
+# use rsync to copy ida_data files for a program from a remote server (e.g., blade)
 # to the local machine, e.g., where IDA runs.  Run from the RESIM_ROOT_PREFIX directory
 #
 if [ -z "$RESIM_IDA_DATA" ]; then
@@ -10,7 +10,7 @@ fi
 if [ $# -lt 2 ] || [ $1 = "-h" ]; then
     echo "syncIda.sh <program> <server> [user]"
     echo "provide the optional user if id on remote differs from local."
-    echo "Run from the RESIM_ROOT_PREFIX directory"
+    echo "Run from the RESIM_ROOT_PREFIX directory on the machine the runs IDA or Ghidra"
     exit
 fi
 program=$1
@@ -23,7 +23,7 @@ if [ $# -eq 3 ]; then
 else
     user=""
 fi
-remote_ida=$( ssh $user$remote "source \$HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$root_dir/$program_base; echo \$RESIM_IDA_DATA" )
+remote_ida=$( ssh $user$remote "source \$HOME/.resimrc || mkdir -p \$RESIM_IDA_DATA/$root_dir/$program_base; echo \$RESIM_IDA_DATA" )
 if [ -z "$remote_ida" ];then
            echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
            exit 1
