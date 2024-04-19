@@ -2079,7 +2079,9 @@ identify earlier packets as the source by tracing the data back through watch ma
 \item Assuming you have an alternate input value to test, and an offset within the input file as reported by RESim, use hexedit to modify the input file copy
 created by {\tt injectToBB} at {\tt /tmp/bb.io}.
 \item Use {\tt injectIO} to confirm that the modified input file reaches the target BNT.  For example: debugSnap; doBreak; injectIO.
-\item Run the addInput.py utility to add your modified {\tt /tmp/bb.io} to the set of input files discovered by AFL.
+\item Run the addInput.py utility to add your modified {\tt /tmp/bb.io} to the set of input files discovered by AFL, which will then be inclued in the next
+cycleSeeds.py command..
+\item Run addLive.py to add a modified file to a running AFL system.
 \item After the BNTs have been explored, use {\tt runPlay} and {\tt dedupeCoverage.py} to update the coverage records.
 \item Use the {\tt cycleSeeds.py} utility to add all of the input files corresponding to unique coverage to the target seed directory.  This will include your manual additions.
 \item Delete the {\tt afl/output/$<target$>} files and restart AFL to see if it can use the new paths you discovered to discover more paths.
