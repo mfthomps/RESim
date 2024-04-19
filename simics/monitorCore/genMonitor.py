@@ -2123,8 +2123,8 @@ class GenMonitor():
         if self.reverseEnabled():
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
-            self.removeDebugBreaks()
-            self.stopTrackIO()
+            self.removeDebugBreaks(immediate=True)
+            self.stopTrackIO(immediate=True)
             reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
                            self.lgr, extra_back=extra_back)
             self.lgr.debug('back from reverseToAddr')
