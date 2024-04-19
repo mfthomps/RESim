@@ -393,6 +393,7 @@ class findKernelWrite():
                     bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
                 else:
                     ida_message = 'Kernel wrote to user space address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
+                    # MESSAGE used in cadet-test, do not change
                     bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
                 if self.satisfy_value is not None:
