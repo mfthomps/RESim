@@ -322,8 +322,6 @@ class AFL():
             self.lgr.debug('afl finishInit, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
             self.fault_hap = None
             self.lgr.debug('afl finishInit, call debugExitHap to catch exits')
-
-            #TBD restore this
             self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
 
             self.lgr.debug('afl finishInit, clear context manager debugging tid')
@@ -538,6 +536,7 @@ class AFL():
         if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang, watch exits, cpu cycle was 0x%x context %s' % (self.target_cpu.cycles, self.target_cpu.current_context))
             self.coverage.watchExits(tid=self.tid)
+            self.exit_syscall = self.top.debugExitHap(context=self.target_cpu.current_context)
 
         if self.write_data is None:
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 

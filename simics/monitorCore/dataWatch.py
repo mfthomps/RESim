@@ -171,6 +171,7 @@ class DataWatch():
         self.function_no_watch = None
         self.callback = None
         self.last_byteswap = 0
+        self.stopped = False
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -764,6 +765,7 @@ class DataWatch():
     def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False, no_backstop=False):
         if self.disabled:
             return
+        self.stopped = False
         ''' set the data watches, e.g., after a reverse execution is complete.'''
         self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
            len(self.start), len(self.read_hap)))
@@ -818,6 +820,7 @@ class DataWatch():
         ''' stop data watches, e.g., in prep for reverse execution or to run free from a memsomething call to its return'''
         if self.disabled:
             return
+        self.stopped = True
         self.lgr.debug('dataWatch stopWatch immediate: %r len of start is %d len of read_hap: %d' % (immediate, len(self.start), len(self.read_hap)))
         for index in range(len(self.start)):
             if self.start[index] is None:
@@ -1246,7 +1249,11 @@ class DataWatch():
         elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf']:
             if self.mem_something.dest is None:
                 self.lgr.debug('dataWatch %s dest is None' % self.mem_something.fun)
+            if self.mem_something.addr is None:
+                self.lgr.error('dataWatch returnHap mem_something.addr is None')
+                return
             self.mem_something.src = self.mem_something.addr
+            self.lgr.debug('dataWatch returnHap printfish mem_something.src is 0x%x' % self.mem_something.src)
             buf_start = self.findRange(self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.dest)        
             mark = self.watchMarks.sprintf(self.mem_something.fun, self.mem_something.addr, self.mem_something.dest, self.mem_something.count, buf_start)
@@ -1259,6 +1266,8 @@ class DataWatch():
             self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             self.setBreakRange()
         elif self.mem_something.fun in ['fprintf', 'printf', 'syslog', 'output_processor','fputs']:
+            if self.mem_something.src is None:
+                self.mem_something.src = self.mem_something.addr
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
             self.watchMarks.fprintf(self.mem_something.fun, self.mem_something.src)
         elif self.mem_something.fun == 'fwrite' or self.mem_something.fun == 'IO_do_write':
@@ -2522,6 +2531,9 @@ class DataWatch():
     def memstuffStopHap(self, alternate_callback, one, exception, error_string):
         ''' We may have been in a memsomething and have stopped.  Set a break on the address 
             of the call to the function and reverse. '''
+        if self.stopped:
+            self.lgr.debug('dataWatch memstuffStopHap, dataWatch is stopped, return')
+            return
         self.lgr.debug('memstuffStopHap stopHap ')
         if self.stop_hap is not None:
             self.lgr.debug('memstuffStopHap stopHap will delete hap %s' % str(self.stop_hap))
@@ -2558,6 +2570,9 @@ class DataWatch():
         #    self.lgr.debug('handleMemStuff ret_addr 0x%x fun %s called_from_ip 0x%x' % (self.mem_something.ret_ip, self.mem_something.fun, self.mem_something.called_from_ip))
         #else:
         #    self.lgr.debug('handleMemStuff got none for either ret_addr or called_from_ip')
+        if self.stopped:
+            self.lgr.debug('dataWatch handleMemStuff, dataWatch is stopped, return')
+            return
         
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr:
@@ -4521,7 +4536,7 @@ class DataWatch():
         #self.rev_to_call.preCallFD(fd) 
         if max_marks is not None:
            self.max_marks = max_marks
-           self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % max_marks)
+           self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % self.max_marks)
         else:
            self.max_marks = 2000
            self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
@@ -4846,6 +4861,9 @@ class DataWatch():
         if self.disabled:
             self.lgr.debug('dataWatch enable')
             self.disabled = False
+
+    def disable(self):
+        self.disabled=True
 
     def setReadLimit(self, limit, callback):
         self.read_limit_trigger = limit
