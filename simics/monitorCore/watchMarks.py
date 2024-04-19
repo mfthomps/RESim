@@ -132,18 +132,21 @@ class DataMark():
                 mark_msg = '%s %d bytes into dest 0x%08x from 0x%08x %s %s' % (self.note, self.trans_size, self.dest, self.addr, offset_string, self.mark_compare.toString())
         elif self.ad_hoc or self.was_ad_hoc:
             copy_length = (self.end_addr - self.addr) + 1
-            #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
-            op = 'Copy'
-            if self.byte_swap:
-                op = 'Byteswap'
-            if self.start is not None:
-                if copy_length == self.length and self.start == self.addr:
-                    mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (op, copy_length, self.addr, self.dest)
-                else: 
-                    offset = self.addr - self.start
-                    mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (op, copy_length, self.addr, self.dest, offset, self.start)
+            if copy_length > 0:
+                #self.lgr.debug('DataMark getMsg ad-hoc length is %d' % copy_length)
+                op = 'Copy'
+                if self.byte_swap:
+                    op = 'Byteswap'
+                if self.start is not None:
+                    if copy_length == self.length and self.start == self.addr:
+                        mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc' % (op, copy_length, self.addr, self.dest)
+                    else: 
+                        offset = self.addr - self.start
+                        mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (from offset %d into buffer at 0x%x)' % (op, copy_length, self.addr, self.dest, offset, self.start)
+                else:
+                    mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (op, copy_length, self.addr, self.dest)
             else:
-                mark_msg = '%s %d bytes from 0x%08x to 0x%08x . Ad-hoc (Source buffer starts before known buffers!)' % (op, copy_length, self.addr, self.dest)
+                mark_msg = 'Read %d from 0x%08x was adhoc buffer' % (self.trans_size, self.addr)
         else:
             copy_length = self.end_addr- self.addr + 1
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
