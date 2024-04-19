@@ -1765,17 +1765,7 @@ class DataWatch():
                         return 
         '''
         if self.max_marks is not None and self.watchMarks.markCount() > self.max_marks:
-            self.lgr.debug('dataWatch max marks exceeded')
-            if self.callback is None:
-                self.lgr.debug('dataWatch max marks exceeded no callback')
-                self.stopWatch()
-                self.clearWatches()
-                SIM_break_simulation('max marks exceeded')
-                print('Data Watches removed')
-            else:
-                self.lgr.debug('dataWatch max marks exceeded, call callback %s' % str(self.callback))
-                self.callback()
-                self.callback = None
+            self.maxMarksExceeded()
             return
 
         ret_to = self.getReturnAddr()
@@ -3724,17 +3714,7 @@ class DataWatch():
             ''' hap echos? '''
             if len(self.read_hap) == 0:
                 return
-
-            self.lgr.debug('dataWatch readHap max marks exceeded')
-            if self.callback is None:
-                self.lgr.debug('dataWatch readHap max marks exceeded no callback')
-                self.stopWatch()
-                self.clearWatches()
-                SIM_break_simulation('max marks exceeded')
-                print('Data Watches removed')
-            else:
-                self.lgr.debug('dataWatch readHap max marks exceeded, call callback %s' % str(self.callback))
-                self.callback()
+            self.maxMarksExceeded()
             return
 
         ''' ad hoc sanitity check for wayward programs, fuzzed, etc.'''
@@ -3749,7 +3729,7 @@ class DataWatch():
                 read_loop = os.getenv('READ_LOOP')
                 if read_loop is not None and read_loop.lower() == 'quit':
                     self.top.quit()
-                self.stopWatch()
+                self.stopWatch(leave_backstop=True)
                 return
         ''' watched data has been read (or written) '''
         if self.prev_cycle is None:
@@ -5209,6 +5189,26 @@ class DataWatch():
                 wm.mark.switchTo(addr)
 
         self.lgr.debug('dataWatch doAppend wm now %s' % wm.mark.getMsg())
+
+
+
+    def maxMarksExceeded(self):
+            self.lgr.debug('dataWatch maxMarksExceeded check callback')
+            if self.callback is None:
+                self.lgr.debug('dataWatch maxMarksExceeded no callback')
+                self.stopWatch()
+                self.clearWatches()
+                SIM_break_simulation('max marks exceeded')
+                print('Data Watches removed')
+            else:
+                #SIM_break_simulation('max marks exceeded')
+                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(self.callback))
+                use_callback = self.callback
+                self.top.stopAndGo(use_callback)
+                #self.callback()
+                self.callback = None
+
+
 
 
 
