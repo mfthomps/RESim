@@ -3725,10 +3725,12 @@ class DataWatch():
             self.index_hits[index] = self.index_hits[index]+1
             #self.lgr.error('dataWatch readHap %d hits on  index %d, ' % (self.index_hits[index], index))
             if self.index_hits[index] > self.read_loop_max:
-                self.lgr.error('dataWatch readHap over %d hits on index %d eip 0x%x, stopping watch' % (self.read_loop_max, index, eip))
+                self.lgr.error('dataWatch readHap over %d hits on index %d eip 0x%x, stopping watch cycle: 0x%x' % (self.read_loop_max, index, eip, self.cpu.cycles))
                 read_loop = os.getenv('READ_LOOP')
                 if read_loop is not None and read_loop.lower() == 'quit':
                     self.top.quit()
+                else:
+                    self.top.pendingFault()
                 self.stopWatch(leave_backstop=True)
                 return
         ''' watched data has been read (or written) '''
@@ -4330,14 +4332,14 @@ class DataWatch():
         self.watchMarks.clearWatchMarks(record_old=record_old)
 
 
-    def clearWatches(self, cycle=None, immediate=False):
+    def clearWatches(self, cycle=None, immediate=False, leave_backstop=False):
         self.lgr.debug('dataWatch clearWatches')
         if cycle is None:
             self.lgr.debug('DataWatch clearWatches, no cycle given')
             self.prev_cycle = None
         else:
             self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
-        self.stopWatch(immediate=immediate)
+        self.stopWatch(immediate=immediate, leave_backstop=leave_backstop)
         self.break_simulation = True
         self.stack_buffers = {}
         self.total_read = 0
@@ -4421,7 +4423,8 @@ class DataWatch():
         self.lgr.debug('dataWatch setCallback, call to backstop to set callback %s' % str(callback))
         self.back_stop.setCallback(callback)
         # use if max marks exceeded
-        self.callback = callback
+        if self.callback is None:
+            self.callback = callback
 
     def setMaxMarksCallback(self, callback):
         self.lgr.debug('dataWatch setMaxMarksCallback to %s' % str(callback))
@@ -5196,13 +5199,13 @@ class DataWatch():
             self.lgr.debug('dataWatch maxMarksExceeded check callback')
             if self.callback is None:
                 self.lgr.debug('dataWatch maxMarksExceeded no callback')
-                self.stopWatch()
                 self.clearWatches()
                 SIM_break_simulation('max marks exceeded')
                 print('Data Watches removed')
             else:
                 #SIM_break_simulation('max marks exceeded')
                 self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(self.callback))
+                self.clearWatches(leave_backstop=True)
                 use_callback = self.callback
                 self.top.stopAndGo(use_callback)
                 #self.callback()
