@@ -288,4 +288,6 @@ class ReportCrash():
         self.crash_report.write(msg)
 
     def maxMarksCallback(self):
+        self.lgr.debug('reportCrash maxMarksCallback, just continue') 
+        self.top.pendingFault()
         SIM_run_alone(SIM_continue, 0)
