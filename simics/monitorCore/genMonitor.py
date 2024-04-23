@@ -5293,8 +5293,8 @@ class GenMonitor():
     def injectToBB(self, bb, fname=None):
         ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
 
-    def injectToWM(self, addr, fname=None, max_marks=None):
-        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname, max_marks=max_marks)
+    def injectToWM(self, addr, fname=None, max_marks=None, no_reset=False):
+        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname, max_marks=max_marks, no_reset=no_reset)
 
     def getParam(self):
         return self.param[self.target]
