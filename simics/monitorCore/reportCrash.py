@@ -49,6 +49,19 @@ class ReportCrash():
 
         if self.dataWatch is not None:
             self.dataWatch.setMaxMarksCallback(self.maxMarksCallback)
+        self.skip_ip = []
+        if os.path.isfile('ignore_crash_ip.txt'):
+            with open('ignore_crash_ip.txt') as fh:
+                for line in fh:
+                    if '#' not in line.strip():
+                        addr_s = line.strip()
+                        try:
+                            self.skip_ip.append(int(addr_s, 16))
+                            self.lgr.debug('reportCrash ignore_crash_ip.txt added %s' % addr_s)
+                        except:
+                            self.lgr.error('reportCrash ignore_crash_ip.txt failed on %s' % line)
+                            self.top.quit()
+                            
 
     def go(self):
          if self.index > 0 and self.target is not None:
@@ -174,6 +187,10 @@ class ReportCrash():
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         bad_addr = self.top.getSEGVAddr()
+        if eip in self.skip_ip:
+            self.lgr.debug('doneForward got eip in skip list 0x%x' % eip)
+            self.crash_report.write('IP: 0x%x in skip list, bad addr 0x%x, ignore' % (eip, bad_addr))
+            self.top.quit()
         is_rop = False
         read_count = self.dataWatch.readCount()
         self.crash_report.write('%d read/recv calls prior to crash\n' % read_count)
