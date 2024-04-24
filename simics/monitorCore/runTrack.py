@@ -31,7 +31,7 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, fname, stop_threads, lgr, instance_path):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, fname, stop_threads, lgr, instance_path, afl_path):
     if instance_path is not None:
         os.chdir(instance_path)
     here = os.getcwd()
@@ -47,6 +47,7 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_m
         os.environ['ONE_DONE_PARAM4']=max_marks
     if fname is not None:
         os.environ['ONE_DONE_PARAM5']=fname
+    track_blacklist = aflPath.getTrackBlacklist(afl_path)
     with open(log, 'wb') as fh:
         for f in afl_list:
             #os.chdir(here)
@@ -66,6 +67,9 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_m
             except:
                 pass
             trackoutput = os.path.join(trackdir, base)
+            if trackoutput in track_blacklist:
+                lgr.debug('%s path in blacklist, skip it %s' % (workspace, trackoutput))
+                continue
             if os.path.isfile(trackoutput):
                 lgr.debug('%s path exists, skip it %s' % (workspace, trackoutput))
                 continue
@@ -140,7 +144,8 @@ def main():
     stop_threads=False
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
-    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.fname, lambda: stop_threads, lgr, None))
+    afl_path = aflPath.getTargetPath(target)
+    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.fname, lambda: stop_threads, lgr, None, afl_path))
     thread_list.append(track_thread)
     track_thread.start()
    
