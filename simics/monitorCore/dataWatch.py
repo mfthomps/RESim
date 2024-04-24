@@ -64,7 +64,7 @@ no_stop_funs = ['xml_element_free']
 ''' made up functions that could not have ghost frames?'''
 no_ghosts = ['charLookup', 'charLookupX', 'charLookupY']
 ''' TBD confirm end_cleanup is a good choice for free'''
-free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc']
+free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc', 'memset']
 # remove allocators, should not get that as windows function
 allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
@@ -2395,15 +2395,12 @@ class DataWatch():
             self.call_hap = None
             self.call_break = None
 
-    def hitCallStopHap(self, vt_stuff, one, exception, error_string):
-        SIM_run_alone(self.hitCallStopHapAlone, vt_stuff)
+    def hitCallStopHap(self, prev_mark_cycle, one, exception, error_string):
+        SIM_run_alone(self.hitCallStopHapAlone, prev_mark_cycle)
  
-    def hitCallStopHapAlone(self, vt_stuff):
-        #self.context_manager.enableAll()
+    def hitCallStopHapAlone(self, prev_mark_cycle):
+        self.context_manager.enableAll()
         SIM_run_command('enable-vmp') 
-        if vt_stuff is not None and vt_stuff.simics_fail:
-            resimUtils.skipToTest(self.cpu, vt_stuff.cycle, self.lgr)
-            self.lgr.debug('dataWatch hitStopHap alone, simics rev failure, skipped to cycle 0x%x' % vt_stuff.cycle)
         
         ''' we are at the call to a memsomething, get the parameters '''
         eip = self.top.getEIP(self.cpu)
@@ -2424,6 +2421,10 @@ class DataWatch():
         #if eip != self.mem_something.called_from_ip or cycle_dif > 300000:
         if self.cpu.cycles == first_cycle:
             self.lgr.debug('hitCallStopHap stopped at original bookmark, assume a ghost frame')
+            self.undo_pending = True
+            SIM_run_alone(self.undoAlone, self.mem_something)
+        if self.cpu.cycles == prev_mark_cycle:
+            self.lgr.debug('hitCallStopHap stopped at previous watchmark, assume a ghost frame')
             self.undo_pending = True
             SIM_run_alone(self.undoAlone, self.mem_something)
 
@@ -2471,7 +2472,7 @@ class DataWatch():
 
         self.top.removeDebugBreaks(immediate=True)
         self.stopWatch(immediate=True)
-        #self.context_manager.disableAll(direction='reverse')
+        self.context_manager.disableAll(direction='reverse')
 
         self.cycles_was = self.cpu.cycles
         self.save_cycle = self.cycles_was - 1
@@ -2491,8 +2492,17 @@ class DataWatch():
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
         #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call_hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
         #   self.mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
-        self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d), now reverse' % (self.call_break, 
-           self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle))
+        prev_mark_cycle = self.watchMarks.latestCycle()
+        delta = None
+        if prev_mark_cycle is not None:
+            delta = self.cpu.cycles - prev_mark_cycle
+            rev_cmd = 'reverse-to cycle = %d' % prev_mark_cycle 
+            self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d). Delta cycles is %d, now reverse' % (self.call_break, 
+               self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle, delta))
+        else:
+            rev_cmd = 'reverse' 
+            self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d). No previous cycle, so just now reverse' % (self.call_break, 
+                self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle))
         #self.lgr.debug('cell is %s  cpu context %s' % (cell, self.cpu.current_context))
         #SIM_run_command('list-breakpoints')
         if alternate_callback is None:
@@ -2500,8 +2510,12 @@ class DataWatch():
         else:
             callback = alternate_callback
         SIM_run_command('disable-vmp') 
-        self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", callback, None)
-        SIM_run_command('reverse')
+        self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", callback, prev_mark_cycle)
+        #if delta > 1000:
+        #    print('would run this: %s' % rev_cmd)
+        #else:
+        #    SIM_run_command(rev_cmd)
+        SIM_run_command(rev_cmd)
 
 
     def ghostStopHap(self, dumb, one, exception, error_string):
@@ -3530,7 +3544,6 @@ class DataWatch():
             if instruct[1].startswith('rep movsd'):
                 count = count*4
             self.lgr.debug('dataWatch checkRep esi 0x%x edi 0x%x count %d start[%d]=0x%x addr 0x%x' % (esi, edi, count, index, self.start[index], addr))
-            end = esi + count
             start = esi
             if self.start[index] > start:
                 start = self.start[index] 
@@ -3665,19 +3678,32 @@ class DataWatch():
                 self.lgr.error('readHap memory logical address zero???, index %d' % index)
                 SIM_break_simulation('remove this')
         else:
-            start = self.start[index]
-            if start is not None:
-                phys_of_start = self.mem_utils.v2p(self.cpu, start)
-                if phys_of_start is not None:
-                    self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference phys addr 0x%x, start[%d] is 0x%x phys of start 0x%x' % (index, memory.physical_address, index, start, phys_of_start))
-                    delta = phys_of_start - memory.physical_address
-                    addr = start + delta
-                    self.lgr.debug('dataWatch readHap delta 0x%x, set addr to 0x%x' % (delta, addr))
+            if addr is None:
+                self.lgr.debug('dataWatch readHap in kernel, addr None, compute offset. index %d size %d' % (index, size))
+                start = self.start[index]
+                if start is not None:
+                    phys_of_start = self.mem_utils.v2p(self.cpu, start)
+                    if phys_of_start is not None:
+                        self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x memory.physical_addr 0x%x, start[%d] is 0x%x phys of start 0x%x' % (index, memory.logical_address, memory.physical_address, index, start, phys_of_start))
+                        delta = phys_of_start - memory.physical_address
+                        if delta >= 0:
+                            addr = start + delta 
+                            self.lgr.debug('dataWatch readHap in kernel delta 0x%x, set addr to 0x%x' % (delta, addr))
+                        else:
+                            self.lgr.debug('dataWatch readHap in kernel delta negative?  0x%x, ' % (delta))
+                             
+                    else:
+                        self.lgr.error('dataWatch readHap no physical address for start address 0x%x' % start)
                 else:
-                    self.lgr.error('dataWatch readHap no physical address for start address 0x%x' % start)
+                    self.lgr.error('dataWatch readHap no start address for index %s' % index)
             else:
-                self.lgr.error('dataWatch readHap no start address for index %s' % index)
-           
+                self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x phys 0x%x size %d' % (index, 
+                     memory.logical_address, memory.physical_address, memory.size))
+                start, length = self.findBufForRange(memory.logical_address, memory.size)
+                if start is None:
+                     self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x' % (index, memory.logical_address))
+                else:
+                     self.lgr.debug('dataWatch readHap reference from kernel for index %d buffer start 0x%x' % (index, start))
     
         if op_type != Sim_Trans_Load:
             self.lgr.debug('dataWatch readHap cycles: 0x%x move_cycle: 0x%x  move_cycle_max: 0x%x' % (self.cpu.cycles, self.move_cycle, self.move_cycle_max))
@@ -4084,7 +4110,7 @@ class DataWatch():
             phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
             break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Read | Sim_Access_Write, phys_block.address, self.length[index], 0)
             #break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
-            end = self.start[index] + self.length[index] 
+            end = self.start[index] + (self.length[index] - 1)
             eip = self.top.getEIP(self.cpu)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
             self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
@@ -4134,6 +4160,9 @@ class DataWatch():
     def rmSubRange(self, addr, trans_size):
         ''' remove a subrange within a buffer '''
         index = self.findRangeIndex(addr)
+        if index is None:
+            buf_start, buf_length = self.findBufForRange(addr, trans_size)
+            index = self.findRangeIndex(buf_start)
         if index is not None:
             if index != self.recent_reused_index:
                 start = self.start[index]
@@ -4156,7 +4185,7 @@ class DataWatch():
                             self.lgr.debug('dataWatch rmSubRange force reuse')
               
                 #if force_reuse or (start >= addr and end <= (addr+trans_size)):
-                if force_reuse or (start <= addr and end >= (addr+trans_size)):
+                if force_reuse or (start <= addr and end >= (addr+trans_size)) or (start > addr and (addr+trans_size) >= end):
                     self.lgr.debug('dataWatch rmSubRange, IS overlap (or force_reuse) start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
                     new_start = None
                     self.lgr.debug('dataWatch rmSubRange, addr: 0x%x start 0x%x length: %d end 0x%x' % (addr, start, length, end))
@@ -4221,7 +4250,7 @@ class DataWatch():
             else:
                 for index in range(len(self.start)):
                     if self.start[index] is not None:
-                        end = self.start[index] + self.length[index]
+                        end = self.start[index] + self.length[index] - 1
                         #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
                         if addr >= self.start[index] and addr <= end:
                             retval = self.start[index]
@@ -4614,7 +4643,7 @@ class DataWatch():
                     ''' adjacent to previous malloc ''' 
                     size = (addr - last_addr) + self.malloc_dict[addr]
                     retval[last_addr] = size
-                    new_end = last_addr + size
+                    new_end = last_addr + size - 1
                     self.lgr.debug('mergeMalloc, adjacent, extend range now 0x%x to 0x%x' % (last_addr, new_end))
                 else:
                     if last_addr is not None:
@@ -5003,12 +5032,12 @@ class DataWatch():
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry2 eip 0x%x already in mem_fun_entries' % eip)
             self.runToReturnAlone(False)
 
-    def memcpyCheck(self, vt_stuff, one, exception, error_string):
+    def memcpyCheck(self, prev_mark_cycle, one, exception, error_string):
         ''' We are at the call to what looks like an obscure memcpy.  We are stopped, but in a hap.
             Determine if this is in fact an obscure memcpy (one with no analysis signature).
         '''
         self.lgr.debug('dataWatch memcpyCheck cycle: 0x%x' % self.cpu.cycles)
-        #SIM_run_alone(self.context_manager.enableAll, None)
+        SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_command('enable-vmp') 
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
@@ -5030,7 +5059,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch memcpyCheck src is rdx 0x%x' % rdx)
                 ''' see if destination (not nessesarily beginning of dest buffer, depends on memcy sequency), is within range of rcx to buffer size '''
                 rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
-                end = rcx + self.length[buf_index]
+                end = rcx + self.length[buf_index] - 1
                 if self.mem_something.dest >= rcx and self.mem_something.dest <= end: 
                     got_it = True
                     ''' Record the function entry and run to the return '''
@@ -5047,7 +5076,7 @@ class DataWatch():
                 if (src_ptr+1) >= self.start[buf_index] and src_ptr < (self.start[buf_index]+self.length[buf_index]):
                     dest_ptr = self.mem_utils.readAppPtr(self.cpu, rsp, word_size)
                     count = self.mem_utils.readAppPtr(self.cpu, rsp+2*word_size, word_size)
-                    end = dest_ptr + self.length[buf_index]
+                    end = dest_ptr + self.length[buf_index] - 1
                     if self.mem_something.dest >= dest_ptr and self.mem_something.dest <= end: 
                         self.lgr.debug('dataWatch memcpyCheck looks like stack params, dest_ptr 0x%x count 0x%x' % (dest_ptr, count))
                         src_dest_count = (src_ptr, dest_ptr, count)
