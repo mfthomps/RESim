@@ -666,6 +666,7 @@ class WriteData():
                 else:
                     self.lgr.debug('writeData doRetIOCtl would adjust count to zero, but no reset write_callback %s' % self.write_callback)
                     if self.write_callback is not None:
+                        SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
                         self.write_callback(0)
                     elif self.top.getCommandCallback() is not None:
                         cb = self.top.getCommandCallback()
