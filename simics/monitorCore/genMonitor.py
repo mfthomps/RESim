@@ -4692,8 +4692,8 @@ class GenMonitor():
     def precall(self, tid=None):
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('precall tid:%s' % tid)
         cycle_list = self.rev_to_call[self.target].getEnterCycles(tid)
+        self.lgr.debug('precall tid:%s len of cycle_list %d' % (tid, len(cycle_list)))
         if cycle_list is None:
             print('No cycles for tid:%s' % tid)
             return
@@ -4714,8 +4714,6 @@ class GenMonitor():
                 cmd='skip-to cycle=0x%x' % previous
                 self.lgr.debug('precall cmd: %s' % cmd)
                 SIM_run_command(cmd)
-                if did_remove:
-                    self.restoreDebugBreaks(was_watching=True)
                 eip = self.getEIP()
                 self.lgr.debug('precall skipped to cycle 0x%x eip: 0x%x' % (cpu.cycles, eip))
                 if cpu.cycles != previous:
@@ -4723,8 +4721,17 @@ class GenMonitor():
                 else:
                     cpl = memUtils.getCPL(cpu)
                     if cpl == 0: 
-                        self.lgr.error('precall ended up in kernel, quit')
-                        self.quit()
+                        # TBD Simics edge case?
+                        previous = prev_cycle-2
+                        cmd='skip-to cycle=0x%x' % previous
+                        self.lgr.debug('precall landed in kernel, try going back 1 more cmd: %s' % cmd)
+                        SIM_run_command(cmd)
+                        cpl = memUtils.getCPL(cpu)
+                        if cpl == 0: 
+                            self.lgr.error('precall ended up in kernel, quit')
+                            #self.quit()
+                if did_remove:
+                    self.restoreDebugBreaks(was_watching=True)
 
     def taskSwitches(self):
         cpu = self.cell_config.cpuFromCell(self.target)
