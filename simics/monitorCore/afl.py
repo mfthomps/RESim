@@ -360,7 +360,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            #self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
+            self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -499,7 +499,7 @@ class AFL():
         if self.commence_coverage is not None:
             self.coverage.disableAll()
             #self.lgr.debug('afl goN disabled coverage breakpoints')
-        #self.lgr.debug('afl goN restore snapshot')
+        self.lgr.debug('afl goN restore snapshot')
         cli.quiet_run_command('restore-snapshot name=origin')
         if not self.linear and self.context_manager.isDebugContext():
             SIM_run_alone(self.context_manager.restoreDefaultContext, None)
