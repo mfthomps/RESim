@@ -1768,11 +1768,12 @@ class DataWatch():
             self.maxMarksExceeded()
             return
 
-        ret_to = self.getReturnAddr()
-        ''' TBD expand to catch all free-type functions?  Also, cases where we would still want to see this?'''
-        if not fun == 'memset' and ret_to is not None and not self.top.isMainText(ret_to) and self.fun_mgr.getFun(ret_to) is None:
-            self.lgr.debug('memSomethingEntry, fun %s called from 0x%x, not main text' % (fun, ret_to))
-            return
+        # TBD what is the point of this ret_to logic?
+        #ret_to = self.getReturnAddr()
+        #''' TBD expand to catch all free-type functions?  Also, cases where we would still want to see this?'''
+        #if not fun == 'memset' and ret_to is not None and not self.top.isMainText(ret_to) and self.fun_mgr.getFun(ret_to) is None:
+        #    self.lgr.debug('memSomethingEntry, fun %s called from 0x%x, not main text' % (fun, ret_to))
+        #    return
         self.lgr.debug('memSomethingEntry, sp 0x%x' % (sp))
         if self.cpu.architecture != 'arm':
             ret_addr = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
