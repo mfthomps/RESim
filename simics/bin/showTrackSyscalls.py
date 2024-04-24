@@ -22,12 +22,18 @@ def main():
     parser = argparse.ArgumentParser(prog='showTrackSyscalls', description='Show kernel call numbers from watch marks, e.g., to see if any input data is used in a create')
     parser.add_argument('ini', action='store', help='The ini file')
     parser.add_argument('target', action='store', help='The target')
+    parser.add_argument('-c', '--call', action='store', help='Optional system call name.  If given, will display each queue file that reaches that call.')
     args = parser.parse_args()
     flist = aflPath.getAFLTrackList(args.target)
     call_list = []
     unistd = resimUtils.getIniTargetValue(args.ini, 'RESIM_UNISTD')
     syscalls = syscallNumbers.SyscallNumbers(unistd, None)
     print('unistd is %s' % unistd)
+    if args.call is not None:
+        show_call_num = syscalls.callnums[args.call]
+        print('Will display queue files having watchmarks for system call %s (%d)' % (args.call, show_call_num))
+    else:
+        show_call_num = None
     for track in flist:
         #print('track: %s' % track)
         if not os.path.isfile(track):
@@ -42,6 +48,8 @@ def main():
                 call_num = mark['callnum']
                 if call_num not in call_list:
                     call_list.append(call_num)
+                if show_call_num is not None and show_call_num == call_num:
+                    print('%s' % track)
     for call in call_list:
         call_name = syscalls.syscalls[call]
         print('call %d  name: %s' % (call, call_name))
