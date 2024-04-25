@@ -1206,6 +1206,8 @@ class GenMonitor():
                     else:
                         id_str = ''
                     if verbose:
+                        name = self.getProgName(tid)
+                        '''
                         prog = self.soMap[self.target].getProg(tid)
                         if prog is None:
                             if self.target in self.traceProcs:
@@ -1214,6 +1216,7 @@ class GenMonitor():
                             name = os.path.basename(prog)
                         else:
                             name = tasks[t].comm
+                        '''
                     else:
                         name = tasks[t].comm
                     # catch garbage
@@ -5439,8 +5442,9 @@ class GenMonitor():
             return None
         if target in self.soMap:
             prog_name = self.soMap[target].getProg(tid)
-        prog_name = self.traceProcs[target].getProg(tid)
-        self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
+        if prog_name is None:
+            prog_name = self.traceProcs[target].getProg(tid)
+            self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
         if prog_name is None or prog_name == 'unknown' or prog_name == '<clone>':
             #prog_name = self.soMap[target].getProg(tid)
             #if True or prog_name is None:
