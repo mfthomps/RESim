@@ -4169,6 +4169,9 @@ class GenMonitor():
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
             return
+        if self.fun_mgr is None:
+            print('No funManager loaded, debugging?')
+            return
         if not self.fun_mgr.hasIDAFuns():
             print('No functions defined, needs IDA or Ghidar analysis.')
             return
@@ -6159,7 +6162,9 @@ class GenMonitor():
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], fuzz_addr, break_at, reg, self.lgr)
-    
+
+    def clearExitTid(self):
+        self.task_utils[self.target].clearExitTid()
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
