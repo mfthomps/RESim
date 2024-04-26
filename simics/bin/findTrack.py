@@ -48,7 +48,11 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
     if lgr is not None:
         lgr.debug('findTrack addr 0x%x path %s' % (addr, track_path))
     if os.path.isfile(track_path):
-        track = json.load(open(track_path))
+        try:
+            track = json.load(open(track_path))
+        except:
+            print('failed to load json from %s' % track_path)
+            return None
         somap = track['somap']
         if prog is not None:
             offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)

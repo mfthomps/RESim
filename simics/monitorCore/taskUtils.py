@@ -964,7 +964,7 @@ class TaskUtils():
     def getProgNameFromComm(self, comm):
         for tid in self.exec_addrs:
             if self.exec_addrs[tid].prog_name.endswith(comm):
-                return self.program_map[tid]
+                return self.exec_addrs[tid].prog_name
         return None
 
     def swapExecTid(self, old, new):

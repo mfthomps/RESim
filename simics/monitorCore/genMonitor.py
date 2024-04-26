@@ -1206,6 +1206,8 @@ class GenMonitor():
                     else:
                         id_str = ''
                     if verbose:
+                        name = self.getProgName(tid)
+                        '''
                         prog = self.soMap[self.target].getProg(tid)
                         if prog is None:
                             if self.target in self.traceProcs:
@@ -1214,6 +1216,7 @@ class GenMonitor():
                             name = os.path.basename(prog)
                         else:
                             name = tasks[t].comm
+                        '''
                     else:
                         name = tasks[t].comm
                     # catch garbage
@@ -4166,6 +4169,9 @@ class GenMonitor():
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
             return
+        if self.fun_mgr is None:
+            print('No funManager loaded, debugging?')
+            return
         if not self.fun_mgr.hasIDAFuns():
             print('No functions defined, needs IDA or Ghidar analysis.')
             return
@@ -5439,8 +5445,9 @@ class GenMonitor():
             return None
         if target in self.soMap:
             prog_name = self.soMap[target].getProg(tid)
-        prog_name = self.traceProcs[target].getProg(tid)
-        self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
+        if prog_name is None:
+            prog_name = self.traceProcs[target].getProg(tid)
+            self.lgr.debug('genMonitor called traceProcs to  getProgName for tid:%s, returned progname is %s' % (tid, prog_name))
         if prog_name is None or prog_name == 'unknown' or prog_name == '<clone>':
             #prog_name = self.soMap[target].getProg(tid)
             #if True or prog_name is None:
@@ -6155,7 +6162,9 @@ class GenMonitor():
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], fuzz_addr, break_at, reg, self.lgr)
-    
+
+    def clearExitTid(self):
+        self.task_utils[self.target].clearExitTid()
         
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

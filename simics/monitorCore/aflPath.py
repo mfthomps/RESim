@@ -144,18 +144,34 @@ def getAFLCoverageList(target, get_all=False, host=None):
                     glist.append(os.path.join(manual, f))
     return glist
 
+def getTrackBlacklist(afl_dir):
+    track_blacklist = []
+    pre_len = len(afl_dir)+1
+    if os.path.isfile('track.blacklist'):
+        with open('track.blacklist') as fh:
+            for line in fh:
+                if not line.strip().startswith('#'):
+                    # blacklist assumed to be full paths
+                    line = line[pre_len:] 
+                    track_blacklist.append(line.strip())
+    return track_blacklist
+
 def getAFLTrackList(target, get_all=False, host=None, ws_filter=None):
     glist = []
     afl_path = getAFLOutput()
     afl_dir = os.path.join(afl_path, target)
     unique_path = os.path.join(afl_dir, target+'.unique')
+    track_blacklist = getTrackBlacklist(afl_dir)
     if os.path.isfile(unique_path):
         ulist = json.load(open(unique_path))
         for path in ulist:
             if ws_filter is not None and ws_filter not in path:
                 continue
             path = path.replace('coverage', 'trackio')
-            glist.append(os.path.join(afl_dir, path)) 
+            if path.strip() not in track_blacklist:
+                glist.append(os.path.join(afl_dir, path)) 
+            else:
+                print('skipping blacklisted %s' % path)
     else:
         print('No file at %s' % unique_path)
     return glist
