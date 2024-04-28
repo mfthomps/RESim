@@ -27,6 +27,7 @@ for crash in sorted(clist):
                 seg_addr = line.strip().split()[5]
                 if len(seg_addr) <= 4:
                     ''' look for something like [eax+0x12]'''
+                    pass
             elif seg_addr is not None and line.startswith('Stack trace:'):
                 watch_addr = True
             elif watch_addr:
@@ -35,7 +36,7 @@ for crash in sorted(clist):
                 if look_for in line:
                     add_to_zero = line
                 watch_addr = False
-                show_line = line
+                show_line = line.strip() + " SEGV: "+seg_addr
                 #else:
                 #    break
             elif add_to_zero is not None and 'occured prior to' in line:
