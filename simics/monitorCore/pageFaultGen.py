@@ -522,6 +522,7 @@ class PageFaultGen():
         ''' page fault caught in kernel, back up to user space?  '''
         ''' TBD what about segv generated within kernel '''
        
+        self.lgr.debug('pageFaultGen skipAlone')
         if self.top.hasBookmarks() and self.top.reverseEnabled():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
@@ -669,12 +670,20 @@ class PageFaultGen():
                 else:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  %s' % (recent_tid, self.pending_faults[recent_tid].name))
                 if not report_only:
-                    SIM_run_alone(self.hapAlone, self.pending_faults[recent_tid])
+                    if self.top.isRunning():
+                        self.lgr.debug('pageFaultGen handleExit, is running, call hapAlone')
+                        SIM_run_alone(self.hapAlone, self.pending_faults[recent_tid])
+                    else:
+                        prec = self.pending_faults[recent_tid]
+                        self.lgr.debug('pageFaultGen handleExit, not running, call skipAlone')
+                        self.skipAlone(prec)
+                    # this cleanup should happen after the haps ??
                     self.pending_faults = {}
                     self.stopPageFaults()
                     self.stopWatchPageFaults()
                     retval = True
                 else:
+                    self.lgr.debug('pageFaultGen handleExit report_only')
                     prec = self.pending_faults[recent_tid]
                     if prec.page_fault:
                         self.lgr.debug('SEGV access to memory 0x%x cycle: 0x%x' % (prec.cr2, prec.cycles))
@@ -682,6 +691,9 @@ class PageFaultGen():
                     else:
                         self.lgr.debug('pageFaultGen handleExit fault %s eip: 0x%x cycle: 0x%x' % (prec.name, prec.eip, prec.cycles))
                         print('Fault %s tid:%s eip: 0x%x cycle: 0x%x' % (prec.name, tid, prec.eip, prec.cycles))
+            else:
+                self.lgr.debug('pageFaultGen handleExit confused, recent_tid %s, tid %s' % (recent_tid, tid))
+
  
                     
         return retval
