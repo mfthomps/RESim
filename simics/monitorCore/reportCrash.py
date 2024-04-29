@@ -305,6 +305,10 @@ class ReportCrash():
         self.crash_report.write(msg)
 
     def maxMarksCallback(self):
-        self.lgr.debug('reportCrash maxMarksCallback, just continue') 
-        self.top.pendingFault()
-        SIM_run_alone(SIM_continue, 0)
+        self.lgr.debug('reportCrash maxMarksCallback, call pendingFault to check for faults') 
+        if not self.top.pendingFault():
+            self.lgr.debug('reportCrash maxMarksCallback, just continue') 
+            SIM_run_alone(SIM_continue, 0)
+        else:
+            self.lgr.debug('reportCrash maxMarksCallback, got page fault, call doneForward') 
+            self.doneForward()
