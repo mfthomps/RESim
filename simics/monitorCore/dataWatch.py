@@ -5238,6 +5238,9 @@ class DataWatch():
     def findMarkIp(self, ip):
         return self.watchMarks.findMarkIp(ip)
 
+    def findStaleMarkIp(self, ip):
+        return self.watchMarks.findStaleMarkIp(ip)
+
     def doAppend(self, this, addr):
         wm = self.watchMarks.findCharAppend(this)
         if wm is None:

@@ -1360,6 +1360,16 @@ class WatchMarks():
                 break
         return retval
 
+    def findStaleMarkIp(self, ip):
+        retval = None
+        index = 0
+        for mark in self.stale_marks:
+            index += 1
+            if mark.ip == ip:
+                retval = index
+                break
+        return retval
+
     def getCmp(self, addr, trans_size):
         mark_compare = markCompare.MarkCompare(self.top, self.cpu, self.mem_utils, addr, trans_size, self.lgr)
         return mark_compare
