@@ -48,7 +48,11 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
     if lgr is not None:
         lgr.debug('findTrack addr 0x%x path %s' % (addr, track_path))
     if os.path.isfile(track_path):
-        track = json.load(open(track_path))
+        try:
+            track = json.load(open(track_path))
+        except:
+            print('failed to load json from %s' % track_path)
+            return None
         somap = track['somap']
         if prog is not None:
             offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)
@@ -61,8 +65,8 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
             #print('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
             #lgr.debug('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
             if mark['cycle'] < mark_cycle:
-                print('OUT OF ORDER')
-                print('mark cycle 0x%x' % mark['cycle'])
+                if lgr is not None:
+                    lgr.debug('OUT OF ORDER, mark[cycle] 0x%x less than previous 0x%x' % (mark['cycle'], mark_cycle))
                 break
             else:
                 mark_cycle = mark['cycle'] 
@@ -79,6 +83,7 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
                     retval = TrackResult(queue_path, size, mark, len(mark_list))
                     if lgr is not None:
                         lgr.debug('findTrack 0x%x found %s at mark %d in (len %d)  %s packet: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, mark['packet']))
+                        lgr.debug('\t size: %d num_marks %d' % (retval.size, retval.num_marks))
                     if not quiet:
                         print('0x%x found %s at mark %d in (len %d)  %s packet: %d num_marks: %d' % (addr, mark['mark_type'], mark['index'], size, queue_path, 
                               mark['packet'], len(mark_list)))

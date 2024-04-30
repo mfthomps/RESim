@@ -664,8 +664,16 @@ class WriteData():
                     #self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
                     self.top.writeWord(addr_of_count, 0, target_cpu=self.cpu, word_size=4)
                 else:
-                    SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
-                    self.lgr.debug('writeData doRetIOCtl would adjust count to zero, but no reset')
+                    self.lgr.debug('writeData doRetIOCtl would adjust count to zero, but no reset write_callback %s' % self.write_callback)
+                    if self.write_callback is not None:
+                        SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
+                        self.write_callback(0)
+                    elif self.top.getCommandCallback() is not None:
+                        cb = self.top.getCommandCallback()
+                        self.lgr.debug('writeData doRetIOCtl is command callback, call to %s' % cb)
+                        cb()
+                    else:
+                        SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
         return retval
                 
     def doRetFixup(self, fd, callname=None):

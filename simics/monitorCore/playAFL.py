@@ -407,6 +407,7 @@ class PlayAFL():
 
     def hangCallbackAlone(self, cycles):
         self.lgr.info('playAFL hang detected')
+        print('playAFL hang detected')
         if self.stop_hap is None:
                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('hang')
@@ -605,7 +606,9 @@ class PlayAFL():
                     print('no hits file at %s ?' % all_prev_hits_path)
             elif self.parallel:
                 self.top.quit()
-            self.delStopHap(None)               
+            hap = self.stop_hap
+            self.delStopHap(hap)
+            self.stop_hap = None
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
                     print('%-30s  packet %d' % (f, n))
@@ -626,17 +629,19 @@ class PlayAFL():
                 self.top.stopCoverage() 
                 
     def getHitsPath(self, index):
-        queue_dir = os.path.dirname(self.afl_list[index])
-        queue_parent = os.path.dirname(queue_dir)
-        if os.path.basename(queue_dir) == 'manual_queue':
-            coverage_dir = os.path.join(queue_parent, 'manual_coverage')
-        else:
-            coverage_dir = os.path.join(queue_parent, 'coverage')
-        try:
-            os.makedirs(coverage_dir)
-        except:
-            pass
-        fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
+        fname = None
+        if index < len(self.afl_list):
+            queue_dir = os.path.dirname(self.afl_list[index])
+            queue_parent = os.path.dirname(queue_dir)
+            if os.path.basename(queue_dir) == 'manual_queue':
+                coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+            else:
+                coverage_dir = os.path.join(queue_parent, 'coverage')
+            try:
+                os.makedirs(coverage_dir)
+            except:
+                pass
+            fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
         return fname
 
     def getExitsPath(self, index):
@@ -658,19 +663,41 @@ class PlayAFL():
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
         fname = self.getHitsPath(self.index)
-        if not os.path.isfile(fname):
-            self.lgr.debug('playAFL record hits, assume ad-hoc path')
-            print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
-            fname = '/tmp/playAFL.hits'
-        self.lgr.debug('playAFL recordHits to file %s' % fname)
-        with open(fname, 'w') as fh:
-            #json.dump(hit_list, fh) 
-            json.dump(hit_bbs, fh) 
-        #for hit in hit_list:
-        for hit in hit_bbs:
-            hit = int(hit)
-            if hit not in self.all_hits:
-                self.all_hits.append(hit)
+        if fname is not None: 
+            if not os.path.isfile(fname):
+                self.lgr.debug('playAFL record hits, assume ad-hoc path')
+                print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
+                fname = '/tmp/playAFL.hits'
+            self.lgr.debug('playAFL recordHits to file %s' % fname)
+            with open(fname, 'w') as fh:
+                #json.dump(hit_list, fh) 
+                json.dump(hit_bbs, fh) 
+            #for hit in hit_list:
+            for hit in hit_bbs:
+                hit = int(hit)
+                if hit not in self.all_hits:
+                    self.all_hits.append(hit)
+            self.reportNewHits()
+
+    def reportNewHits(self):
+            prog_path = self.top.getProgName(self.tid)
+            if prog_path is not None:
+                hits_path = self.top.getIdaData(prog_path, target=self.cell_name)
+                self.lgr.debug('playAFL recordHits prog_path %s hits path from getIdaData %s' % (prog_path, hits_path))
+
+                all_prev_hits_path = '%s.hits' % hits_path
+                if os.path.isfile(all_prev_hits_path):
+                    all_prev_hits = json.load(open(all_prev_hits_path))
+                    count = 0
+                    for hit in self.all_hits:
+                        if hit not in all_prev_hits:
+                            if self.show_new_hits:
+                                print('New hit found at 0x%x' % hit)
+                            count = count+1
+                    if count == 0:
+                        print('No new hits.')
+                    else:
+                        print('Found %d new hits that were not in %s' % (count, all_prev_hits_path))
 
     def recordExits(self, path):
         ''' exits will go in a "exits" directory along side queue, etc. '''
@@ -703,15 +730,20 @@ class PlayAFL():
                     self.lgr.debug('Found %d new hits' % delta)
                 hit_bbs = self.coverage.getBlocksHit()
                 delta = self.target_cpu.cycles - self.initial_cycle
-                self.lgr.debug('playAFL stophap gtBlocksHit returned %d hits over 0x%x cycles' % (len(hit_bbs), delta))
+                self.lgr.debug('playAFL stophap getBlocksHit returned %d hits over 0x%x cycles' % (len(hit_bbs), delta))
                 if self.findbb is not None and self.index < len(self.afl_list):
                     self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:
                         packet_num = self.write_data.getCurrentPacket()
                         self.bnt_list.append((self.afl_list[self.index], packet_num))
+                #elif self.dfile == 'oneplay':
                 elif not self.repeat:
                     self.recordHits(hit_bbs)
                     self.coverage.saveDeadFile()
+                    hap = self.stop_hap
+                    SIM_run_alone(self.delStopHap, hap)
+                    self.stop_hap = None
+                    self.lgr.debug('playAFL stopHap, one play, should be done.')
                 if self.coverage.didExit() or self.did_exit:
                     self.lgr.debug('playAFL stopHap coverage says didExit, add to exit_list')
                     self.exit_list.append(self.afl_list[self.index])
@@ -722,13 +754,13 @@ class PlayAFL():
                     self.lgr.debug('TID %s has pending page fault' % self.tid)
             else:
                 self.lgr.debug('playAFL stopHap')
-            SIM_run_alone(self.goAlone, True)
+            if self.repeat or self.dfile != 'oneplay':
+                SIM_run_alone(self.goAlone, True)
 
 
-    def delStopHap(self, dumb):
-        if self.stop_hap is not None:
-            SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
-            self.stop_hap = None
+    def delStopHap(self, hap):
+        if hap is not None:
+            SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
 
     def loadPickle(self, name):
         retval = False

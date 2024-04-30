@@ -104,8 +104,11 @@ class RopCop():
                     self.is_signal = True
                     # TBD distinguish runs of trackIO/crashReport from others so thost stopHaps handle it
                     #SIM_run_alone(self.stopAlone, return_to)
+                    self.clearHap()
+                    print('ropCop detects signal at eip 0x%x cycle 0x%x' % (eip, self.cpu.cycles))
                     if self.callback is not None:
                         self.lgr.debug('ropCop found signal call callback %s' % str(self.callback))
+                        SIM_break_simulation('ropCop signal detected')
                         self.callback()
                     else:
                         self.lgr.debug('ropCop found signal no callback, just stop')

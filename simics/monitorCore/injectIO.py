@@ -299,10 +299,14 @@ class InjectIO():
             use_data_watch = None
         else:
             use_data_watch = self.dataWatch
+        if self.no_reset:
+            write_callback = self.callback
+        else:
+            write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=self.writeCallback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
+                 write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
 
         #bytes_wrote = self.writeData()
@@ -503,12 +507,15 @@ class InjectIO():
         else:
             self.lgr.debug('injectIO stopHap, count None, just stop?')
         
-    def writeCallback(self, count):
+    def writeCallbackAlone(self, count):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('injectIO writeCallback eip: 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, count)
         SIM_break_simulation('writeCallback')
+
+    def writeCallback(self, count):
+        SIM_run_alone(self.writeCallbackAlone, count)
 
     def loadPickle(self, name):
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')

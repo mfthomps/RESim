@@ -16,6 +16,7 @@ for crash in sorted(clist):
     prior_to_origin = False
     with open(full) as fh:
         seg_addr = None
+        show_line = ''
         for line in fh:
             if 'came from memcpy' in line:
                 memcpy = line
@@ -26,6 +27,7 @@ for crash in sorted(clist):
                 seg_addr = line.strip().split()[5]
                 if len(seg_addr) <= 4:
                     ''' look for something like [eax+0x12]'''
+                    pass
             elif seg_addr is not None and line.startswith('Stack trace:'):
                 watch_addr = True
             elif watch_addr:
@@ -33,12 +35,15 @@ for crash in sorted(clist):
                 look_for = "+%s" % seg_addr
                 if look_for in line:
                     add_to_zero = line
-                    watch_addr = False
-                else:
-                    break
+                watch_addr = False
+                show_line = line.strip() + " SEGV: "+seg_addr
+                #else:
+                #    break
             elif add_to_zero is not None and 'occured prior to' in line:
                 prior_to_origin = True
                 break
+            elif "START" in line:
+                show_line = line
             
         if memcpy is not None:
             print('%s %s' % (crash, memcpy))
@@ -47,4 +52,4 @@ for crash in sorted(clist):
         elif add_to_zero is not None:
             print('%s Add offset to zero, prior: %r 1st frame: %s' % (crash, prior_to_origin, add_to_zero))
         else:
-            print('%s **OTHER**' % crash) 
+            print('%s **OTHER** %s' % (crash, show_line)) 

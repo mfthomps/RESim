@@ -42,7 +42,11 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                             queue_list = findBB.findBB(target, bb_hit, True) 
                             least_packet = 100000
                             least_size = 100000
-                            best_result = None
+                            least_marks = 100000
+                            best_result_size = None
+                            best_result_marks = None
+                            best = None
+                            # look at every trackIO that has a WM in this BB and find the "best" of them
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
@@ -54,36 +58,52 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                     if result is not None:
                                         if result.mark['packet'] < least_packet:
                                             least_packet = result.mark['packet']
-                                            #least_size = result.size
-                                            least_size = result.num_marks
-                                            best_result = result
+                                            least_marks = result.num_marks
+                                            least_size = result.size
+                                            best_result_marks = None
+                                            best_result_size = None
+                                            best = result
                                         #elif result.mark['packet'] == least_packet and result.size < least_size:
                                         #    least_size = result.size
                                         #    best_result = result
-                                        elif result.mark['packet'] == least_packet and result.num_marks < least_size:
-                                            least_size = result.num_marks
-                                            best_result = result
+                                        elif result.mark['packet'] == least_packet:
+                                            if result.num_marks < least_marks:
+                                                least_marks = result.num_marks
+                                                best_result_marks = result
+                                            if result.size < least_size:
+                                                least_size = result.size
+                                                best_result_size = result
 
-                                if best_result is not None:
-                                    read_mark = best_result.mark['ip']
-                                    packet_num = best_result.mark['packet']
-                                  
-                                '''
-                                first_read = findBB.getFirstReadCycle(trackio, quiet=quiet)
-                                if first_read is None:
-                                    print('No read mark in %s' % trackio)
-                                bb_cycle = findBB.getBBCycle(coverage, bb_hit)
-                                if read_mark is not None:
-                                    if (bb['end_ea'] - read_mark) < 20:
-                                        #print('qfile: %s had readmark at 0x%x' % (q, read_mark))
-                                        pass
-                                    break
-                                elif first_read is not None and bb_cycle < first_read:
-                                    before_read = 'pre-read' 
-                                '''
-                            if best_result is None:
+                            if best_result_marks is not None and best_result_size is not None:
+                                delta_marks = best_result_size.num_marks - best_result_marks.num_marks
+                                delta_size = best_result_marks.size - best_result_size.size
+                                lgr.debug('delta_marks %d best_marks %d  delta_size %d best_size %d' % (delta_marks, 
+                                           best_result_marks.num_marks, delta_size, best_result_size.size))
+                                if delta_marks == 0:
+                                    best = best_result_size
+                                elif delta_size == 0:
+                                    best = best_result_marks
+                                else:
+                                    mark_ratio = delta_marks / best_result_marks.num_marks
+                                    size_ratio = delta_size / best_result_size.size
+                                    lgr.debug('best marks ratio %f   best size %f' % (mark_ratio, size_ratio))
+                                    if mark_ratio > size_ratio:
+                                        best = best_result_marks
+                                    else:
+                                        best = best_result_size
+                            elif best_result_marks is not None:
+                                best = best_result_marks
+                            elif best_result_size is not None:
+                                best = best_result_size
+                            else:
+                                # best is least packets
+                                pass 
+                            if best is None:
                                 lgr.debug('found no read marks')
- 
+                                pass 
+                            else:
+                                read_mark = best.mark['ip']
+                                packet_num = best.mark['packet']
                         if not no_print:
                             mark_info = ''
                             if read_mark is not None:

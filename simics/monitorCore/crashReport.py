@@ -106,10 +106,15 @@ def main():
                 path = os.path.join(args.report_dir, f)
                 if os.path.isfile(path):
                     with open(path) as fh:
-                        for line in fh:
-                            if 'Crash report for' in line:
-                                qfile = line.split()[-1]
-                                already_done.append(qfile)
+                        try:
+                            for line in fh:
+                                if 'Crash report for' in line:
+                                    qfile = line.split()[-1]
+                                    already_done.append(qfile)
+                        except UnicodeDecodeError:
+                            print('error reading from %s, assume garbage, or maybe file is open for writing?' % path)
+                            exit(1)
+                            pass
         
     resim_dir = os.getenv('RESIM_DIR')
     magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')

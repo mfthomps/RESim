@@ -49,6 +49,74 @@ def findBB(target, bb, quiet=False, get_all=False, lgr=None):
         print('Found %d queue files that hit 0x%x' % (len(retval), bb))
     return retval
 
+def getFirstReadCycle(trackio, quiet=False):
+    retval = None
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    if not os.path.isfile(trackio):
+        if not quiet:
+            print('ERROR: getFirstReadCycle no trackio file at %s' % trackio)
+        return None
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        print('ERROR: failed reading json from %s' % trackio)
+        return None
+    mark_list = tjson['marks']
+    for mark in mark_list:
+        if mark['mark_type'] in read_marks:
+            retval = mark['cycle']
+            break
+    return retval
+
+def getWatchMark(trackio, bb, prog, quiet=False):
+    #print('in getWatchMark')
+    retval = (None, None)
+    ''' Find a read watch mark within a given watch mark json for a given bb '''
+    ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
+    if not os.path.isfile(trackio):
+        if not quiet:
+            print('ERROR: getWatchMark no trackio file at %s' % trackio)
+        return retval
+    try:
+        tjson = json.load(open(trackio))
+    except:
+        print('ERROR: failed reading json from %s' % trackio)
+        return retval
+    index = 1
+    somap = tjson['somap']
+    offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=None)
+    if offset != None:
+        #print('not wrong file')
+        mark_list = tjson['marks']
+        for mark in mark_list:
+            if mark['mark_type'] in read_marks:
+                eip = mark['ip'] - offset
+                #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
+                if eip >= bb['start_ea'] and eip < bb['end_ea']:
+                    #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
+                    retval = (eip, mark['packet'])
+                    break
+            index = index + 1
+    return retval
+       
+def getBBCycle(coverage, bb): 
+    retval = None
+    ''' Find cycle at which a given bb was hit in the coverage json '''
+    if not os.path.isfile(coverage):
+        print('ERROR: no coverage file at %s' % coverage)
+        return None
+    try:
+        cjson = json.load(open(coverage))
+    except:
+        #print('ERROR: failed reading json from %s' % coverage)
+        return None
+
+    bb_str = str(bb)
+    if bb_str in cjson:
+        retval = cjson[bb_str]['cycle']
+    else:
+        print('Could not find bb 0x%x in json %s' % (bb, coverage))
+    return retval
 def main():
     parser = argparse.ArgumentParser(prog='findBBB', description='Show AFL queue entries that lead to a given basic block address.')
     parser.add_argument('target', action='store', help='The target, e.g., the name of the workspace.')

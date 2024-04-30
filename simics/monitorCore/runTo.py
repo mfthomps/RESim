@@ -315,6 +315,7 @@ class RunTo():
         self.lgr.debug('cleantoProcHaps')
         if self.cur_task_break is not None:
             RES_delete_breakpoint(self.cur_task_break)
+            self.cur_task_break = None
         if self.cur_task_hap is not None:
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.cur_task_hap)
             self.cur_task_hap = None

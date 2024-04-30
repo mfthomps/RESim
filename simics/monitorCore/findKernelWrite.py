@@ -93,6 +93,10 @@ class findKernelWrite():
         self.start_cycles = None
         self.stop_cycles = None
 
+        # simics bugs
+        self.future_count = 0
+        self.best_cycle = 0
+
         self.go(addr)
 
 
@@ -129,6 +133,8 @@ class findKernelWrite():
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
+        self.future_count = 0
+        self.best_cycle = 0
         SIM_run_alone(SIM_run_command, 'reverse')
 
     def checkInitialBufferAlone(self, addr):
@@ -159,12 +165,23 @@ class findKernelWrite():
                     return True
         return False
 
+    def cleanUp(self):
+        self.deleteBrokenHap()
+        if self.kernel_write_break is not None: 
+            RES_delete_breakpoint(self.kernel_write_break)
+            self.kernel_write_break = None 
+            self.lgr.debug('vt_handler deleted kernel_write_break')
+        if self.rev_write_hap is not None:
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.rev_write_hap)
+            self.rev_write_hap = None 
+            self.lgr.debug('vt_handler deleted rev_write_hap')
+
     def vt_handler(self, memory):
         if self.rev_write_hap is None:
             return
         offset = 0
         eip = self.top.getEIP(self.cpu)
-        self.deleteBrokenHap()
+        self.cleanUp()
         if memory.logical_address == 0:
             ''' TBD this would reflect an error or corruption in Simics due to reality leaks.  Replace with error message. '''
             phys_block = self.cpu.iface.processor_info.logical_to_physical(self.addr, Sim_Access_Write)
@@ -176,14 +193,6 @@ class findKernelWrite():
             if memory.logical_address != self.addr:
                 offset = memory.logical_address - self.addr
             self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, eip, self.cpu.cycles))
-        if self.kernel_write_break is not None: 
-            RES_delete_breakpoint(self.kernel_write_break)
-            self.kernel_write_break = None 
-            self.lgr.debug('vt_handler deleted kernel_write_break')
-        if self.rev_write_hap is not None:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.rev_write_hap)
-            self.rev_write_hap = None 
-            self.lgr.debug('vt_handler deleted rev_write_hap')
         self.memory_transaction = memory
         SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_alone(self.addStopHapForWriteAlone, offset)
@@ -228,6 +237,10 @@ class findKernelWrite():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
+            self.future_count = 0
+            if self.cpu.cycles > self.best_cycle:
+                self.best_cycle = self.cpu.cycles
+                self.lgr.debug('revWriteCallback best cycle now 0x%x' % self.best_cycle)
             VT_in_time_order(self.vt_handler, my_memory)
         else:
             location = memory.logical_address
@@ -236,6 +249,15 @@ class findKernelWrite():
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+            self.future_count = self.future_count+1
+            if self.future_count > 100:
+                self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
+                #self.cleanUp()
+                #SIM_break_simulation('remove this and fix it')
+                # simics goes into loop, but can still quit
+                self.top.quit()
+            VT_in_time_order(self.vt_handler, my_memory)
+                
 
     def addStopHapForWriteAlone(self, offset):
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
