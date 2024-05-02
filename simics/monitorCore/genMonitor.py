@@ -1909,7 +1909,7 @@ class GenMonitor():
         print('Monitor done')
 
     def skipAndMail(self, cycles=1, restore_debug=True):
-        self.lgr.debug('skipAndMail...')
+        self.lgr.debug('skipAndMail restore_debug %r' % restore_debug)
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMail")
@@ -5324,6 +5324,7 @@ class GenMonitor():
 
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
+        retval = None
         self.lgr.debug('backtraceAddr %x cycles: 0x%x' % (addr, cycles))
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5343,6 +5344,7 @@ class GenMonitor():
                 print(msg)
                 self.context_manager[self.target].setIdaMessage(msg)
                 self.lgr.debug(msg)
+                retval = msg
             else:
                 msg = 'Orig buffer not found for addr 0x%x' % addr
                 self.lgr.debug(msg)
@@ -5356,8 +5358,10 @@ class GenMonitor():
             print(msg)
             self.context_manager[self.target].setIdaMessage(msg)
             self.lgr.debug(msg)
+            retval = msg
         if self.report_crash is not None:
             self.report_crash.addMsg('Backtrace summary: \n %s' % msg)
+        return retval
 
     def amWatching(self, tid):
         return self.context_manager[self.target].amWatching(tid)
@@ -6022,6 +6026,9 @@ class GenMonitor():
     def debugging(self):
         retval = False
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
+        if debug_tid is None:
+            debug_tid = self.context_manager[self.target].getSavedDebugTid() 
+            self.lgr.debug('genMonitor debugging ? context manager returned None for getDebugTid, tried getting saved and got %s' % (debug_tid))
         if debug_tid is not None:
             retval = True
         return retval
