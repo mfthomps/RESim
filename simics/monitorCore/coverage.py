@@ -768,6 +768,8 @@ class Coverage():
         cover = (len(self.blocks_hit)*100) / self.block_total 
         print('Hit %d of %d blocks  (%d percent)' % (len(self.blocks_hit), self.block_total, cover))
         print('Hit %d of %d functions' % (len(self.funs_hit), len(self.blocks)))
+        self.lgr.debug('coverage showCoverage Hit %d of %d blocks  (%d percent)' % (len(self.blocks_hit), self.block_total, cover))
+        self.lgr.debug('coverage showCoverage Hit %d of %d functions' % (len(self.funs_hit), len(self.blocks)))
 
     def saveCoverage(self, fname = None):
         if not self.enabled or self.no_save:
