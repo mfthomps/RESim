@@ -29,8 +29,12 @@ class ProgInfo():
         self.plt_size = plt_size
         self.local_path = local_path
     def toString(self):
-        return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
-            self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
+        if self.plt_size is not None:
+            return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
+                self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
+        else:
+            return('Not a binary')
+
 
 class LoadInfo():
     def __init__(self, addr, size):
