@@ -1687,7 +1687,7 @@ class GenMonitor():
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
             f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
-            f3 = stopFunction.StopFunction(self.debug, [], nest=False)
+            f3 = stopFunction.StopFunction(self.debug, [True], nest=False)
             flist = [f1, f3, f2]
             if final_fun is not None:
                 f4 = stopFunction.StopFunction(final_fun, [], nest=False)
