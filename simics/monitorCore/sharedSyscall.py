@@ -1122,6 +1122,7 @@ class SharedSyscall():
                         self.lgr.debug('sharedSyscall %s not watching threads or debugging tid:%s.  SO not recorded.' % (callname, tid))
             else:
                 trace_msg = ('\treturn from mmap tid:%s, addr: 0x%x \n' % (tid, ueax))
+                self.dataWatch.mmap(ueax)
         elif callname == 'ipc':
             callname = exit_info.socket_callname
             call = exit_info.frame['param1']
