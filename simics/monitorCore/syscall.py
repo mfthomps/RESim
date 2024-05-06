@@ -1844,8 +1844,15 @@ class Syscall():
                     self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, frame['param1']))
                     exit_info.call_params.append(call_param)
                 elif type(call_param.match_param) is str:
-                    self.lgr.debug('write match param for tid:%s is string, add to exit info' % tid)
-                    exit_info.call_params.append(call_param)
+                    self.lgr.debug('write match param for tid:%s is string, check match' % tid)
+                    max_len = min(count, 1024)
+                    byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+                    if byte_array is not None:
+                        if resimUtils.isPrintable(byte_array):
+                            s = ''.join(map(chr,byte_array))
+                            if call_param.match_param in s:
+                                exit_info.call_params.append(call_param)
+                                exit_info.matched_param = call_param
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if count < 4028:
                         self.lgr.debug('syscall write check dmod count %d' % count)

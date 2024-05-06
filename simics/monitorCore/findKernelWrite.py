@@ -297,10 +297,11 @@ class findKernelWrite():
             self.lgr.debug('findKernelWrite brokenHap at origin')
             if not self.checkInitialBuffer(self.addr):
                 self.lgr.debug('findKernelWrite brokenHap not initial buffer, likely prior to current origin')
-                bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
+                bm = self.top.backtraceAddr(self.addr, cycles)
+                if bm is None:
+                    self.bookmarks.setBacktrackBookmark(bm)
+                    bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
                 self.bookmarks.setBacktrackBookmark(bm)
-                self.top.backtraceAddr(self.addr, cycles)
-          
         else:
             self.lgr.debug('findKernelWrite brokenHap NOT at origin')
             bm = "eip:0x%x maybe follows kernel paging of memory:0x%x?" % (eip, self.addr)
@@ -309,6 +310,7 @@ class findKernelWrite():
             self.context_manager.setIdaMessage(bm)
         SIM_run_alone(self.cleanup, False)
         self.lgr.debug('findKernelWrite brokenHap now skip')
+        
         self.top.skipAndMail()
 
     def stopToCheckWriteCallback(self, offset, one, exception, error_string):

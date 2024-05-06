@@ -94,7 +94,7 @@ class StackFrameManager():
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
                     if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('getSTackTraceQuiet not in expected tid:%s, current is %s' % (tid, cur_tid))
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in expected tid:%s, current is %s' % (tid, cur_tid))
                         return None
                     else:
                         tid = cur_tid

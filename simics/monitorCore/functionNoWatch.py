@@ -128,7 +128,7 @@ class FunctionNoWatch():
             return
         ret_addr = self.data_watch.getReturnAddr() 
         if ret_addr is None:
-            self.lgr.error('functionNoWatch funHap failed to get ret_addr for entry %s' % entry_info.lib_fun)
+            self.lgr.debug('functionNoWatch funHap failed to get ret_addr for entry %s, could be wrong tid linked to same lib' % entry_info.lib_fun)
             return
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('functionNoWatch funHap entry %s eip: 0x%x set break on return addr 0x%x  cycle: 0x%x' % (entry_info.lib_fun, eip, ret_addr, self.cpu.cycles))

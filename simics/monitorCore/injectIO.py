@@ -340,6 +340,11 @@ class InjectIO():
                     self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
                     self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
+                if self.mem_utils.isKernel(self.addr):
+                    if self.addr_of_count is not None and not self.top.isWindows():
+                        self.lgr.debug('injectIO set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                        self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
@@ -361,7 +366,6 @@ class InjectIO():
                             self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
                     else:
                         if self.addr_of_count is not None and not self.top.isWindows():
-                            self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
                             if self.dataWatch is not None:
                                 self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                                 self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")

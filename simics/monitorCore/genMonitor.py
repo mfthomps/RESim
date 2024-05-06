@@ -1909,7 +1909,7 @@ class GenMonitor():
         print('Monitor done')
 
     def skipAndMail(self, cycles=1, restore_debug=True):
-        self.lgr.debug('skipAndMail...')
+        self.lgr.debug('skipAndMail restore_debug %r' % restore_debug)
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMail")
@@ -4698,8 +4698,8 @@ class GenMonitor():
     def precall(self, tid=None):
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('precall tid:%s' % tid)
         cycle_list = self.rev_to_call[self.target].getEnterCycles(tid)
+        self.lgr.debug('precall tid:%s len of cycle_list %d' % (tid, len(cycle_list)))
         if cycle_list is None:
             print('No cycles for tid:%s' % tid)
             return
@@ -4720,8 +4720,6 @@ class GenMonitor():
                 cmd='skip-to cycle=0x%x' % previous
                 self.lgr.debug('precall cmd: %s' % cmd)
                 SIM_run_command(cmd)
-                if did_remove:
-                    self.restoreDebugBreaks(was_watching=True)
                 eip = self.getEIP()
                 self.lgr.debug('precall skipped to cycle 0x%x eip: 0x%x' % (cpu.cycles, eip))
                 if cpu.cycles != previous:
@@ -4729,8 +4727,17 @@ class GenMonitor():
                 else:
                     cpl = memUtils.getCPL(cpu)
                     if cpl == 0: 
-                        self.lgr.error('precall ended up in kernel, quit')
-                        self.quit()
+                        # TBD Simics edge case?
+                        previous = prev_cycle-2
+                        cmd='skip-to cycle=0x%x' % previous
+                        self.lgr.debug('precall landed in kernel, try going back 1 more cmd: %s' % cmd)
+                        SIM_run_command(cmd)
+                        cpl = memUtils.getCPL(cpu)
+                        if cpl == 0: 
+                            self.lgr.error('precall ended up in kernel, quit')
+                            #self.quit()
+                if did_remove:
+                    self.restoreDebugBreaks(was_watching=True)
 
     def taskSwitches(self):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5317,6 +5324,7 @@ class GenMonitor():
 
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
+        retval = None
         self.lgr.debug('backtraceAddr %x cycles: 0x%x' % (addr, cycles))
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -5336,6 +5344,7 @@ class GenMonitor():
                 print(msg)
                 self.context_manager[self.target].setIdaMessage(msg)
                 self.lgr.debug(msg)
+                retval = msg
             else:
                 msg = 'Orig buffer not found for addr 0x%x' % addr
                 self.lgr.debug(msg)
@@ -5349,8 +5358,10 @@ class GenMonitor():
             print(msg)
             self.context_manager[self.target].setIdaMessage(msg)
             self.lgr.debug(msg)
+            retval = msg
         if self.report_crash is not None:
             self.report_crash.addMsg('Backtrace summary: \n %s' % msg)
+        return retval
 
     def amWatching(self, tid):
         return self.context_manager[self.target].amWatching(tid)
@@ -6015,6 +6026,9 @@ class GenMonitor():
     def debugging(self):
         retval = False
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
+        if debug_tid is None:
+            debug_tid = self.context_manager[self.target].getSavedDebugTid() 
+            self.lgr.debug('genMonitor debugging ? context manager returned None for getDebugTid, tried getting saved and got %s' % (debug_tid))
         if debug_tid is not None:
             retval = True
         return retval

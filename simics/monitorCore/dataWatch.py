@@ -1915,21 +1915,29 @@ class DataWatch():
 
             #self.context_manager.restoreDefaultContext()
             if not data_hit and not skip_fun and self.mem_something.fun not in ['getenv']:
-                #self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
+                self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
                 buf_start = None
                 buf_length = None    
                 if self.mem_something.count is not None:
+                    self.lgr.debug('dataWatch getMemParams count is not none %d' % self.mem_something.count)
                     buf_start, buf_length = self.findBufForRange(self.mem_something.src, self.mem_something.count)
+                    if buf_start is None:
+                        self.lgr.debug('dataWatch getMemParams count is not but buf_start is None')
                 else:
+                    self.lgr.debug('dataWatch getMemParams count is None')
                     buf_index = self.findRangeIndex(self.mem_something.src)
                     if buf_index is not None:
                         buf_start = self.start[buf_index]
+                        self.lgr.debug('dataWatch getMemParams count is None, buf_index not none')
+                    else:
+                        self.lgr.debug('dataWatch getMemParams count is None, and so is buf index for src 0x%x' % self.mem_something.src)
                 if buf_start is None:
                     ''' handle ambigous calls such as strcmp '''
                     if self.mem_something.dest is not None:
                         buf_start = self.findRange(self.mem_something.dest)
                     if buf_start is None:
+                        self.lgr.debug('dataWatch getMemParams buf_start none, ambigous call like strcmp')
                         skip_fun = True
                         if self.mem_something.src is not None and self.mem_something.dest is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x and dst 0x%x not buffers we care about, skip it' % (self.mem_something.src,
@@ -2056,7 +2064,7 @@ class DataWatch():
                 ''' TBD this fails on buffer overlap, but that leads to crash anyway? '''
                 self.lgr.debug('gatherCallParams strcpy, src: 0x%x dest: 0x%x count(maybe): %d' % (self.mem_something.src, self.mem_something.dest, self.mem_something.count))
             else:
-                self.mem_something.src, self.mem_something.dest, self.mem_something.count = self.getCallParams(sp, word_size)
+                self.mem_something.dest, self.mem_something.src, self.mem_something.count = self.getCallParams(sp, word_size)
                 #if self.mem_something.src is None:
                 #    self.mem_something.src = self.mem_utils.readAppPtr(self.cpu, sp+word_size, size=word_size)
                 #self.mem_something.count = self.getStrLen(self.mem_something.src)        
@@ -3029,7 +3037,7 @@ class DataWatch():
             elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                     self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
                     our_reg_list.append(op1)
-            elif self.cpu.architecture != 'arm' and next_instruct[1].startswith('mov') and self.decode.isReg(op1) and op1 in our_reg_list:
+            elif self.cpu.architecture != 'arm' and (next_instruct[1].startswith('mov') or next_instruct[1].startswith('lea')) and self.decode.isReg(op1) and op1 in our_reg_list:
                 # TBD fix for arm
                 #self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
                 our_reg_list.remove(op1)
@@ -3729,7 +3737,8 @@ class DataWatch():
                      memory.logical_address, memory.physical_address, memory.size))
                 start, length = self.findBufForRange(memory.logical_address, memory.size)
                 if start is None:
-                     self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x' % (index, memory.logical_address))
+                     self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x WILL BAIL' % (index, memory.logical_address))
+                     return
                 else:
                      self.lgr.debug('dataWatch readHap reference from kernel for index %d buffer start 0x%x' % (index, start))
     
@@ -4141,8 +4150,8 @@ class DataWatch():
             end = self.start[index] + (self.length[index] - 1)
             eip = self.top.getEIP(self.cpu)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
-            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
-                break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
+            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x (physical 0x%x) hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
+                break_num, self.start[index], end, self.length[index], phys_block.address, hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
             self.read_hap.append(hap)
             #self.lgr.debug('DataWatch back from set break range')
             

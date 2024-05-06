@@ -61,12 +61,18 @@ def getText(path, lgr):
     #out,err=proc2.communicate()
     out = proc1.communicate()
     addr = None
+    offset = None
+    size = None
+    plt_addr = None
+    plt_offset = None
+    plt_size = None
     for line in out[0].decode("utf-8").splitlines():
      
         ''' section numbering has whitespace '''
         hack = line[7:]
         #if lgr is not None:
         #    lgr.debug('readelf got %s from %s' % (hack, path))
+        
         parts = hack.split()
         if len(parts) < 5:
             #ftype = magic.from_file(path)

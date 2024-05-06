@@ -147,6 +147,7 @@ class AFL():
         if hang is not None:
             self.hang_cycles = int(hang)
         self.lgr.debug('AFL init from snap %s' % snap_name)
+        self.addr_of_count = None
 
         self.snap_name = snap_name
         self.loadPickle(snap_name)
@@ -548,6 +549,10 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         self.write_data.write()
+        if self.mem_utils.isKernel(self.addr):
+            if self.addr_of_count is not None and not self.top.isWindows():
+                self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
         # TBD why again and again?
         self.page_faults.watchPageFaults(afl=True)
         if self.exit_syscall is not None:
@@ -649,6 +654,9 @@ class AFL():
                 self.addr = so_pickle['addr']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
+            if 'addr_of_count' in so_pickle and so_pickle['addr_of_count'] is not None: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
 
     def fixFaults(self):
         if self.target_cpu.architecture == 'arm':

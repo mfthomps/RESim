@@ -90,6 +90,7 @@ class PlayAFL():
         self.stop_hap_cycle = None
         self.back_stop_cycle = None
         self.hang_cycles = 90000000
+        self.addr_of_count = None
         hang = os.getenv('HANG_CYCLES')
         if hang is not None:
             self.hang_cycles = int(hang)
@@ -514,13 +515,17 @@ class PlayAFL():
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
-                         filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
-                         #filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
+                         #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
+                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall())
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('playAFL call writeData write')
             count = self.write_data.write()
+            if self.mem_utils.isKernel(self.addr):
+                if self.addr_of_count is not None and not self.top.isWindows():
+                    self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
             bp_count = self.coverage.bpCount()
             self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             # TBD just rely on coverage?
@@ -677,6 +682,7 @@ class PlayAFL():
                 hit = int(hit)
                 if hit not in self.all_hits:
                     self.all_hits.append(hit)
+            print('%d hits in this play.' % len(hit_bbs))
             self.reportNewHits()
 
     def reportNewHits(self):
@@ -774,6 +780,9 @@ class PlayAFL():
                 self.addr = so_pickle['addr']
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
+            if 'addr_of_count' in so_pickle and so_pickle['addr_of_count'] is not None: 
+                self.addr_of_count = so_pickle['addr_of_count']
+                self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
         return retval
 
     def reportExit(self):
