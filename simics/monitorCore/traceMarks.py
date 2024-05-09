@@ -316,7 +316,7 @@ class TraceMarks():
             elif mark['mark_type'] == 'kernel':
                 read_fd = self.dataWatch.getPipeReader(str(mark['fd']))
                 if read_fd is None:
-                    self.lgr.debug('traceRefs kernel found no read fd from datawatch for write fd %d' % (mark['fd']))
+                    self.lgr.debug('traceRefs kernel found no read fd from datawatch for write fd %s' % (mark['fd']))
                     continue
                 self.handlePipeWrite(mark, read_fd)
 

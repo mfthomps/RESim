@@ -148,9 +148,6 @@ class GetKernelParams():
 
         self.quit = False
         self.force = False
-
-        # hack to keep from repeatedly attempting to get mm_struct
-        self.mm_struct_fail = False
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -606,7 +603,10 @@ class GetKernelParams():
             self.param.ts_group_leader = real_parent_offset + self.getOff(6)
             # pidtype_max is 3?  pid_link is hlist_node and pointer.  hlist_node is two pointers.  total 4 words x 3 is 12 words?
             # no idea how we get 8 words from group leader...  works on arm
-            self.param.ts_thread_group_list_head = self.param.ts_group_leader+self.getOff(14)
+            if self.cpu.architecture == 'arm':
+                self.param.ts_thread_group_list_head = self.param.ts_group_leader+self.getOff(14)
+            else:
+                self.param.ts_thread_group_list_head = self.param.ts_group_leader+self.getOff(15)
 
             parent = self.mem_utils.readPtr(self.cpu, task+self.param.ts_parent) 
             group_leader = self.mem_utils.readPtr(self.cpu, task+self.param.ts_group_leader) 
@@ -961,10 +961,9 @@ class GetKernelParams():
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
             self.lgr.debug('entryModeChanged entering kernel')
-            if not self.isWindows() and self.param.mm_struct is None and not self.mm_struct_fail:
+            if not self.isWindows() and self.param.mm_struct is None:
                 if not self.getPageTableDirectory():
                     self.lgr.error('Failed to get page table offsets from process record')
-                    self.mm_struct_fail = True
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
@@ -1676,7 +1675,7 @@ class GetKernelParams():
             return False
 
     def getPageTableDirectory(self):
-        #self.lgr.debug('getPageTableDirectory')
+        self.lgr.debug('getPageTableDirectory')
         retval = False
         if self.cpu.architecture == 'arm':
             ttbr = self.cpu.translation_table_base0
@@ -1686,21 +1685,21 @@ class GetKernelParams():
             #page_dir_addr = self.cpu.iface.int_register.read(reg_num)
             page_dir_addr = self.mem_utils.getKernelSavedCR3()
         proc_rec = self.taskUtils.getCurProcRec()
-        #self.lgr.debug('getPageTableDirectory proc rec 0x%x page_dir_addr 0x%x' % (proc_rec, page_dir_addr)) 
+        self.lgr.debug('getPageTableDirectory proc rec 0x%x page_dir_addr 0x%x' % (proc_rec, page_dir_addr)) 
         start = self.param.ts_prev + 4
         ptr = proc_rec + start
         mm_struct = None
         mm_struct_off = None
         end = proc_rec + self.param.ts_pid 
-        #self.lgr.debug('getPageTableDirectory start 0x%x ptr 0x%x end 0x%x' % (start, ptr, end))
+        self.lgr.debug('getPageTableDirectory start 0x%x ptr 0x%x end 0x%x' % (start, ptr, end))
         while ptr < end:
             maybe = self.mem_utils.readPtr(self.cpu, ptr)
-            #self.lgr.debug('getPageTableDirectory ptr 0x%x maybe 0x%x' % (ptr, maybe))
+            self.lgr.debug('getPageTableDirectory ptr 0x%x maybe 0x%x' % (ptr, maybe))
             pgd_ptr = maybe
             for i in range(100):
                 pgd = self.mem_utils.readWord32(self.cpu, pgd_ptr)
                 if pgd is not None:
-                    #self.lgr.debug('\t pgd_ptr 0x%x   pgd 0x%x' % (pgd_ptr, pgd))
+                    self.lgr.debug('\t pgd_ptr 0x%x   pgd 0x%x' % (pgd_ptr, pgd))
                     if pgd == page_dir_addr:
                         mm_struct = ptr - proc_rec
                         self.param.mm_struct = mm_struct

@@ -164,6 +164,7 @@ class DataMark():
 
     def noAdHoc(self):
         if self.ad_hoc:
+            self.lgr.debug('DataMark noAdHoc')
             self.was_ad_hoc = True
             self.ad_hoc = False
 
@@ -612,6 +613,7 @@ class WatchMarks():
             self.loadPickle(run_from_snap)
         ''' will store so map with saved json files ''' 
         self.so_map = None
+        self.recent_ad_hoc = None
 
     def saveMarks(self, fpath):
         with open(fpath, 'w') as fh:
@@ -736,9 +738,14 @@ class WatchMarks():
             if ip is not None:
                 self.lgr.debug('watchMarks dataRead ad_hoc eip 0x%x ' % (ip))
             if len(self.mark_list) > 0:
-                pm = self.mark_list[-1]
+                #pm = self.mark_list[-1]
+                pm = self.recent_ad_hoc
                 create_new = True   
-                if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+                
+                #if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+                
+                if pm is not None and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+                    self.lgr.debug('watchMarks previous ad_hoc had end addr one greather than addr')
                     skip_this = False
                     if dest is not None:
                         self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
@@ -747,6 +754,8 @@ class WatchMarks():
                         self.lgr.debug('watchMarks dataRead cur_len 0x%x  ok_dest would be 0x%x' % (cur_len, ok_dest))
                         if dest != ok_dest:
                             skip_this = True
+                    else:
+                        self.lgr.debug('watchMarks dest is None')
                     if not skip_this:
                         end_addr = addr + trans_size - 1
                         self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
@@ -761,6 +770,7 @@ class WatchMarks():
                     #self.lgr.debug('sp is %s' % str(sp))
                     dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, byte_swap=byte_swap)
                     wm = self.addWatchMark(dm)
+                    self.recent_ad_hoc = wm
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
         elif note is not None:
@@ -771,9 +781,9 @@ class WatchMarks():
             # looking for multiple iterations over data range at same instruction
             #self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
             if len(self.prev_ip) > 0:
-                pm = self.mark_list[-1]
+                pm = self.recent_ad_hoc
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
-                if isinstance(pm.mark, DataMark) and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
+                if pm is not None and pm.ip == ip and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
                     pm.mark.addrRange(addr, ip=ip)
                     pm.cycle = self.cpu.cycles
                     pm.ip = ip

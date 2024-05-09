@@ -428,6 +428,11 @@ class DataWatch():
             else:
                 return
 
+        # See returns above
+        if len(self.start) == 0:
+            # first range, set mmap syscall
+            self.watchMmap()
+
         if fd is not None:
             self.total_read = self.total_read + length
             if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
@@ -2317,6 +2322,10 @@ class DataWatch():
             # TBD was commented out. 
             self.mem_something.dest, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
 
+        elif self.mem_something.fun == 'fputs':
+            # TBD was commented out. 
+            self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+
         elif self.mem_something.fun.startswith('WSAAddressToString'):
             self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
             self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp+3*word_size, size=word_size)
@@ -2725,7 +2734,8 @@ class DataWatch():
                 SIM_run_alone(self.stopForMemcpyCheck, None)
                 return 
  
-            self.recordAdHocCopy(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.move_stuff.trans_size, dest=self.last_ad_hoc[-1])
+            #self.recordAdHocCopy(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.move_stuff.trans_size, dest=self.last_ad_hoc[-1])
+            self.recordAdHocCopy(self.move_stuff.addr, self.move_stuff.start, self.move_stuff.length, self.move_stuff.trans_size, dest_addr)
 
         elif self.move_stuff.function is not None:
             if dest_addr != self.move_stuff.addr:
@@ -2758,10 +2768,11 @@ class DataWatch():
         self.finish_check_move_hap = None
 
     def recordAdHocCopy(self, src, buf_start, buf_length, copy_size, dest, byte_swap=False):
+        self.lgr.debug('dataWatch recordAdHocCopy src 0x%x dest 0x%x size 0x%x' % (src, dest, copy_size))
         wm = self.watchMarks.dataRead(src, buf_start, buf_length, copy_size, ad_hoc=True, dest=dest, byte_swap=byte_swap)
         if not byte_swap: 
             self.setRange(dest, copy_size, watch_mark=wm)
-            self.lgr.debug('dataWatch recordAdHocCopy src 0x%x dest 0x%x size 0x%x' % (src, dest, copy_size))
+            self.lgr.debug('dataWatch recordAdHocCopy not byte_swap src 0x%x dest 0x%x size 0x%x' % (src, dest, copy_size))
             self.setBreakRange()
         #''' TBD breaks something?'''
         #self.move_cycle = self.cpu.cycles
@@ -3733,11 +3744,11 @@ class DataWatch():
                 else:
                     self.lgr.error('dataWatch readHap no start address for index %s' % index)
             else:
-                self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x phys 0x%x size %d' % (index, 
-                     memory.logical_address, memory.physical_address, memory.size))
+                #self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x phys 0x%x size %d' % (index, 
+                #     memory.logical_address, memory.physical_address, memory.size))
                 start, length = self.findBufForRange(memory.logical_address, memory.size)
                 if start is None:
-                     self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x WILL BAIL' % (index, memory.logical_address))
+                     #self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x WILL BAIL' % (index, memory.logical_address))
                      return
                 else:
                      self.lgr.debug('dataWatch readHap reference from kernel for index %d buffer start 0x%x' % (index, start))
@@ -4145,13 +4156,20 @@ class DataWatch():
             ''' TBD should this be a physical bp?  Why explicit RESim context -- perhaps debugging_tid is not set while
                 fussing with memsomething parameters? '''
             phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
-            break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Read | Sim_Access_Write, phys_block.address, self.length[index], 0)
-            #break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
+            if phys_block.address is not None and phys_block.address != 0:
+                break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Read | Sim_Access_Write, phys_block.address, self.length[index], 0)
+            else:
+                self.lgr.debug('dataWatch setBreakRange no phys addr for 0x%x, use linear' % self.start[index])
+                break_num = self.context_manager.genBreakpoint(context, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             end = self.start[index] + (self.length[index] - 1)
             eip = self.top.getEIP(self.cpu)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
-            self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x (physical 0x%x) hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
-                break_num, self.start[index], end, self.length[index], phys_block.address, hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
+            if phys_block.address is not None and phys_block.address != 0:
+                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x (physical 0x%x) hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
+                    break_num, self.start[index], end, self.length[index], phys_block.address, hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
+            else:
+                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x NO PHYS hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
+                    break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
             self.read_hap.append(hap)
             #self.lgr.debug('DataWatch back from set break range')
             
@@ -4913,6 +4931,8 @@ class DataWatch():
 
     def disable(self):
         self.disabled=True
+        self.top.rmSyscall('dataWatchMmap')
+        
 
     def setReadLimit(self, limit, callback):
         self.read_limit_trigger = limit
@@ -5282,8 +5302,23 @@ class DataWatch():
                 #self.callback()
                 self.callback = None
 
+    def mmap(self, addr):
+        phys_of_addr = self.mem_utils.v2p(self.cpu, addr)
+        self.lgr.debug('dataWatch mmap addr 0x%x phys is 0x%x' % (addr, phys_of_addr))
+        index = self.findRangeIndex(addr)
+        if index is not None:
+            self.lgr.debug('dataWatch mmap redo range')
+            length = self.length[index]
+            self.rmRange(addr)
+            self.setRange(addr, length)        
+            self.setBreakRange()
+        else:
+            self.lgr.debug('dataWatch mmap range not found')
+            pass
 
-
-
+    def watchMmap(self):
+        call_list = ['mmap', 'mmap2']
+        self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
+        self.lgr.debug('dataWatch did watchMmap')
 
 
