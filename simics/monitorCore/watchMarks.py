@@ -783,7 +783,7 @@ class WatchMarks():
             if len(self.prev_ip) > 0:
                 pm = self.recent_ad_hoc
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
-                if pm.ip == ip and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
+                if pm is not None and pm.ip == ip and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
                     pm.mark.addrRange(addr, ip=ip)
                     pm.cycle = self.cpu.cycles
                     pm.ip = ip
