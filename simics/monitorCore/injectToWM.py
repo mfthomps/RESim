@@ -95,7 +95,11 @@ class InjectToWM():
             self.top.goToDataMark(wm_index)
             print('Go to data mark %d.  Artifact mark was %d.  Data file copied to /tmp/wm.io (and wm_filtered.io if there was a filter).' % (wm_index, self.mark_index))
         else:
-            print('Did not find a watch mark for address 0x%x.  Perhaps it came from a stale trackio artifact?' % self.addr)
+            stale_index = self.dataWatch.findStaleMarkIp(self.addr)
+            if stale_index is not None:
+                print('Watch mark for address 0x%x occurred at index %d, which is prior to a bookmark reset.' % (self.addr, stale_index))
+            else:
+                print('Did not find a watch mark for address 0x%x.  Perhaps it came from a stale trackio artifact?' % self.addr)
 
     def findOneTrack(self, addr):
         ''' Find a track having watchmark having the given address. 
