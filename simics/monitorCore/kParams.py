@@ -93,14 +93,14 @@ class Kparams():
 
     def printParams(self):
         print('Kernel parameters:')
-        for k in self.__dict__.keys():
+        for k in sorted(self.__dict__.keys()):
             v = self.__dict__.__getitem__(k)
             if v is not None:
                 print('\t%-30s  %s' % (k, v))
 
     def getParamString(self):
         retval = 'Kernel parameters:\n'
-        for k in self.__dict__.keys():
+        for k in sorted(self.__dict__.keys()):
             v = self.__dict__.__getitem__(k)
             if v is not None:
                 retval = retval + '\t%-30s  %s\n' % (k, v)
