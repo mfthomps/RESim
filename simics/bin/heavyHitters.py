@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 '''
-Parse a log file in which "coverage bbHap" debug is enabled and find blocks with the most hits.
+Parse a log file in which the line in coverage.py containing: "coverage bbHap" is 
+uncommented.  Find blocks with the most hits.
 Intended for use in blackballing parts of the code from afl.
 '''
 import sys

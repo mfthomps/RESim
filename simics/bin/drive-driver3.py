@@ -148,7 +148,7 @@ def main():
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
     parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
     parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
-    parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file')
+    parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file, e.g., generated using genJsonIO.py')
     args = parser.parse_args()
     sshport = args.port
     print('Drive driver22')
