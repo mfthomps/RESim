@@ -1180,3 +1180,8 @@ class MemUtils():
         new_cr3 = current_cr3 & 0xffffe7ff
         self.lgr.debug('memUtils checkSavedCR3 kernel_saved_cr3 0x%x  current_cr3 0x%x new 0x%x' % (self.kernel_saved_cr3, current_cr3, new_cr3))
         #self.kernel_saved_cr3 = new_cr3
+
+    def readCR3(self, cpu):
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        current_cr3 = cpu.iface.int_register.read(reg_num)
+        return current_cr3

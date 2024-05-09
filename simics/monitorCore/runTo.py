@@ -52,7 +52,7 @@ class RunTo():
     def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('runTo stopHap ip: 0x%x' % eip)
+            self.lgr.debug('runTo stopHap ip: 0x%x stop_action %s' % (eip, str(self.stop_action)))
             SIM_run_alone(self.delStopHap, None)
             if self.stop_action is not None:
                 self.stop_action.run()
@@ -262,6 +262,8 @@ class RunTo():
                     stop_action = hapCleaner.StopAction(hap_clean, [], flist)
                     stop_action.run()
                     return
+
+        # *** SEE returns above ****
         ''' Set breakpoint on current_task to watch task switches '''
         prec = Prec(cpu, proc, want_tid_list)
         phys_current_task = self.task_utils.getPhysCurrentTask()
@@ -287,11 +289,11 @@ class RunTo():
         else:
             self.lgr.debug('runTo toRunningProc thinks it is already running')
       
-    def stopAlone(self, prec): 
+    def stopAlone(self, dumb=None): 
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, None)
         SIM_run_alone(self.cleanToProcHaps, None)
-        SIM_break_simulation('found %s' % prec.proc)
+        SIM_break_simulation('runTo stopAlone')
 
     def runToProc(self, prec, third, forth, memory):
         ''' callback when current_task is updated.  new value is in memory parameter '''
@@ -301,15 +303,23 @@ class RunTo():
         cur_thread = SIM_get_mem_op_value_le(memory)
         self.lgr.debug('runToProc cur_thread 0x%x' % cur_thread)
         tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
-        self.lgr.debug('runToProc look for %s tid is %s cycle: 0x%x' % (prec.proc, tid, self.cpu.cycles))
+        # prec_tid is a list
+        self.lgr.debug('runToProc look for prec.proc %s prec.tid %s, the current tid is %s cycle: 0x%x' % (prec.proc, prec.tid, tid, self.cpu.cycles))
         if tid is not None and tid != 0:
             if (prec.tid is not None and tid in prec.tid) or (prec.tid is None and comm == prec.proc):
                 self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, prec.tid))
-                SIM_run_alone(self.stopAlone, prec)
+                SIM_run_alone(self.cleanToProcHaps, None)
+                SIM_run_alone(self.toUserAlone, tid)
             else:
                 #self.proc_list[self.target][tid] = comm
                 #self.lgr.debug('runToProc tid: %d proc: %s' % (tid, comm))
                 pass
+
+    def toUserAlone(self, tid):
+        flist = None
+        if self.stop_action is not None:
+            flist = self.stop_action.flist
+        self.top.toUser(flist=flist, want_tid=tid)
             
     def cleanToProcHaps(self, dumb):
         self.lgr.debug('cleantoProcHaps')
