@@ -605,19 +605,19 @@ class GenMonitor():
 
         SIM_break_simulation('mode changed')
 
-    def modeChanged(self, want_tid, one, old, new):
+    def modeChanged(self, tid_list, one, old, new):
         dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         cpu = self.cell_config.cpuFromCell(self.target)
         ''' note may both be None due to failure of getProc '''
-        if want_tid != this_tid:
+        if this_tid not in tid_list:
             ''' or just want may be None if debugging some windows dead zone '''
-            if want_tid is None and this_tid is not None:
-                SIM_break_simulation('mode changed, tid was None, now is not none.')
-            elif this_tid is not None:            
-                self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+            #if want_tid is None and this_tid is not None:
+            #    SIM_break_simulation('mode changed, tid was None, now is not none.')
+            if this_tid is not None:            
+                self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (str(tid_list), this_tid))
                 return
             else:
-                self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (want_tid))
+                self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
         cpl = memUtils.getCPL(cpu)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
         mode = 1
@@ -707,7 +707,7 @@ class GenMonitor():
         if cpl != 0:
             dumb, comm, tid = self.task_utils[self.target].curThread() 
             self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
-            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, [tid])
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, None, flist)
@@ -724,22 +724,32 @@ class GenMonitor():
                     else:
                         fun_item.fun(fun_item.args)
 
-    def run2User(self, cpu, flist=None):
+    def run2User(self, cpu, flist=None, want_tid=None):
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
             tid = self.task_utils[self.target].curTID() 
             ''' use debug process if defined, otherwise default to current process '''
-            debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
-            if debug_tid is not None:
-                if debug_tid != tid:
-                    self.lgr.debug('debug_tid:%s  tid %s' % (debug_tid, tid))
-                    ''' debugging, but not this tid.  likely a clone '''
-                    if not self.context_manager[self.target].amWatching(tid):
-                        ''' stick with original debug tid '''
-                        tid = debug_tid
+            if want_tid is not None:
+                want_tid = str(want_tid)
+                self.lgr.debug('run2User has want_tid of %s' % want_tid)
+                tid_list = [want_tid]
+            else:
+                tid_list = self.context_manager[self.target].getThreadTids()
+                if len(tid_list) == 0:
+                    tid_list.append(tid)
+                    self.lgr.debug('run2User tidlist from context_manager empty, add self %s' % tid)
+                else:
+                    self.lgr.debug('run2User tidlist from context_manager is %s' % tid_list)
+            #if debug_tid is not None:
+            #    if debug_tid != tid:
+            #        self.lgr.debug('debug_tid:%s  tid %s' % (debug_tid, tid))
+            #        ''' debugging, but not this tid.  likely a clone '''
+            #        if not self.context_manager[self.target].amWatching(tid):
+            #            ''' stick with original debug tid '''
+            #            tid = debug_tid
                     
-            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
-            self.lgr.debug('run2User tid %s in kernel space (%d), set mode hap %d' % (tid, cpl, self.mode_hap))
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid_list)
+            self.lgr.debug('run2User tid %s in kernel space (%d), set mode hap %d' % (str(tid_list), cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
@@ -1820,11 +1830,11 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, flist=None): 
+    def toUser(self, flist=None, want_tid=None): 
         self.rmDebugWarnHap()
         self.lgr.debug('toUser')
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.run2User(cpu, flist)
+        self.run2User(cpu, flist, want_tid=want_tid)
 
     def runToUserSpace(self, dumb=None):
         self.lgr.debug('runToUserSpace')
@@ -1839,7 +1849,10 @@ class GenMonitor():
 
     def toProcTid(self, tid):
         self.lgr.debug('toProcTid %s' % tid)
-        self.run_to[self.target].toRunningProc(None, [tid], None)
+        f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
+        f2 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
+        flist = [f1, f2]
+        self.run_to[self.target].toRunningProc(None, [str(tid)], flist)
 
 
     def getEIP(self, cpu=None):
@@ -3146,12 +3159,13 @@ class GenMonitor():
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
         self.lgr.debug('runTo')
-        if self.checkOnlyIgnore():
+        if not ignore_running and self.checkOnlyIgnore():
             self.rmDebugWarnHap()
 
         ''' call is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
+            self.lgr.debug('runTo Monitor is running, try again after it pauses')
             return
         if cell_name is None:
             cell_name = self.target
@@ -3186,9 +3200,12 @@ class GenMonitor():
             context = self.context_manager[self.target].getContextName(cell)
             self.syscallManager[cell_name].watchSyscall(context, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                    callback=callback)
+        self.lgr.debug('genMonitor runTo done setting, check if running')
         if run and not self.is_monitor_running.isRunning():
+            self.lgr.debug('genMonitor runTo run set but is not running, do continue')
             self.is_monitor_running.setRunning(True)
             SIM_continue(0)
+        self.lgr.debug('genMonitor runTo now return')
         return retval
 
     def runToClone(self, nth=1):
@@ -3423,6 +3440,7 @@ class GenMonitor():
                 else: 
                     calls = ['read', 'close', 'socketcall', 'ioctl']
 
+            calls.append('clone')
             skip_and_mail = True
             if flist_in is not None:
                 ''' Given callback functions, use those instead of skip_and_mail '''
@@ -4571,6 +4589,11 @@ class GenMonitor():
             use_cr3 = self.mem_utils[self.target].getKernelSavedCR3()
         else:
             use_cr3 = cr3
+        task_cr3 = self.mem_utils[self.target].readCR3(cpu)
+        print('current task cr3 0x%x' % (task_cr3))
+        if use_cr3 is not None:
+            print('Using cr3 0x%x' % (use_cr3))
+
         ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3)
         if not quiet:
             print(ptable_info.valueString())
@@ -4579,6 +4602,8 @@ class GenMonitor():
             pei = pageUtils.PageEntryInfo(ptable_info.entry, cpu.architecture)
             if not quiet:
                 print('writable? %r' % pei.writable)
+        else:
+            print('page table entry is None')
         return ptable_info
 
     def toTid(self, tid, callback = None, run=True):
