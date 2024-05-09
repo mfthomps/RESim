@@ -428,6 +428,11 @@ class DataWatch():
             else:
                 return
 
+        # See returns above
+        if len(self.start) == 0:
+            # first range, set mmap syscall
+            self.watchMmap()
+
         if fd is not None:
             self.total_read = self.total_read + length
             if self.read_limit_trigger is not None and self.total_read >= self.read_limit_trigger and self.read_limit_callback is not None:
@@ -3739,11 +3744,11 @@ class DataWatch():
                 else:
                     self.lgr.error('dataWatch readHap no start address for index %s' % index)
             else:
-                self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x phys 0x%x size %d' % (index, 
-                     memory.logical_address, memory.physical_address, memory.size))
+                #self.lgr.debug('dataWatch readHap reference from kernel.  Index %d. Reference memory.logical_address 0x%x phys 0x%x size %d' % (index, 
+                #     memory.logical_address, memory.physical_address, memory.size))
                 start, length = self.findBufForRange(memory.logical_address, memory.size)
                 if start is None:
-                     self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x WILL BAIL' % (index, memory.logical_address))
+                     #self.lgr.warning('dataWatch readHap reference from kernel for index %d that does not cover this address 0x%x WILL BAIL' % (index, memory.logical_address))
                      return
                 else:
                      self.lgr.debug('dataWatch readHap reference from kernel for index %d buffer start 0x%x' % (index, start))
@@ -4926,6 +4931,8 @@ class DataWatch():
 
     def disable(self):
         self.disabled=True
+        self.top.rmSyscall('dataWatchMmap')
+        
 
     def setReadLimit(self, limit, callback):
         self.read_limit_trigger = limit
@@ -5306,6 +5313,9 @@ class DataWatch():
             self.lgr.debug('dataWatch mmap range not found')
             pass
 
-
+    def watchMmap(self):
+        call_list = ['mmap', 'mmap2']
+        self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
+        self.lgr.debug('dataWatch did watchMmap')
 
 
