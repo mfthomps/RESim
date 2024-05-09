@@ -409,7 +409,7 @@ class InjectIO():
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
-            self.lgr.debug('injectIO debug to %s' % self.target_proc)
+            self.lgr.debug('injectIO using target %s' % self.target_proc)
             self.top.resetOrigin()
             ''' watch for death of this process as well '''
             self.top.stopWatchTasks(target=self.target_cell, immediate=True)
@@ -417,7 +417,12 @@ class InjectIO():
 
             self.top.setTarget(self.target_cell)
 
-            self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
+            if self.trace_all and self.no_trace_dbg:
+                self.lgr.debug('injectIO trace all without debugging')
+                self.injectCallback()
+            else:
+                self.lgr.debug('injectIO trace all with debugging')
+                self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):
