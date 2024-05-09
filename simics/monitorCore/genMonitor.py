@@ -92,6 +92,7 @@ import afl
 import playAFL
 import replayAFL
 import reportCrash
+import reportExit
 import injectIO
 import instructTrace
 import aflPath
@@ -5071,6 +5072,14 @@ class GenMonitor():
         self.report_crash = reportCrash.ReportCrash(self, cpu, tid, self.dataWatch[self.target], self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
               target=target, targetFD=targetFD, trackFD=trackFD, report_dir=report_dir)
         self.report_crash.go()
+
+    def exitReport(self, fname, n=1, one_done=False, report_index=None, report_dir=None):
+        ''' generate exit reports for all exits in a given AFL target diretory -- or a given specific file '''
+        self.lgr.debug('exitReport %s' % fname)
+        cpu, comm, tid = self.task_utils[self.target].curThread() 
+        self.report_exit = reportExit.ReportExit(self, cpu, tid, self.mem_utils[self.target], fname, n, one_done, report_index, self.lgr, 
+              report_dir=report_dir)
+        self.report_exit.go()
 
     def trackAFL(self, target):
         track_afl = trackAFL.TrackAFL(self, target, self.lgr)
