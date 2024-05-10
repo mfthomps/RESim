@@ -97,7 +97,8 @@ class ReportCrash():
         ''' Either inject or track '''
         if self.trackFD is None:
             self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
-                   targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True, no_reset=False, max_marks=400)
+                   targetFD=self.targetFD, callback=self.doneForward, no_iterators=True, no_reset=False, max_marks=400)
+            #      targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True, no_reset=False, max_marks=400)
             #       targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
             ''' Be sure we are debugging and then do the trackIO '''
@@ -184,6 +185,7 @@ class ReportCrash():
         sys.stdout = orig_stdout 
 
     def doneForward(self, dumb=None):
+        self.top.stopTrackIO()
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         bad_addr = self.top.getSEGVAddr()
