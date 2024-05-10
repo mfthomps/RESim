@@ -321,6 +321,7 @@ class InjectIO():
             self.lgr.error('got None for bytes_wrote in injectIO')
             return
         eip = self.top.getEIP(self.cpu)
+        did_origin_reset = False
         if self.target_proc is None:
             self.dataWatch.clearWatchMarks(record_old=True)
             self.dataWatch.clearWatches(immediate=True)
@@ -348,6 +349,7 @@ class InjectIO():
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
+                    did_origin_reset = True
                     eip = self.top.getEIP(self.cpu)
                     self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
@@ -395,8 +397,10 @@ class InjectIO():
                     #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
-                    self.top.stopTrackIO(immediate=True)
-                    self.dataWatch.clearWatches(immediate=True)
+                    if not did_origin_reset:
+                        self.lgr.debug('injectIO call stopTrackIO')
+                        self.top.stopTrackIO(immediate=True)
+                        self.dataWatch.clearWatches(immediate=True)
                     self.lgr.debug('injectIO call dataWatch to set callback to %s' % str(self.callback))
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
@@ -405,7 +409,8 @@ class InjectIO():
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
-                    self.top.resetOrigin(cpu=self.cpu)
+                    if not did_origin_reset:
+                        self.top.resetOrigin(cpu=self.cpu)
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''

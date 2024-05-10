@@ -115,6 +115,8 @@ class DataMark():
         #self.lgr.debug('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
         if ip is not None:
             self.ad_hoc_ip_list.append(ip)
+        self.loop_instruct = None
+        self.loop_compares = None
 
     def getMsg(self):
         if self.start is None:
@@ -123,6 +125,8 @@ class DataMark():
             mark_msg = 'Write %d to  0x%08x offset %4d into 0x%08x (buf size %4d)' % (self.trans_size, self.addr, self.offset, self.start, self.length)
         elif self.addr is None:
             mark_msg = 'Memory mod reset, original buffer %d bytes starting at 0x%x' % (self.length, self.start)
+        elif self.loop_compares is not None:
+            mark_msg = 'Loop counter compare addr 0x%x, looped %d times, %s' % (self.addr, self.loop_compares, self.loop_instruct)
         elif self.end_addr is None:
             offset_string = ''
             if self.offset != 0 or self.trans_size != self.length:
@@ -167,6 +171,14 @@ class DataMark():
             self.lgr.debug('DataMark noAdHoc')
             self.was_ad_hoc = True
             self.ad_hoc = False
+
+    def loopCompare(self, instruct):
+        if self.loop_compares is None:
+            self.loop_compares = 1
+            self.loop_instruct = instruct 
+        else:
+            self.loop_compares += 1
+        return self.loop_compares
 
 class KernelMark():
     def __init__(self, addr, count, callnum, call, fd, fname, buffer_start):
@@ -1402,6 +1414,14 @@ class WatchMarks():
                if mark.mark.recv_addr <= addr and mark.mark.end_addr >= addr:
                    retval = mark.mark.recv_addr, mark.mark.len, read_count
                    break
+        return retval
+
+    def findReadIpAddr(self, ip, addr):
+        retval = None
+        for mark in reversed(self.mark_list):
+           if isinstance(mark.mark, DataMark) and mark.ip == ip and mark.mark.addr == addr:
+               retval = mark
+               self.lgr.debug('watchMarks findReadIpAddr foundip 0x%x add 0x%x' % (ip, addr))
         return retval
 
     def loadPickle(self, name):
