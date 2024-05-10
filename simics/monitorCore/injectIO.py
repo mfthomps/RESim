@@ -397,9 +397,10 @@ class InjectIO():
                     #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
-                    self.lgr.debug('injectIO call stopTrackIO')
-                    self.top.stopTrackIO(immediate=True)
-                    self.dataWatch.clearWatches(immediate=True)
+                    if not did_origin_reset:
+                        self.lgr.debug('injectIO call stopTrackIO')
+                        self.top.stopTrackIO(immediate=True)
+                        self.dataWatch.clearWatches(immediate=True)
                     self.lgr.debug('injectIO call dataWatch to set callback to %s' % str(self.callback))
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
