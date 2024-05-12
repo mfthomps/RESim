@@ -5337,7 +5337,7 @@ class DataWatch():
         op2, op1 = self.decode.getOperands(instruct[1])
         if instruct[1].startswith('cmp') and (self.decode.isReg(op1) or self.decode.isReg(op2)):
             prev_read = self.watchMarks.findReadIpAddr(eip, addr)
-            if prev_read is not None:
+            if prev_read is not None and not prev_read.mark.ad_hoc:
                 loop_count = prev_read.mark.loopCompare(instruct[1])
                 retval = 'loop counter compare at 0x%x, count %d' % (addr, loop_count)
             
