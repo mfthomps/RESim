@@ -43,11 +43,12 @@ class InjectToWM():
         self.addr = addr
         self.lgr = lgr
         self.max_marks = max_marks
+        self.no_reset = no_reset
         here = os.getcwd()
         self.target = os.path.basename(here)
         print('target is %s' % self.target)
         self.lgr.debug('InjectToWM addr: 0x%x target is %s fname %s max_marks %s' % (addr, self.target, fname, max_marks))
-        result = self.findOneTrack(addr)
+        result = self.findOneTrack()
         if result is not None:
             self.mark_index = result.mark['index']
             self.lgr.debug('InjectToWM inject %d bytes and %d packets at ip: 0x%x, Watch Mark: %d from %s' % (result.size, result.mark['packet'], result.mark['ip'], 
@@ -101,7 +102,7 @@ class InjectToWM():
             else:
                 print('Did not find a watch mark for address 0x%x.  Perhaps it came from a stale trackio artifact?' % self.addr)
 
-    def findOneTrack(self, addr):
+    def findOneTrack(self):
         ''' Find a track having watchmark having the given address. 
             Prioritize low packet numbers and small queue file size and number of watch marks.
         '''
@@ -111,14 +112,15 @@ class InjectToWM():
         least_marks = 100000
         best_result_size = None
         best_result_marks = None
+        without_resets = None
         best = None
         expaths = aflPath.getAFLTrackList(self.target)
-        self.lgr.debug('findOneTrack 0x%x found %d paths' % (addr, len(expaths)))
+        self.lgr.debug('findOneTrack 0x%x found %d paths' % (self.addr, len(expaths)))
         for index in range(len(expaths)):
             # NOTE addr given to injectToWM are load addresses, so do not let findTrack apply offsets
-            result = findTrack.findTrack(expaths[index], addr, True, None, quiet=True, lgr=self.lgr)
+            result, num_resets = findTrack.findTrack(expaths[index], self.addr, True, None, quiet=True, lgr=self.lgr)
             if result is not None:
-                self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d size: %d num_marks %d' % (addr, 
+                self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d size: %d num_marks %d' % (self.addr, 
                      result.mark['index'], result.size, result.num_marks))
                 if result.mark['packet'] < least_packet:
                     least_packet = result.mark['packet']
@@ -128,37 +130,43 @@ class InjectToWM():
                     best_result_size = None
                     retval = result
                 elif result.mark['packet'] == least_packet:
-                    if result.num_marks < least_marks:
+                    if self.no_reset and without_resets is None and num_resets == 0:
+                        without_resets = result
+                    if result.num_marks < least_marks and (not self.no_reset or num_resets == 0 or without_resets is None):
                         least_marks = result.num_marks
                         best_result_marks = result
-                    if result.size < least_size:
+                    if result.size < least_size and (not self.no_reset or num_resets == 0 or without_resets is None):
                         least_size = result.size
                         best_result_size = result
             #else:
             #    self.lgr.debug('findOneTrack got nothing from findTrack')
-        if best_result_marks is not None and best_result_size is not None:
+        if self.no_reset and without_resets is None:
+            print('Failed to find watchmark prior to origin reset')
+            self.lgr.debug('Failed to find watchmark prior to origin reset')
+            retval = None
+        elif best_result_marks is not None and best_result_size is not None:
             delta_marks = best_result_size.num_marks - best_result_marks.num_marks
             delta_size = best_result_marks.size - best_result_size.size
             self.lgr.debug('delta_marks %d best_marks %d  delta_size %d best_size %d' % (delta_marks, 
                        best_result_marks.num_marks, delta_size, best_result_size.size))
             if delta_marks == 0:
-                result = best_result_size
+                retval = best_result_size
             elif delta_size == 0:
-                result = best_result_marks
+                retval = best_result_marks
             else:
                 mark_ratio = delta_marks / best_result_marks.num_marks
                 size_ratio = delta_size / best_result_size.size
                 self.lgr.debug('best marks ratio %f   best size %f' % (mark_ratio, size_ratio))
                 if mark_ratio > size_ratio:
-                    result = best_result_marks
+                    retval = best_result_marks
                 else:
-                    result = best_result_size
+                    retval = best_result_size
         elif best_result_marks is not None:
             self.lgr.debug('best is marks')
-            result = best_result_marks
+            retval = best_result_marks
         elif best_result_size is not None:
             self.lgr.debug('best is size')
-            result = best_result_size
+            retval = best_result_size
         else:
             # best is least packets
             pass 
