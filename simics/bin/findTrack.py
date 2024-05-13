@@ -43,7 +43,7 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
     retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
-    mark_cycle = 0
+    num_resets = 0
     #print('NEW FIND TRACK %s' % track_path)
     if lgr is not None:
         lgr.debug('findTrack addr 0x%x path %s' % (addr, track_path))
@@ -52,24 +52,21 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
             track = json.load(open(track_path))
         except:
             print('failed to load json from %s' % track_path)
-            return None
+            return None, None
         somap = track['somap']
         if prog is not None:
             offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)
             if offset != None:
                 addr = addr + offset
         mark_list = track['marks']
+        sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
         #print('%d marks' % len(mark_list))
         count = 1
-        for mark in mark_list:
+        for mark in sorted_marks:
             #print('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
             #lgr.debug('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
-            if mark['cycle'] < mark_cycle:
-                if lgr is not None:
-                    lgr.debug('OUT OF ORDER, mark[cycle] 0x%x less than previous 0x%x' % (mark['cycle'], mark_cycle))
-                break
-            else:
-                mark_cycle = mark['cycle'] 
+            if mark['mark_type'] == 'reset_origin':
+                num_resets += 1
             #if mark['mark_type'] == 'read' and mark['ip']==addr:
             if mark['ip']==addr:
                 if no_cbr and mark['type'] == 'read' and mark['compare'] == 'CBR':
@@ -93,7 +90,7 @@ def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
         print('not a file: %s' % track_path)
         if lgr is not None:
             lgr.debug('findTrack addr 0x%x NOT A FILE path %s' % (addr, track_path))
-    return retval
+    return retval, num_resets
 
 def main():
     parser = argparse.ArgumentParser(prog='findTrack', description='Find track files that reference an input at a given instruction address')
@@ -112,7 +109,7 @@ def main():
     print('got %d paths' % len(expaths))
     addr = int(args.addr, 16) 
     for index in range(len(expaths)):
-        result = findTrack(os.path.join(target_path, expaths[index]), addr, args.one, args.prog)
+        result, num_resets = findTrack(os.path.join(target_path, expaths[index]), addr, args.one, args.prog)
         if result is not None and args.one:
             break
 
