@@ -37,8 +37,11 @@ def main():
                         old_parts = old_line.split('hits')
                         old_start = old_parts[0]
                         if old_start == line_start and len(line) < len(old_line):
-                            #print('old_start: %s' % old_start)
-                            merge_bnt_fh.write(old_line)
+                            if line.strip().endswith('not in hits'):
+                                merge_bnt_fh.write(old_line.strip()+' NO WM for new run\n')
+                            else:
+                                #print('old_start: %s' % old_start)
+                                merge_bnt_fh.write(old_line)
                             did_write = True
                             break
                 if did_write:

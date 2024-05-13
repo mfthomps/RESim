@@ -62,7 +62,8 @@ def getFirstReadCycle(trackio, quiet=False):
         print('ERROR: failed reading json from %s' % trackio)
         return None
     mark_list = tjson['marks']
-    for mark in mark_list:
+    sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
+    for mark in sorted_marks:
         if mark['mark_type'] in read_marks:
             retval = mark['cycle']
             break
@@ -70,7 +71,7 @@ def getFirstReadCycle(trackio, quiet=False):
 
 def getWatchMark(trackio, bb, prog, quiet=False):
     #print('in getWatchMark')
-    retval = (None, None)
+    retval = (None, None, None)
     ''' Find a read watch mark within a given watch mark json for a given bb '''
     ''' The given bb is a static value.  The watchmark eip may be offset by a shared library load address '''
     if not os.path.isfile(trackio):
@@ -85,16 +86,26 @@ def getWatchMark(trackio, bb, prog, quiet=False):
     index = 1
     somap = tjson['somap']
     offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=None)
+    reset_count = 0
     if offset != None:
         #print('not wrong file')
         mark_list = tjson['marks']
-        for mark in mark_list:
+
+        sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
+        last_cycle = None
+        for mark in sorted_marks:
+            if last_cycle is not None and mark['cycle'] < last_cycle:
+                print('out of order')
+            else:
+                last_cycle = mark['cycle']
+            if mark['mark_type'] == 'reset_origin':
+                reset_count += 1
             if mark['mark_type'] in read_marks:
                 eip = mark['ip'] - offset
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
                 if eip >= bb['start_ea'] and eip < bb['end_ea']:
                     #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
-                    retval = (eip, mark['packet'])
+                    retval = (eip, mark['packet'], reset_count)
                     break
             index = index + 1
     return retval

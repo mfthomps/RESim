@@ -1620,6 +1620,8 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['ptr'] = mark.mark.ptr
                 entry['value'] = mark.mark.value
+            elif isinstance(mark.mark, ResetOrigin):
+                entry['mark_type'] = 'reset_origin' 
 
 
             elif isinstance(mark.mark, IteratorMark) or isinstance(mark.mark, KernelModMark) or isinstance(mark.mark, SetMark):
