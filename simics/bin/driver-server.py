@@ -5,7 +5,7 @@ import socket,os
 host = '0.0.0.0'        
 port = 6459 
 
-log = open('/tmp/server.log', 'w') 
+log = open('/tmp/serverx.log', 'w') 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind((host, port))
 print('driver-server begin', file=log)
@@ -18,7 +18,7 @@ while True:
         print('len of f is %d' % len(f), file=log)
         log.flush()
         if header.endswith("=EOFX="):
-            s.sendto('ack'.encode(), source)
+            s.sendto('ac1'.encode(), source)
             ack, source = s.recvfrom(3)
             print('got ack ack', file=log)
             parts = str(header).split()
@@ -30,19 +30,30 @@ while True:
                 local_name = os.path.join('/tmp/', name) 
                 g = open(local_name, 'wb')
                 tot=0
+                count = 0
                 while True:
                     read_data, source = s.recvfrom(1024)
-                    print('len of read_data is %d' % len(read_data), file=log)
+                    #print('len of read_data is %d' % len(read_data), file=log)
                     tot=tot+len(read_data)
                     try: 
-                        if read_data.decode().endswith('=EOFX=') == True: break
-                    except: pass
+                        if read_data.decode().endswith('=EOFX=') == True: 
+                            break
+                    except: 
+                        pass
+                    count += 1
+                    if count % 20 == 0:
+                        s.sendto('ack'.encode(), source)
+                        print('sent ack count %d' % count, file=log)
                     g.write(read_data)
                     log.flush()
                 g.write(read_data[:-6])
                 g.close()
-                if the_size == str(os.path.getsize(local_name)): print(">> Size verified.", file=log)
-                else: print("sizes do not match", file=log)
+                if the_size == str(os.path.getsize(local_name)): 
+                    print(">> Size verified.", file=log)
+                else: 
+                    print("sizes do not match", file=log)
+                    msg = 'size from header %s,  size of file %s' % (the_size, str(os.path.getsize(local_name)))
+                    print(msg, file=log)
                 s.sendto('ack'.encode(), source)
                 print('tot %d' % tot, file=log)
             elif cmd == 'RUN:':

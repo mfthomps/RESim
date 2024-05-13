@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+#  Wrapper for drive-driver3.py
+#  Will replace the driver-server.py on the driver unless the
+#  expected version is found in .driver_server_version
+#
+myversion=ac1
+if [ -f .driver_server_version ]; then
+    echo "Found driver_server_version"
+    version=$(cat .driver_server_version)
+    echo "Version is " $version
+    if [ $version == $myversion ]; then
+        echo "Has our version, do not replace"
+    else
+        echo "Replace the driver-server"
+        drive-driver3.py $RESIM_DIR/simics/bin/replace.directive
+        sleep 1
+    fi
+else
+    echo "No version found, replace driver-server"
+    drive-driver3.py $RESIM_DIR/simics/bin/replace.directive
+    sleep 1
+fi
+drive-driver3.py $@
