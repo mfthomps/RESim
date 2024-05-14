@@ -12,7 +12,7 @@ if [ -f .driver_server_version ]; then
     if [ $version == $myversion ]; then
         echo "Has our version, do not replace"
     else
-        echo "Replace the driver-server"
+        echo "Incorrect version.  Replace the driver-server"
         drive-driver3.py $RESIM_DIR/simics/bin/replace.directive
         sleep 1
     fi

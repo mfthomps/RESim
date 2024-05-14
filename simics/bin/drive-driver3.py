@@ -107,7 +107,7 @@ def sendFiles(file_list, sock, target):
         print('>> Transfer: ' + file + ' complete.\n')
         ack, source = sock.recvfrom(3)
         print('got %s' % str(ack))
-        return retval
+    return retval
 
 class Directive():
     def __init__(self, fname):
@@ -172,11 +172,7 @@ def main():
     parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
-    parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
-    parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
-    parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
-    parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file, e.g., generated using genJsonIO.py')
     args = parser.parse_args()
     sshport = args.port
     print('Drive driver22')
@@ -198,7 +194,7 @@ def main():
         client_cmd = None
     elif directive.session == 'command':
         client_cmd = None
-    elif args.json:
+    elif directive.session == 'UDP_JSON':
         if directive.src_ip is not None:
             client_cmd = 'clientudpJsonScapy'
         else:
@@ -249,13 +245,13 @@ def main():
         directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
         driver_file.write(directive_line+'\n')
     elif directive.session == 'replay':
-        if directive.iface is not None:
+        if directive.device is not None:
             for pcap in directive.file:
                 pcap_base = os.path.basename(pcap)
-                directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.iface, pcap_base)
+                directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
                 driver_file.write(directive+'\n')
         else:
-            print('The replay directive needs an iface value as the source device for tcpreplay.')
+            print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
             exit(1)
     elif directive.session == 'command':
         for command in directive.commands:
