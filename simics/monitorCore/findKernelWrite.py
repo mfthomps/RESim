@@ -258,10 +258,11 @@ class findKernelWrite():
                     self.top.skipAndMail()
                     return
                 else:
-                    bm = "eip:0x%x modification of :0x%x not found after some looking" % (eip, self.addr)
-                    self.bookmarks.setBacktrackBookmark(bm)
-                    SIM_break_simulation('revWriteCallbackx')
-                    self.top.skipAndMail()
+                    bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
+                    self.top.quit()
+                    #self.bookmarks.setBacktrackBookmark(bm)
+                    #SIM_break_simulation('revWriteCallbackx')
+                    #self.top.skipAndMail()
                     return
                 #else:
                 #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
