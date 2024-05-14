@@ -2337,12 +2337,27 @@ class GenMonitor():
                 return
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d rev_to_call %s cycles: 0x%x' % (value, addr, num_bytes, str(rev_to_call), cpu.cycles))
             cell = self.cell_config.cell_context[self.target]
-            if self.find_kernel_write is None:
-                self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                    self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
-                    num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
+
+            here = cpu.cycles
+            phys = self.mem_utils[self.target].v2p(cpu, addr)
+            orig_cycle = self.bookmarks.getFirstCycle()
+            self.skipToCycle(orig_cycle) 
+            value_origin = SIM_read_phys_memory(cpu, phys, num_bytes)
+            if value_origin == value:
+                print('Value 0x%x at address 0x%x unchanged at origin.' % (value, addr))
+                self.lgr.debug('stopAtKernelWRite 0x%x at address 0x%x unchanged at origin.' % (value, addr))
+            elif value_origin is None:
+                print('Address 0x%x not mapped at origin.' % (addr))
+                self.lgr.debug('stopAtKernelWrite Address 0x%x not mapped at origin.' % (addr))
             else:
-                self.find_kernel_write.go(addr)
+                self.skipToCycle(here) 
+                self.lgr.debug('stopAtKernelWrite Address 0x%x differs from that at origin.' % (addr))
+                if self.find_kernel_write is None:
+                    self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
+                        self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
+                        num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
+                else:
+                    self.find_kernel_write.go(addr)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
