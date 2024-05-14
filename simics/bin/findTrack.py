@@ -39,7 +39,7 @@ class TrackResult():
         self.mark = mark
         self.num_marks = num_marks
 
-def findTrack(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
+def findTrackMark(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
     retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
@@ -109,7 +109,7 @@ def main():
     print('got %d paths' % len(expaths))
     addr = int(args.addr, 16) 
     for index in range(len(expaths)):
-        result, num_resets = findTrack(os.path.join(target_path, expaths[index]), addr, args.one, args.prog)
+        result, num_resets = findTrackMark(os.path.join(target_path, expaths[index]), addr, args.one, args.prog)
         if result is not None and args.one:
             break
 
