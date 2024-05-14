@@ -2326,7 +2326,7 @@ class DataWatch():
 
         elif self.mem_something.fun == 'fputs':
             # TBD was commented out. 
-            self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.src, dumb2, dumb = self.getCallParams(sp, word_size)
 
         elif self.mem_something.fun.startswith('WSAAddressToString'):
             self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
