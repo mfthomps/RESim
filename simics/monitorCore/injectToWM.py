@@ -118,7 +118,7 @@ class InjectToWM():
         self.lgr.debug('findOneTrack 0x%x found %d paths' % (self.addr, len(expaths)))
         for index in range(len(expaths)):
             # NOTE addr given to injectToWM are load addresses, so do not let findTrack apply offsets
-            result, num_resets = findTrack.findTrack(expaths[index], self.addr, True, None, quiet=True, lgr=self.lgr)
+            result, num_resets = findTrack.findTrackMark(expaths[index], self.addr, True, None, quiet=True, lgr=self.lgr)
             if result is not None:
                 self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d size: %d num_marks %d' % (self.addr, 
                      result.mark['index'], result.size, result.num_marks))
@@ -129,6 +129,8 @@ class InjectToWM():
                     best_result_marks = None
                     best_result_size = None
                     retval = result
+                    if self.no_reset and without_resets is None and num_resets == 0:
+                        without_resets = result
                 elif result.mark['packet'] == least_packet:
                     if self.no_reset and without_resets is None and num_resets == 0:
                         without_resets = result
