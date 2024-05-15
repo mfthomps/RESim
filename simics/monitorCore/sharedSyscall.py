@@ -452,9 +452,10 @@ class SharedSyscall():
                 trace_msg = ('\terror return from socketcall %s tid:%s, FD: %s, exception: %d\n' % (socket_callname, tid, str(exit_info.old_fd), eax))
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
-            if self.read_fixup_callback is not None:
+            if self.read_fixup_callback is not None and eax >= 0:
                 self.lgr.debug('sharedSyscall recv call read_fixup_callback eax was %d' % eax)
                 eax = self.read_fixup_callback(exit_info.old_fd, callname=socket_callname)
+                self.lgr.debug('sharedSyscall recv call back from read_fixup_callback eax is now %s' % str(eax))
                 if eax is None:
                     return
             if eax >= 0:
@@ -846,7 +847,7 @@ class SharedSyscall():
 
         elif callname == 'read':
             #self.lgr.debug('is read eax 0x%x' % eax)
-            if self.read_fixup_callback is not None:
+            if self.read_fixup_callback is not None and eax >= 0:
                 self.lgr.debug('sharedSyscall read call read_fixup_callback')
                 eax = self.read_fixup_callback(exit_info.old_fd, callname=callname)
                 if eax is None:
