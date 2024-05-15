@@ -56,7 +56,6 @@ def handleClose(resim_procs, read_array, remote, lgr):
     io_handler.start()
     total_time = 0
     sleep_time = 4
-    do_restart = False
     lgr.debug('handleClose, wait for all procs')
     for proc in resim_procs:
         proc.wait()
@@ -65,7 +64,6 @@ def handleClose(resim_procs, read_array, remote, lgr):
     stop_threads = True
     for fd in read_array:
         fd.close()
-    return do_restart
 
 
 def runPlay(args, lgr, prog_path):
@@ -78,7 +76,6 @@ def runPlay(args, lgr, prog_path):
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
     hostname = aflPath.getHost()
 
-    do_restart = False 
     here = os.getcwd()
     afl_name = os.path.basename(here)
     resim_procs = []
@@ -132,7 +129,7 @@ def runPlay(args, lgr, prog_path):
             lgr.debug('created resim')
             os.chdir(here)
 
-        do_restart = handleClose(resim_procs, read_array, args.remote, lgr)
+        handleClose(resim_procs, read_array, args.remote, lgr)
         cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
         all_hits = []
         for hit_file in cover_list:
@@ -162,7 +159,6 @@ def runPlay(args, lgr, prog_path):
         print('all hits total %d' % len(all_hits))
     else:
         print('Nothing to do.')
-    return do_restart
 
 def main():
     lgr = resimUtils.getLogger('runPlay', '/tmp/', level=None)
@@ -197,14 +193,7 @@ def main():
     prog_path = os.path.join(ida_data, root_name, args.program)
     os.makedirs(prog_path, exist_ok=True)
 
-    do_restart = runPlay(args, lgr, prog_path)
-    #time.sleep(20)
-    if do_restart:
-        print('restarting resim in 10')
-        os.remove('/tmp/resim_restart.txt')
-        time.sleep(10)
-        args.no_afl = True
-        do_restart = runPlay(args, lgr, prog_path)
+    runPlay(args, lgr, prog_path)
   
 if __name__ == '__main__':
     sys.exit(main())

@@ -6,7 +6,7 @@ import os
 import argparse
 from pathlib import Path
 def main():
-    parser = argparse.ArgumentParser(prog='bntMerge', description='Create BNT report annotated with results from previous resports.')
+    parser = argparse.ArgumentParser(prog='bntMerge', description='Create BNT report annotated with results from previous reports.')
     parser.add_argument('bnt_file', action='store', help='The BNT file')
     args = parser.parse_args()
     old_bnt = './old_bnt'

@@ -31,7 +31,7 @@ def handler(signum, frame):
     print('sig handler with %d' % signum)
     stop_threads = True
 
-def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, fname, stop_threads, lgr, instance_path, afl_path):
+def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_marks, fname, trace_all, stop_threads, lgr, instance_path, afl_path):
     if instance_path is not None:
         os.chdir(instance_path)
     here = os.getcwd()
@@ -47,6 +47,8 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_m
         os.environ['ONE_DONE_PARAM4']=max_marks
     if fname is not None:
         os.environ['ONE_DONE_PARAM5']=fname
+    if trace_all:
+        os.environ['ONE_DONE_PARAM6']='True'
     track_blacklist = aflPath.getTrackBlacklist(afl_path)
     with open(log, 'wb') as fh:
         for f in afl_list:
@@ -59,9 +61,15 @@ def oneTrack(afl_list, resim_path, resim_ini, only_thread, no_page_faults, max_m
             pdir = os.path.dirname(f)
             tdir = os.path.dirname(pdir)
             if os.path.basename(pdir) == 'manual_queue':
-                trackdir = os.path.join(tdir, 'manual_trackio')
+                if trace_all:
+                    trackdir = os.path.join(tdir, 'manual_trace')
+                else:
+                    trackdir = os.path.join(tdir, 'manual_trackio')
             else:
-                trackdir = os.path.join(tdir, 'trackio')
+                if trace_all:
+                    trackdir = os.path.join(tdir, 'trace')
+                else:
+                    trackdir = os.path.join(tdir, 'trackio')
             try:
                 os.mkdir(trackdir)
             except:
@@ -109,6 +117,7 @@ def main():
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when needed, will miss SEGV.')
     parser.add_argument('-m', '--max_marks', action='store', help='Optional maximum watch marks to record before stopping simulation.')
     parser.add_argument('-f', '--fname', action='store', help='Optional name of library.')
+    parser.add_argument('-t', '--trace_all', action='store_true', help='Do not track, trace all system calls.')
     
     args = parser.parse_args()
     resim_ini = args.ini
@@ -145,7 +154,8 @@ def main():
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     afl_path = aflPath.getTargetPath(target)
-    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.fname, lambda: stop_threads, lgr, None, afl_path))
+    track_thread = threading.Thread(target=oneTrack, args=(afl_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.fname, args.trace_all,
+                       lambda: stop_threads, lgr, None, afl_path))
     thread_list.append(track_thread)
     track_thread.start()
    

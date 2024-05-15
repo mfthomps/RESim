@@ -5,6 +5,7 @@ found in OS environment variables set by the script that repeatdedly
 starts RESim.
 '''
 import os
+from simics import *
 global mytop, myinject
 def quit(cycles=None):
     global mytop, myinject
@@ -37,8 +38,20 @@ def onedone(top):
     if max_marks_s is not None:
         max_marks = int(max_marks_s)
     fname=os.getenv('ONE_DONE_PARAM5')
-    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, max_marks=max_marks, fname=fname)
+    trace_all_s=os.getenv('ONE_DONE_PARAM6')
+    trace_all = False
+    no_trace_dbg = False
+    if trace_all_s is not None and trace_all_s.lower() == 'true':
+        trace_all = True
+        no_trace_dbg = True
+
+    myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, 
+                      max_marks=max_marks, fname=fname, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=False)
     myinject.setExitCallback(reportExit)
     myinject.go()
+    top.autoMaze()
+    run_cycles = 1000000
+    SIM_continue(run_cycles)
+    top.quit()
 
 

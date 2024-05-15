@@ -2326,7 +2326,7 @@ class DataWatch():
 
         elif self.mem_something.fun == 'fputs':
             # TBD was commented out. 
-            self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.src, dumb2, dumb = self.getCallParams(sp, word_size)
 
         elif self.mem_something.fun.startswith('WSAAddressToString'):
             self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
@@ -5298,16 +5298,24 @@ class DataWatch():
 
     def maxMarksExceeded(self):
             self.lgr.debug('dataWatch maxMarksExceeded check callback')
-            if self.callback is None:
+            use_callback = None
+            if self.callback is not None: 
+                use_callback = self.callback
+                self.lgr.debug('dataWatch maxMarksExceeded using self.callback')
+            elif self.top.getCommandCallback() is not None:
+                self.lgr.debug('dataWatch maxMarksExceeded using command callback')
+                use_callback = self.top.getCommandCallback()
+
+            if use_callback is None:
                 self.lgr.debug('dataWatch maxMarksExceeded no callback')
                 self.clearWatches()
                 SIM_break_simulation('max marks exceeded')
                 print('Data Watches removed')
+             
             else:
                 #SIM_break_simulation('max marks exceeded')
-                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(self.callback))
+                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(use_callback))
                 self.clearWatches(leave_backstop=True)
-                use_callback = self.callback
                 self.top.stopAndGo(use_callback)
                 #self.callback()
                 self.callback = None
