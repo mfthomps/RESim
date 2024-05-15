@@ -2676,7 +2676,7 @@ class GenMonitor():
             self.ignoreThreadList()
         return retval
  
-    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True, trace_file=None):
         if target is None:
             target = self.target
 
@@ -2711,10 +2711,16 @@ class GenMonitor():
             tid, cpu = self.context_manager[target].getDebugTid() 
             if tid is not None:
                 #tf = '/tmp/syscall_trace-%s-%s.txt' % (target, tid)
-                tf = 'logs/syscall_trace-%s-%s.txt' % (target, tid)
+                if trace_file is None:
+                    tf = 'logs/syscall_trace-%s-%s.txt' % (target, tid)
+                else:
+                    tf = trace_file
                 context = self.context_manager[target].getRESimContext()
             else:
-                tf = 'logs/syscall_trace-%s.txt' % target
+                if trace_file is None:
+                    tf = 'logs/syscall_trace-%s.txt' % target
+                else:
+                    tf = trace_file
                 cpu, comm, tid = self.task_utils[target].curThread() 
 
             self.traceMgr[target].open(tf, cpu)

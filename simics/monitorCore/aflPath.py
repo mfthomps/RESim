@@ -176,6 +176,22 @@ def getAFLTrackList(target, get_all=False, host=None, ws_filter=None):
         print('No file at %s' % unique_path)
     return glist
 
+def getAFLTraceList(target, get_all=False, host=None, ws_filter=None):
+    glist = []
+    afl_path = getAFLOutput()
+    afl_dir = os.path.join(afl_path, target)
+    unique_path = os.path.join(afl_dir, target+'.unique')
+    if os.path.isfile(unique_path):
+        ulist = json.load(open(unique_path))
+        for path in ulist:
+            if ws_filter is not None and ws_filter not in path:
+                continue
+            path = path.replace('coverage', 'trace')
+            glist.append(os.path.join(afl_dir, path)) 
+    else:
+        print('No file at %s' % unique_path)
+    return glist
+
 def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
     ''' get list of queue files, relative to afloutput.  ignore sync files and return based on target.unique if allowed.'''
     afl_list = []
