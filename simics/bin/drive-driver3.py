@@ -68,8 +68,10 @@ def sendFiles(file_list, sock, target):
         fstr = 'FILE: ' + flen + ' ' + os.path.basename(file) + ' =EOFX='
         print("- Send file: " + file + " (" + flen + ")")
         sock.sendto(fstr.encode(), target)
+        print('sent header')
         use_ack = True
         ack, source = sock.recvfrom(3)
+        print('got ack of header')
         if ack.decode() == 'ack':
             use_ack = False
             print('Old server, not using UDP acks')
@@ -95,12 +97,12 @@ def sendFiles(file_list, sock, target):
                     end = ptr+remain
                     send_this = fileData[ptr:end]
                     remain = 0 
-                #print('now send %d bytes' % len(send_this))
+                print('now send %d bytes' % len(send_this))
                 sock.sendto(send_this, target)
                 pcount += 1
                 if use_ack and pcount % 20 == 0:
                     ack, source = sock.recvfrom(3)
-                    #print('back from getting ack pcount %d' % pcount)
+                    print('back from getting ack pcount %d' % pcount)
             sock.sendto('=EOFX='.encode(), target)
             print('sent EOF')
         f.close()
@@ -173,9 +175,10 @@ def main():
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
+    parser.add_argument('-w', '--wait_restart', action='store_true', help='Wait for the driver to restart, assumes a replace.directive')
     args = parser.parse_args()
     sshport = args.port
-    print('Drive driver22')
+    print('Drive driver')
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
         exit(1)
@@ -266,6 +269,10 @@ def main():
     doCommand(cmd, sock, target)
     print('cmd was %s' % cmd)
 
+    if args.wait_restart:
+        print('Wait for restart')
+        ack, source = sock.recvfrom(3)
+        print('Got ack from restart')
     sock.close()
 
 if __name__ == '__main__':

@@ -356,6 +356,10 @@ class GenMonitor():
         self.run_from_snap = os.getenv('RUN_FROM_SNAP')
         self.binders = binder.Binder(self.lgr)
         self.connectors = connector.Connector(self.lgr)
+        try:
+            os.remove('.driver_server_version')
+        except:
+            pass
         if self.run_from_snap is not None:
             self.lgr.debug('genInit running from snapshot %s' % self.run_from_snap)
             version_file = os.path.join('./', self.run_from_snap, 'version.pickle')
@@ -381,6 +385,16 @@ class GenMonitor():
             if os.path.isfile(debug_info_file):
                 self.debug_info = pickle.load( open(debug_info_file, 'rb') )
                 self.lgr.debug('genInit loaded debug_info %s' % str(self.debug_info))
+            driver_version_file = os.path.join('./', self.run_from_snap, 'driver_version.pickle')
+            if os.path.isfile(driver_version_file):
+                self.lgr.debug('genInit found driver_version_file')
+                # for driver-driver to find version of driver-server that was pickled
+                driver_version = pickle.load( open(driver_version_file, 'rb') )
+                current_version_file = os.path.join('./', '.driver_server_version')
+                with open(current_version_file, 'w') as fh:
+                    fh.write(driver_version) 
+                    self.lgr.debug('genInit wrote %s to %s' % (driver_version, current_version_file))
+                    fh.close()
             connector_file = os.path.join('./', self.run_from_snap, 'connector.json')
             if os.path.isfile(connector_file):
                 self.connectors.loadJson(connector_file)
@@ -3996,6 +4010,11 @@ class GenMonitor():
             binder_file = os.path.join('./', name, 'binder.json')
             self.binders.dumpJson(binder_file)
 
+        if os.path.isfile('.driver_server_version'):
+            with open('.driver_server_version') as fh:
+                dsv = fh.read()
+                version_file = os.path.join('./', name, 'driver_version.pickle')
+                pickle.dump(dsv, open(version_file, "wb" ) )
 
         self.lgr.debug('writeConfig done to %s' % name)
 
