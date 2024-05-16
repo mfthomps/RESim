@@ -662,7 +662,7 @@ class SharedSyscall():
             trace_msg = ('F_GETFL, old_fd: %d  flags: 0%o\n' % (exit_info.old_fd, eax))
         else:
             trace_msg = ('old_fd: %d retval: %d\n' % (exit_info.old_fd, eax))
-            return trace_msg
+        return trace_msg
        
             
     def handleExit(self, exit_info, tid, comm):
