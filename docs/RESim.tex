@@ -516,7 +516,7 @@ the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse
     cat foo.io > /dev/udp/127.0.0.1/6060 
 \end{verbatim}
 \noindent Note that sending multiple packets via real networks will cause the origin to reset on each packet, thereby limiting the range of reverse execution.  It is generally simpler
-to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver.py} (see \ref{drive-driver}).  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
+to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver} (see \ref{drive-driver}).  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} or {\tt TRACE\_BUFFERS} as watch marks.  This may help display diagnostics
@@ -702,7 +702,7 @@ Note this command does not support running forward past the application
 references to the input data, e.g., the kernel may detect corruption on the recv following the end of the current data.
 Do not try to run these checkpoints forward to establish new checkpoints.
 It is important that received data all appears within the kernel buffer before the application is returned to from its recv call.  Otherwise, injectIO and AFL sessions
-will have kernel buffers overwritten by data on the wire.  Consider using drive-driver.sh command as described in \ref{drive-driver}.
+will have kernel buffers overwritten by data on the wire.  Consider using drive-driver command as described in \ref{drive-driver}.
 
 \item{\tt prepInjectAddr(addr, configfile)} -- For use when preparing to inject data directly into arbitrary application memory, e.g., when fuzzing argv parameters
 to a program.  Consider priming the prepInject state with enough data to cross any page boundaries that might be part of the buffer.
@@ -748,8 +748,8 @@ Note that function uses a driver to send data, and this it should not be used wi
 a driver component.  Thus, only single-packet processing can be analyzed.  Use {\tt aflInjectTCP} for TCP sessions.
 
 \item{\tt trackAFL(target)} -- Use injectIO to replay all AFL queue files for a given target, and store the set of resulting watch marks as json files
-in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions include multiple packets, then use the runTrack utlity to 
-start new Simics sessions for each queue file.
+in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions ran in parallel, or include multiple packets, then use the runTrack utlity to 
+start new Simics sessions for each queue file within each parallel workspace.  Use the {\tt --trace\_all} option to create system call traces instead of watchmarks.  
 
 \item{\tt injectToBB(bb, fname)} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
 is assumed to be the current RESim workspace directory name.  Note the simulation breaks at the BB, and thus the watch marks do not reflect subsequent
@@ -1022,7 +1022,7 @@ create that file from the driver computer.  This requires you copy the Simics ag
 upon boot.  It is intended that the agent will load scripts to generate traffic for the target computers.  
 An example driver is described in Appendix \ref{driver}.   
 See the {\tt mapdriver.simics} script in the simics/workspace directory for an example of how to connect the driver to a real network,
-e.g., to use {\tt drive-driver.py} script in a manner that disconnects the service node from the simulation.
+e.g., to use {\tt drive-driver} script in a manner that disconnects the service node from the simulation.
 
 \section{Running the simulation}
 \label{running}
@@ -1589,33 +1589,36 @@ port forwarding.  For example, if the target network is connected to switch0 and
 The use of real networks has limitations described in \ref{real-networks}.
 
 It is often preferable to send data via a driver computer. Driver computers are described in \ref{driver}.  If you use the default RESim driver computer, then the
-{\tt drive-driver.py} script provides a convenient way to send data from your host to the target via a driver.
+{\tt drive-driver} script provides a convenient way to send data from your host to the target via a driver.
 
-\subsubsection{Using drive-driver.py}
+\subsubsection{Using drive-driver}
 \label{drive-driver}
-The {\tt drive-driver.py} utility uses command line options and \textit{directive} files to control the transmission of input 
-data from the Simics host to a driver computer and from there to the target.  Use of {\tt drive-driver.py} requires:
+The {\tt drive-driver} utility uses command line options and \textit{directive} files to control the transmission of input 
+data from the Simics host to a driver computer and from there to the target.  Use of {\tt drive-driver} requires:
 \begin{itemize}
 \item The driver is configured to have an IP address that can communicate with the target IP address.  This implies IP address settings and configuration
-of virtual switches to provide (virtual) physical connectivity.  The former can be achieved with the {\tt driver-script.sh}, and the latter by switch settings
-in the RESim ini file.
+of virtual switches to provide (virtual) physical connectivity.  The former can be achieved with {\tt driver-script.sh}, or use of the {\tt iface} directive (see below). 
+Connections between ethernet devices
+and switches are settings within the RESim ini file.
 \item A Simics \textit{real network} is defined to allow the Simics host to communicate with the driver via SSH.  This can be achieved with a 
 Simics command file such as the {\tt mapdirver.simics} script found in the sample workspace.
 \end{itemize}
 
-\textbf{Note:} The drive-driver.py script is being replaced by a newer version described below at \ref{drive-driver3}  Use the new version when possible.
-Information below will be merged into that section and drive-driver will be deprecated.
 
 An example directive file for sending a UDP packet to a target is:
 \begin{verbatim}
-    some.io 10.10.0.2 5678 UdPcc
+FILE=some.io
+IP=10.10.0.2
+PORT=5678
+HEADER=UdPcc
+SESSION=UDP
 \end{verbatim}
 This directive would cause the driver to send the content of the file named {\tt some.io} to port 5678 at IP address 10.10.0.2 of the target.
-The list field in the directive is a UDP header.  While this field is required, it is only used when the IO file, e.g., {\tt some.io} contains multiple
+While UDP {\tt HEADER} field is required, it is only used when the IO file, e.g., {\tt some.io} contains multiple
 UDP packets with that same UDP header.  The system will then transmit those UDP packets separately.  Otherwise, the header is ignore (but is required.)
 Assuming the above directive is in a file named {\tt my.directive}, the command for this directive would be:
 \begin{verbatim}
-    drive-driver.py my.directive -d
+    drive-driver my.directive -d
 \end{verbatim}
 \noindent The {\tt -d} option tells RESim to disconnect the real network interface once the driver computer has received everything it needs to make
 the transmission to the target.  This is generally necessary if {\tt trackIO} is used.  See \ref{real-networks} for an explanation.
@@ -1623,47 +1626,23 @@ the transmission to the target.  This is generally necessary if {\tt trackIO} is
 The Simics host computer uses scp and ssh to send information to the driver via the real network interface.  The default port is 4022, which can be changed
 by including the {\tt -p} option followed by the desired port number.
 
-Other options for {\tt drive-driver.py} include:
+Other options for {\tt drive-driver} include:
 \begin{itemize}
-\item Data can be sent via TCP by providing the {\tt -t} option.  TCP directives should not include UDP header fields.  A TCP conversation can be driven by
-including multiple IO files on separate lines, with only the last line including fields for the target IP and port.  For example:
-\begin{verbatim}
-   first_data.io 
-   second_data.io 
-   first_data.io 10.10.0.2 3232 
-\end{verbatim}
-would send the data from {\tt first\_data.io}, and then do a receive before sending {\tt second\_data.io}.
+\item Data can be sent via TCP by setting SESSION to TCP.  TCP directives should not include UDP header fields.  A TCP conversation can be driven by
+including multiple IO files on separate lines.
 
-\item Broadcast UPD can be sent using the {\tt -b} option.  The directive should include an IP address following the UDP header field.  This
-address is used to identify the device on the driver computer from which the broadcast should originate.  Thus, the final field should be
-an IP address on the driver computer.
+\item Broadcast UPD can be sent by setting SRC\_IP to the source IP, e.g, the device that should broadcast the message. 
 
-\item The driver can run a TCP server by providing the {\tt -s} option.  In this case, the server will listen on the IP and port named in the directive.
-When the server accepts a connection, it will send the IO file content and then preform a receive.  Use the {\tt -o} option to run as sudo, e.g., if
-the server is to bind to a protected port number.
+\item The driver can run a TCP server by setting SESSION to {\tt TCP\_SERVER}.  In this case, the server will listen on the IP and port named in the directive.
+When the server accepts a connection, it will send the IO file content and then preform a receive.  
 
-\item TCP replay of a PCAP file occurs using the {\tt -r} option.  The IO field (first field) of the directive names a PCAP and the second field names the
-ethernet device on the driver from which the data should be sent.  The Unix {\tt tcpreplay} utility is then invoked on the driver.
+\item TCP replay of a PCAP file occurs by setting SESSION to REPLAY.
+The FILE values are assumed to be PCAPs.  The IFACE value should be the name of the ethernet device on the driver, e.g., {\tt ens25} from which the data 
+should be sent.  The Unix {\tt tcpreplay} utility is then invoked on the driver.
 
-\item Arbitrary scripts can be run on the driver by using the {\tt -c} option.  The only field in the directive is the name of a script, which will be
-sent to the driver and executed.
+\item Arbitrary scripts can be run on the driver by setting SESSION to COMMAND and including COMMAND tag whose values are commands to execute from the driver.
 
-\end{itemize}
-
-\subsubsection{Using drive-driver3.py}
-\label{drive-driver3}
-This revision to drive-driver uses UDP to send data to driver.  This is typically much faster than using ssh, which can be very slow due to Simics 
-handling of "real network" TCP connections.  This revision uses a {\textit key=value} directive file format.  A simple directive
-for sending data to a TCP service might be:
-\begin{verbatim}
-FILE=somefile.io
-IP=192.168.31.1
-PORT=65009
-SESSION=TCP
-\end{verbatim}
-Note that contrary to the original drive-driver syntax, you do not now include the {\tt -t} option because the protocol type is specified in SESSION.
-
-The {\tt IFACE} directive will define a new IP address for a given ethernet intereface.  For example:
+\item The {\tt IFACE} directive will define a new IP address for a given ethernet intereface.  For example:
 \begin{verbatim}
 FILE=z2000.io
 iface=ens12:172.33.15.101
@@ -1679,11 +1658,13 @@ Use of Scapy to send UDP packets from a json file from a specified device, IP an
  PORT=20002
  SRC_IP=10.10.0.100
  SRC_PORT=5678
- SESSION=UDP
+ SESSION=UDP_JSON
  FILE=udp_packets.json 
 \end{verbatim}
 In the above example, Scapy is used to spoof the source of IP and Port number in the UDP packets.  The FILE is a json containing a list of UPD packets,
 e.g., created use genJsonIO.py
+
+\end{itemize}
 
 
 \subsection{Tracking data}
@@ -1872,7 +1853,7 @@ There also may be situations in which you wish to inject data directly into the 
 multiple UDP packets that each change the system state in a manner that affects processing of subsequent packets.  While the {\tt injectIO} function
 supports injecting multiple UDP packets, doing so causes the reverse execution bookmarks to be reset on each packet injection.  Also, the injectIO
 support for multiple UDP packets assumes all packets are received into the same buffer.  Injecting data into the driver is performed in the same
-manner as injecting data into a target application.  The {\tt drive-driver.py} utility includes a {\tt --json} option to send UDP packets from a
+manner as injecting data into a target application.  The {\tt drive-driver} utility includes a {\tt JSON\_UDP} opion in the directive file to send UDP packets from a
 JSON file.  Use that utility to tee up the reading of the JSON on the driver, after first using {\tt debugProc('clientudpJson')} to catch its execution.
 Then use {\tt runToOpen} to catch the opening of the JSON file and to see its FD.  You can then use prepInject on that FD.
 
@@ -2348,7 +2329,7 @@ In many cases, programmers provide debugging messages that can aid understanding
 to /dev/null, or other some other FD.  Using the traceFD function will redirect all of those messages to a file for your review.  
 
 A next step is to use trackIO and/or injectIO to generate watch marks denoting execution points at which the target application references
-ingested data.  This step typically uses the {\tt drive-driver.py} utility to send test data via the driver component.  This is necessary to 
+ingested data.  This step typically uses the {\tt drive-driver} utility to send test data via the driver component.  This is necessary to 
 permit reverse execution, which is required by trackIO and injectIO.  Bringing the target up in the IDA or Ghidra debugger lets you see the execution
 context at the various watch marks and interactively debug the program.  Things you might look for include calls to logging subsystems that do
 not appear to generate any system calls, i.e., do not generate output and thus did not appear in the system trace.  This may be due to configuration 
@@ -2366,15 +2347,15 @@ target, using HTTP that names your URL as the only seed.  That might expose exec
 \item Use the {\tt driver-script.sh} to configure the driver computer network to share a subnet with the target computer such that the driver
 can reach the target.  And use the mapdriver.sh to make sure you can ssh to the driver from your host.
 
-\item Create a \textit{directive} file within your workspace for use with {\tt drive-driver.py}.  Create a 2nd terminal with a shell in your workspace
-and tee up the drive-driver.y command.
+\item Create a \textit{directive} file within your workspace for use with {\tt drive-driver}.  Create a 2nd terminal with a shell in your workspace
+and tee up the drive-driver command.
 
 \item Debug the desired process e.g., {\tt debugProc('some-program')}, or {\tt debugSnap()} if the snapshot had been made of the process subsequent
 to a {\tt debugProc}.  Be sure the program state is beyond the bind system call and you know the FD upon which the bind occurred.
 
 \item Use {\tt trackIO(FD)} to track input on the FD returned by the bind call.
  
-\item Run the {\tt drive-driver.py} command from the other terminal and wait for RESim to report the data watch has completd.
+\item Run the {\tt drive-driver} command from the other terminal and wait for RESim to report the data watch has completd.
 
 \item Start IDA with the desired program (e.g, use {\tt runIda program}.  Use shift-r to attach to the debugger and load the RESim plugin.
 Then go to the ``data watch'' window and refresh.  That will create a list of watch marks, i.e., program references to the content of the UDP packet. 
@@ -2413,7 +2394,7 @@ or using reMessage)
 \item Use runToAccept, which will not return until the client
 connects to the service.  
 
-\item Use drive-driver.py to cause a data file to be sent to the target, which 
+\item Use drive-driver to cause a data file to be sent to the target, which 
 should then cause RESim to stop on return from the ACCEPT call.  Observe the resulting FD.
 
 \item Use trackIO to note where input is processed.  The stack
@@ -2695,12 +2676,15 @@ These are typically run from a bash shell in the workspace directory.
 \item sync-drones -- Push the current workspace to the list of drones.
 \item syncIda.sh -- Push the current workspace to the list of drones.
 \item status-drones -- Get AFL status of the drones.
-\item runPlay -- Replay all path inputs generated by AFL.  Will run in parallel based on the number of clones created with {\tt clonewd}.
+\item runPlay -- Replay all path inputs generated by AFL to create RESim coverage files for each.  Will run in parallel based on the number of clones created with {\tt clonewd}.
+These files are created in directory structures parallel to the AFL queue files.
+\item runTrack -- Replay all path inputs generated by AFL to create track IO watchmarks for each, or to create system call traces using the {\tt --trace\_all} option.  
+Sessions will run in parallel based on the number of clones created with {\tt clonewd}.  This utility uses injectIO, restarting Simcis for each session.  If the trace\_all option
+is selected, tracing will be of all processes on the target.
 \item crashReport -- Run automated analysis on a set of crash files found by AFL.  When inputs may include multiple packets, the utility
 will send packets via the driver computer which is assumed to have port forwarding on port 4022.   Use the -f option
 to identify the FD.
 \item crashTriage.py -- Parse crash reports and provide a summary.
-\item runTrack -- Use the {\tt injectIO} command to generate trackio json files for sessions found by AFL. This restarts Simics for each session
 to avoid redefinitions of the origin that would occur if trackIO were used multiple times in a single Simics session.
 \item findBNT.py -- find branches not taken within the program hits file in the RESIM\_IDA\_DATA directory.
 \item findBB.py -- List the AFL session files that reached a given basic block.
@@ -2721,9 +2705,8 @@ Intended for use in determining if multiple TIDs reference input data.
 of divergence.  The hits files must be in the {\tt \$RESIM\_IDA\_DATA/program} directory.
 \item cycleSeeds -- Populate the AFL seed directory with queue files and manually added files identified in the results of the {\tt dedupeCoverge} utility.
 \item kill-simics.sh -- Sometimes it is the only way, also use when runAFL is given the --background switch
-\item drive-driver.py -- Send data from a driver computer to a target IP/PORT.  A real network is used to push the data and scripts
-to the driver.  There are many ways to send data to a target computer, and this is an example.  See the script for syntax of its directives.
-\item drive-driver3.py -- Replaces drive-driver.py with a new syntax and uses UDP to communicate with the driver to avoid TCP timing breakage.
+\item drive-driver -- Send data from a driver computer to a target IP/PORT.  A real network is used to push the data and scripts
+to the driver.  There are several ways to send data to a target computer. The drive-driver utilityis recommended.  See \ref{drive-driver}.
 \item syncIda.sh -- Copy hits files from the {\tt RESIM\_Data\_Dir} on the Simics computer to a local IDA computer.
 \item addInput.py  -- Manually add an input file to the AFL queue files.  These will be included as seeds if {\tt cycleSeeds} is run.
 \item wmMerge.py -- Merge a watch marks report (from saveWatchMarks) into a named system call trace output (from traceAll).
@@ -3186,7 +3169,7 @@ blocks.
 
 \subsection{More on kernel data buffers}
 On a 32 bit x86, there were many 14xx sized kernel buffers.  A new option for trackIO (used prior to calling prepInjectWatch) was created for recording these buffers.
-This option, kbuf=True, requires drive-driver.sh to send as large a data stream as you wish to support for future injectIO or AFL sessions, and this data stream
+This option, kbuf=True, requires drive-driver to send as large a data stream as you wish to support for future injectIO or AFL sessions, and this data stream
 must be crafted so that the application reads all of it.  A hap is set on the read/recv call, and this hap sets a write break on the start of the application buffer.  When that is hit, we assume that esi contains the start of the kernel buffer, and it is recorded.  A hap is also set on read returns.  The consumption of the
 kernel buffer is monitored along with the amount of data read by the application such that before a kernel buffer is consumed, a write break is set on the next 
 application memory location that will receive the first byte from the next kernel buffer.
@@ -3344,9 +3327,9 @@ ssh keys used by localhost, e.g.,:
 
 \subsection{Using the driver component}
 The driver is a simulated computer that is intended to interact with simulated targets.  This is typically
-achieved by either using SSH to establish a shell on the driver, or by using the {\tt drive-driver.py}
+achieved by either using SSH to establish a shell on the driver, or by using the {\tt drive-driver}
 script to send files to the driver along with directives describing where and how to send those files to
-targets.
+targets.  
 
 Large scp operations may stall.  Consider using the simics-agent to move files to the driver.  However,
 these only happen one file at a time, so use tar.
@@ -3377,6 +3360,16 @@ The files in {\tt simics/examples/driver} can be put into a new workspace for pu
 If creating a new driver, add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
 driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
 and execute the driver-script.sh from the workspace.
+
+\subsection{Notes on driver-server.py}
+The drive-driver utility interacts with the driver-server.py service running on the driver.  UDP is used to avoid timing issues that arise with TCP and the disparent
+clock rates between the simulation and the real world.  The version id for the server is kept in simics/bin/driver\_server\_version, which is stored in snapshots
+and copied to the workspace for reference by drive-driver to determine if the driver-server needs to be replaced prior to data xfer. The normal drive-driver protocol is used
+to replace the driver-server.  If that is not possible, then the {\tt update-driver-server.sh} script should be run, and a new snapshot taken. 
+
+The driver-server.py service has a {\tt driver\_server\_version} hardcoded into its first ack that
+drive-driver then uses to determine if driver-server.py needs updating, in which case the usual drive-driver protocol is used to send an install an update.
+The version value is recorded in RESim snapshots, and drive-driver uses this as the 
 
 \section{Simics user notes}
 This section includes ad-hoc suggestions for users with little Simics experience.
@@ -3464,7 +3457,7 @@ Most problems related to real network can be avoided by connecting and completin
 script to cause data to be sent to the target.
 
 Automation, such as the {\tt prepInject} function can make use of Simics magic instructions to allow a driver computer to cause a new origin
-to be established.  See the {\tt simics/bin/driver-driver.py} program as an example.
+to be established.  See the {\tt simics/bin/driver-driver} program as an example.
 
 Use the {\tt INIT\_SCRIPT} ENV directive in the init file to specify a simics script to load at the start of each session.
 

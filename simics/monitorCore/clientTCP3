@@ -20,7 +20,7 @@ def sendTCP(host, port, infile_list, lgr):
             sock.connect(server_addr)
             lgr.debug('connect ok')
             break
-        except(socket.error, e):
+        except(socket.error) as e:
             lgr.debug('connect fail %s' % e)
             time.sleep(1)
             

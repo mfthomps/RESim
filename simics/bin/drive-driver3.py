@@ -6,7 +6,6 @@ and disconnects the driver from the system.
 
 
 Directive lines that start with a # are ignored.
-Lines that start with ! are treated as shell commands to be executed on the driver.
 '''
 import os
 import socket
@@ -20,6 +19,18 @@ core_path=os.path.join(resim_dir,'simics', 'monitorCore')
 sys.path.append(core_path)
 import runAFL
 import resimUtils
+def expandValue(value): 
+    if value.startswith('$'):
+        if os.path.sep in value:
+            env_var, rest = value.split(os.path.sep,1)
+            expanded = os.getenv(env_var[1:])
+            if expanded is None:
+                print('ERROR***** Could not expand %s' % value)
+                return None
+            value = os.path.join(expanded, rest)
+        else:
+            value = os.getenv(value[1:])
+    return value
 def keyValue(line):
     key = None
     value = None
@@ -27,6 +38,8 @@ def keyValue(line):
         parts = line.split('=', 1)
         key = parts[0].strip()
         value = parts[1].strip()
+        value = expandValue(value)
+        
     else:
         print('bad line %s' % line)
     return key, value
@@ -49,15 +62,25 @@ def doBackgroundCommand(command, sock, target):
     sock.sendto('ack'.encode(), target)
 
 def sendFiles(file_list, sock, target):
+    retval = None
     for file in file_list: 
         flen = str(os.path.getsize(file))
         fstr = 'FILE: ' + flen + ' ' + os.path.basename(file) + ' =EOFX='
         print("- Send file: " + file + " (" + flen + ")")
         sock.sendto(fstr.encode(), target)
+        print('sent header')
+        use_ack = True
         ack, source = sock.recvfrom(3)
+        print('got ack of header')
+        if ack.decode() == 'ack':
+            use_ack = False
+            print('Old server, not using UDP acks')
+        if retval is None:
+            retval = ack
         sock.sendto('ack'.encode(), target)
         print('before send got %s' % str(ack))
         #time.sleep(1)
+        pcount = 0
         with open(file, 'rb') as f:
             print('now read')
             fileData = f.read()
@@ -74,14 +97,19 @@ def sendFiles(file_list, sock, target):
                     end = ptr+remain
                     send_this = fileData[ptr:end]
                     remain = 0 
-                print('now send %d bytes' % len(fileData))
+                print('now send %d bytes' % len(send_this))
                 sock.sendto(send_this, target)
-                #time.sleep(4)
+                pcount += 1
+                if use_ack and pcount % 20 == 0:
+                    ack, source = sock.recvfrom(3)
+                    print('back from getting ack pcount %d' % pcount)
             sock.sendto('=EOFX='.encode(), target)
+            print('sent EOF')
         f.close()
         print('>> Transfer: ' + file + ' complete.\n')
         ack, source = sock.recvfrom(3)
         print('got %s' % str(ack))
+    return retval
 
 class Directive():
     def __init__(self, fname):
@@ -94,6 +122,7 @@ class Directive():
         self.header = None
         self.iface = None
         self.file = []
+        self.commands = []
         self.load(fname)
 
     def load(self, fname):
@@ -121,6 +150,8 @@ class Directive():
                     self.header = value
                 elif key == 'FILE':
                     self.file.append(value)
+                elif key == 'COMMAND':
+                    self.commands.append(value)
                 elif key == 'IFACE':
                     self.iface = value
     def getArgs(self):
@@ -143,15 +174,11 @@ def main():
     parser = argparse.ArgumentParser(prog='drive-driver.py', description='Send files to the driver and from there to one or more targets.')
     parser.add_argument('directives', action='store', help='File containing driver directives')
     parser.add_argument('-d', '--disconnect', action='store_true', help='Disconnect driver and set new origin after sending data.')
-    parser.add_argument('-b', '--broadcast', action='store_true', help='Use broadcast.')
-    parser.add_argument('-x', '--tcpx', action='store_true', help='Use TCP but do not read between writes -- experimental.')
     parser.add_argument('-p', '--port', action='store', type=int, default=4022, help='Alternate ssh port, default is 4022')
-    parser.add_argument('-r', '--replay', action='store_true', help='Treat the directives as PCAPS to be sent via tcpreplay')
-    parser.add_argument('-c', '--command', action='store_true', help='The directive simply names a script to be xfered and run from the driver.')
-    parser.add_argument('-j', '--json', action='store_true', help='Send UDP packets found in a given json file, e.g., generated using genJsonIO.py')
+    parser.add_argument('-w', '--wait_restart', action='store_true', help='Wait for the driver to restart, assumes a replace.directive')
     args = parser.parse_args()
     sshport = args.port
-    print('Drive driver22')
+    print('Drive driver')
     if not os.path.isfile(args.directives):
         print('No file found at %s' % args.directives)
         exit(1)
@@ -166,17 +193,15 @@ def main():
         client_cmd = 'serverTCP3'
     elif directive.session == 'TCP':
         client_cmd = 'clientTCP3'
-    elif args.replay:
+    elif directive.session == 'replay':
         client_cmd = None
-    elif args.broadcast:
-        client_cmd = 'clientudpBroad'
-    elif args.json:
+    elif directive.session == 'command':
+        client_cmd = None
+    elif directive.session == 'UDP_JSON':
         if directive.src_ip is not None:
             client_cmd = 'clientudpJsonScapy'
         else:
             client_cmd = 'clientudpJson'
-    elif args.command:
-        client_cmd = None
     else:
         client_cmd = 'clientudpMult3'
     if client_cmd is not None:
@@ -204,25 +229,36 @@ def main():
     file_list = []
     for file in directive.file:
         file_list.append(file)
-    sendFiles(file_list, sock, target)
+    ack = sendFiles(file_list, sock, target)
+    with open('.driver_server_version', 'w') as fh:
+        fh.write(ack.decode())
     dev = None
     host = None
     if directive.iface is not None:
         if ':' in directive.iface:
             dev, host = directive.iface.split(':')
-        else:
-            print('Expected : in iface field, e.g., ens25:10.0.0.3')
-            exit(1)
-        cmd = 'ip addr add %s dev %s' % (host, dev)
-        driver_file.write(cmd+'\n')
-        cmd = 'ip link set dev %s up' % dev
-        driver_file.write(cmd+'\n')
+            cmd = 'ip addr add %s dev %s' % (host, dev)
+            driver_file.write(cmd+'\n')
+            cmd = 'ip link set dev %s up' % dev
+            driver_file.write(cmd+'\n')
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
-    directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
-
-    driver_file.write(directive_line+'\n')
+    if client_cmd is not None:
+        directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
+        driver_file.write(directive_line+'\n')
+    elif directive.session == 'replay':
+        if directive.device is not None:
+            for pcap in directive.file:
+                pcap_base = os.path.basename(pcap)
+                directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
+                driver_file.write(directive+'\n')
+        else:
+            print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
+            exit(1)
+    elif directive.session == 'command':
+        for command in directive.commands:
+            driver_file.write(command+'\n')
 
     driver_file.close()
     sendFiles([remote_directives_file], sock, target)
@@ -233,6 +269,10 @@ def main():
     doCommand(cmd, sock, target)
     print('cmd was %s' % cmd)
 
+    if args.wait_restart:
+        print('Wait for restart')
+        ack, source = sock.recvfrom(3)
+        print('Got ack from restart')
     sock.close()
 
 if __name__ == '__main__':

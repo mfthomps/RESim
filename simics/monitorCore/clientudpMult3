@@ -7,8 +7,12 @@ import time
 import os
 import socket
 import argparse
-def sendUDP(host, port, header, infile_list):
+def sendUDP(host, port, header, src_ip, infile_list):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    if src_ip is not None:
+        local_addr = (src_ip, port)
+        sock.bind(local_addr)
+
     server_addr = (host, port)
     #server_addr = ('localhost', port)
     for infile in infile_list:
@@ -43,13 +47,14 @@ def sendUDP(host, port, header, infile_list):
 def main():
     parser = argparse.ArgumentParser(prog='clientudpMult3', description='Send file content as UDP to a target.')
     parser.add_argument('-i', '--ip', action='store', help='IP address.')
+    parser.add_argument('-s', '--src_ip', action='store', help='Local IP address for broadcast UDP.')
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-u', '--header', action='store', help='upd header.')
     parser.add_argument('-f', '--file', action='store', help='File list.')
     print('begin')
     args = parser.parse_args()
     file_list = args.file.split()
-    sendUDP(args.ip, args.port, args.header, file_list)
+    sendUDP(args.ip, args.port, args.header, args.src_ip, file_list)
 
 if __name__ == '__main__':
     sys.exit(main())
