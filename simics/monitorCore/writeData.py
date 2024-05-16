@@ -453,6 +453,10 @@ class WriteData():
             #self.lgr.debug('writeData selectHap stop on read')
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
+            elif self.top.getCommandCallback() is not None:
+                cb = self.top.getCommandCallback()
+                self.lgr.debug('writeData selectHap is command callback, call to %s' % cb)
+                cb()
             else:
                 #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read callback is None')
@@ -461,8 +465,12 @@ class WriteData():
         if self.stop_on_read and len(self.in_data) == 0:
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
+            elif self.top.getCommandCallback() is not None:
+                cb = self.top.getCommandCallback()
+                self.lgr.debug('writeData selectHap no more data, three is a command callback, call to %s' % cb)
+                cb()
             else:
-                #self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
+                self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
             return
         if tid != self.tid:
