@@ -505,6 +505,9 @@ class Syscall():
         # when stophap it, remove these parameters
         self.rm_param_queue = []
 
+        # Determine when to stop tracing due to a close FD for trackIO
+        self.clone_fd_count = 1
+
     def breakOnExecve(self):
         for call in self.call_params:
             if call is not None and call.subcall == 'execve' and call.break_simulation:
@@ -1605,8 +1608,12 @@ class Syscall():
                     self.lgr.debug(ida_msg)
                     exit_info.call_params.append(call_param)
                     if not self.linger or self.name=='runToIO':
-                        self.lgr.debug('closed fd %d, stop trace' % fd)
-                        self.stopTrace()
+                        if self.clone_fd_count <= 1:
+                            self.lgr.debug('closed fd %d, stop trace' % fd)
+                            self.stopTrace()
+                        else:
+                            self.lgr.debug('closed fd %d, but clone_fd_count not yet 1 %d' % (fd, self.clone_fd_count))
+                            self.clone_fd_count -= 1
                 elif call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
                     self.lgr.debug('sysall close Dmod, tid and fd match')
                     exit_info.call_params.append(call_param)
@@ -1619,6 +1626,13 @@ class Syscall():
             exit_info.old_fd = frame['param1']
             exit_info.new_fd = frame['param2']
             ida_msg = '%s tid:%s (%s) fid:%d newfid:%d' % (callname, comm, tid, frame['param1'], frame['param2'])
+            for call_param in self.call_params:
+                self.lgr.debug('syscall dup call_param match_param %s' % str(call_param.match_param))
+                if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    # assume intent is to change fd, but not from 0
+                    if call_param.match_param != 0:
+                        call_param.match_param = exit_info.new_fd
+                        self.lgr.debug('syscall dup Changed match param to new fd of %d' % exit_info.new_fd)
         elif callname == 'clone':        
 
             flags = frame['param1']
@@ -1626,9 +1640,16 @@ class Syscall():
             exit_info.fname_addr = child_stack
             ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
                 child_stack, frame['param3'], frame['param4'], frame['param5'])
+
+            #./include/linux/sched.h:#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
+            if not flags & 0x00000400 and self.name == 'runToIO':
+                self.lgr.debug('syscall clone FD not shared, increment FD count for clones')
+                self.clone_fd_count += 1
               
             self.context_manager.setIdaMessage(ida_msg)
             for call_param in self.call_params:
+                if call_param.name != 'runToClone':
+                    continue
                 if call_param.nth is not None:
                     call_param.count = call_param.count + 1
                     self.lgr.debug('syscall clone call_param.count %s call_param.nth %s' % (str(call_param.count), str(call_param.nth)))
