@@ -1531,12 +1531,16 @@ class reverseToCall():
                 self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
         return frame, ret_cycles
 
-    def getPreviousCycleFrame(self, tid):
+    def getPreviousCycleFrame(self, tid, cpu=None):
         ''' NOTE these frames do not reflect socket call decoding '''
         frame = None
         ret_cycles = None
-        cur_cycles = self.cpu.cycles
-        self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x' % (tid, cur_cycles))
+        if cpu is None:
+            cur_cycles = self.cpu.cycles
+            self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x' % (tid, cur_cycles))
+        else:
+            cur_cycles = cpu.cycles
+            self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x from given cpu' % (tid, cur_cycles))
         cycles = None
         prev_cycles = None
         if tid in self.sysenter_cycles:
