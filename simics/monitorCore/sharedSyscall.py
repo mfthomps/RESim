@@ -653,7 +653,7 @@ class SharedSyscall():
                 self.callback(self.callback_param, context, break_num, memory)
                 self.callback = None
 
-    def fcntl(self, eax, exit_info):
+    def fcntl(self, eax, exit_info, tid):
         if net.fcntlCmdIs(exit_info.cmd, 'F_DUPFD'):
             if tid in self.trace_procs:
                 self.traceProcs.dup(tid, exit_info.old_fd, eax)
@@ -765,7 +765,7 @@ class SharedSyscall():
                         self.lgr.debug('exitHap clone, run to tid:%s' % eax)
                         SIM_run_alone(self.top.toProcTid, eax)
                         context = self.context_manager.getContextName(self.cpu.current_context)
-                        self.top.rmSyscall(self.exit_info.matched_param.name, cell_name=self.cell_name, context=context)
+                        self.top.rmSyscall(exit_info.matched_param.name, cell_name=self.cell_name, context=context)
                         exit_info.matched_param = None
                         #my_syscall = exit_info.syscall_instance
                         #my_syscall.stopTrace()
@@ -1096,7 +1096,7 @@ class SharedSyscall():
             
         elif callname == 'fcntl64':        
             if eax >= 0:
-                trace_msg = trace_msg+self.fcntl(eax, exit_info)
+                trace_msg = trace_msg+self.fcntl(eax, exit_info, tid)
             else:
                 trace_msg = err_trace_msg+('old_fd: %d retval: %d\n' % (exit_info.old_fd, eax))
 
@@ -1114,7 +1114,7 @@ class SharedSyscall():
                         self.traceProcs.dup(tid, exit_info.old_fd, exit_info.new_fd)
                     trace_msg = trace_msg+('old_fd: %d new: %d\n' % (exit_info.old_fd, eax))
                 else:
-                    trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (tid, eax))
+                    trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (eax))
         elif callname == 'mmap2' or callname == 'mmap':
             ''' TBD error handling? '''
             if exit_info.fname is not None and self.soMap is not None:
@@ -1192,7 +1192,7 @@ class SharedSyscall():
             exit_info.matched_param = None
 
         elif callname == 'vfork':
-            trace_msg = trace_msg+('in parent %s child tid:%s\n' % (ueax))
+            trace_msg = trace_msg+('in parent %s child tid:%s\n' % (tid, ueax))
             if tid in self.trace_procs:
                 self.traceProcs.addProc(ueax, tid)
                 self.traceProcs.copyOpen(tid, eax)
