@@ -387,7 +387,7 @@ class GenMonitor():
                 self.lgr.debug('genInit loaded debug_info %s' % str(self.debug_info))
             driver_version_file = os.path.join('./', self.run_from_snap, 'driver_version.pickle')
             if os.path.isfile(driver_version_file):
-                self.lgr.debug('genInit found driver_version_file')
+                self.lgr.debug('genInit found driver_version_file pickle')
                 # for driver-driver to find version of driver-server that was pickled
                 driver_version = pickle.load( open(driver_version_file, 'rb') )
                 current_version_file = os.path.join('./', '.driver_server_version')
@@ -417,7 +417,11 @@ class GenMonitor():
                     self.lgr.debug(self.param[cell_name].getParamString())
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
-                         
+        else:                 
+            resim_dir = os.getenv('RESIM_DIR')
+            driver_version = os.path.join(resim_dir, 'simics', 'bin', 'driver_server_version')
+            current_version = os.path.join('./', '.driver_server_version')
+            shutil.copyfile(driver_version, current_version)
         self.lgr.debug('genInit each target in comp_dict (%d targets)' % len(comp_dict))
         for cell_name in comp_dict:
             self.lgr.debug('genInit for cell %s' % (cell_name))
@@ -597,9 +601,9 @@ class GenMonitor():
         else:
             new_mode = 'user'
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
-        #self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x' % (new_mode, eip))
         phys = self.mem_utils[self.target].v2p(cpu, eip)
         callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
+        self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x eax: 0x%x' % (new_mode, eip, callnum))
         if phys is not None:
             instruct = SIM_disassemble_address(cpu, phys, 0, 0)
             if new_mode == 'user':
@@ -1107,10 +1111,16 @@ class GenMonitor():
             print('\ttid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
                  call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
 
-    def tasksDBG(self):
+    def tasksDBG(self, tid=None):
         cpu, cur_comm, cur_tid = self.task_utils[self.target].curThread() 
         plist = {}
         tid_list = self.context_manager[self.target].getThreadTids()
+        force_cpu = None
+        if tid is None:
+            tid = cur_tid
+        if len(tid_list) == 0:
+            tid_list.append(id)
+            force_cpu = cpu
         tasks = self.task_utils[self.target].getTaskStructs()
         self.lgr.debug('tasksDBG, tid_list is %s' % str(tid_list))
         print('Status of debugging threads')
@@ -1127,7 +1137,7 @@ class GenMonitor():
                     this_in_kernel = True   
             t = plist[tid]
             if this_in_kernel or tasks[t].state > 0:
-                frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(tid)
+                frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(tid, cpu=force_cpu)
                 if frame is None:
                     print('Nothing in previous, try recent loaded from pickle')
                     frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
@@ -3191,14 +3201,14 @@ class GenMonitor():
         return self.syscallManager[cell_name].remainingCallTraces(exception=exception)
 
 
-    def runTo(self, call, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
+    def runTo(self, call_list, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
         self.lgr.debug('runTo')
         if not ignore_running and self.checkOnlyIgnore():
             self.rmDebugWarnHap()
 
-        ''' call is a list '''
+        ''' call_list is a list '''
         if not ignore_running and self.is_monitor_running.isRunning():
             print('Monitor is running, try again after it pauses')
             self.lgr.debug('runTo Monitor is running, try again after it pauses')
@@ -3206,7 +3216,7 @@ class GenMonitor():
         if cell_name is None:
             cell_name = self.target
         ''' qualify call with name, e.g, for multiple dmod on reads '''
-        call_name = call[0]
+        call_name = call_list[0]
         if name is not None:
             #call_name = '%s-%s' % (call[0], name)
             call_name = name
@@ -3227,15 +3237,49 @@ class GenMonitor():
             f2 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
             flist.append(f1)
             flist.append(f2)
+        the_syscall = None
         if all_contexts:
             for context in self.context_manager[self.target].getContexts():
-                self.syscallManager[cell_name].watchSyscall(context, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+                self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                            callback=callback)
  
         else:
             context = self.context_manager[self.target].getContextName(cell)
-            self.syscallManager[cell_name].watchSyscall(context, call, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+            the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                    callback=callback)
+        if the_syscall is not None:
+            ''' find processes that are in the kernel on IO calls '''
+            frames = self.getDbgFrames()
+            for tid in list(frames):
+                if frames[tid] is None:
+                    self.lgr.error('frame for tid %s is none?' % tid)
+                    continue
+                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
+                self.lgr.debug('runTo found %s in kernel for tid:%s' % (call, tid))
+                #if call == 'socketcall': 
+                #    if 'ss' in frames[tid]:
+                #        ss = frames[tid]['ss']
+                #        socket_callnum = frames[tid]['param1']
+                #        call = net.callname[socket_callnum].lower()
+                #        self.lgr.debug('runTo socketcall, set call to %s' % call)
+                if call not in call_list:
+                   self.lgr.debug('runTo socketcall call %s not in call_list %s' % (call, str(call_list)))
+                   del frames[tid]
+            self.lgr.debug('runTo, %d frames after all that' % len(frames))
+            if len(frames) > 0:
+                cpu = self.cell_config.cpuFromCell(self.target)
+                eip = self.getEIP(cpu=cpu)
+                self.lgr.debug('runTo, %d frames eip 0x%x' % (len(frames), eip))
+                if not self.mem_utils[self.target].isKernel(eip):
+                    self.lgr.debug('runTo, not in kernel')
+                    if self.reverseEnabled():
+                        self.lgr.debug('runTo, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
+                        prev_cycle = cpu.cycles - 2
+                        self.skipToCycle(prev_cycle, cpu=cpu)
+                self.lgr.debug('runTo, call to setExits')
+                the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
+
+
         self.lgr.debug('genMonitor runTo done setting, check if running')
         if run and not self.is_monitor_running.isRunning():
             self.lgr.debug('genMonitor runTo run set but is not running, do continue')
@@ -3477,6 +3521,7 @@ class GenMonitor():
                     calls = ['read', 'close', 'socketcall', 'ioctl']
 
             calls.append('clone')
+            calls.append('dup2')
             skip_and_mail = True
             if flist_in is not None:
                 ''' Given callback functions, use those instead of skip_and_mail '''
@@ -3546,20 +3591,34 @@ class GenMonitor():
 
         ''' find processes that are in the kernel on IO calls '''
         frames = self.getDbgFrames()
+        self.lgr.debug('runToIO found %d frames in kernel' % len(frames))
+        latest_waiting_cycle = None
         for tid in list(frames):
             if frames[tid] is None:
                 self.lgr.error('frame for tid %s is none?' % tid)
                 continue
             call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
-            self.lgr.debug('runToInput found %s in kernel for tid:%s' % (call, tid))
+            self.lgr.debug('runToIO found %s in kernel for tid:%s cycle: 0x%x' % (call, tid, frames[tid]['cycle']))
             if call not in calls:
-               del frames[tid]
+                del frames[tid]
+            elif latest_waiting_cyle is None or frames[tid]['cycle'] > latest_waiting_cycle:
+                latest_waiting_cycle = frames[tid]['cycle']   
+               
         if len(frames) > 0:
-            self.lgr.debug('runToInput, call to setExits')
+            eip = self.getEIP(cpu=cpu)
+            self.lgr.debug('runToIO, %d frames eip 0x%x' % (len(frames), eip))
+            if not self.mem_utils[self.target].isKernel(eip):
+                self.lgr.debug('runToIO, not in kernel')
+                if self.reverseEnabled():
+                    self.lgr.debug('runToIO, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
+                    prev_cycle = cpu.cycles - 2
+                    self.skipToCycle(prev_cycle, cpu=cpu)
+                
+            self.lgr.debug('runToIO, call to setExits')
             the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
         elif cpu in self.snap_start_cycle and self.snap_start_cycle[cpu] == cpu.cycles:
-            self.lgr.warning('runToInput, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
-            print('WARNING: runToInput found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+            self.lgr.warning('runToIO, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+            print('WARNING: runToIO found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
         
         SIM_continue(0)
 
@@ -5992,8 +6051,9 @@ class GenMonitor():
         self.rmDebugWarnHap()
         self.run_to[self.target].runToSO(file)
 
-    def skipToCycle(self, cycle):
-        cpu = self.cell_config.cpuFromCell(self.target)
+    def skipToCycle(self, cycle, cpu=None):
+        if cpu is None:
+            cpu = self.cell_config.cpuFromCell(self.target)
         self.context_manager[self.target].setReverseContext()
         resimUtils.skipToTest(cpu, cycle, self.lgr)
         self.context_manager[self.target].clearReverseContext()
