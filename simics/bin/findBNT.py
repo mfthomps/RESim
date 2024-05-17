@@ -55,7 +55,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                 read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 if read_mark is not None:
                                     ''' Look for the best mark '''
-                                    result, num_resetsx = findTrack.findTrack(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
+                                    result, num_resetsx = findTrack.findTrackMark(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
                                     lgr.debug('found read_mark 0x%x  result %s num_resets from findBB %d, from findTrac %d' % (read_mark, str(result), num_resets, num_resetsx))
                                     if result is not None:
                                         if result.mark['packet'] < least_packet:
