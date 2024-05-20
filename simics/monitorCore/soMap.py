@@ -24,11 +24,12 @@ class ProgInfo():
         if self.text_start is not None and text_size is not None:
            self.text_end = text_start + text_size
         self.text_offset = text_offset
-        self.plt_addr = plt_addr
         if plt_offset is None:
+            self.plt_addr = 0
             self.plt_offset = 0
             self.plt_size = 0
         else:
+            self.plt_addr = plt_addr
             self.plt_offset = plt_offset
             self.plt_size = plt_size
         self.local_path = local_path
