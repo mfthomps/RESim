@@ -14,6 +14,8 @@ mkdir -p /home/mike/.ssh
 /usr/bin/simics-agent --executable --overwrite --download authorized_keys --to /home/mike/.ssh
 chown -R mike:mike /home/mike/.ssh
 
+# warning: the authoritative driver-server.py is at $RESIM_DIR/simics/bin/driver-server.py
+# However this script grabs the copy from the workspace, which should be a sym link to the repo.
 /usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
 nohup /tmp/driver-server.py &
 
