@@ -6,7 +6,7 @@ import os
 import argparse
 from pathlib import Path
 def main():
-    parser = argparse.ArgumentParser(prog='bntMerge', description='Create BNT report annotated with results from previous resports.')
+    parser = argparse.ArgumentParser(prog='bntMerge', description='Create BNT report annotated with results from previous reports.')
     parser.add_argument('bnt_file', action='store', help='The BNT file')
     args = parser.parse_args()
     old_bnt = './old_bnt'
@@ -37,8 +37,11 @@ def main():
                         old_parts = old_line.split('hits')
                         old_start = old_parts[0]
                         if old_start == line_start and len(line) < len(old_line):
-                            #print('old_start: %s' % old_start)
-                            merge_bnt_fh.write(old_line)
+                            if line.strip().endswith('not in hits'):
+                                merge_bnt_fh.write(old_line.strip()+' NO WM for new run\n')
+                            else:
+                                #print('old_start: %s' % old_start)
+                                merge_bnt_fh.write(old_line)
                             did_write = True
                             break
                 if did_write:

@@ -24,9 +24,14 @@ class ProgInfo():
         if self.text_start is not None and text_size is not None:
            self.text_end = text_start + text_size
         self.text_offset = text_offset
-        self.plt_addr = plt_addr
-        self.plt_offset = plt_offset
-        self.plt_size = plt_size
+        if plt_offset is None:
+            self.plt_addr = 0
+            self.plt_offset = 0
+            self.plt_size = 0
+        else:
+            self.plt_addr = plt_addr
+            self.plt_offset = plt_offset
+            self.plt_size = plt_size
         self.local_path = local_path
     def toString(self):
         if self.plt_size is not None:
@@ -130,6 +135,11 @@ class SOMap():
                         base = os.path.basename(prog)
                         self.lgr.debug('soMap loadPickle base %s prog %s' % (base, prog))
                         self.prog_base_map[base] = prog
+                else:
+                    for prog in self.prog_info:
+                        if self.prog_info[prog].plt_offset is None:
+                            self.prog_info[prog].plt_offset = 0
+                            self.prog_info[prog].plt_size = 0
             else:
                 # backward compatability, but only most recent
                 # TBD remove all this
@@ -281,9 +291,9 @@ class SOMap():
         # Add information about a newly loaded program, returning load info
         retval = None
         prog_basename = os.path.basename(path)
-        if prog_basename == 'busybox':
-            self.lgr.debug('soMap ignore busybox')
-            return None
+        #if prog_basename == 'busybox':
+        #    self.lgr.debug('soMap ignore busybox')
+        #    return None
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
         else:

@@ -22,9 +22,10 @@ def showTrack(f):
     if os.path.isfile(track_path):
         track = json.load(open(track_path))
         mark_list = track['marks']
-        first = mark_list[0]
+        sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
+        first = sorted_marks[0]
         print('first cycle is 0x%x' % first['cycle'])
-        for mark in mark_list:
+        for mark in sorted_marks:
             print('%d 0x%x %s %d' % (mark['index'], mark['ip'], mark['mark_type'], mark['packet']))
 
 def main():

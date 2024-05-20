@@ -321,6 +321,7 @@ class InjectIO():
             self.lgr.error('got None for bytes_wrote in injectIO')
             return
         eip = self.top.getEIP(self.cpu)
+        did_origin_reset = False
         if self.target_proc is None:
             self.dataWatch.clearWatchMarks(record_old=True)
             self.dataWatch.clearWatches(immediate=True)
@@ -348,6 +349,7 @@ class InjectIO():
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
+                    did_origin_reset = True
                     eip = self.top.getEIP(self.cpu)
                     self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
@@ -374,7 +376,7 @@ class InjectIO():
                 else:
                     self.lgr.debug('injectIO call traceAll')
                     call_params = syscall.CallParams('injectIO', None, self.fd)
-                    self.top.traceAll(call_params_list=[call_params])
+                    self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -382,7 +384,8 @@ class InjectIO():
                     self.top.traceMalloc()
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
-                    cli.quiet_run_command('c')
+                    if self.run:
+                        cli.quiet_run_command('c')
                 elif not self.mem_utils.isKernel(self.addr):
                     print('retracking IO') 
                     if self.mark_logs:
@@ -395,8 +398,10 @@ class InjectIO():
                     #self.callback = None
                 else:
                     ''' Injected into kernel buffer '''
-                    self.top.stopTrackIO(immediate=True)
-                    self.dataWatch.clearWatches(immediate=True)
+                    if not did_origin_reset:
+                        self.lgr.debug('injectIO call stopTrackIO')
+                        self.top.stopTrackIO(immediate=True)
+                        self.dataWatch.clearWatches(immediate=True)
                     self.lgr.debug('injectIO call dataWatch to set callback to %s' % str(self.callback))
                     self.dataWatch.setCallback(self.callback)
                     self.context_manager.watchTasks()
@@ -405,7 +410,8 @@ class InjectIO():
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
-                    self.top.resetOrigin(cpu=self.cpu)
+                    if not did_origin_reset:
+                        self.top.resetOrigin(cpu=self.cpu)
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
@@ -438,7 +444,7 @@ class InjectIO():
             self.top.stopWatchPageFaults()
         self.top.stopThreadTrack(immediate=True)
         if self.trace_all:
-            self.top.traceAll()
+            self.top.traceAll(trace_file=self.save_json)
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
@@ -565,7 +571,10 @@ class InjectIO():
         if packet is None:
             packet = self.write_data.getCurrentPacket()
         self.lgr.debug('injectIO saveJson packet %d' % packet)
-        if save_file is None and self.save_json is not None:
+        if self.trace_all and self.save_json is not None:
+            self.lgr.debug('injectIO saveJson trace_all')
+            pass 
+        elif save_file is None and self.save_json is not None:
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)

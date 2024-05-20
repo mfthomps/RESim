@@ -428,6 +428,7 @@ class DataWatch():
             else:
                 return
 
+        self.lgr.debug('dataWatch setRange len of self.start is %d' % len(self.start))
         # See returns above
         if len(self.start) == 0:
             # first range, set mmap syscall
@@ -571,6 +572,7 @@ class DataWatch():
                 self.prev_cycle = self.cpu.cycles
         if no_backstop:
             self.no_backstop.append(start)
+        self.lgr.debug('dataWatch leaving setRange len of self.start is %d' % len(self.start))
 
     def stackThisHap(self, dumb, an_object, the_breakpoint, memory):
         ''' Returned from function on call chain that created a c++ object whose this is in the stack.  See
@@ -2324,7 +2326,7 @@ class DataWatch():
 
         elif self.mem_something.fun == 'fputs':
             # TBD was commented out. 
-            self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.src, dumb2, dumb = self.getCallParams(sp, word_size)
 
         elif self.mem_something.fun.startswith('WSAAddressToString'):
             self.mem_something.src, self.mem_something.count, dumb = self.getCallParams(sp, word_size)
@@ -3570,6 +3572,7 @@ class DataWatch():
         return retval
 
     def checkRep(self, instruct, addr, index):
+        # look for rep or repe type instruction
         retval = None
         if instruct[1].startswith('repe cmpsb') or instruct[1].startswith('repe cmpsd'):
             esi = self.mem_utils.getRegValue(self.cpu, 'esi')
@@ -3626,6 +3629,7 @@ class DataWatch():
                             offset, length, start, eip))
                 self.lgr.debug(msg)
                 self.context_manager.setIdaMessage(msg)
+                # see if it is a a rep/repe type instruction
                 rep_msg = self.checkRep(instruct, addr, index)
                 if rep_msg is not None:
                     msg = rep_msg
@@ -3634,16 +3638,22 @@ class DataWatch():
                     self.lgr.debug('dataWatch finishReadHap, found a rep move, call set break range')
                     self.setBreakRange()
                 else: 
-                    adhoc = False
-                    ''' see if an ad-hoc move. checkMove will update watch marks '''
-                    if eip not in self.not_ad_hoc_copy:
-                        self.checkMove(addr, trans_size, start, length, eip, instruct, tid)
-                        self.lgr.debug('dataWatch back from checkMove')
-                    else:
-                        self.lgr.debug('dataWatch eip 0x%x is in not_ad_hoc_copy list' % eip)
-                        if not self.checkReWatch(tid, eip, instruct, addr, start, length, trans_size):
-                            self.lgr.debug('dataWatch checkMove xx not a reWatch')
-                            self.watchMarks.dataRead(addr, start, length, trans_size)
+                    loop_msg = self.checkLoopCmp(eip, instruct, addr, index)
+                    if loop_msg is not None:
+                        msg = loop_msg
+                        self.lgr.debug(msg)
+                    else:         
+                        adhoc = False
+                        ''' see if an ad-hoc move. checkMove will update watch marks '''
+                        if eip not in self.not_ad_hoc_copy:
+                            self.checkMove(addr, trans_size, start, length, eip, instruct, tid)
+                            self.lgr.debug('dataWatch back from checkMove')
+                        else:
+                            self.lgr.debug('dataWatch eip 0x%x is in not_ad_hoc_copy list' % eip)
+                            if not self.checkReWatch(tid, eip, instruct, addr, start, length, trans_size):
+                                self.lgr.debug('dataWatch checkMove xx not a reWatch')
+                                self.watchMarks.dataRead(addr, start, length, trans_size)
+
                 if self.break_simulation:
                     self.lgr.debug('dataWatch told to break simulation')
                     SIM_break_simulation('DataWatch read data')
@@ -5288,16 +5298,24 @@ class DataWatch():
 
     def maxMarksExceeded(self):
             self.lgr.debug('dataWatch maxMarksExceeded check callback')
-            if self.callback is None:
+            use_callback = None
+            if self.callback is not None: 
+                use_callback = self.callback
+                self.lgr.debug('dataWatch maxMarksExceeded using self.callback')
+            elif self.top.getCommandCallback() is not None:
+                self.lgr.debug('dataWatch maxMarksExceeded using command callback')
+                use_callback = self.top.getCommandCallback()
+
+            if use_callback is None:
                 self.lgr.debug('dataWatch maxMarksExceeded no callback')
                 self.clearWatches()
                 SIM_break_simulation('max marks exceeded')
                 print('Data Watches removed')
+             
             else:
                 #SIM_break_simulation('max marks exceeded')
-                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(self.callback))
+                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(use_callback))
                 self.clearWatches(leave_backstop=True)
-                use_callback = self.callback
                 self.top.stopAndGo(use_callback)
                 #self.callback()
                 self.callback = None
@@ -5321,4 +5339,15 @@ class DataWatch():
         self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
         self.lgr.debug('dataWatch did watchMmap')
 
-
+    def checkLoopCmp(self, eip, instruct, addr, index):
+        retval = None
+        # Does the read reference look like a loop counter comparison?
+        op2, op1 = self.decode.getOperands(instruct[1])
+        if instruct[1].startswith('cmp') and (self.decode.isReg(op1) or self.decode.isReg(op2)):
+            prev_read = self.watchMarks.findReadIpAddr(eip, addr)
+            if prev_read is not None and not prev_read.mark.ad_hoc:
+                loop_count = prev_read.mark.loopCompare(instruct[1])
+                retval = 'loop counter compare at 0x%x, count %d' % (addr, loop_count)
+            
+        return retval
+        

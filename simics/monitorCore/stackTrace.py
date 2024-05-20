@@ -110,8 +110,11 @@ class StackTrace():
         self.gap_reset_to = 1
         self.most_frames = 0
         self.best_frames = []
-
-        self.doTrace()
+        cur_eip = self.top.getEIP(cpu=cpu)
+        if self.mem_utils.isKernel(cur_eip):
+            self.lgr.error('stackTrace called from within kernel.  No support for that yet.')
+        else:
+            self.doTrace()
 
     def isCallTo(self, instruct, fun):
         if instruct.startswith(self.callmn):
@@ -920,6 +923,11 @@ class StackTrace():
                     return
 
                 prev_frame_fun = self.fun_mgr.getFun(self.frames[-1].fun_addr)
+                if prev_frame_fun is None:
+                    self.lgr.debug('stackTrace large gap but no previous frame function frames %d' % len(self.frames))
+                    #SIM_break_simulation('remove this')
+                    self.lgr.debug('offending frame: %s' % self.frames[-1].dumpString())
+                    return
                 prev_frame_fun_name = self.frames[-1].fun_of_ip
                 self.lgr.debug('stackTrace MIND THE GAP ptr now 0x%x, last frame sp was 0x%x will add  to blacklist: prev_fun 0x%x fun_name %s number of frames %d' % (ptr, self.prev_frame_sp, prev_frame_fun, prev_frame_fun_name, len(self.frames)))
                 if len(self.frames) > 1:

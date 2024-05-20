@@ -251,11 +251,25 @@ class findKernelWrite():
             self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
             self.future_count = self.future_count+1
             if self.future_count > 100:
-                self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
-                #self.cleanUp()
-                #SIM_break_simulation('remove this and fix it')
-                # simics goes into loop, but can still quit
-                self.top.quit()
+                if self.best_cycle == 0:
+                    bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
+                    self.bookmarks.setBacktrackBookmark(bm)
+                    SIM_break_simulation('revWriteCallback')
+                    self.top.skipAndMail()
+                    return
+                else:
+                    bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
+                    self.top.quit()
+                    #self.bookmarks.setBacktrackBookmark(bm)
+                    #SIM_break_simulation('revWriteCallbackx')
+                    #self.top.skipAndMail()
+                    return
+                #else:
+                #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
+                #    #self.cleanUp()
+                #    #SIM_break_simulation('remove this and fix it')
+                #    # simics goes into loop, but can still quit
+                #    self.top.quit()
             VT_in_time_order(self.vt_handler, my_memory)
                 
 

@@ -148,6 +148,9 @@ class GetKernelParams():
 
         self.quit = False
         self.force = False
+
+        # another hack.  if the kernel entry we find early are sysenter, use fs, otherwise it is a fools errand.
+        self.ignore_fs = False
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -247,8 +250,13 @@ class GetKernelParams():
             elif 'sys' not in instruct[1] and 'int' not in instruct[1] and 'svc' not in instruct[1]:
                 self.lgr.debug('taskModeChanged32 not a syscall, page fault, continue')
             else:
-                self.lgr.debug('taskModeChanged32 must be a call, look for FS')
-                self.lookForFS(None)
+                if self.ignore_fs or instruct[1].startswith('int'):
+                    self.lgr.debug('taskModeChanged32 an int80 call, use brute force')
+                    self.taskModeChanged(cpu, one, old, new)
+                    self.ignore_fs = True
+                else:
+                    self.lgr.debug('taskModeChanged32 must be a non-int call, look for FS')
+                    self.lookForFS(None)
         else:
            pass
 
@@ -299,7 +307,7 @@ class GetKernelParams():
         else:
             self.task_rec_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.taskModeChanged64, self.cpu)
             self.current_task_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.currentTaskStopHap, None)
-            self.lgr.debug('getCurrentTaskPtr added mode and stop haps')
+            self.lgr.debug('getCurrentTaskPtr added mode and stop haps 64 bit')
             self.continueAhead()
 
             '''
@@ -327,7 +335,7 @@ class GetKernelParams():
 
             self.fs_start_cycle = self.cpu.cycles
             self.lgr.debug('fsEnableReverse, , now continue %d cycles' % self.fs_cycles)
-            ''' tbd point of going forward?'''
+            ''' go forward so that we can later reverse '''
             SIM_continue(self.fs_cycles)
             self.fsFindAlone()
 
@@ -371,6 +379,7 @@ class GetKernelParams():
 
     def fsFindAlone(self):
         self.lgr.debug('fsFindAlone, fs_cycles is %d' % self.fs_cycles)
+        gotit = False
         for i in range(1,self.fs_cycles):
             resimUtils.skipToTest(self.cpu, self.fs_start_cycle+i, self.lgr)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -388,8 +397,11 @@ class GetKernelParams():
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
                 self.current_task_phys = phys
                 SIM_run_command('disable-reverse-execution')
+                gotit = True
                 self.findSwapper()
                 break
+        if not gotit:
+            self.lgr.error('fsFindAlone failed to find fs: instruction')
 
     def gsFindAlone(self, any_reg=False):
         retval = False
@@ -479,7 +491,7 @@ class GetKernelParams():
          SIM_break_simulation('gs stop')
 
     def taskModeChanged(self, cpu, one, old, new):
-        ''' *** NOT USED *** see other variations taskModeChanged '''
+        ''' *** NOT ALWAYS USED *** see other variations taskModeChanged '''
         ''' search kernel memory for the current_task address that seems to match
             the task address found for the current process '''
         if self.task_rec_mode_hap is None:
@@ -961,9 +973,10 @@ class GetKernelParams():
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
             self.lgr.debug('entryModeChanged entering kernel')
-            if not self.isWindows() and self.param.mm_struct is None:
-                if not self.getPageTableDirectory():
-                    self.lgr.error('Failed to get page table offsets from process record')
+            if self.dumb_count < 50:
+                if not self.isWindows() and self.param.mm_struct is None:
+                    if not self.getPageTableDirectory():
+                        self.lgr.error('Failed to get page table offsets from process record')
             self.dumb_count += 1
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
 
@@ -1389,6 +1402,7 @@ class GetKernelParams():
         self.param = pickle.load( open(fname, 'rb') )
 
     def saveParam(self):
+        self.lgr.debug(self.param.getParamString())
         self.lgr.debug('saveParam')
         fname = '%s.param' % self.target
         pickle.dump( self.param, open( fname, "wb" ) )

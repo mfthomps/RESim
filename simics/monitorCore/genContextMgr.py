@@ -558,51 +558,52 @@ class GenContextMgr():
         retval = False       
         if tid in self.ignore_threads:
             if self.cpu.current_context != self.ignore_context:
-                SIM_run_alone(self.restoreIgnoreContext, None)
+                #SIM_run_alone(self.restoreIgnoreContext, None)
+                self.restoreIgnoreContext()
             retval = True
         elif len(self.ignore_progs) > 0 and self.debugging_tid is None:
             if comm in self.ignore_progs:
                 
                 if self.cpu.current_context != self.ignore_context:
                     #self.lgr.debug('ignoring context for tid:%s comm %s' % (tid, comm))
-                    SIM_run_alone(self.restoreIgnoreContext, None)
-                    #self.restoreIgnoreContext()
+                    #SIM_run_alone(self.restoreIgnoreContext, None)
+                    self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
                 if new_addr is not None and self.isSuspended(new_addr):
-                    SIM_run_alone(self.restoreSuspendContext, None)
-                    #self.restoreSuspendContext()
+                    #SIM_run_alone(self.restoreSuspendContext, None)
+                    self.restoreSuspendContext()
                 else:
-                    SIM_run_alone(self.restoreDefaultContext, None)
-                    #self.restoreDefaultContext()
+                    #SIM_run_alone(self.restoreDefaultContext, None)
+                    self.restoreDefaultContext()
             else:
-                SIM_run_alone(self.restoreDefaultContext, None)
-                #self.restoreDefaultContext()
+                #SIM_run_alone(self.restoreDefaultContext, None)
+                self.restoreDefaultContext()
             retval = True 
         elif len(self.only_progs) > 0 and self.debugging_tid is None:
             #self.lgr.debug('onlyOrIgnore tid:%s comm %s' % (tid, comm))
             if comm not in self.only_progs:
                 if self.cpu.current_context != self.ignore_context:
                     #self.lgr.debug('ignoring context for comm tid:%s %s' % (tid, comm))
-                    SIM_run_alone(self.restoreIgnoreContext, None)
-                    #self.restoreIgnoreContext()
+                    #SIM_run_alone(self.restoreIgnoreContext, None)
+                    self.restoreIgnoreContext()
             elif len(self.suspend_watch_list) > 0:
                 if new_addr is not None and self.isSuspended(new_addr):
                     #self.lgr.debug('restore suspend context for tid:%s comm %s' % (tid, comm))
-                    SIM_run_alone(self.restoreSuspendContext, None)
-                    #self.restoreSuspendContext()
+                    #SIM_run_alone(self.restoreSuspendContext, None)
+                    self.restoreSuspendContext()
                 else:
-                    SIM_run_alone(self.restoreDefaultContext, None)
+                    #SIM_run_alone(self.restoreDefaultContext, None)
+                    self.restoreDefaultContext()
                     if len(self.watch_for_prog) > 0: 
                         self.checkFirstSchedule(new_addr, tid, comm)
-                    #self.restoreDefaultContext()
             else:
-                SIM_run_alone(self.restoreDefaultContext, None)
+                #SIM_run_alone(self.restoreDefaultContext, None)
+                self.restoreDefaultContext()
                 if len(self.watch_for_prog) > 0:
                     self.checkFirstSchedule(new_addr, tid, comm)
                 if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
                     self.lgr.debug('contextManager is in only_prog, watch exit for tid: %s' % tid)
                     self.watchExit(tid=tid)
-                #self.restoreDefaultContext()
                 #self.lgr.debug('restore default context for tid:%s comm %s' % (tid, comm))
             retval = True 
             
@@ -1443,7 +1444,8 @@ class GenContextMgr():
                 if base.startswith(ignore):
                     self.lgr.debug('contextManager newProg, ignore tid %s %s' % (tid, base))
                     self.ignore_tids.append(tid)
-                    SIM_run_alone(self.restoreIgnoreContext, None)
+                    #SIM_run_alone(self.restoreIgnoreContext, None)
+                    self.restoreIgnoreContext()
 
     def tidExit(self, tid):
         self.lgr.debug('contextManager tidExit %s' % tid)

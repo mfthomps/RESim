@@ -1,0 +1,5 @@
+FILE=$RESIM_DIR/simics/bin/driver-server.py
+FILE=$RESIM_DIR/simics/bin/restart-driver.sh
+COMMAND=chmod a+x /tmp/restart-driver.sh
+COMMAND= nohup /tmp/restart-driver.sh &
+SESSION=command

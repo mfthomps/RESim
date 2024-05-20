@@ -20,7 +20,7 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, lgr):
+def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, no_reset, lgr):
     retval = []
     count = 0
     #print('in findBNTForFun')
@@ -43,18 +43,20 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                             least_packet = 100000
                             least_size = 100000
                             least_marks = 100000
+                            least_resets = 100000
                             best_result_size = None
                             best_result_marks = None
+                            without_resets = None
                             best = None
                             # look at every trackIO that has a WM in this BB and find the "best" of them
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark, packet_num = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
+                                read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
                                 if read_mark is not None:
                                     ''' Look for the best mark '''
-                                    result = findTrack.findTrack(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
-                                    lgr.debug('found read_mark 0x%x  result %s' % (read_mark, str(result)))
+                                    result, num_resetsx = findTrack.findTrackMark(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
+                                    lgr.debug('found read_mark 0x%x  result %s num_resets from findBB %d, from findTrac %d' % (read_mark, str(result), num_resets, num_resetsx))
                                     if result is not None:
                                         if result.mark['packet'] < least_packet:
                                             least_packet = result.mark['packet']
@@ -67,10 +69,12 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                         #    least_size = result.size
                                         #    best_result = result
                                         elif result.mark['packet'] == least_packet:
-                                            if result.num_marks < least_marks:
+                                            if no_reset and without_resets is None and num_resets == 0:
+                                                without_resets = result
+                                            if result.num_marks < least_marks and (not no_reset or num_resets == 0 or without_resets is None):
                                                 least_marks = result.num_marks
                                                 best_result_marks = result
-                                            if result.size < least_size:
+                                            if result.size < least_size and (not no_reset or num_resets == 0 or without_resets is None):
                                                 least_size = result.size
                                                 best_result_size = result
 
@@ -106,8 +110,11 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                                 packet_num = best.mark['packet']
                         if not no_print:
                             mark_info = ''
+                            reset = ''
+                            if no_reset and without_resets is None:
+                                reset = 'RESET'
                             if read_mark is not None:
-                                mark_info = 'read mark: 0x%x packet: %d size: %d' % (read_mark, packet_num, least_size)
+                                mark_info = 'read mark: 0x%x %s packet: %d size: %d' % (read_mark, reset, packet_num, least_size)
                             print('function: %s branch 0x%x from 0x%x not in hits %s %s' % (fun_blocks['name'], branch, bb_hit, mark_info, before_read))
                             count = count + 1
                         entry = {}
@@ -119,7 +126,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                     #    print('branch 0x%x in hits' % branch)
     return retval
 
-def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False):
+def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False, no_reset=False):
     lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
@@ -151,12 +158,12 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if fun_name is None:
         for fun in sorted(blocks):
-            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, lgr)
+            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, lgr)
+                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
@@ -169,8 +176,9 @@ def main():
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')
+    parser.add_argument('-r', '--no_reset', action='store_true', help='Prioritize watchmarks that occur before a reset.')
     args = parser.parse_args()
-    bnt_list = findBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet)
+    bnt_list = findBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet, no_reset=args.no_reset)
     if bnt_list is not None:
         print('Found %d branches not taken.' % len(bnt_list))
 

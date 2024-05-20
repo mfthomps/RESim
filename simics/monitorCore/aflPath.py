@@ -176,6 +176,22 @@ def getAFLTrackList(target, get_all=False, host=None, ws_filter=None):
         print('No file at %s' % unique_path)
     return glist
 
+def getAFLTraceList(target, get_all=False, host=None, ws_filter=None):
+    glist = []
+    afl_path = getAFLOutput()
+    afl_dir = os.path.join(afl_path, target)
+    unique_path = os.path.join(afl_dir, target+'.unique')
+    if os.path.isfile(unique_path):
+        ulist = json.load(open(unique_path))
+        for path in ulist:
+            if ws_filter is not None and ws_filter not in path:
+                continue
+            path = path.replace('coverage', 'trace')
+            glist.append(os.path.join(afl_dir, path)) 
+    else:
+        print('No file at %s' % unique_path)
+    return glist
+
 def getTargetQueue(target, get_all=False, host=None, ws_filter=None):
     ''' get list of queue files, relative to afloutput.  ignore sync files and return based on target.unique if allowed.'''
     afl_list = []
@@ -235,6 +251,22 @@ def getTargetCrashes(target):
             afl_list.append(path)
     else:
         cdir = os.path.join(afl_dir, 'crashes')
+        if os.path.isdir(cdir):
+            afl_list = [os.path.join(cdir, f) for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
+    return afl_list
+
+def getTargetExits(target):
+    afl_list = []
+    afl_output = getAFLOutput()
+    afl_dir = os.path.join(afl_output, target)
+    cpath = os.path.join(afl_dir, '*_resim_*', 'exits', 'id:*')
+    glist = glob.glob(cpath)
+    if len(glist) > 0:
+        #for path in sorted(glist):
+        for path in glist:
+            afl_list.append(path)
+    else:
+        cdir = os.path.join(afl_dir, 'exits')
         if os.path.isdir(cdir):
             afl_list = [os.path.join(cdir, f) for f in os.listdir(cdir) if os.path.isfile(os.path.join(cdir, f))]
     return afl_list

@@ -146,7 +146,19 @@ def linkSwitches(target, comp_dict, link_names):
     if comp_dict['ETH3_SWITCH'] != 'NONE' and 'eth3' in link_names:
         doConnect(comp_dict['ETH3_SWITCH'], 'eth3', switch_map, 3)
     return switch_map
- 
+
+def expandValue(value): 
+    if value.startswith('$'):
+        if os.path.sep in value:
+            env_var, rest = value.split(os.path.sep,1)
+            expanded = os.getenv(env_var[1:])
+            if expanded is None:
+                print('ERROR***** Could not expand %s' % value)
+                return None
+            value = os.path.join(expanded, rest)
+        else:
+            value = os.getenv(value[1:])
+    return value
    
 def createDict(config, not_a_target, lgr): 
     comp_dict = {}
@@ -167,16 +179,9 @@ def createDict(config, not_a_target, lgr):
         comp_dict[section]['ETH3_SWITCH'] = 'switch3'
         for name, value in config.items(section):
             #lgr.debug('name %s value %s' % (name, value))
-            if value.startswith('$'):
-                if os.path.sep in value:
-                    env_var, rest = value.split(os.path.sep,1)
-                    expanded = os.getenv(env_var[1:])
-                    if expanded is None:
-                        print('Could not expand %s' % value)
-                        continue
-                    value = os.path.join(expanded, rest)
-                else:
-                    value = os.getenv(value[1:])
+            value = expandValue(value)
+            if value is None:
+                continue
             comp_dict[section][name] = value
     return comp_dict
 
@@ -231,6 +236,7 @@ class LaunchRESim():
         #print('assign ENV variables')
         lgr.debug('assign ENV variables')
         for name, value in self.config.items('ENV'):
+            value = expandValue(value)
             os.environ[name] = value
             if name == 'RESIM_TARGET':
                 RESIM_TARGET = value

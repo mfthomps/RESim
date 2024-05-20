@@ -43,7 +43,7 @@ class NetLinks():
                      
     def __init__(self, path):
         sock_start = 'socket - socket tid:'
-        sock_sock = 'return from socketcall SOCKET'
+        sock_sock = 'return from socketcall socket'
         recv_from = '- recvfrom'
         send_to = '- sendto'
         self.proc_trace = None
@@ -75,7 +75,7 @@ class NetLinks():
                     tid_tok = getTokValue(line, 'tid')
                     type_tok = getTokValue(line, 'type')
                     self.sock_start[tid_tok] = type_tok
-                elif sock_sock in line:
+                elif sock_sock.lower() in line.lower():
                     tid_tok = getTokValue(line, 'tid')
                     if tid_tok not in self.sock_socks:
                         self.sock_socks[tid_tok] = {}
@@ -192,16 +192,16 @@ class NetLinks():
                         self.send_to[pname].append(addr_tok)
 
     def isBind(self, line):
-        sock_bind = 'return from socketcall BIND'
-        win_bind = 'return from DeviceIoControlFile'
-        if sock_bind in line or (win_bind in line and 'BIND' in line):
+        sock_bind = 'return from socketcall bind'
+        win_bind = 'return from deviceiocontrolfile'
+        if sock_bind.lower() in line.lower() or (win_bind.lower() in line.lower() and 'bind' in line.lower()):
             return True
         else:
             return False
 
     def isConnect(self, line):
         sock_connect = 'connect tid'
-        if sock_connect in line or 'DeviceIoControlFile CONNECT' in line:
+        if sock_connect in line or 'deviceiocontrolfile connect' in line.lower():
             return True
         else:
             return False
