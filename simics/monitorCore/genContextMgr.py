@@ -1134,7 +1134,7 @@ class GenContextMgr():
                     break
             if add_task is not None:
                 self.lgr.debug('contextManager killGroup add_task is not None, swap tids')
-                self.top.swapTOPid(self.debugging_tid, p)
+                self.top.swapSOTid(self.debugging_tid, p)
                 self.addTask(add_task)
             else:
                 self.lgr.debug('contextManager killGroup %s is leader, tid_cache is %s' % (lead_tid, str(self.tid_cache)))
