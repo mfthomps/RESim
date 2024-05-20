@@ -3337,6 +3337,10 @@ these only happen one file at a time, so use tar.
 Smaller scp and ssh sessions seem to work well with drivers.  Add an authorized\_keys file to the driver-script.sh to facilitate xfer of scripts/data to the driver
 during the simulation.  Take care to reset the reversing origin after you are done with the real-networ (see the trackIO reset option.)
 
+Setting up a proxy from your local host through the driver to the target can be done using ssh tunneling.  For example, to proxy to a web server:
+\begin{verbatim}
+ssh -p 4022 -AfN -L 8081:10.0.0.10:80 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -o "ServerAliveInterval 60" localhost
+\end{verbatim}
 
 \subsection{Notes on updating the driver}
 If updating the driver, use the DRIVER\_WAIT=NO directive in the ini file to prevent RESim from waiting for the driver to finish 
