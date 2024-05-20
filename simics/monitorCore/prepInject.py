@@ -39,7 +39,7 @@ class PrepInject():
         self.prepInject()
 
 
-    def prepInject(self, dumb=None):
+    def prepInject(self, dumb=None, ignore_waiting=False):
         ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('prepInject snap %s FD: %d (0x%x)' % (self.snap_name, self.fd, self.fd))
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
@@ -49,7 +49,7 @@ class PrepInject():
         if self.top.isWindows():
             self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence, just_input=True)
         else:
-            self.top.runToInput(self.fd, flist_in=flist, count=self.count)
+            self.top.runToInput(self.fd, flist_in=flist, count=self.count, ignore_waiting=ignore_waiting)
 
     def instrumentSelect(self, dumb):
         #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
@@ -75,7 +75,7 @@ class PrepInject():
             ''' now back to return '''
             resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
         self.top.restoreDebugBreaks()
-        self.prepInject()
+        self.prepInject(ignore_waiting=True)
 
     def finishNoCall(self, read_original=True):
         # TBD point of runToIO check?
@@ -193,6 +193,7 @@ class PrepInject():
         elif callname.startswith('re') or callname == 'socketcall':
             SIM_run_alone(self.instrumentAlone, None)
         elif 'select' in callname:
+            self.lgr.debug('prepInject instrumentIO call to instrumentSelect')
             SIM_run_alone(self.instrumentSelect, None)
         else:
             self.lgr.error('preInject instrumentIO could not handle callname %s' % callname)
