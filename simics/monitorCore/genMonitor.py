@@ -2361,10 +2361,12 @@ class GenMonitor():
                 return
             self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d rev_to_call %s cycles: 0x%x' % (value, addr, num_bytes, str(rev_to_call), cpu.cycles))
             cell = self.cell_config.cell_context[self.target]
-
+            '''
+            TBD breaks.  check for HAPs that have not been deleted or hidden.  ROP hap?
             here = cpu.cycles
             phys = self.mem_utils[self.target].v2p(cpu, addr)
             orig_cycle = self.bookmarks.getFirstCycle()
+            self.lgr.debug('stopAtKernelWrite at cycle 0x%x, skip to origin 0x%x to test if value changed' % (cpu.cycles, orig_cycle))
             self.skipToCycle(orig_cycle) 
             value_origin = SIM_read_phys_memory(cpu, phys, num_bytes)
             if value_origin == value:
@@ -2375,7 +2377,9 @@ class GenMonitor():
                 self.lgr.debug('stopAtKernelWrite Address 0x%x not mapped at origin.' % (addr))
             else:
                 self.skipToCycle(here) 
-                self.lgr.debug('stopAtKernelWrite Address 0x%x differs from that at origin.' % (addr))
+                self.lgr.debug('stopAtKernelWrite Address 0x%x differs from that at origin. Skipped to saved cycle? 0x%x' % (addr, cpu.cycles))
+            '''
+            if True:
                 if self.find_kernel_write is None:
                     self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
                         self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
@@ -3558,7 +3562,7 @@ class GenMonitor():
                 self.lgr.debug('runToIO now run, context is %s' % str(cpu.current_context))
                 SIM_continue(0)
 
-    def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None):
+    def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, ignore_waiting=False):
         ''' Track syscalls that consume inputs.  Intended for use by prepInject functions '''
         ''' Also see runToIO for more general tracking '''
         input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
@@ -3588,37 +3592,34 @@ class GenMonitor():
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         self.call_traces[self.target]['runToIO'] = the_syscall
-
-        ''' find processes that are in the kernel on IO calls '''
-        frames = self.getDbgFrames()
-        self.lgr.debug('runToIO found %d frames in kernel' % len(frames))
-        latest_waiting_cycle = None
-        for tid in list(frames):
-            if frames[tid] is None:
-                self.lgr.error('frame for tid %s is none?' % tid)
-                continue
-            call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
-            self.lgr.debug('runToIO found %s in kernel for tid:%s cycle: 0x%x' % (call, tid, frames[tid]['cycle']))
-            if call not in calls:
-                del frames[tid]
-            elif latest_waiting_cyle is None or frames[tid]['cycle'] > latest_waiting_cycle:
-                latest_waiting_cycle = frames[tid]['cycle']   
-               
-        if len(frames) > 0:
-            eip = self.getEIP(cpu=cpu)
-            self.lgr.debug('runToIO, %d frames eip 0x%x' % (len(frames), eip))
-            if not self.mem_utils[self.target].isKernel(eip):
-                self.lgr.debug('runToIO, not in kernel')
-                if self.reverseEnabled():
-                    self.lgr.debug('runToIO, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
-                    prev_cycle = cpu.cycles - 2
-                    self.skipToCycle(prev_cycle, cpu=cpu)
-                
-            self.lgr.debug('runToIO, call to setExits')
-            the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
-        elif cpu in self.snap_start_cycle and self.snap_start_cycle[cpu] == cpu.cycles:
-            self.lgr.warning('runToIO, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
-            print('WARNING: runToIO found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+        if not ignore_waiting:
+            ''' find processes that are in the kernel on IO calls '''
+            frames = self.getDbgFrames()
+            self.lgr.debug('runToIO found %d frames in kernel' % len(frames))
+            for tid in list(frames):
+                if frames[tid] is None:
+                    self.lgr.error('frame for tid %s is none?' % tid)
+                    continue
+                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
+                self.lgr.debug('runToIO found %s in kernel for tid:%s ' % (call, tid))
+                if call not in calls:
+                    del frames[tid]
+                   
+            if len(frames) > 0:
+                eip = self.getEIP(cpu=cpu)
+                self.lgr.debug('runToIO, %d frames eip 0x%x' % (len(frames), eip))
+                if not self.mem_utils[self.target].isKernel(eip):
+                    self.lgr.debug('runToIO, not in kernel')
+                    if self.reverseEnabled():
+                        self.lgr.debug('runToIO, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
+                        prev_cycle = cpu.cycles - 2
+                        self.skipToCycle(prev_cycle, cpu=cpu)
+                    
+                self.lgr.debug('runToIO, call to setExits')
+                the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
+            elif cpu in self.snap_start_cycle and self.snap_start_cycle[cpu] == cpu.cycles:
+                self.lgr.warning('runToIO, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+                print('WARNING: runToIO found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
         
         SIM_continue(0)
 
