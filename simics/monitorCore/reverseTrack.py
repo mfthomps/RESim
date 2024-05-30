@@ -53,20 +53,22 @@ class ReverseTrack():
         self.value = value
         self.lgr.debug('revTaintReg tid:%s for %s value 0x%x' % (tid, reg, value))
         if self.top.reverseEnabled():
-            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
-            if st is None:
-                self.lgr.debug('revTaintReg stack trace is None, wrong tid?')
-                return
-            frames = st.getFrames(20)
-            mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)
-            if mem_stuff is not None:
-                self.mem_something = dataWatch.MemSomething(mem_stuff.fun, mem_stuff.fun_addr, None, mem_stuff.ret_addr, None, None, None, 
-                      mem_stuff.called_from_ip, None, None, None, ret_addr_addr = mem_stuff.ret_addr_addr)
-                call_ip = mem_stuff.called_from_ip
-                self.lgr.debug('revTaintReg mem_stuff.fun is %s' % mem_stuff.fun)
-                self.top.setCommandCallback(self.handleCall)
-                self.top.revToAddr(call_ip)
-            else:
+            #st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+            #if st is None:
+            #    self.lgr.debug('revTaintReg stack trace is None, wrong tid?')
+            #    return
+            #frames = st.getFrames(20)
+            #mem_stuff = self.dataWatch.memsomething(frames, dataWatch.mem_funs)
+            #if mem_stuff is not None:
+            #    self.mem_something = dataWatch.MemSomething(mem_stuff.fun, mem_stuff.fun_addr, None, mem_stuff.ret_addr, None, None, None, 
+            #          mem_stuff.called_from_ip, None, None, None, ret_addr_addr = mem_stuff.ret_addr_addr)
+            #    call_ip = mem_stuff.called_from_ip
+            #    self.lgr.debug('revTaintReg mem_stuff.fun is %s' % mem_stuff.fun)
+            #    self.top.setCommandCallback(self.handleCall)
+            #    self.top.revToAddr(call_ip)
+            #else:
+            # TBD what the heck was that?
+            if True:
                 self.top.removeDebugBreaks()
                 cell_name = self.top.getTopComponentName(cpu)
                 eip = self.top.getEIP(cpu)
