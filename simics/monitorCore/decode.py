@@ -22,8 +22,10 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-
-from simics import *
+try:
+    from simics import *
+except:
+    pass
 modifiesOp0_list = ['mov', 'xor', 'pop', 'add', 'or', 'and', 'inc', 'dec', 'shl', 'shr', 'lea', 'xchg', 'imul', 'sub']
 ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
 ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
@@ -141,7 +143,7 @@ def getInBrackets(cpu, s, lgr):
         if prefix is None:
             prebracket = s.split('[')[0]
             #lgr.debug('cell_name: %s prebracket is %s' % (cell_name, prebracket))
-            pieces = prebracket.split(' ')
+            pieces = prebracket.split()
             if len(pieces) > 0:
                 prefix = pieces[len(pieces)-1]
                 if len(prefix.strip()) == 0:
@@ -156,16 +158,16 @@ def getInBrackets(cpu, s, lgr):
         return None, None
 
 def getMn(instruct):
-    parts = instruct.split(' ')
+    parts = instruct.split()
     return parts[0].strip()
 
 def getOperands(instruct):
     ret1 = None
     ret2 = None
-    parts = instruct.split(',')
-    if len(parts) == 1:
+    parts_comma = instruct.split(',')
+    if len(parts_comma) == 1:
         ''' no comma '''
-        parts = instruct.split(' ')
+        parts = instruct.strip().split()
         if parts[0] == 'rep':
             if (parts[1].startswith('sto') and len(parts) > 2):
                 ret1 = None
@@ -178,11 +180,12 @@ def getOperands(instruct):
                 ret1 = parts[3].strip()
             else:
                 ret1 = parts[1].strip()
+            
     else:
-        ret2 = parts[1].strip()
+        ret2 = parts_comma[1].strip()
         #parts = parts[0].split(' ')
         #ret1 = parts[len(parts) - 1]
-        ret1 = parts[0].split(' ',1)[1].strip()
+        ret1 = parts_comma[0].split(' ',1)[1].strip()
     return ret2, ret1
 
 def isIndirect(reg):
