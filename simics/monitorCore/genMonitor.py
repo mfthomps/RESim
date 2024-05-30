@@ -634,6 +634,18 @@ class GenMonitor():
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
             if this_tid is not None:            
                 self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (str(tid_list), this_tid))
+                alive = False
+                for tid in tid_list:
+                    rec = self.task_utils[self.target].getRecAddrForTid(tid)
+                    if rec is not None:
+                        alive = True
+                        break
+                if not alive:
+                    self.lgr.debug('modeChanged no recs for tids %s, assume dead' % str(tid_list))
+                    print('modeChanged no recs for tids %s, assume dead' % str(tid_list))
+                    self.context_manager[self.target].setIdaMessage('Process gone')
+                    SIM_break_simulation('mode changed, tid %s threads all gone' % str(tid_list))
+                    
                 return
             else:
                 self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
@@ -1717,6 +1729,12 @@ class GenMonitor():
             self.stopTracking()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
+            if proc.startswith('/') and self.target in self.soMap:
+                prog_name = self.soMap[self.target].getProg(plist[0])
+                if prog_name is None:
+                    local_path = self.getFullPath(fname=proc)
+                    self.soMap[self.target].addText(local_path, proc, plist[0])
+                    self.lgr.debug('debugProc %s add to soMap' % proc)
 
             self.lgr.debug('debugProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
