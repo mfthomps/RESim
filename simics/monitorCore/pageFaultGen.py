@@ -552,6 +552,12 @@ class PageFaultGen():
                         
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen skipAlone after another backup, eip is 0x%x' % (cur_eip))
+                    elif self.mem_utils.isKernel(cur_eip):
+                        target_cycles = self.cpu.cycles - 1
+                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                            return
+                        cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+                        self.lgr.debug('pageFaultGen still in kernel after back one, after another backup, eip is 0x%x' % (cur_eip))
     
             if prec.fsr is not None and prec.fsr == 2:            
                 self.top.setDebugBookmark('Unhandled fault: External abort? on access to 0x%x' % prec.cr2)
