@@ -500,6 +500,14 @@ class DataWatch():
                         self.stopWatch()
                         self.watch(i_am_alone=True)
                         break
+                    elif (end+1) == self.start[index]:
+                        self.length[index] = self.length[index]+my_len
+                        self.start[index] = start
+                        self.lgr.debug('DataWatch extending backwards prior to start of range of index %d, len now %d' % (index, self.length[index]))
+                        overlap = True
+                        self.stopWatch()
+                        self.watch(i_am_alone=True)
+                        break
                     elif(start >= self.start[index] and start <= this_end) and end > this_end:
                         ''' TBD combine with above?'''
                         self.length[index] = end - self.start[index]
@@ -1062,7 +1070,8 @@ class DataWatch():
      
     def startUndoAlone(self, dumb):
         self.undo_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.undoHap, self.mem_something)
-        self.watchMarks.undoMark()
+        # TBD ever case of mark created before we decide it is a ghost?
+        #self.watchMarks.undoMark()
         self.lgr.debug('dataWatch startUndoAlone')
         SIM_break_simulation('undo it')
 
@@ -5322,6 +5331,9 @@ class DataWatch():
 
     def mmap(self, addr):
         phys_of_addr = self.mem_utils.v2p(self.cpu, addr)
+        if phys_of_addr is None:
+            self.lgr.error('dataWatch mmap called with addr 0x%x, but not mapped' % addr)
+            return 
         self.lgr.debug('dataWatch mmap addr 0x%x phys is 0x%x' % (addr, phys_of_addr))
         index = self.findRangeIndex(addr)
         if index is not None:
