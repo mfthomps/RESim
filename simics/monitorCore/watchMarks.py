@@ -166,6 +166,14 @@ class DataMark():
                 self.ad_hoc_ip_list.append(ip)
             self.lgr.debug('DataMark addrRange end_addr now 0x%x loop_count %d' % (self.end_addr, self.loop_count))
 
+    def addrRangeBackward(self, addr, ip=None):
+        if self.end_addr is not None or addr < self.addr:
+            self.addr = addr
+            self.loop_count += 1
+            if ip is not None:
+                self.ad_hoc_ip_list.append(ip)
+            self.lgr.debug('DataMark addrRangeBackward addr now 0x%x loop_count %d' % (self.addr, self.loop_count))
+
     def noAdHoc(self):
         if self.ad_hoc:
             self.lgr.debug('DataMark noAdHoc')
@@ -775,12 +783,33 @@ class WatchMarks():
                         pm.cycle = self.cpu.cycles
                         pm.ip = ip
                         create_new = False
+                elif pm is not None and pm.mark.end_addr is not None and (addr+trans_size) == (pm.mark.addr):
+                    self.lgr.debug('watchMarks previous ad_hoc had addr one greather than end of new copy -- extend range backwards')
+                    skip_this = False
+                    if dest is not None:
+                        self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
+                        cur_len = pm.mark.end_addr - pm.mark.addr
+                        ok_dest = pm.mark.dest - trans_size
+                        self.lgr.debug('watchMarks dataRead trans_size 0x%x  ok_dest would be 0x%x' % (trans_size, ok_dest))
+                        if dest != ok_dest:
+                            skip_this = True
+                    else:
+                        self.lgr.debug('watchMarks dest is None')
+                    if not skip_this:
+                        self.lgr.debug('watchMarks dataRead extend range backward from addr 0x%x to 0x%x' % (pm.mark.addr, addr))
+                        pm.mark.addrRangeBackward(addr, ip=ip)
+                        pm.mark.dest = dest
+                        pm.cycle = self.cpu.cycles
+                        pm.ip = ip
+                        create_new = False
+                        self.lgr.debug('watchMarks extend backward, now mark %s' % pm.mark.getMsg())
                 if create_new:
-                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x' % (addr, start, length, dest, trans_size, self.cpu.cycles))
+                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x mark_list len %d' % (addr, start, length, dest, trans_size, self.cpu.cycles, len(self.mark_list)))
                     sp, base = self.getStackBase(dest)
                     sp = self.isStackBuf(dest)
                     #self.lgr.debug('sp is %s' % str(sp))
                     dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, byte_swap=byte_swap)
+                    self.lgr.debug('watchMarks new mark %s' % dm.getMsg())
                     wm = self.addWatchMark(dm)
                     self.recent_ad_hoc = wm
             else:
@@ -830,6 +859,7 @@ class WatchMarks():
             return None
 
     def rmLast(self, count):
+        self.lgr.debug('watchMarks rmLast %d' % count)
         for i in range(count):
             self.mark_list.pop() 
 
@@ -1316,6 +1346,7 @@ class WatchMarks():
         return retval
 
     def undoMark(self):
+        self.lgr.debug('watchMarks undoMark')
         self.mark_list.pop()
 
     def latestCycle(self):
