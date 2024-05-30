@@ -21,7 +21,7 @@ fi
 cp $RESIM_DIR/simics/ida/runRESim.idc $IDA_DIR/idc
 if [[ $# -eq 0 ]] || [[ "$1" = "-h" ]]; then
     echo "idaThis.sh [-64] <program> <script>"
-    echo "    Runs the given IDA script after loading the named program.
+    echo "    Runs the given IDA script after loading the named program."
     exit
 fi
 ida_suffix=id0
@@ -43,7 +43,7 @@ echo "the root_dir is $root_dir"
 old_dir=$RESIM_IDA_DATA/$target_base
 new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
-    echo "idaThis.sh assumes you are running from the file system root (per your ini file)."
+    echo "idaThis.sh assumes you are running from the file system root per your ini file."
     echo "If $old_dir is where the ida data is, rename it to $new_dir"
     echo "Or, if $old_dir is from some other system, fix its path, change its name, or remove it."
     exit

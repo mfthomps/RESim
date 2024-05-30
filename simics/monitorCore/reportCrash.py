@@ -10,11 +10,11 @@ import pageUtils
 import aflPath
 
 class ReportCrash():
-    def __init__(self, top, cpu, pid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, 
+    def __init__(self, top, cpu, tid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, 
                     target=None, targetFD=None, trackFD=None, report_dir=None):
         self.top = top
         self.cpu = cpu
-        self.pid = pid
+        self.tid = tid
         self.lgr = lgr
         self.report_index = report_index
         self.one_done = one_done
@@ -226,9 +226,14 @@ class ReportCrash():
                     self.lgr.debug("reportCrash doneForward Unhandled fault on access to address: 0x%x\n" % bad_addr)
                     self.reportStack()
                 else:
-                    self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
-                    SIM_run_alone(self.doneNothing,None)
-                    return            
+                    if self.top.hasPendingPageFault(self.tid):
+                        self.lgr.debug("reportCrash doneForward sees there is a pending fault, call pendingFault and return")
+                        self.top.pendingFault()
+                        return
+                    else:
+                        self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
+                        SIM_run_alone(self.doneNothing,None)
+                        return            
         self.lgr.debug('reportCrash doneForward eip: 0x%x instruction %s' %(eip, instruct[1]))
         if is_rop:
             self.top.setCommandCallback(self.doneBackward)

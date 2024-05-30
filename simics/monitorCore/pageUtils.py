@@ -355,11 +355,16 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None):
                 return ptable_info
             
             ptable_info.page_protect = memUtils.testBit(entry, 2)
+            present = memUtils.testBit(entry, 0)
+            rw = memUtils.testBit(entry, 1)
+            user_sup = memUtils.testBit(entry, 2)
+            #lgr.debug('page present: %d  rw %d user_sup %d' % (present, rw, user_sup))
             ptable_info.page_exists = True
             entry_20 = memUtils.bitRange(entry, 12, 31)
             page_base = entry_20 * PAGE_SIZE
             paddr = page_base + offset
             ptable_info.page_addr = paddr
+            ptable_info.entry = entry
             #lgr.debug('phys addr is 0x%x' % paddr)
             return ptable_info
         else:

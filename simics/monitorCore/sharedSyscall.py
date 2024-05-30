@@ -1116,18 +1116,19 @@ class SharedSyscall():
                 else:
                     trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (eax))
         elif callname == 'mmap2' or callname == 'mmap':
-            ''' TBD error handling? '''
-            if exit_info.fname is not None and self.soMap is not None:
-                self.lgr.debug('return from mmap tid:%s, addr: 0x%x so fname: %s' % (tid, ueax, exit_info.fname))
-                trace_msg = trace_msg+('addr: 0x%x so fname: %s\n' % (ueax, exit_info.fname))
-                if '/etc/ld.so.cache' not in exit_info.fname:
-                    if self.top.trackingThreads() or self.context_manager.amWatching(tid):
-                        self.soMap.addSO(tid, exit_info.fname, ueax, exit_info.count)
-                    else:
-                        self.lgr.debug('sharedSyscall %s not watching threads or debugging tid:%s.  SO not recorded.' % (callname, tid))
-            else:
-                trace_msg = trace_msg+('addr: 0x%x \n' % (ueax))
-                self.dataWatch.mmap(ueax)
+                # TBD still need error detection/handline
+                if exit_info.fname is not None and self.soMap is not None:
+                    self.lgr.debug('return from mmap tid:%s, addr: 0x%x so fname: %s' % (tid, ueax, exit_info.fname))
+                    trace_msg = trace_msg+('addr: 0x%x so fname: %s\n' % (ueax, exit_info.fname))
+                    if '/etc/ld.so.cache' not in exit_info.fname:
+                        if self.top.trackingThreads() or self.context_manager.amWatching(tid):
+                            self.soMap.addSO(tid, exit_info.fname, ueax, exit_info.count)
+                        else:
+                            self.lgr.debug('sharedSyscall %s not watching threads or debugging tid:%s.  SO not recorded.' % (callname, tid))
+                else:
+                    self.lgr.debug('fname soMap none')
+                    trace_msg = trace_msg+('addr: 0x%x \n' % (ueax))
+                    self.dataWatch.mmap(ueax)
         elif callname == 'ipc':
             callname = exit_info.socket_callname
             call = exit_info.frame['param1']

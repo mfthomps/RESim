@@ -188,27 +188,24 @@ def main():
     host = 'localhost'
     PORT = 6459
     target = (host, PORT)
-
-    if directive.session == 'serverTCP':
-        client_cmd = 'serverTCP3'
-    elif directive.session == 'TCP':
-        client_cmd = 'clientTCP3'
-    elif directive.session == 'replay':
-        client_cmd = None
-    elif directive.session == 'command':
-        client_cmd = None
-    elif directive.session == 'UDP_JSON':
-        if directive.src_ip is not None:
-            client_cmd = 'clientudpJsonScapy'
+    client_cmd = None
+    if directive.session is not None:
+        if directive.session.lower() == 'servertcp':
+            client_cmd = 'serverTCP3'
+        elif directive.session.lower() == 'tcp':
+            client_cmd = 'clientTCP3'
+        elif directive.session.lower() == 'udp_json':
+            if directive.src_ip is not None:
+                client_cmd = 'clientudpJsonScapy'
+            else:
+                client_cmd = 'clientudpJson'
         else:
-            client_cmd = 'clientudpJson'
-    else:
-        client_cmd = 'clientudpMult3'
-    if client_cmd is not None:
-        client_mult_path = os.path.join(core_path, client_cmd)
-        sendFiles([client_mult_path], sock, target)
-        cmd='/bin/chmod a+x /tmp/%s' % client_cmd
-        doCommand(cmd, sock, target)
+            client_cmd = 'clientudpMult3'
+        if client_cmd is not None:
+            client_mult_path = os.path.join(core_path, client_cmd)
+            sendFiles([client_mult_path], sock, target)
+            cmd='/bin/chmod a+x /tmp/%s' % client_cmd
+            doCommand(cmd, sock, target)
     if args.disconnect:
         magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
         sendFiles([magic_path], sock, target)
@@ -230,8 +227,9 @@ def main():
     for file in directive.file:
         file_list.append(file)
     ack = sendFiles(file_list, sock, target)
-    with open('.driver_server_version', 'w') as fh:
-        fh.write(ack.decode())
+    if ack is not None:
+        with open('.driver_server_version', 'w') as fh:
+            fh.write(ack.decode())
     dev = None
     host = None
     if directive.iface is not None:
@@ -244,21 +242,21 @@ def main():
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
-    if client_cmd is not None:
-        directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
-        driver_file.write(directive_line+'\n')
-    elif directive.session == 'replay':
-        if directive.device is not None:
-            for pcap in directive.file:
-                pcap_base = os.path.basename(pcap)
-                directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
-                driver_file.write(directive+'\n')
-        else:
-            print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
-            exit(1)
-    elif directive.session == 'command':
-        for command in directive.commands:
-            driver_file.write(command+'\n')
+    if directive.session is not None:
+        if client_cmd is not None:
+            directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
+            driver_file.write(directive_line+'\n')
+        elif directive.session == 'replay':
+            if directive.device is not None:
+                for pcap in directive.file:
+                    pcap_base = os.path.basename(pcap)
+                    directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
+                    driver_file.write(directive+'\n')
+            else:
+                print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
+                exit(1)
+    for command in directive.commands:
+        driver_file.write(command+'\n')
 
     driver_file.close()
     sendFiles([remote_directives_file], sock, target)
