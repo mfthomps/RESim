@@ -3161,6 +3161,17 @@ class DataWatch():
                 else:
                     self.lgr.debug('dataWatch testCompare clear zero flag')
                     retval = []
+                reg_size = self.decode.regLen(op1)
+                self.lgr.debug('dataWatch testCompare reg_size %d val 0x%x' % (reg_size, val))
+                if reg_size == 1:
+                    mask = 0x80 
+                elif reg_size == 2:
+                    mask = 0x8000 
+                elif reg_size == 4:
+                    mask = 0x80000000 
+                if val & mask:
+                    self.lgr.debug('dataWatch testCompare signed')
+                    retval.append('SF')
         return retval
                 
     def checkNoTaint(self, op, recent):
@@ -3242,6 +3253,23 @@ class DataWatch():
                                     mn = self.decode.getMn(next_instruct[1])
                                 except:
                                     self.lgr.debug('dataWatch getNextInstruct is jz failed to get jump dest from %s' % (next_instruct[1]))
+                                    next_ip = None
+                                    break
+                    elif mn in ['js']:
+                        self.lgr.debug('dataWatch getNextInstruct is js flags %s' % str(flags))
+                        if 'SF' not in flags:
+                            next_ip = next_ip + next_instruct[0]
+                            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                            mn = self.decode.getMn(next_instruct[1])
+                        else: 
+                            parts = next_instruct[1].split()
+                            if len(parts) == 2:
+                                try:
+                                    next_ip = int(parts[1], 16)
+                                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                                    mn = self.decode.getMn(next_instruct[1])
+                                except:
+                                    self.lgr.debug('dataWatch getNextInstruct is js failed to get jump dest from %s' % (next_instruct[1]))
                                     next_ip = None
                                     break
                     else:
