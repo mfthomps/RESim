@@ -245,6 +245,9 @@ class MemUtils():
         except AttributeError:
             self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
             return None
+        except TypeError:
+            self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
+            return None
         table_base = self.readWord(cpu, mm_struct+self.param.mm_struct_offset)
         if cpu.architecture == 'arm':
             table_base = table_base | 0x164
