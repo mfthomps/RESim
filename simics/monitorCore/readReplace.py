@@ -180,6 +180,7 @@ class ReadReplace():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(trace_info.lib, trace_info.lib_addr)
         if phys_addr is None:
+            self.lgr.debug('readReplace getPhys got None, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=replace_entry.lib_addr, use_pid=pid)
         else:
             replace_entry.linear_addr =  linear
