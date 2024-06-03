@@ -2962,7 +2962,7 @@ class DataWatch():
                     dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
         else:
             if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
-                #self.lgr.debug('dataWatch loopAdHoc, maybe op1 is %s' % op1)
+                self.lgr.debug('dataWatch loopAdHoc, maybe op1 is %s' % op1)
                 dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
         return dest_addr
 
@@ -3036,9 +3036,9 @@ class DataWatch():
         recent_instructs = []
         flags = None
         byte_swap = False
-        for i in range(max_num):
+        for move_cycles in range(max_num):
              
-            next_ip, next_instruct, mn = self.getNextInstruct(next_instruct, next_ip, flags, our_reg)
+            next_ip, next_instruct, mn, jump_cycles = self.getNextInstruct(next_instruct, next_ip, flags, our_reg)
             if next_ip is None:
                 break
             op2, op1 = self.decode.getOperands(next_instruct[1])
@@ -3054,7 +3054,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
  
             if dest_addr is not None:
-                adhoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i, word_size)
+                adhoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, (move_cycles+jump_cycles), word_size)
                 break
             elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
                     self.lgr.debug('dataWatch loopAdHoc, adding our_reg to %s' % op1)
@@ -3087,10 +3087,10 @@ class DataWatch():
                 flags = self.testCompare(mn, op1, op2, recent_instructs)
 
             recent_instructs.append(next_instruct[1])
-        #self.lgr.debug('dataWatch loopAdHoc exit i is %d' % i)
+        #self.lgr.debug('dataWatch loopAdHoc exit move_cycles is %d' % move_cycles)
         return adhoc
 
-    def gotAdHocDest(self, next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, i, word_size):
+    def gotAdHocDest(self, next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, move_cycles, word_size):
         adhoc = False
         ''' If dest is relative to sp, assume its value is good and avoid use of finishCheckMove, which is skipped if we encounter another read hap'''
         if 'sp' in op1:
@@ -3113,7 +3113,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch gotAdHocDest back from adHocCopy adhoc %r' % adhoc)
                 if adhoc:
                     self.move_cycle = self.cpu.cycles
-                    self.move_cycle_max = self.cpu.cycles+i+1
+                    self.move_cycle_max = self.cpu.cycles+move_cycles+1
                     self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
                     self.recordAdHocCopy(addr, start, length, trans_size, dest_addr)
         else:
@@ -3125,7 +3125,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch gotAdHocDestx back from adHocCopy adhoc %r' % adhoc)
                 if adhoc:
                     self.recordAdHocCopy(addr, start, length, trans_size, dest_addr, byte_swap=byte_swap)
-                    self.move_cycle_max = self.cpu.cycles+i+1
+                    self.move_cycle_max = self.cpu.cycles+move_cycles+1
                     self.move_cycle = self.cpu.cycles
                     self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
             else:                   
@@ -3139,7 +3139,7 @@ class DataWatch():
                 self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
                 # set these here since we know the max.  note though, we may decide this was not a move.  safe?
                 self.move_cycle = self.cpu.cycles
-                self.move_cycle_max = self.cpu.cycles+i+1
+                self.move_cycle_max = self.cpu.cycles+move_cycles+1
                 self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
                 self.lgr.debug('dataWatch gotAdHocDest addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
                       start, next_ip, self.cpu.current_context))
@@ -3201,9 +3201,11 @@ class DataWatch():
         next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
         mn = self.decode.getMn(next_instruct[1])
         self.lgr.debug('dataWatch getNextInstruct next_ip 0x%x next_instruc %s' % (next_ip, next_instruct[1]))
+        jump_cycles = 1
         while next_instruct[1].startswith('j'):
+            jump_cycles =  jump_cycles+1
             # TBD move branch tests into single routine that returns next_ip and next_instruct
-            self.lgr.debug('dataWatch getNextInstruct ip 0x%x instruc %s' % (next_ip, next_instruct[1]))
+            self.lgr.debug('dataWatch getNextInstruct ip 0x%x instruc %s jump_cycles %d' % (next_ip, next_instruct[1], jump_cycles))
             if next_instruct[1].startswith('jmp'):
                 parts = next_instruct[1].split()
                 if len(parts) == 2:
@@ -3284,7 +3286,7 @@ class DataWatch():
             self.lgr.debug('dataWatch getNextInstruct return next_ip 0x%x next_instruct %s ' % (next_ip, next_instruct[1]))
         else:
             self.lgr.debug('dataWatch getNextInstruct return None')
-        return next_ip, next_instruct, mn
+        return next_ip, next_instruct, mn, jump_cycles
 
     def checkPushedData(self, track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size):
         adhoc = False
