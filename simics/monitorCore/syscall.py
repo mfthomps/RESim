@@ -2361,8 +2361,9 @@ class Syscall():
         ''' catch stray calls from wrong tid.  Allow calls if the syscall instance's cell is not None, which means it is not up to the context manager
             to watch or not.  An example is execve, which must be watched for all processes to provide a toExecve function. '''
         if self.debugging and not self.context_manager.amWatching(tid) and syscall_info.callnum is not None and self.background_break is None and self.cell is None and not self.context_manager.watchingExit(tid):
-            self.lgr.debug('syscallHap name: %s tid:%s missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
-                 tid, syscall_info.callnum))
+            # will happen in afl if some other process exits.  TBD, method to watch selected processes as part of AFL run
+            #self.lgr.debug('syscallHap name: %s tid:%s missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
+            #     tid, syscall_info.callnum))
             return
 
         if self.bang_you_are_dead:
