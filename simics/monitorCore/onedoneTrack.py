@@ -5,6 +5,7 @@ found in OS environment variables set by the script that repeatdedly
 starts RESim.
 '''
 import os
+import json
 from simics import *
 global mytop, myinject
 def quit(cycles=None):
@@ -52,9 +53,31 @@ def onedone(top):
     myinject.setExitCallback(reportExit)
     myinject.go()
     if trace_all:
+        # determine how many cycles to run by adding backstop to final trackio cycle
+        track_path = outpath.replace('trace', 'trackio')
+        print('track path %s' % track_path) 
+        track = json.load(open(track_path))
+        mark_list = track['marks']
+        sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
+        last_mark_cycle = sorted_marks[-1]['cycle']
+        print('last_mark_cycle 0x%x' % last_mark_cycle)
+        first_mark_cycle = sorted_marks[0]['cycle']
+        print('first_mark_cycle 0x%x' % first_mark_cycle)
+        backstop_cycles =   9000000
+        bsc = os.getenv('BACK_STOP_CYCLES')
+        if bsc is not None:
+            backstop_cycles = int(bsc)
+        print('backstop cycles 0x%x' % backstop_cycles)
+        now = top.getCPU().cycles
+        now_delta = last_mark_cycle - now
+        track_delta = last_mark_cycle - first_mark_cycle
+        print('now 0x%x first delta 0x%x  now delta 0x%x' % (now, track_delta, now_delta))
+        run_cycles = track_delta + backstop_cycles
+        print('run 0x%x cycles' % run_cycles)
         top.autoMaze()
-        run_cycles = 1000000
         SIM_continue(run_cycles)
+        now = top.getCPU().cycles
+        print('cycles when done 0x%x' % now)
         top.quit()
 
 
