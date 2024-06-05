@@ -261,7 +261,7 @@ class WriteData():
             ''' Limit reads to buffer size using a hap on the read return '''
             ''' TBD can we stop tracking total read now that sharedSyscall is used to adjust values?'''
             if self.set_ret_hap:
-                self.lgr.debug('writeData call setRetHap')
+                #self.lgr.debug('writeData call setRetHap')
                 self.setRetHap()
             self.read_limit = retval
             self.total_read = 0
@@ -428,16 +428,16 @@ class WriteData():
                 self.lgr.debug('writeData setSelectStopHap failed to get entry for _newselect')
 
     def setRetHap(self):
-        self.lgr.debug('writeData set retHap') 
+        #self.lgr.debug('writeData set retHap') 
         if self.shared_syscall is None:
-            self.lgr.debug('writeData set retHap no shared_syscall yet?')
+            #self.lgr.debug('writeData set retHap no shared_syscall yet?')
             if self.ret_hap is None: 
                 phys_block = self.cpu.iface.processor_info.logical_to_physical(self.return_ip, Sim_Access_Execute)
                 self.ret_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
                 self.lgr.debug('writeData set retHap on return_ip 0x%x (phys 0x%x) cell is %s' % (self.return_ip, phys_block.address, str(self.cell)))
         else:
-            self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
+            #self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
             if self.addr_of_count is not None:
                 self.shared_syscall.setReadFixup(self.doRetIOCtl)
             else:
@@ -749,14 +749,14 @@ class WriteData():
 
     def retHap(self, dumb, third, break_num, memory):
         ''' Hit a return from read'''
-        self.lgr.debug('writeData retHap')
+        #self.lgr.debug('writeData retHap')
         if self.ret_hap is None:
             self.lgr.debug('writeData retHap no ret_hap bail')
             return
         if not self.pending_call:
-            self.lgr.debug('writeData retHap no pending call bail')
+            #self.lgr.debug('writeData retHap no pending call bail')
             return
-        self.lgr.debug('writeData retHap call doRetFixup')
+        #self.lgr.debug('writeData retHap call doRetFixup')
         self.doRetFixup(self.fd)
         
     def restoreCallHap(self):
