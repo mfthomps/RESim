@@ -154,12 +154,13 @@ class AFL():
 
         self.resim_ctl = None
         #if resimUtils.isParallel():
-        if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
-            self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
-            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
-            self.lgr.debug('afl back from open')
-        else: 
-            self.lgr.debug('AFL did NOT find resim_ctl.fifo')
+        if test_file is None:
+            if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+                self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
+                self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
+                self.lgr.debug('afl back from open')
+            else: 
+                self.lgr.debug('AFL did NOT find resim_ctl.fifo')
          
         self.starting_cycle = self.target_cpu.cycles 
         self.total_cycles = 0
@@ -552,7 +553,7 @@ class AFL():
         self.write_data.write()
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
-                self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
         # TBD why again and again?
         self.page_faults.watchPageFaults(afl=True)
