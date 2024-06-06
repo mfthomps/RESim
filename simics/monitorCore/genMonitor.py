@@ -5099,7 +5099,8 @@ class GenMonitor():
                      only_thread=only_thread, target=target, fname=fname)
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
-            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, no_page_faults=False, show_new_hits=False):
+            parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, 
+            no_page_faults=False, show_new_hits=False, diag_hits=False):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -5122,7 +5123,7 @@ class GenMonitor():
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
               repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults,
-              show_new_hits=show_new_hits)
+              show_new_hits=show_new_hits, diag_hits=diag_hits)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             if trace_all: 
@@ -6332,7 +6333,9 @@ class GenMonitor():
 
     def clearExitTid(self):
         self.task_utils[self.target].clearExitTid()
-        
+    
+    def diagHits(self):
+        self.coverage.diagHits()    
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
