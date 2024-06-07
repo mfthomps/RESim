@@ -2370,7 +2370,7 @@ class GenMonitor():
         '''
         if self.reverseEnabled():
             #self.context_manager[self.target].showHaps();
-            self.removeDebugBreaks()
+            self.removeDebugBreaks(immediate=True)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             value = self.mem_utils[self.target].readMemory(cpu, addr, num_bytes)
             if value is None:
@@ -2768,6 +2768,7 @@ class GenMonitor():
                 else:
                     tf = trace_file
                 cpu, comm, tid = self.task_utils[target].curThread() 
+                self.trackThreads()
 
             self.traceMgr[target].open(tf, cpu)
             if not self.context_manager[self.target].watchingTasks():
@@ -5071,7 +5072,8 @@ class GenMonitor():
             if self.target in self.kbuffer:
                 kbuf_module = self.kbuffer[self.target]
             self.lgr.debug('prepInjectWatch, kbuffer: %s' % str(kbuf_module))
-            prep_inject = prepInjectWatch.PrepInjectWatch(self, cpu, cell_name, self.mem_utils[self.target], self.dataWatch[self.target], kbuf_module, self.lgr) 
+            prep_inject = prepInjectWatch.PrepInjectWatch(self, cpu, cell_name, self.mem_utils[self.target], self.dataWatch[self.target], 
+                              self.context_manager[self.target], kbuf_module, self.lgr) 
             prep_inject.doInject(snap_name, watch_mark)
         else:
             print('prepInjectWatch requires reverse execution.')
@@ -5365,7 +5367,7 @@ class GenMonitor():
             self.debugTidGroup(self.debug_info['tid'], to_user=False, final_fun=final_fun)
             self.lgr.debug('debugSnap did debugTidGroup for tid:%s' % self.debug_info['tid'])
         else:
-            self.lgr.error('debugSnap, no debug_info read from snapshot')
+            self.lgr.error('debugSnap, no debug_info read from snapshot, try using debugIfNot')
             retval = False
         return retval
 
