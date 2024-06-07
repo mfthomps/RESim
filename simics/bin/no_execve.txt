@@ -1,0 +1,15 @@
+/bin/grep
+/bin/ls
+/bin/xargs
+/bin/rm
+/bin/chmod
+/bin/sync
+/bin/wc
+/bin/awk
+/usr/bin/find
+/usr/bin/diff
+/sbin/raw
+ls -l
+ cp 
+ raw 
+/bin/df
