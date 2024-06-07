@@ -1345,6 +1345,18 @@ class WatchMarks():
             index += 1
         return retval
 
+    def nextCallMark(self):
+        retval = None
+        cur_cycle = self.cpu.cycles
+        index = 1
+        for mark in self.mark_list:
+            if mark.cycle > cur_cycle:
+                if isinstance(mark.mark, CallMark) and mark.mark.recv_addr is not None:
+                    retval = index
+                    break
+            index += 1
+        return retval
+
     def undoMark(self):
         self.lgr.debug('watchMarks undoMark')
         self.mark_list.pop()

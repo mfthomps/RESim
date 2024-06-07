@@ -5392,4 +5392,6 @@ class DataWatch():
                 retval = 'loop counter compare at 0x%x, count %d' % (addr, loop_count)
             
         return retval
-        
+       
+    def nextCallMark(self):
+        return self.watchMarks.nextCallMark() 
