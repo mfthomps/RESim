@@ -43,7 +43,7 @@ class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -172,6 +172,7 @@ class PlayAFL():
         self.afl_packet_count = None
         self.current_packet = 0
         self.hit_total = 0
+        self.diag_hits = diag_hits
 
         self.filter_module = None
         packet_filter = os.getenv('AFL_PACKET_FILTER')
@@ -340,7 +341,8 @@ class PlayAFL():
                     prog_path = self.fname
             self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s' % (analysis_path, prog_path))
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path, prog_path=prog_path)
+               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
+               fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
             if self.linear:

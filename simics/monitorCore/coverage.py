@@ -74,6 +74,8 @@ class Coverage():
         self.proc_status = 0
         self.hit_count = 0
         self.afl_del_breaks = []
+        self.hit_255 = []
+        self.re_enable_bp = []
         self.tid = None
         self.linear = False
         # TBD not currently used
@@ -116,6 +118,9 @@ class Coverage():
         self.did_missing = []
         self.packet_num = None
         self.halt_coverage = False
+        self.diag_hits_counts = {}
+        self.diag_hits=False
+        
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
     def loadBlocks(self, block_file):
@@ -176,14 +181,18 @@ class Coverage():
                     #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
-                    if self.afl:
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
-                    else:
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, Sim_Breakpoint_Temporary)
+                    bp = self.setPhysBreak(phys_addr)
                     self.addr_map[bp] = bb_rel
             else:
                 #self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_block.address)
                 pass
+        return bp
+
+    def setPhysBreak(self, phys_addr):
+        if self.afl:
+            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+        else:
+            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, Sim_Breakpoint_Temporary)
         return bp
  
     def cover(self, force_default_context=False, physical=False):
@@ -441,8 +450,8 @@ class Coverage():
                         addr = pt.page_addr | (bb & 0x00000fff)
                         if addr not in self.dead_map:
                             got_one = True
-                            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
                             #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                            bp = self.setPhysBreak(addr)
                             self.addr_map[bp] = bb
                             if prev_bp is not None and bp != (prev_bp+1):
                                 #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
@@ -533,8 +542,8 @@ class Coverage():
                         addr = pt.page_addr | (bb & 0x00000fff)
                         if addr not in self.dead_map:
                             got_one = True
-                            bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
                             #self.lgr.debug('coverage pageBaseUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                            bp = self.setPhysBreak(addr)
                             self.addr_map[bp] = bb
                             if prev_bp is not None and bp != (prev_bp+1):
                                 #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
@@ -580,8 +589,8 @@ class Coverage():
                         self.lgr.error('coverage pageHap got none for addr ofr bb 0x%x.  broken' % bb) 
                         self.top.brokenAFL()
                     elif addr not in self.dead_map:
-                        bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, addr, 1, 0)
                         self.lgr.error('pageHap NOT YET FINISHED added break at phys addr 0x%x' % addr)
+                        bp = self.setPhysBreak(addr)
                         self.addr_map[bp] = bb
                     else:
                         #self.lgr.debug('pageHap addr 0x%x was in dead map, skip' % addr)
@@ -634,8 +643,8 @@ class Coverage():
         #if self.physical or (self.afl and not self.linear):
         if not self.linear and not self.force_default_context:
             this_addr = self.addr_map[break_num]
-        if this_addr in self.afl_del_breaks:
-            ''' already 255 hits, see if a jumper will alter the PC'''
+        if this_addr in self.hit_255:
+            ''' already 255 hits.  Will bail, but first see if a jumper will alter the PC'''
             if self.backstop_cycles is not None and self.backstop_cycles > 0:
                 #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
                 self.backstop.setFutureCycle(self.backstop_cycles, now=False)
@@ -717,12 +726,21 @@ class Coverage():
                 index = cur_loc ^ self.prev_loc
                 #self.lgr.debug('coverage bbHap cur_loc %d, index %d' % (cur_loc, index))
                 #self.lgr.debug('coverage bbHap addr 0x%x, offset 0x%x linear: 0x%x cycle: 0x%x' % (addr, self.offset, self.addr_map[break_num], self.cpu.cycles))
+                if self.diag_hits:
+                    if this_addr not in self.diag_hits_counts:
+                        self.diag_hits_counts[this_addr] = 1
+                    else:
+                        self.diag_hits_counts[this_addr] += 1
+                    self.lgr.debug('coverge bbHap diag_hits this_addr 0x%x %d hits' % (this_addr, self.diag_hits_counts[this_addr]))
                 if self.trace_bits[index] == 0:
                     self.hit_count += 1
-                if self.trace_bits[index] == 255:
-                    self.afl_del_breaks.append(this_addr)
+                if self.trace_bits[index] == 255 and this_addr not in self.hit_255:
+                    self.hit_255.append(this_addr)
                     if prejump_addr is not None: 
-                        self.afl_del_breaks.append(prejump_addr)
+                        self.hit_255.append(prejump_addr)
+                    if self.jumpers is None or this_addr not in self.jumpers:
+                        SIM_disable_breakpoint(break_num)
+                        self.re_enable_bp.append(break_num)
                     #if True:
                     #    ''' Current strategy is to assume deleting breaks is just as bad as hitting saturated breaks.  consider before 
                     #        prematurely optimizing'''
@@ -888,6 +906,7 @@ class Coverage():
     def doCoverage(self, no_merge=False, physical=False):
         '''
         Set coverage haps if not already set
+        AFL calls this each iteration
         '''
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
@@ -937,7 +956,12 @@ class Coverage():
             self.prev_loc = 0
             self.proc_status = 0
             self.hit_count = 0
+            # afl_del_breaks no longer used
             self.afl_del_breaks = []
+            self.hit_255 = []
+            for bp in self.re_enable_bp:
+                SIM_enable_breakpoint(bp) 
+            self.re_enable_bp = []
 
     def getHitRec(self, cycle=None):
         if cycle is None:
@@ -966,13 +990,14 @@ class Coverage():
             self.lgr.debug('coverage startDataSession with no previous hits')
 
     def enableCoverage(self, tid, fname=None, prog_path=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
-                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True):
+                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True, diag_hits=False):
         self.enabled = True
         self.tid = tid
         self.create_dead_zone = create_dead_zone
         self.no_save = no_save
         self.record_hits = record_hits
         self.only_thread = only_thread
+        self.diag_hits = diag_hits
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
             self.analysis_path = fname
@@ -1136,3 +1161,9 @@ class Coverage():
     def haltCoverage(self):
         #self.lgr.debug('coverage haltCoverage')  
         self.halt_coverage = True
+
+    def diagHits(self):
+        sorted_dict = dict(sorted(self.diag_hits_counts.items(), key=lambda item: item[1]))
+        for addr in sorted_dict:
+            if sorted_dict[addr] > 100:
+                print('addr 0x%x %d hits' % (addr, sorted_dict[addr]))
