@@ -293,7 +293,9 @@ class IdaSIM():
         else:
             return
         bpUtils.enableBpts(disabledSet)
-        if eip >=  self.kernel_base:
+        if eip is None:
+            print('Failed to get eip from RESim.  ERROR')
+        elif eip >=  self.kernel_base:
             print('previous is as far back as we can trace content of address 0x%x' % target_addr)
         else:
             curAddr = idaversion.get_reg_value(self.PC)
