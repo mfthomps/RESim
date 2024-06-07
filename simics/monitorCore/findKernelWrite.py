@@ -127,15 +127,22 @@ class findKernelWrite():
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
-        self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.brokenHap, self.cpu.cycles)
+        self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
 
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
         self.future_count = 0
         self.best_cycle = 0
-        SIM_run_alone(SIM_run_command, 'reverse')
+        # TBD does this nonsense mask a simics bug in which the reverse never returns?
+        now = self.cpu.cycles
+        prev = now - 1
+        if not resimUtils.skipToTest(self.cpu, prev, self.lgr):
+            self.top.quit()
+        if not resimUtils.skipToTest(self.cpu, now, self.lgr):
+            self.top.quit()
+        #SIM_run_alone(SIM_run_command, 'reverse')
+        SIM_run_command('reverse')
 
     def checkInitialBufferAlone(self, addr):
         self.lgr.debug('findKernelWrite checkInitialBufferAlone 0%x' % addr)
