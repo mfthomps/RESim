@@ -910,7 +910,7 @@ class WriteData():
                 buf_len = so_pickle['k_buf_len']
                 if type(buf_len) is int:
                     self.k_buf_len = []
-                    for i in range(len(self.kbufs)):
+                    for i in range(len(self.k_bufs)):
                         self.k_buf_len.append(buf_len)
                 else:
                     self.k_buf_len = buf_len
