@@ -831,7 +831,7 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        if tid in self.prog_start:
+        if tid in self.prog_start and self.prog_start[tid] is not None:
             prog = self.text_prog[tid]
             size = self.prog_end[tid] - self.prog_start[tid] + 1 
             load_info = LoadInfo(self.prog_start[tid], size)
