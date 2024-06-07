@@ -874,7 +874,8 @@ class SharedSyscall():
             if eax >= 0 and exit_info.retval_addr is not None:
 
                 max_len = min(eax, 1024)
-                byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                max_max_len = min(eax, 10000)
+                byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, exit_info.retval_addr)
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:max_len])
                     if self.traceFiles is not None:
@@ -947,7 +948,8 @@ class SharedSyscall():
         elif callname == 'write':
             if eax >= 0 and exit_info.retval_addr is not None:
                     max_len = min(eax, 1024)
-                    byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
+                    max_max_len = min(eax, 10000)
+                    byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, exit_info.retval_addr)
                     if byte_array is not None:
                         s = resimUtils.getHexDump(byte_array[:max_len])
                         '''
