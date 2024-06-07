@@ -91,6 +91,7 @@ class WriteData():
 
         self.stop_on_read = stop_on_read
         self.k_bufs = None
+        self.k_buf_len = None
         self.orig_buffer = None
         # for restoring user space to what it was, less what we read from the kernel
         self.user_space_addr = None
@@ -189,13 +190,13 @@ class WriteData():
             if not self.no_call_hap:
                 self.setCallHap()
             while remain > 0:
-                 count = min(self.k_buf_len, remain)
+                 count = min(self.k_buf_len[index], remain)
                  end = offset + count
                  if index >= len(self.k_bufs):
                      self.lgr.error('writeKdata index %d out of range with %d bytes remaining, count was %d.' % (index, remain, count))
                      self.lgr.debug('writeKdata to buf[%d] data[%d:%d] remain %d' % (index,  offset, end, remain))
                      break
-                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index]))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -906,7 +907,13 @@ class WriteData():
             if 'k_bufs' in so_pickle:
                 self.lgr.debug('writeData pickle got k_bufs')
                 self.k_bufs = so_pickle['k_bufs']
-                self.k_buf_len = so_pickle['k_buf_len']
+                buf_len = so_pickle['k_buf_len']
+                if type(buf_len) is int:
+                    self.k_buf_len = []
+                    for i in range(len(self.kbufs)):
+                        self.k_buf_len.append(buf_len)
+                else:
+                    self.k_buf_len = buf_len
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
