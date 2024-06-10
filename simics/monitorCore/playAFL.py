@@ -112,6 +112,11 @@ class PlayAFL():
                 return
         else: 
             self.pad_to_size = 0
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
+        else:
+            self.ioctl_count_max = None
         self.stop_on_read =   stop_on_read
         if not self.stop_on_read:
             sor = os.getenv('AFL_STOP_ON_READ')
@@ -512,13 +517,14 @@ class PlayAFL():
                     force_default_context = False
                 self.lgr.debug('playAFL gen writeData')
                 write_callback = None
-                if self.stop_on_read:
+                if self.stop_on_read or self.ioctl_count_max is not None:
                     write_callback = self.stopOnRead
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                          #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
-                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback)
+                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
+                         ioctl_count_max=self.ioctl_count_max)
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
@@ -528,6 +534,9 @@ class PlayAFL():
                 if self.addr_of_count is not None and not self.top.isWindows():
                     self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                     self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                    self.write_data.watchIOCtl()
+            if self.trace_all:
+                self.write_data.tracingIO()
             bp_count = self.coverage.bpCount()
             self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             # TBD just rely on coverage?

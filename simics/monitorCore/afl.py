@@ -119,6 +119,9 @@ class AFL():
             else:
                 self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
                 self.backstop_cycles =   1000000
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
                 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
@@ -546,7 +549,7 @@ class AFL():
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
@@ -555,6 +558,7 @@ class AFL():
             if self.addr_of_count is not None and not self.top.isWindows():
                 #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                self.write_data.watchIOCtl()
         # TBD why again and again?
         self.page_faults.watchPageFaults(afl=True)
         if self.exit_syscall is not None:

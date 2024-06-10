@@ -11,7 +11,7 @@ from resimHaps import *
 class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
-                 force_default_context=False, backstop_cycles=None, stop_on_read=False, write_callback=None, limit_one=False, 
+                 force_default_context=False, backstop_cycles=None, stop_on_read=False, ioctl_count_max=None, write_callback=None, limit_one=False, 
                   dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
@@ -90,6 +90,8 @@ class WriteData():
         self.current_packet = 0
 
         self.stop_on_read = stop_on_read
+        self.ioctl_count_max = ioctl_count_max
+        self.ioctl_count = 0
         self.k_bufs = None
         self.k_buf_len = None
         self.orig_buffer = None
@@ -156,9 +158,12 @@ class WriteData():
         else:
             self.ioctl_op_map = None
 
+        # TBD assumes single thread doing IO, change to dict?
         self.pending_call = True
         # know when to return 0 from ioctl
         self.ioctl_flag = None
+        self.watch_ioctl = False
+        self.tracing_io = False
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -186,8 +191,8 @@ class WriteData():
             #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
             #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
-            #self.lgr.debug('writeData writeKdata, call setCallHap')
             if not self.no_call_hap:
+                self.lgr.debug('writeData writeKdata, call setCallHap')
                 self.setCallHap()
             while remain > 0:
                  count = min(self.k_buf_len[index], remain)
@@ -252,6 +257,7 @@ class WriteData():
 
             if self.addr_of_count is not None:
                 self.ioctl_flag = 1
+                self.ioctl_count = 1
                 #self.lgr.debug('writeData setCountValue.  Assume ioctl describes how much read. wrote count 0x%x to addr 0x%x' % (retval, self.addr_of_count))
 
             #self.lgr.debug('writeData write is to kernel buffer %d bytes to 0x%x' % (retval, self.addr))
@@ -402,7 +408,7 @@ class WriteData():
             #if self.k_start_ptr is None and not self.mem_utils.isKernel(self.addr) and self.call_ip is not None:
             if self.k_start_ptr is None and self.call_ip is not None:
                 ''' NOTE stop on read will miss processing performed by other threads. '''
-                #self.lgr.debug('writeData set callHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
+                self.lgr.debug('writeData setCallHap on call_ip 0x%x, cell is %s' % (self.call_ip, str(self.cell)))
                 phys_block = self.cpu.iface.processor_info.logical_to_physical(self.call_ip, Sim_Access_Execute)
                 self.call_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 #self.call_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.call_ip, 1, 0)
@@ -429,20 +435,23 @@ class WriteData():
                 self.lgr.debug('writeData setSelectStopHap failed to get entry for _newselect')
 
     def setRetHap(self):
-        #self.lgr.debug('writeData set retHap') 
-        if self.shared_syscall is None:
-            #self.lgr.debug('writeData set retHap no shared_syscall yet?')
+        self.lgr.debug('writeData setRetHap') 
+        #if self.shared_syscall is None:
+        if not self.tracing_io:
+            #self.lgr.debug('writeData not tracing IO, we must do it')
             if self.ret_hap is None: 
                 phys_block = self.cpu.iface.processor_info.logical_to_physical(self.return_ip, Sim_Access_Execute)
                 self.ret_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
                 self.ret_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.retHap, None, self.ret_break)
-                self.lgr.debug('writeData set retHap on return_ip 0x%x (phys 0x%x) cell is %s' % (self.return_ip, phys_block.address, str(self.cell)))
-        else:
-            #self.lgr.debug('writeData set retHap call sharedSyscall setReadFixup')
+                self.lgr.debug('writeData setRetHap on return_ip 0x%x (phys 0x%x) cell is %s' % (self.return_ip, phys_block.address, str(self.cell)))
+        elif self.shared_syscall is not None:
+            self.lgr.debug('writeData setRetHap call sharedSyscall setReadFixup')
             if self.addr_of_count is not None:
                 self.shared_syscall.setReadFixup(self.doRetIOCtl)
             else:
                 self.shared_syscall.setReadFixup(self.doRetFixup)
+        else:
+            self.lgr.error('writeData setRetHap, shared_syscall is None and not tracing io')
 
     def selectHap(self, dumb, third, break_num, memory):
         ''' Hit a call to select or poll'''
@@ -491,7 +500,7 @@ class WriteData():
                 self.lgr.debug('writeData selectHap, skipped over kernel')
 
     def callHap(self, dumb, third, break_num, memory):
-        ''' Hit a call to recv '''
+        ''' Hit a call to recv or ioctl or... '''
         if self.call_hap is None:
             return
         tid = self.top.getTID()
@@ -533,14 +542,14 @@ class WriteData():
                 skip_it = True
             if callname == 'socketcall':
                 self.lgr.warning('writeData fix this so we know if we are calling a read')
-            elif callname not in ['recv', 'recvfrom', 'read']:
+            elif callname not in ['recv', 'recvfrom', 'read'] and not (self.watch_ioctl and callname == 'ioctl'):
                 #self.lgr.debug('writeData callHap wrong call %s' % callname)
                 skip_it = True
             if self.read_count == 0 and self.addr_of_count is not None:
                 # was an ioctl and we've not yet hit the read, so just let it go
                 skip_it = True
-            #self.lgr.debug('writeData callHap eip: 0x%x callnum %d  call: %s fd: %d cycle: 0x%x context: %s' % (eip, callnum, 
-            #     callname, fd, self.cpu.cycles, str(self.cpu.current_context)))
+            #self.lgr.debug('writeData callHap eip: 0x%x callnum %d  call: %s fd: %d cycle: 0x%x context: %s skip_it %r' % (eip, callnum, 
+            #     callname, fd, self.cpu.cycles, str(self.cpu.current_context), skip_it))
 
         if not skip_it:
             self.read_count = self.read_count + 1
@@ -556,18 +565,18 @@ class WriteData():
         eip = self.top.getEIP(self.cpu)
         #self.lgr.debug('writeData handleCall, tid:%s write_callback %s closed_fd: %r eip: 0x%x cycle: 0x%x' % (tid, self.write_callback, self.closed_fd, eip, self.cpu.cycles))
         if self.closed_fd or len(self.in_data) == 0 or (self.max_packets is not None and self.current_packet >= self.max_packets):
-            if self.closed_fd:
-                #self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
-                pass
-            else:
-                #self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
-                pass
+            #if self.closed_fd:
+            #    self.lgr.debug('writeData handleCall current packet %d. closed FD write_callback: %s' % (self.current_packet, self.write_callback))
+            #    pass
+            #else:
+            #    self.lgr.debug('writeData handleCall current packet %d. Len in_data: %d write_callback: %s' % (self.current_packet, len(self.in_data), self.write_callback))
+            #    pass
             '''
             self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
             self.cpu.iface.int_register.write(self.len_reg_num, 0)
             '''
             if self.write_callback is not None:
-                self.lgr.debug('writeData handleCall write_callback not None')
+                #self.lgr.debug('writeData handleCall write_callback not None')
                 if self.mem_utils.isKernel(self.addr):
                     if self.closed_fd:
                         rprint('fd closed')
@@ -583,6 +592,9 @@ class WriteData():
                             self.top.writeRegValue('syscall_ret', 0x12, alone=True, reuse_msg=True)
                             self.lgr.debug('writeData handleCall hacked it')
                             self.read_count = 0
+                        elif self.watch_ioctl:
+                            #self.lgr.debug('writeData handleCall, watch_ioctl do write_callback')
+                            SIM_run_alone(self.write_callback, 0)
                         else:
                             self.user_space_addr, length = self.top.getReadAddr()
                             if self.user_space_addr is not None:
@@ -591,9 +603,9 @@ class WriteData():
                         
                     else:
                         rprint('kernel buffer data consumed')
-                        self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
+                        #self.lgr.debug('writeData handleCall kernel buffer data consumed, stop')
                         SIM_break_simulation('kernel buffer data consumed.')
-                        self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
+                        #self.lgr.debug('writeData handleCall current packet %d kernel buffer' % self.current_packet)
                         SIM_run_alone(self.write_callback, 0)
                 elif len(self.in_data) == 0:
                     #self.lgr.debug('writeData handleCall current packet %d no data left, break simulation' % self.current_packet)
@@ -615,6 +627,16 @@ class WriteData():
                         if self.user_space_addr is not None:
                             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, length)
                         #self.lgr.debug('writeData handleCall kernel buf not consumed')
+                        if self.watch_ioctl:
+                            self.ioctl_count = self.ioctl_count+1
+                            if self.ioctl_count_max is not None and self.ioctl_count  >= self.ioctl_count_max:
+                                SIM_run_alone(self.delCallHap, None)
+                                SIM_break_simulation('writeData ioctl_count_max')
+                                #self.lgr.debug('writeData ioctl_count_max')
+                            elif self.ret_hap is None:
+                                #self.lgr.debug('writeData handleCall ioctl call to setRetHap')
+                                self.setRetHap()
+                          
                     else:
                         self.top.haltCoverage()
                         SIM_run_alone(self.delCallHap, None)
@@ -661,16 +683,19 @@ class WriteData():
     def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
         retval = None
         tid = self.top.getTID()
-        self.lgr.debug('writeData doRetIOCtl fd %d callname %s tid %s' % (fd, callname, tid))
+        if tid != self.tid:
+            return
+        #self.lgr.debug('writeData doRetIOCtl fd %d callname %s tid %s' % (fd, callname, tid))
+        self.pending_call = False
         if callname is not None and callname != 'ioctl':
             return self.doRetFixup(fd)
-        if tid == self.tid and fd == self.fd:
+        if fd == self.fd:
             if self.ioctl_flag is not None:
                 if not self.no_reset:
                     # must be second call, return zero
                     if addr_of_count is None:
                         addr_of_count = self.addr_of_count
-                    self.lgr.debug('writeData doRetIOCtl set return value to zero to addr 0x%x' % addr_of_count)
+                    #self.lgr.debug('writeData doRetIOCtl set return value to zero to addr 0x%x' % addr_of_count)
                     #self.mem_utils.writeWord32(self.cpu, addr_of_count, 0)
                     self.top.writeWord(addr_of_count, 0, target_cpu=self.cpu, word_size=4)
                 else:
@@ -695,11 +720,11 @@ class WriteData():
         self.top.flushTrace()
         if tid != self.tid or fd != self.fd:
             return eax
+        self.pending_call = False
         eax = self.mem_utils.getSigned(eax)
         if eax <= 0: 
             #self.lgr.error('writeData retHap got count of %d' % eax)
             return eax
-        self.pending_call = False
         remain = self.read_limit - self.total_read
 
         if self.total_read >= self.read_limit and self.stop_on_read:
@@ -749,16 +774,19 @@ class WriteData():
         return eax
 
     def retHap(self, dumb, third, break_num, memory):
-        ''' Hit a return from read'''
+        ''' Hit a return from read or ioctl'''
         #self.lgr.debug('writeData retHap')
         if self.ret_hap is None:
-            self.lgr.debug('writeData retHap no ret_hap bail')
+            #self.lgr.debug('writeData retHap no ret_hap bail')
             return
         if not self.pending_call:
             #self.lgr.debug('writeData retHap no pending call bail')
             return
-        #self.lgr.debug('writeData retHap call doRetFixup')
-        self.doRetFixup(self.fd)
+        if self.watch_ioctl:
+            self.doRetIOCtl(self.fd)
+        else:
+            #self.lgr.debug('writeData retHap call doRetFixup')
+            self.doRetFixup(self.fd)
         
     def restoreCallHap(self):
         if self.was_a_call_hap:
@@ -862,6 +890,13 @@ class WriteData():
             '''
     def closedFD(self):
         return self.closed_fd
+
+    def watchIOCtl(self):
+         self.watch_ioctl = True
+
+    def tracingIO(self):
+        # syscalls of IO are being traced, thus we need not catch syscalls or returns
+        self.tracing_io = True
 
     def loadPickle(self, name):
         cell_name = self.top.getTopComponentName(self.cpu)

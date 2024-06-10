@@ -149,6 +149,11 @@ class InjectIO():
         if sor is not None and sor.lower() in ['true', 'yes']:
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
+        else:
+            self.ioctl_count_max = None
         self.break_on_hap = None
         if not self.coverage and not self.trace_all:
             self.dataWatch.enable()
@@ -305,8 +310,8 @@ class InjectIO():
             write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max,
+                 force_default_context=force_default_context, write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
 
         #bytes_wrote = self.writeData()
