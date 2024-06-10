@@ -123,6 +123,7 @@ class Directive():
         self.iface = None
         self.file = []
         self.commands = []
+        self.hang = False
         self.load(fname)
 
     def load(self, fname):
@@ -154,6 +155,9 @@ class Directive():
                     self.commands.append(value)
                 elif key == 'IFACE':
                     self.iface = value
+                elif key == 'HANG':
+                    if value.lower() in ['true', 'yes']:
+                        self.hang = True
     def getArgs(self):
         retval = ' --ip %s --port %s' % (self.ip, self.port)
         if self.src_ip is not None:
@@ -164,6 +168,8 @@ class Directive():
             retval = retval + ' --device %s' % self.device
         if self.header is not None:
             retval = retval + ' --header %s' % self.header
+        if self.hang:
+            retval = retval + ' --hang'
         farg = ''
         for f in self.file:
             farg = farg + ' /tmp/%s' % os.path.basename(f)
