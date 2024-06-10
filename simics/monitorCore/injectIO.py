@@ -315,7 +315,7 @@ class InjectIO():
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
 
         #bytes_wrote = self.writeData()
-
+        self.write_data.tracingIO()
         if self.addr_addr is not None and self.src_addr is not None:
             self.lgr.debug('injectIO replace src addr with given 0x%x at 0x%x' % (self.src_addr, self.addr_addr))
             src_ip_addr = self.addr_addr + 4
