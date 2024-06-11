@@ -455,11 +455,13 @@ class SharedSyscall():
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
             if self.read_fixup_callback is not None and eax >= 0:
-                self.lgr.debug('sharedSyscall recv call read_fixup_callback eax was %d' % eax)
-                eax = self.read_fixup_callback(exit_info.old_fd, callname=socket_callname)
-                self.lgr.debug('sharedSyscall recv call back from read_fixup_callback eax is now %s' % str(eax))
-                if eax is None:
-                    return
+                self.lgr.debug('sharedSyscall recv call read_fixup_callback eax was %d fixup callback %s' % (eax, str(self.read_fixup_callback)))
+                fixed_eax = self.read_fixup_callback(exit_info.old_fd, callname=socket_callname)
+                if fixed_eax is not None:
+                    eax = fixed_eax
+                else:
+                    self.lgr.debug('sharedSyscall recv got None from read_fixup, likely ioctl')
+                    
             if eax >= 0:
                 nbytes = min(eax, 256)
                 byte_array = self.mem_utils.getBytes(self.cpu, eax, exit_info.retval_addr)
