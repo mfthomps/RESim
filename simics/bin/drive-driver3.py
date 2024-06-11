@@ -189,6 +189,7 @@ def main():
         print('No file found at %s' % args.directives)
         exit(1)
     directive = Directive(args.directives)
+    print('wtf commands %s' % str(directive.commands))
 
     sock = getSocket()
     host = 'localhost'
@@ -205,7 +206,7 @@ def main():
                 client_cmd = 'clientudpJsonScapy'
             else:
                 client_cmd = 'clientudpJson'
-        else:
+        elif directive.session.lower() != 'replay':
             client_cmd = 'clientudpMult3'
         if client_cmd is not None:
             client_mult_path = os.path.join(core_path, client_cmd)
@@ -248,19 +249,22 @@ def main():
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
+    print('wtf2 commands %s' % str(directive.commands))
     if directive.session is not None:
         if client_cmd is not None:
             directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
             driver_file.write(directive_line+'\n')
-        elif directive.session == 'replay':
+        elif directive.session.lower() == 'replay':
+            print('wtf3 commands %s' % str(directive.commands))
             if directive.device is not None:
                 for pcap in directive.file:
                     pcap_base = os.path.basename(pcap)
-                    directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
-                    driver_file.write(directive+'\n')
+                    directive_line = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
+                    driver_file.write(directive_line+'\n')
             else:
                 print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
                 exit(1)
+    print('wtf4 commands %s' % str(directive.commands))
     for command in directive.commands:
         driver_file.write(command+'\n')
 
