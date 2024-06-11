@@ -6328,10 +6328,11 @@ class GenMonitor():
             target = self.cell_config.cellFromCPU(target_cpu)
         return self.soMap[target].isLibc(addr)
 
-    def spotFuzz(self, fuzz_addr, break_at, reg, dfile):
+    def spotFuzz(self, fuzz_addr, break_at, data_length=4, reg=None, fail_break=None):
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
-        spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], fuzz_addr, break_at, reg, self.lgr)
+        spotFuzz.SpotFuzz(self, cpu, self.mem_utils[self.target], self.context_manager[self.target], self.back_stop[self.target], 
+             fuzz_addr, break_at, self.lgr, reg=reg, data_length=data_length, fail_break=fail_break)
 
     def clearExitTid(self):
         self.task_utils[self.target].clearExitTid()
