@@ -17,7 +17,10 @@ class CallMark():
         self.max_len = max_len
         self.recv_addr = recv_addr
         self.len = length
-        self.end_addr = recv_addr+length-1
+        if recv_addr is not None and length is not None:
+            self.end_addr = recv_addr+length-1
+        else:
+            self.end_addr = None
         self.fd = fd
         self.is_lib = is_lib
     def getMsg(self):
@@ -698,7 +701,7 @@ class WatchMarks():
         if len(self.prev_ip) > 4:
             self.prev_ip.pop(0)
 
-    def markCall(self, msg, max_len, recv_addr=None, length=None, fd=None, is_lib=False):
+    def markCall(self, msg, max_len=None, recv_addr=None, length=None, fd=None, is_lib=False):
         ''' remove previous mark if a kernel mod of same address'''
         prev_mark = self.getRecentMark()
         if prev_mark is not None:
