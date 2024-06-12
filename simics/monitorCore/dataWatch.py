@@ -573,7 +573,7 @@ class DataWatch():
                 recv_addr = start
             self.lgr.debug('dataWatch call markCall, length %d' % length)
             ''' TBD what if fun result? e.g., checkNumericStore'''
-            self.watchMarks.markCall(fixed, max_len, recv_addr=recv_addr, length=length, fd=fd, is_lib=is_lib)
+            self.watchMarks.markCall(fixed, max_len=max_len, recv_addr=recv_addr, length=length, fd=fd, is_lib=is_lib)
             if self.prev_cycle is None:
                 ''' first data read, start data session if doing coverage '''
                 self.top.startDataSessions()
@@ -757,7 +757,7 @@ class DataWatch():
         ''' called when FD is closed and we might be doing a trackIO '''
         eip = self.top.getEIP(self.cpu)
         msg = 'closed FD: %d (0x%x)' % (fd, fd)
-        self.watchMarks.markCall(msg, None, None, fd=fd)
+        self.watchMarks.markCall(msg, fd=fd)
        
     def watchFunEntries(self): 
         #self.lgr.debug('watchFunEntries, %d entries' % len(self.mem_fun_entries))
@@ -5403,3 +5403,6 @@ class DataWatch():
        
     def nextCallMark(self):
         return self.watchMarks.nextCallMark() 
+
+    def markSelect(self, msg, fd):
+        self.watchMarks.markCall(msg, fd=fd)
