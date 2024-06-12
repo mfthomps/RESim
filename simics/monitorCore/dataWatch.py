@@ -3769,6 +3769,14 @@ class DataWatch():
         tid = self.task_utils.curTID()
         cpl = memUtils.getCPL(self.cpu)
         addr = memory.logical_address
+
+        # may be multiple overlapping buffer ranges, index is simply first reported by Simics.  Find
+        # the most recently defined range
+        latest_index = self.findRangeIndex(addr)
+        if latest_index is not None and latest_index != index:
+            self.lgr.debug('readHap altering index from %d to more recently defined buffer at index %d' % (index, latest_index))
+            index = latest_index
+
         if cpl > 0:
             if addr == 0:
                 self.lgr.error('readHap memory logical address zero???, index %d' % index)
@@ -4352,7 +4360,7 @@ class DataWatch():
                 retval = recv_addr
                 self.lgr.debug('findRange addr 0x%x found in call buffer # %d, addr 0x%x' % (addr, read_count, recv_addr))
             else:
-                for index in range(len(self.start)):
+                for index in reversed(range(len(self.start))):
                     if self.start[index] is not None:
                         end = self.start[index] + self.length[index] - 1
                         #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
@@ -4362,7 +4370,7 @@ class DataWatch():
         return retval
 
     def findRangeIndex(self, addr):
-        for index in range(len(self.start)):
+        for index in reversed(range(len(self.start))):
             if self.start[index] is not None:
                 end = self.start[index] + (self.length[index]-1)
                 #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
@@ -4382,7 +4390,7 @@ class DataWatch():
                 ret_start = recv_addr
                 ret_length = recv_length
             else:
-                for index in range(len(self.start)):
+                for index in reversed(range(len(self.start))):
                     if self.start[index] is not None:
                         end = self.start[index] + (self.length[index]-1)
                         #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
