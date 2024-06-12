@@ -350,7 +350,7 @@ class GenMonitor():
         SIM_run_command("bp.delete -all")
         self.target = os.getenv('RESIM_TARGET')
         print('using target of %s' % self.target)
-        self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()))
+        self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()), self.lgr)
         target_cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('New log, in genInit')
         self.run_from_snap = os.getenv('RUN_FROM_SNAP')
@@ -1631,22 +1631,22 @@ class GenMonitor():
             full_path = self.targetFS[self.target].getFull(prog_name, self.lgr)
             self.lgr.debug('execToText, progname is %s  full: %s' % (prog_name, full_path))
             if full_path is None:
-                self.lgr.error('execToText failed to get full_path for %s' % prog_name)
-                return
-            prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
-            if prog_info is not None:
-                if prog_info.addr is None:
-                    self.lgr.error('execToText found file %s, but address is None?' % full_path)
-                    stopFunction.allFuns(flist)
-                    return
-                self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
-                #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
-                self.runToText(flist)
-                return
+                self.lgr.warning('execToText failed to get full_path for %s' % prog_name)
             else:
-                self.lgr.debug('execToText text segment, just run to user flist')
-                self.toUser(flist)
-                return
+                prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
+                if prog_info is not None:
+                    if prog_info.addr is None:
+                        self.lgr.error('execToText found file %s, but address is None?' % full_path)
+                        stopFunction.allFuns(flist)
+                        return
+                    self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
+                    #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
+                    self.runToText(flist)
+                    return
+                else:
+                    self.lgr.debug('execToText text segment, just run to user flist')
+                    self.toUser(flist)
+                    return
         self.lgr.debug('execToText no information about the text segment')
         ''' If here, then no info about the text segment '''
         if flist is not None:
