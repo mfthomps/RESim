@@ -648,7 +648,7 @@ class DataWatch():
                     self.lgr.debug('dataWatch checkFailedStackBufs failed index %d not in self.start (or is None), sp: 0x%x' % (failed_index, sp))
                     continue
                 self.lgr.debug('dataWatch checkFailedStackBufs failed index %d start 0x%x sp 0x%x' % (failed_index, self.start[failed_index], sp))
-                if self.start[failed_index] <= sp:
+                if self.start[failed_index] <= sp and failed_index < len(self.read_hap):
                     rm_list.append(failed_index)
                     #self.lgr.debug('dataWatch checkFailedStackbufs remove start 0x%x failed index %d' % (self.start[failed_index], failed_index))
                     hap = self.read_hap[failed_index]
