@@ -3535,13 +3535,13 @@ class GenMonitor():
                             calls.remove(c)
             else:
                 if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.mem_utils[target].WORD_SIZE == 8:
-                    calls = ['read', 'close', 'ioctl']
+                    calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
                     for call in net.readcalls:
                         calls.append(call.lower())
                     if self.mem_utils[target].WORD_SIZE == 8:
                         calls.remove('recv')
                 else: 
-                    calls = ['read', 'close', 'socketcall', 'ioctl']
+                    calls = ['read', 'close', 'socketcall', 'ioctl', 'select', 'pselect6', '_newselect']
 
             calls.append('clone')
             calls.append('dup2')
