@@ -1179,8 +1179,11 @@ class SharedSyscall():
                         if type(call_param.match_param) is int:
                             if exit_info.syscall_instance.name == 'runToIO':
                                 if exit_info.select_info.setHasFD(call_param.match_param, exit_info.select_info.readfds):
-                                    self.lgr.debug('sharedSyscall select for runToIO fd %d in read fds, no match' % call_param.match_param)
+                                    self.lgr.debug('sharedSyscall select for runToIO fd %d in read fds, has match' % call_param.match_param)
                                     exit_info.matched_param = call_param
+                                    if self.dataWatch is not None:
+                                        msg = trace_msg
+                                        self.dataWatch.markSelect(msg, call_param.match_param)
                                     break
                             elif exit_info.select_info.hasFD(call_param.match_param):
                                 self.lgr.debug('sharedSyscall select fd %d found' % call_param.match_param)
