@@ -584,6 +584,16 @@ class WriteData():
             self.pending_call = True
             self.handleCall(callname)
 
+    def doBreakSimulation(self, msg):
+        if self.write_callback is not None:
+            SIM_break_simulation(msg)
+            self.lgr.debug(msg)
+            SIM_run_alone(self.write_callback, 0)
+        else:
+            SIM_run_alone(self.delCallHap, None)
+            SIM_break_simulation(msg+' no write_callback')
+            self.lgr.debug(msg+' no write_callback')
+
     def handleCall(self, callname):
         # TBD reworked, must be updated for Windows
         self.pending_callname = callname
@@ -591,28 +601,14 @@ class WriteData():
         if tid != self.tid:
             #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        if callname in ['recv', 'recvfrom']:
+        if callname in ['recv', 'recvfrom', 'read']:
             self.lgr.debug('writeData handleCall is recv')
             if self.max_packets is not None and self.current_packet >= self.max_packets:
-                if self.write_callback is not None:
-                    SIM_break_simulation('max_packets.')
-                    self.lgr.debug('writeData handleCall max_packets.')
-                    SIM_run_alone(self.write_callback, 0)
-                else:
-                    SIM_run_alone(self.delCallHap, None)
-                    SIM_break_simulation('max_packets no write_callback')
-                    self.lgr.debug('writeData handleCall max_packets no write_callback.')
+                self.doBreakSimulation('writeData handleCall max_packets')
             elif not self.mem_utils.isKernel(self.addr):
                 if len(self.in_data) == 0:
                     if self.stop_on_read: 
-                        if self.write_callback is not None:
-                            SIM_break_simulation('stop_on_read.')
-                            self.lgr.debug('writeData handleCall stop_on_read.')
-                            SIM_run_alone(self.write_callback, 0)
-                        else:
-                            SIM_run_alone(self.delCallHap, None)
-                            SIM_break_simulation('stop_on_read no write_callback')
-                            self.lgr.debug('writeData handleCall stop_on_read no write_callback.')
+                        self.doBreakSimulation('writeData handleCall stop_on_read')
                     else:
                         self.lgr.debug('writeData handleCall out of data, let backstop handle it')
                 else:
@@ -639,6 +635,10 @@ class WriteData():
                                 self.backstop.setFutureCycle(self.backstop_cycles)
                         if self.write_callback is not None:
                             SIM_run_alone(self.write_callback, count)
+            else:
+                # Kernel buffer
+                if self.kernel_buf_consumed:
+                    self.doBreakSimulation('writeData handleCall kernel buffer consumed')
 
         elif self.pending_select is not None:
             if callname not in['select', '_newselect', 'pselect6']:
@@ -659,13 +659,7 @@ class WriteData():
                 self.lgr.error('writeData handleCall watch_ioctl but not a kernel buffer.  Not yet handled, bail.')
                 return
         elif callname == 'close' and self.stop_on_close:
-            if self.write_callback is not None:
-                self.lgr.debug('writeData handleCall close and stop_on_close set, call write_callback %s' % str(self.write_callback))
-                SIM_run_alone(self.write_callback, 0)
-            else:
-                SIM_run_alone(self.delCallHap, None)
-                SIM_break_simulation('max_packets no write_callback')
-                self.lgr.debug('writeData handleCall close and stop_on_close set, no write_callback')
+            self.doBreakSimulation('writeData handleCall close and stop_on_close')
         else:
             self.lgr.debug('writeData handleCall did not handle call %s' % callname)
            
