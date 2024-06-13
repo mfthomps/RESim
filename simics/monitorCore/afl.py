@@ -122,6 +122,8 @@ class AFL():
         sioctl = os.getenv('IOCTL_COUNT_MAX')
         if sioctl is not None:
             self.ioctl_count_max = int(sioctl)
+        else:
+            self.ioctl_count_max = None
                 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
