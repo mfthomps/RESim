@@ -603,29 +603,42 @@ class WriteData():
                     SIM_break_simulation('max_packets no write_callback')
                     self.lgr.debug('writeData handleCall max_packets no write_callback.')
             elif not self.mem_utils.isKernel(self.addr):
-                # User buffer, e.g., UDP skip over kernel read unless told not to limit to one read
-                frame = self.top.frameFromRegs()
-                frame_s = taskUtils.stringFromFrame(frame)
-                self.lgr.debug('handleCall writeData handleCall user buffer frame: %s' % frame_s)
-    
-                if self.limit_one:
-                    self.lgr.warning('writeData handleCall, would write more data, but limit_one')
-                    #self.lgr.debug(frame_s)
-                
+                if len(self.in_data) == 0:
+                    if self.stop_on_read: 
+                        if self.write_callback is not None:
+                            SIM_break_simulation('stop_on_read.')
+                            self.lgr.debug('writeData handleCall stop_on_read.')
+                            SIM_run_alone(self.write_callback, 0)
+                        else:
+                            SIM_run_alone(self.delCallHap, None)
+                            SIM_break_simulation('stop_on_read no write_callback')
+                            self.lgr.debug('writeData handleCall stop_on_read no write_callback.')
+                    else:
+                        self.lgr.debug('writeData handleCall out of data, let backstop handle it')
                 else:
-                    ''' Skip over kernel to the return ip '''
-                    self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
-                    count = self.write()
-                    #self.lgr.debug('writeData handleCall, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
-                    #print('did write')
-                    if self.current_packet >= self.expected_packet_count:
-                        # set backstop if needed, we are on the last (or only) packet.
-                        #SIM_run_alone(self.delCallHap, None)
-                        if self.backstop_cycles > 0:
-                            #self.lgr.debug('writeData setting backstop')
-                            self.backstop.setFutureCycle(self.backstop_cycles)
-                    if self.write_callback is not None:
-                        SIM_run_alone(self.write_callback, count)
+                    # User buffer, e.g., UDP skip over kernel read unless told not to limit to one read
+                    frame = self.top.frameFromRegs()
+                    frame_s = taskUtils.stringFromFrame(frame)
+                    self.lgr.debug('handleCall writeData handleCall user buffer frame: %s' % frame_s)
+        
+                    if self.limit_one:
+                        self.lgr.warning('writeData handleCall, would write more data, but limit_one')
+                        #self.lgr.debug(frame_s)
+                    
+                    else:
+                        ''' Skip over kernel to the return ip '''
+                        self.cpu.iface.int_register.write(self.pc_reg, self.return_ip)
+                        count = self.write()
+                        self.lgr.debug('writeData handleCall, skip over kernel receive processing and wrote %d more bytes context %s' % (count, self.cpu.current_context))
+                        #print('did write')
+                        if self.current_packet >= self.expected_packet_count:
+                            # set backstop if needed, we are on the last (or only) packet.
+                            #SIM_run_alone(self.delCallHap, None)
+                            if self.backstop_cycles > 0:
+                                #self.lgr.debug('writeData setting backstop')
+                                self.backstop.setFutureCycle(self.backstop_cycles)
+                        if self.write_callback is not None:
+                            SIM_run_alone(self.write_callback, count)
 
         elif self.pending_select is not None:
             if callname not in['select', '_newselect', 'pselect6']:
@@ -838,7 +851,7 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        #self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
+        self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
@@ -853,17 +866,17 @@ class WriteData():
         remain = self.read_limit - self.total_read
 
         if self.total_read >= self.read_limit and self.stop_on_read:
-            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
+            self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
             SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
             return None
         self.total_read = self.total_read + eax
-        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         if self.stop_on_read and self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
                 self.kernel_buf_consumed = True
         if self.total_read > self.read_limit:
-            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain and not self.no_reset:
@@ -873,7 +886,7 @@ class WriteData():
                      #    return None
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
-                         #self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
+                         self.lgr.debug('writeData doRetFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:eax]), start))
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
 
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
@@ -895,7 +908,7 @@ class WriteData():
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  SIM_break_simulation('Over read limit')
                  return None
-                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+                 self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         return eax
 
     def retHap(self, dumb, third, break_num, memory):
@@ -926,7 +939,7 @@ class WriteData():
         elif self.pending_callname == 'ioctl' and self.watch_ioctl:
             self.doRetIOCtl(self.fd)
         elif self.pending_callname in ['recv', 'recvfrom', 'read']:
-            #self.lgr.debug('writeData retHap call doRetFixup')
+            self.lgr.debug('writeData retHap call doRetFixup')
             self.doRetFixup(self.fd)
         
     def restoreCallHap(self):
