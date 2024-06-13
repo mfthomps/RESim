@@ -2281,6 +2281,10 @@ class Syscall():
         ''' NOTE Does not track Tar syscalls! '''
         if self.context_manager.isReverseContext():
             return
+        if syscall_info.callnum is None and self.callback is not None:
+            # only used syscall to set breaks, we'll take it from here.
+            self.callback()
+            return
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))

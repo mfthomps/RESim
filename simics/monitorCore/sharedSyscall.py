@@ -1173,7 +1173,10 @@ class SharedSyscall():
             if exit_info.select_info is not None:
                 trace_msg = trace_msg+('%s result: %d\n' % (exit_info.select_info.getString(), eax))
                 if self.fool_select is not None and eax > 0:
-                    self.modifySelect(exit_info.select_info, eax)
+                    eax = self.modifySelect(exit_info.select_info, eax)
+                    if self.dataWatch is not None:
+                        msg = trace_msg + ('eax altered to 0x%x' % eax) 
+                        self.dataWatch.markSelect(msg, exit_info.old_fd)
                 else:
                     for call_param in exit_info.call_params:
                         if type(call_param.match_param) is int:
@@ -1321,6 +1324,7 @@ class SharedSyscall():
 
     def foolSelect(self, fd):
         ''' Modify return values from select to reflect no data for this fd ''' 
+        self.lgr.debug('sharedSyscall foolSelect fd %d' % fd)
         self.fool_select = fd
 
     def modifySelect(self, select_info, eax):
@@ -1328,7 +1332,8 @@ class SharedSyscall():
             select_info.resetFD(self.fool_select, select_info.readfds)
             eax = eax -1
             self.top.writeRegValue('syscall_ret', eax, alone=True)
-            self.lgr.debug('sharedSyscall modified select resut, cleared fd and set eax to %d' % eax)
+            self.lgr.debug('sharedSyscall modified select result, cleared fd and set eax to %d' % eax)
+        return eax
 
     def rmExitBySyscallName(self, name, cell, immediate=False):
         self.lgr.debug('rmExitBySyscallName %s immediate: %r' % (name, immediate))

@@ -6339,6 +6339,10 @@ class GenMonitor():
     
     def diagHits(self):
         self.coverage.diagHits()    
+
+    def getSyscallManager(self):
+        return self.syscallManager[self.target]
+    
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

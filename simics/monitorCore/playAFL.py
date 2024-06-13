@@ -234,7 +234,7 @@ class PlayAFL():
 
         SIM_run_alone(self.setCycleHap, None)
         SIM_run_alone(self.setCounterHap, None)
-        self.lgr.debug('ranToIO set counter hap and cycle hap now continue')
+        self.lgr.debug('ranToIO set counter hap and cycle hap now continue from cycle 0x%x' % self.cpu.cycles)
         SIM_run_alone(SIM_run_command, 'continue')
 
     def setCounterHap(self, dumb=None):
