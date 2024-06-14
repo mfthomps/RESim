@@ -173,7 +173,7 @@ class Directive():
         farg = ''
         for f in self.file:
             farg = farg + ' /tmp/%s' % os.path.basename(f)
-        retval = retval+' --file "%s"' % farg
+        retval = retval+' --file "%s"' % farg.strip()
         return retval
 
 def main():
@@ -206,6 +206,8 @@ def main():
                 client_cmd = 'clientudpJsonScapy'
             else:
                 client_cmd = 'clientudpJson'
+        elif directive.session.lower() == 'tcp_json':
+            client_cmd = 'clientTCPJson'
         elif directive.session.lower() != 'replay':
             client_cmd = 'clientudpMult3'
         if client_cmd is not None:
