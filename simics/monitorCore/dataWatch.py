@@ -428,7 +428,7 @@ class DataWatch():
             else:
                 return
 
-        self.lgr.debug('dataWatch setRange len of self.start is %d' % len(self.start))
+        self.lgr.debug('dataWatch setRange start 0x%x length 0x%x  len of self.start is %d' % (start, length, len(self.start)))
         # See returns above
         if len(self.start) == 0:
             # first range, set mmap syscall
@@ -488,11 +488,12 @@ class DataWatch():
                             self.other_lengths.append(my_len)
                         break
                     elif self.start[index] >= start and this_end <= end:
-                        self.lgr.debug('DataWatch setRange found subrange, replace it with start 0x%x len %d' % (start, my_len))
+                        self.lgr.debug('DataWatch setRange found subrange, replace old start 0x%x old len %d with new start 0x%x len %d' % (self.start[index], 
+                               self.length[index], start, my_len))
                         self.start[index] = start
                         self.length[index] = my_len
                         overlap = True
-                        break
+
                     elif start == (this_end+1):
                         self.length[index] = self.length[index]+my_len
                         self.lgr.debug('DataWatch extending after end of range of index %d, len now %d' % (index, self.length[index]))
@@ -3773,6 +3774,7 @@ class DataWatch():
         # may be multiple overlapping buffer ranges, index is simply first reported by Simics.  Find
         # the most recently defined range
         latest_index = self.findRangeIndex(addr)
+        self.lgr.debug('readHap latest index for addr 0x%x is %s' % (addr, latest_index))
         if latest_index is not None and latest_index != index:
             self.lgr.debug('readHap altering index from %d to more recently defined buffer at index %d' % (index, latest_index))
             index = latest_index
@@ -4222,10 +4224,10 @@ class DataWatch():
             eip = self.top.getEIP(self.cpu)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
             if phys_block.address is not None and phys_block.address != 0:
-                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x (physical 0x%x) hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
+                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x) hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
                     break_num, self.start[index], end, self.length[index], phys_block.address, hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
             else:
-                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for %x-%x length %x NO PHYS hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
+                self.lgr.debug('DataWatch setBreakRange eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d  alone? %r cpu context:%s' % (eip, 
                     break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), i_am_alone, self.cpu.current_context))
             self.read_hap.append(hap)
             #self.lgr.debug('DataWatch back from set break range')
