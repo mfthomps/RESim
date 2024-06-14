@@ -75,6 +75,7 @@ class SharedSyscall():
         self.kbuffer = None
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
+        self.select_fixup_callback = None
 
         if self.top.isWindows(target=self.cell_name):
             self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, 
@@ -1172,7 +1173,12 @@ class SharedSyscall():
         elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':
             if exit_info.select_info is not None:
                 trace_msg = trace_msg+('%s result: %d\n' % (exit_info.select_info.getString(), eax))
-                if self.fool_select is not None and eax > 0:
+                self.lgr.debug('sharedSyscall select fd %s' % exit_info.old_fd)
+                self.lgr.debug(trace_msg)
+                if self.select_fixup_callback is not None:
+                    self.lgr.debug('sharedSyscall select, is a select_fixup_callback and it our fd')
+                    self.select_fixup_callback(exit_info.select_info)
+                elif self.fool_select is not None and eax > 0:
                     eax = self.modifySelect(exit_info.select_info, eax)
                     if self.dataWatch is not None:
                         msg = trace_msg + ('eax altered to 0x%x' % eax) 
@@ -1371,6 +1377,8 @@ class SharedSyscall():
 
     def setReadFixup(self, read_fixup_callback):
         self.read_fixup_callback = read_fixup_callback
+    def setSelectFixup(self, select_fixup_callback):
+        self.select_fixup_callback = select_fixup_callback
 
     def preserveExit(self):
         self.preserve_exit = True
