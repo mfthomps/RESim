@@ -168,6 +168,7 @@ class WriteData():
         self.ioctl_flag = None
         self.watch_ioctl = False
         self.tracing_io = False
+        self.syscallManager = None
 
     def reset(self, in_data, expected_packet_count, addr):
         self.in_data = in_data
@@ -460,6 +461,7 @@ class WriteData():
             self.lgr.debug('writeData setRetHap call sharedSyscall setReadFixup')
             if self.addr_of_count is not None:
                 self.shared_syscall.setReadFixup(self.doRetIOCtl)
+                self.shared_syscall.setSelectFixup(self.doRetSelect)
             else:
                 self.shared_syscall.setReadFixup(self.doRetFixup)
             self.shared_syscall.foolSelect(self.fd)
@@ -842,6 +844,12 @@ class WriteData():
                     else:
                         SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
         return retval
+
+    def doRetSelect(self, select_info):
+        self.lgr.debug('writeData doRetSelect')
+        if select_info.setHasFD(self.fd, select_info.readfds): 
+            self.lgr.debug('writeData doRetSelect has our FD as a read')
+            self.doBreakSimulation('select on our fd')
                 
     def doRetFixup(self, fd, callname=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
@@ -970,7 +978,8 @@ class WriteData():
             self.close_hap = None
             self.close_break = None
         '''
-        self.syscallManager.rmSyscall('writeData')
+        if self.syscallManager is not None:
+            self.syscallManager.rmSyscall('writeData')
         self.delRetHap(dumb)
 
     def delRetHap(self, dumb):
