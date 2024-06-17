@@ -122,9 +122,15 @@ class AFL():
         sioctl = os.getenv('IOCTL_COUNT_MAX')
         if sioctl is not None:
             self.ioctl_count_max = int(sioctl)
+            self.lgr.debug('IOCTL_COUNT_MAX is %d' % self.ioctl_count_max)
         else:
             self.ioctl_count_max = None
-                
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
         self.server_address = ('localhost', self.port)
@@ -195,6 +201,8 @@ class AFL():
             self.top.setTarget(self.target_cell) 
             self.top.debugProc(target_proc, self.aflInitCallback, track_threads=False)
         #self.coverage.watchExits()
+        self.function_backstop_hap = None
+        self.functionBackstop()
     
     def ranToIO(self, dumb):
         ''' callback after completing runToIO '''
@@ -491,6 +499,7 @@ class AFL():
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 0
         self.bad_trick = False
+        #self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
             self.lgr.debug('afl goN first, context is %s' % str(self.target_cpu.current_context))
@@ -551,7 +560,7 @@ class AFL():
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
@@ -727,3 +736,25 @@ class AFL():
         if self.stop_hap_cycle is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
             self.stop_hap_cycle = None
+
+    def functionBackstop(self):
+        function_bs = os.getenv('FUNCTION_BACKSTOP')
+        self.lgr.debug('afl functionBackstop function_bs %s' % function_bs)
+        if function_bs is not None:
+            if os.path.isfile(function_bs):
+                with open(function_bs) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith('#'):
+                            continue
+                        addr = int(line, 16)
+                        function_break = SIM_breakpoint(self.target_cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                        self.function_backstop_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.functionBackstopHap, None, function_break)
+                        self.lgr.debug('afl functionBackstop set break at 0x%x' % addr)
+                        
+    def functionBackstopHap(self, dumb, third, break_num, memory):
+        if self.function_backstop_hap is None:
+            return
+        #self.lgr.debug('afl functionBackstopHap stop it')
+        SIM_break_simulation('afl function backstop')
+                
