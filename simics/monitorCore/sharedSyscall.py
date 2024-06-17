@@ -1173,16 +1173,15 @@ class SharedSyscall():
         elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':
             if exit_info.select_info is not None:
                 trace_msg = trace_msg+('%s result: %d\n' % (exit_info.select_info.getString(), eax))
-                self.lgr.debug('sharedSyscall select fd %s' % exit_info.old_fd)
-                self.lgr.debug(trace_msg)
+                self.lgr.debug('BEFORE fixup: '+trace_msg)
                 if self.select_fixup_callback is not None:
-                    self.lgr.debug('sharedSyscall select, is a select_fixup_callback and it our fd')
+                    self.lgr.debug('sharedSyscall select, call select_fixup_callback to see if it is our FD')
                     self.select_fixup_callback(exit_info.select_info)
                 elif self.fool_select is not None and eax > 0:
                     eax = self.modifySelect(exit_info.select_info, eax)
                     if self.dataWatch is not None:
-                        msg = trace_msg + ('eax altered to 0x%x' % eax) 
-                        self.dataWatch.markSelect(msg, exit_info.old_fd)
+                        trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 
+                        self.dataWatch.markSelect(trace_msg, exit_info.old_fd)
                 else:
                     for call_param in exit_info.call_params:
                         if type(call_param.match_param) is int:
@@ -1377,6 +1376,7 @@ class SharedSyscall():
 
     def setReadFixup(self, read_fixup_callback):
         self.read_fixup_callback = read_fixup_callback
+
     def setSelectFixup(self, select_fixup_callback):
         self.select_fixup_callback = select_fixup_callback
 
