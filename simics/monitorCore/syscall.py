@@ -175,14 +175,14 @@ class SelectInfo():
 
     def resetFD(self, fd, fd_set):
         if fd < self.nfds:
-            self.lgr.debug('SelectInfo reset fd %d' % fd)
+            #self.lgr.debug('SelectInfo reset fd %d' % fd)
             if fd_set is not None:
                 read_low, read_high = self.readit(fd_set)
                 if read_low is not None:
                     the_set = read_low | (read_high << 32) 
                     new_value = memUtils.clearBit(the_set, fd)
                     self.writeit(fd_set, new_value)
-                    self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
+                    #self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
 
     def getFDString(self, fd_set):
         retval = ''
@@ -1542,7 +1542,7 @@ class Syscall():
             else:
                 self.lgr.debug('syscallParse got fname %s' % exit_info.fname)
                 for call_param in self.call_params:
-                    #self.lgr.debug('got param type %s' % type(call_param.match_param))
+                    self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
                          mod = call_param.match_param
                          #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
@@ -1555,8 +1555,8 @@ class Syscall():
                             self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
                         else:
                             self.lgr.debug('syscall open, file is %s' % exit_info.fname)
-                        if exit_info.fname is None or exit_info.fname == call_param.match_param: 
-                            #self.lgr.debug('syscall open, found actual match_param %s' % call_param.match_param)
+                        if exit_info.fname is None or call_param.match_param in exit_info.fname:
+                            self.lgr.debug('syscall open, found actual match_param %s' % call_param.match_param)
                             exit_info.call_params.append(call_param)
                         
                         break
