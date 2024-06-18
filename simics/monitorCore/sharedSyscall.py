@@ -1173,11 +1173,10 @@ class SharedSyscall():
         elif callname == 'select' or callname == '_newselect' or callname == 'pselect6':
             if exit_info.select_info is not None:
                 trace_msg = trace_msg+('%s result: %d\n' % (exit_info.select_info.getString(), eax))
-                self.lgr.debug('BEFORE fixup: '+trace_msg)
-                if self.select_fixup_callback is not None:
-                    self.lgr.debug('sharedSyscall select, call select_fixup_callback to see if it is our FD')
-                    self.select_fixup_callback(exit_info.select_info)
-                elif self.fool_select is not None and eax > 0:
+                if self.select_fixup_callback is not None and not self.select_fixup_callback(exit_info.select_info):
+                    self.lgr.debug('sharedSyscall select, select_fixup_callback returned false, bail')
+                    return 
+                if self.fool_select is not None and eax > 0:
                     eax = self.modifySelect(exit_info.select_info, eax)
                     if self.dataWatch is not None:
                         trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 

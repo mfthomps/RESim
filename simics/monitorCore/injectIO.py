@@ -154,6 +154,11 @@ class InjectIO():
             self.ioctl_count_max = int(sioctl)
         else:
             self.ioctl_count_max = None
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
         self.break_on_hap = None
         if not self.coverage and not self.trace_all:
             self.dataWatch.enable()
@@ -310,7 +315,8 @@ class InjectIO():
             write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max,
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, 
+                 select_count_max=self.select_count_max,
                  force_default_context=force_default_context, write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
 
