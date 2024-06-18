@@ -1199,8 +1199,11 @@ class WatchMarks():
         self.addWatchMark(fm)
 
     def logMark(self, s, prefix):
+        cur_cycle = self.cpu.cycles
+        # assume we are at return from kernel
+        mark_cycle = cur_cycle + 1
         lm = LogMark(s, prefix)
-        self.addWatchMark(lm)
+        self.addWatchMark(lm, cycles=mark_cycle)
 
     def pushMark(self, src, dest, buf_start, length, ip):
         pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.WORD_SIZE)
