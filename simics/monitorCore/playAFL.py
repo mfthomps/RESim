@@ -117,6 +117,11 @@ class PlayAFL():
             self.ioctl_count_max = int(sioctl)
         else:
             self.ioctl_count_max = None
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
         self.stop_on_read =   stop_on_read
         if not self.stop_on_read:
             sor = os.getenv('AFL_STOP_ON_READ')
@@ -524,7 +529,7 @@ class PlayAFL():
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                          #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
                          filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
-                         ioctl_count_max=self.ioctl_count_max)
+                         ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)

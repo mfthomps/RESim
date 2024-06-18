@@ -452,8 +452,7 @@ class WriteData():
             self.lgr.debug('writeData setRetHap call sharedSyscall setReadFixup')
             if self.addr_of_count is not None:
                 self.shared_syscall.setReadFixup(self.doRetIOCtl)
-                # TBD why not just let foolSelect do the fixup.  Do we ever need to stop-on-select?
-                #self.shared_syscall.setSelectFixup(self.doRetSelect)
+                self.shared_syscall.setSelectFixup(self.doRetSelect)
             else:
                 self.shared_syscall.setReadFixup(self.doRetFixup)
             self.shared_syscall.foolSelect(self.fd)
@@ -671,14 +670,21 @@ class WriteData():
                 self.setRetHap()
 
     def checkSelect(self):
-        if self.select_count_max is not None:
+        # return False if simulation being halted
+        retval = True
+        if self.no_reset:
+            self.doBreakSimulation('writeData checkSelect no reset')
+            retval = False
+        elif self.select_count_max is not None:
             #self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
             self.select_count = self.select_count+1
             if self.select_count_max is not None and self.select_count  >= self.select_count_max:
                 self.doBreakSimulation('writeData checkSelect select count')
+                retval = False
             elif self.ret_hap is None:
                 #self.lgr.debug('writeData checkSelect call to setRetHap')
                 self.setRetHap()
+        return retval
 
 
     def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
@@ -714,9 +720,14 @@ class WriteData():
 
     def doRetSelect(self, select_info):
         self.lgr.debug('writeData doRetSelect')
+        # return False if simulation is being halted
+        retval = True
         if select_info.setHasFD(self.fd, select_info.readfds): 
+            if not self.checkSelect():
+                retval = False
             self.lgr.debug('writeData doRetSelect has our FD as a read')
-            self.doBreakSimulation('writeData doRetSelect select on our fd')
+            #self.doBreakSimulation('writeData doRetSelect select on our fd')
+        return retval
                 
     def doRetFixup(self, fd, callname=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
