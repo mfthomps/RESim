@@ -97,10 +97,13 @@ class findKernelWrite():
         self.future_count = 0
         self.best_cycle = 0
 
+        self.lgr.debug('findKernelWrite addr 0x%x num_bytes %d' % (addr, num_bytes))
         self.go(addr)
 
 
-    def go(self, addr):
+    def go(self, addr, num_bytes=None):
+        if num_bytes is not None:
+            self.num_bytes=num_bytes 
         ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
         self.start_cycles = self.cpu.cycles
         cli.quiet_run_command('si')
