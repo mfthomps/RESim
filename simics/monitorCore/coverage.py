@@ -120,6 +120,11 @@ class Coverage():
         self.halt_coverage = False
         self.diag_hits_counts = {}
         self.diag_hits=False
+        self.suspend_end_bp = None
+        self.suspend_end_hap = None
+        self.suspend_start = None
+        self.suspend_end = None
+        self.suspendCoverage()
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -652,7 +657,11 @@ class Coverage():
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             #self.lgr.debug('coverage bbHap 0x%x in del_breaks, return' % this_addr)
             return
-
+        if self.suspend_start is not None and self.suspend_start == this_addr:
+            #self.lgr.debug('coverage bbHap hit suspend start at 0x%x, disable all breaks' % self.suspend_start)
+            self.disableAll()
+            self.backstop.clearCycle()
+            self.setSuspendEnd()
 
         #tid = self.top.getTID(target=self.cell_name)
         #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
@@ -1167,3 +1176,48 @@ class Coverage():
         for addr in sorted_dict:
             if sorted_dict[addr] > 100:
                 print('addr 0x%x %d hits' % (addr, sorted_dict[addr]))
+
+    def suspendCoverage(self):
+        self.lgr.debug('coverage suspendCoverage') 
+        suspend_cover = os.getenv('SUSPEND_COVERAGE')
+        if suspend_cover is not None:
+            if not os.path.isfile(suspend_cover):
+                self.lgr.error('coverage SUSPEND_COVERAGE %s not found' % suspend_cover)
+                return
+            with open(suspend_cover) as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line.startswith('#'):
+                        continue
+                    parts = line.split()
+                    if len(parts) != 2:
+                        self.lgr.error('coverage bad address range, expected 2 addresses separated by a space, got  %s' % line)
+                    self.suspend_start = int(parts[0], 16)
+                    self.suspend_end = int(parts[1], 16)
+                    self.lgr.debug('coverage suspendCoverage start 0x%x end 0x%x' % (self.suspend_start, self.suspend_end))
+
+    def setSuspendEnd(self):
+        phys_addr = self.mem_utils.v2p(self.cpu, self.suspend_end)
+        self.suspend_end_bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+        self.suspend_end_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.suspendEndHap, None, self.suspend_end_bp)
+        #self.lgr.debug('coverage suspendCoverage set end break on phys 0x%x' % phys_addr)
+    
+    def rmSuspendHap(self, hap):
+        if self.suspend_end_hap is not None:
+            self.lgr.debug('coverage rmSuspendHap') 
+            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.suspend_end_hap)
+            SIM_delete_breakpoint(self.suspend_end_bp)
+
+    def suspendEndHap(self, dumb, third, break_num, memory):
+        #self.lgr.debug('coverage suspendEndHap eh?')
+        if self.suspend_end_hap is not None:
+            self.backstop.setFutureCycle(self.backstop_cycles, now=False)
+            #self.lgr.debug('coverage suspendEndHap')
+            self.enableAll()
+            hap = self.suspend_end_hap
+            SIM_run_alone(self.rmSuspendHap, hap)
+            self.suspend_end_hap = None
+
+
+
+
