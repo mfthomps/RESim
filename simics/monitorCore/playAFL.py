@@ -43,7 +43,8 @@ class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
+             search_list=None):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -203,6 +204,10 @@ class PlayAFL():
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
+ 
+        self.search_list = search_list
+        if self.search_list is not None:
+            self.no_cover = True
         
         self.snap_name = snap_name
         self.no_page_faults = no_page_faults
@@ -390,6 +395,9 @@ class PlayAFL():
                     pass
                     #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
+        if self.search_list is not None:
+            self.lgr.debug('playAFL search_list at %s' % self.search_list)
+            self.setSearch() 
         self.backstop.setCallback(self.backstopCallback)
 
     def go(self, findbb=None):
@@ -542,8 +550,9 @@ class PlayAFL():
                     self.write_data.watchIOCtl()
             if self.trace_all:
                 self.write_data.tracingIO()
-            bp_count = self.coverage.bpCount()
-            self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
+            if self.coverage is not None:
+                bp_count = self.coverage.bpCount()
+                self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             # TBD just rely on coverage?
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.trace_buffer is not None:
@@ -860,3 +869,19 @@ class PlayAFL():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
             self.lgr.debug('playAFL stop_hap_cycle removed')
             self.stop_hap_cycle = None
+
+    def setSearch(self):
+        with open(self.search_list) as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                addr = int(line, 16)
+                context = self.target_cpu.current_context
+                search_bp = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+                self.search_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.searchHap, None, search_bp)
+                self.lgr.debug('playAFL set search break on 0x%x' % addr)
+
+    def searchHap(self, dumb, third, break_num, memory):
+        self.lgr.debug('searchHap hit mem 0x%x' % memory.logical_address)
+        print('searchHap hit mem 0x%x' % memory.logical_address)
