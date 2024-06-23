@@ -1584,6 +1584,9 @@ class WatchMarks():
                 entry['dest'] = mark.mark.dest 
                 entry['length'] = mark.mark.count 
                 entry['reference_buffer'] = mark.mark.buf_start 
+            elif isinstance(mark.mark, FprintfMark):
+                entry['mark_type'] = 'fprintf' 
+                entry['src'] = mark.mark.src
             elif isinstance(mark.mark, SprintfMark):
                 entry['mark_type'] = 'sprint' 
                 entry['src'] = mark.mark.src
@@ -1669,6 +1672,8 @@ class WatchMarks():
                 entry['addr'] = mark.mark.addr
                 entry['ptr'] = mark.mark.ptr
                 entry['value'] = mark.mark.value
+            elif isinstance(mark.mark, LogMark):
+                entry['mark_type'] = 'log' 
             elif isinstance(mark.mark, ResetOrigin):
                 entry['mark_type'] = 'reset_origin' 
 
