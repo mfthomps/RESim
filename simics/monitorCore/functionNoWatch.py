@@ -20,6 +20,8 @@ class FunctionNoWatch():
         self.so_map = so_map
         self.context_manager = context_manager
         self.lgr = lgr
+        self.pending_libs = {}
+        self.pending_pages = {}
         self.entry_list = []
         if not os.path.isfile(def_file):
             lgr.error('functionNoWatch failed to find file %s' % def_file)
@@ -101,8 +103,8 @@ class FunctionNoWatch():
         end = load_addr + size - 1
         fun_addr = self.top.getFunWithin(entry_info.fun, load_addr, end) 
         if fun_addr is None:
-            self.lgr.error('functionNoWatch getPhys failed to get fun_addr for %s' % entry_info.fun)
-            return
+            self.lgr.debug('functionNoWatch getPhys failed to get fun_addr for %s load addr 0x%x end 0x%x' % (entry_info.fun, load_addr, end))
+            return None
         linear = fun_addr
         phys_addr = self.mem_utils.v2p(self.cpu, linear, use_pid=pid)
         self.lgr.debug('functionNoWatch getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x pid:%s' % (load_addr, entry_info.image_base, offset, linear, pid))
