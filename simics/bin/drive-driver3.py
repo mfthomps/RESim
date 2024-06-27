@@ -119,6 +119,7 @@ class Directive():
         self.src_ip = None
         self.src_port = None
         self.session = None
+        self.client = None
         self.header = None
         self.iface = None
         self.file = []
@@ -147,6 +148,8 @@ class Directive():
                     self.src_port = value
                 elif key == 'SESSION':
                     self.session = value
+                elif key == 'CLIENT':
+                    self.client = value
                 elif key == 'HEADER':
                     self.header = value
                 elif key == 'FILE':
@@ -189,13 +192,13 @@ def main():
         print('No file found at %s' % args.directives)
         exit(1)
     directive = Directive(args.directives)
-    print('wtf commands %s' % str(directive.commands))
 
     sock = getSocket()
     host = 'localhost'
     PORT = 6459
     target = (host, PORT)
     client_cmd = None
+    # NOTE client_cmd defaults to clientudpMult3, unless replay
     if directive.session is not None:
         if directive.session.lower() == 'servertcp':
             client_cmd = 'serverTCP3'
@@ -208,11 +211,16 @@ def main():
                 client_cmd = 'clientudpJson'
         elif directive.session.lower() == 'tcp_json':
             client_cmd = 'clientTCPJson'
+        elif directive.session.lower() == 'client':
+            client_cmd = directive.client
         elif directive.session.lower() != 'replay':
             client_cmd = 'clientudpMult3'
         if client_cmd is not None:
-            client_mult_path = os.path.join(core_path, client_cmd)
-            sendFiles([client_mult_path], sock, target)
+            if directive.client is not None:
+                client_path = directive.client
+            else:
+                client_path = os.path.join(core_path, client_cmd)
+            sendFiles([client_path], sock, target)
             cmd='/bin/chmod a+x /tmp/%s' % client_cmd
             doCommand(cmd, sock, target)
     if args.disconnect:
@@ -251,13 +259,11 @@ def main():
 
     direct_args = directive.getArgs()
     print('direct_args %s' % direct_args)
-    print('wtf2 commands %s' % str(directive.commands))
     if directive.session is not None:
         if client_cmd is not None:
             directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
             driver_file.write(directive_line+'\n')
         elif directive.session.lower() == 'replay':
-            print('wtf3 commands %s' % str(directive.commands))
             if directive.device is not None:
                 for pcap in directive.file:
                     pcap_base = os.path.basename(pcap)
@@ -266,7 +272,6 @@ def main():
             else:
                 print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
                 exit(1)
-    print('wtf4 commands %s' % str(directive.commands))
     for command in directive.commands:
         driver_file.write(command+'\n')
 
