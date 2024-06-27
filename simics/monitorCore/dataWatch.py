@@ -595,7 +595,7 @@ class DataWatch():
             #self.lgr.debug('stackThisHap eip in stack_buf_hap')
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
 
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, eip)
             op2, op1 = self.decode.getOperands(instruct[1])
             new_sp = self.adjustSP(sp, instruct, op1, op2)
             if new_sp is not None:
@@ -674,7 +674,7 @@ class DataWatch():
             self.lgr.debug('stackBufHap deleted stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
 
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, eip)
             op2, op1 = self.decode.getOperands(instruct[1])
             new_sp = self.adjustSP(sp, instruct, op1, op2)
             if new_sp is not None:
@@ -815,7 +815,7 @@ class DataWatch():
 
     def showCmp(self, addr): 
         eip = self.top.getEIP(self.cpu)
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = self.top.disassembleAddress(self.cpu, eip)
         #self.lgr.debug('showCmp eip 0x%x %s' % (eip, instruct[1]))
         mval = self.mem_utils.readWord32(self.cpu, addr)
         if instruct[1].startswith('cmp'):
@@ -1051,9 +1051,9 @@ class DataWatch():
     def checkNumericStore(self): 
         if self.mem_something.called_from_ip is not None:
             ip = self.mem_something.called_from_ip
-            instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, ip)
             next_ip = ip + instruct[0]
-            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+            next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
             if next_instruct[1].startswith('str'):
                 op2, op1 = self.decode.getOperands(next_instruct[1])
                 if op1 == self.mem_utils.regs['syscall_ret']:
@@ -2505,7 +2505,7 @@ class DataWatch():
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr:
             
-            instruct = SIM_disassemble_address(self.cpu, self.mem_something.fun_addr, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, self.mem_something.fun_addr)
             if self.mem_something.op_type != Sim_Trans_Load:
                 self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a store, so ignore?', self.mem_something.fun_addr)
                 SIM_continue(0)
@@ -2866,7 +2866,7 @@ class DataWatch():
         self.lgr.debug('dataWatch checkNTOHL addr 0x%x' % addr)
         orig_ip = self.top.getEIP(self.cpu)
         orig_cycle = self.cpu.cycles
-        instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+        instruct = self.top.disassembleAddress(self.cpu, next_ip)
         fun = self.isDataTransformCall(instruct, next_ip, recent_instructs=recent_instructs)
         reg_values = {}
         if fun is not None:
@@ -2875,11 +2875,11 @@ class DataWatch():
                 next_instruct = instruct
                 for i in range(5):
                     next_ip = next_ip + next_instruct[0]
-                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                    next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                     if next_instruct[1].startswith('jmp'):
                         dumb, op1 = self.decode.getOperands(next_instruct[1])
                         next_ip = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-                        next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                        next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                         self.lgr.debug('datawatch checkNTOHL, was jump changed next inst is now  0x%x is %s' % (next_ip, next_instruct[1]))
                         
                     elif decode.isBranch(self.cpu, next_instruct[1]):
@@ -2926,7 +2926,7 @@ class DataWatch():
         cur_ip = next_ip
         max_try = 5
         for i in range(max_try):
-            instruct = SIM_disassemble_address(self.cpu, cur_ip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, cur_ip)
             self.lgr.debug('dataWatch checkPushedTest instruct %s' % instruct[1])
             fun = self.isTestByValue(instruct, cur_ip, recent_instructs=recent_instructs)
             if fun is not None:
@@ -2985,7 +2985,7 @@ class DataWatch():
             max_num = 7
             for i in range(max_num):
                 next_ip = next_ip + next_instruct[0]
-                next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                 if decode.isBranch(self.cpu, next_instruct[1]) or decode.isCall(self.cpu, next_instruct[1], ignore_flags=True):
                     #self.lgr.debug('datawatch loopAdHocMult, next inst at 0x%x is %s  is branch' % (next_ip, next_instruct[1]))
                     break
@@ -3059,7 +3059,8 @@ class DataWatch():
  
             if dest_addr is not None:
                 if next_instruct[1].startswith('mov') and self.decode.regIsPartList(op2, our_reg_list) and 'sp' in op1:
-                    self.lgr.debug('dataWatch loopAdHoc push via mov')
+                    self.lgr.debug('dataWatch loopAdHoc push via mov.  hack sp because checkPushedData will subtract word size from it')
+                    track_sp = track_sp + word_size
                     adhoc = self.checkPushedData(track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
                     break
                 else:
@@ -3106,7 +3107,7 @@ class DataWatch():
             if next_instruct[1].startswith('mov') and '[' in op1 and 'sp' in op1 and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
                 # is this a size to malloc?
                 next_next_ip = next_ip + next_instruct[0]
-                next_next_instruct = SIM_disassemble_address(self.cpu, next_next_ip, 1, 0)
+                next_next_instruct = self.top.disassembleAddress(self.cpu, next_next_ip)
                 fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(next_next_instruct, next_next_ip)
                 self.lgr.debug('dataWatch gotAdHocDest reg %s moved to SP and call to %s' % (op2, fun))
                 if fun is not None and 'malloc' in fun:
@@ -3207,7 +3208,7 @@ class DataWatch():
     def getNextInstruct(self, instruct, ip, flags, our_reg):        
         # look for branches we can satisfy and adjust instruction and ip accordingly
         next_ip = ip + instruct[0]
-        next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+        next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
         mn = self.decode.getMn(next_instruct[1])
         self.lgr.debug('dataWatch getNextInstruct next_ip 0x%x next_instruc %s' % (next_ip, next_instruct[1]))
         jump_cycles = 1
@@ -3220,7 +3221,7 @@ class DataWatch():
                 if len(parts) == 2:
                     try:
                         next_ip = int(parts[1], 16)
-                        next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                        next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                         mn = self.decode.getMn(next_instruct[1])
                         continue
                     except:
@@ -3236,14 +3237,14 @@ class DataWatch():
                         self.lgr.debug('dataWatch getNextInstruct is jnz flags %s' % str(flags))
                         if 'ZF' in flags:
                             next_ip = next_ip + next_instruct[0]
-                            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                            next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                             mn = self.decode.getMn(next_instruct[1])
                         else: 
                             parts = next_instruct[1].split()
                             if len(parts) == 2:
                                 try:
                                     next_ip = int(parts[1], 16)
-                                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                                    next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                                     mn = self.decode.getMn(next_instruct[1])
                                 except:
                                     self.lgr.debug('dataWatch getNextInstruct is jnz failed to get jump dest from %s' % (next_instruct[1]))
@@ -3253,14 +3254,14 @@ class DataWatch():
                         self.lgr.debug('dataWatch getNextInstruct is jz flags %s' % str(flags))
                         if 'ZF' not in flags:
                             next_ip = next_ip + next_instruct[0]
-                            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                            next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                             mn = self.decode.getMn(next_instruct[1])
                         else: 
                             parts = next_instruct[1].split()
                             if len(parts) == 2:
                                 try:
                                     next_ip = int(parts[1], 16)
-                                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                                    next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                                     mn = self.decode.getMn(next_instruct[1])
                                 except:
                                     self.lgr.debug('dataWatch getNextInstruct is jz failed to get jump dest from %s' % (next_instruct[1]))
@@ -3270,14 +3271,14 @@ class DataWatch():
                         self.lgr.debug('dataWatch getNextInstruct is js flags %s' % str(flags))
                         if 'SF' not in flags:
                             next_ip = next_ip + next_instruct[0]
-                            next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                            next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                             mn = self.decode.getMn(next_instruct[1])
                         else: 
                             parts = next_instruct[1].split()
                             if len(parts) == 2:
                                 try:
                                     next_ip = int(parts[1], 16)
-                                    next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                                    next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                                     mn = self.decode.getMn(next_instruct[1])
                                 except:
                                     self.lgr.debug('dataWatch getNextInstruct is js failed to get jump dest from %s' % (next_instruct[1]))
@@ -3312,7 +3313,7 @@ class DataWatch():
             self.lgr.debug('dataWatch loopAdHoc, not a NTOHL into memory')
             ''' TBD tweak this for ARM fu '''
             ''' If call to ntohl-like function (but result not stored to memory per above, don't record push '''
-            instruct = SIM_disassemble_address(self.cpu, next_next_ip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, next_next_ip)
         
             self.lgr.debug('dataWatch loopAdHoc see if next is a data xform')
             fun = self.isDataTransformCall(instruct, next_next_ip, recent_instructs=recent_instructs)
@@ -3385,7 +3386,7 @@ class DataWatch():
         if self.fun_mgr is not None:
             while not self.fun_mgr.isCall(next_instruct[1]):
                 next_ip = next_ip + next_instruct[0]
-                next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
+                next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                 if count > limit:
                     self.lgr.error('dataWatch findCall failed to find call.')
                     next_ip = None
@@ -3404,7 +3405,7 @@ class DataWatch():
         our_reg = self.mem_utils.regs['syscall_ret']
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.lgr.debug('dataWatch lookPushedReg cycle 0x%x' % self.cpu.cycles)
-        instruct = SIM_disassemble_address(self.cpu, self.mem_something.called_from_ip, 1, 0)
+        instruct = self.top.disassembleAddress(self.cpu, self.mem_something.called_from_ip)
         # pass called-from address because loopAdHoc does not assess the first instruction.
         # set only_push so we are not distracted by move of value into a temp variable
         adhoc = self.loopAdHoc(self.mem_something.addr, self.mem_something.trans_size, self.mem_something.start, self.mem_something.length, 
@@ -3420,7 +3421,7 @@ class DataWatch():
             self.context_manager.genDeleteHap(self.transform_push_hap)
             self.transform_push_hap = None
             eip = self.top.getEIP(self.cpu)
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, eip)
             our_reg = self.mem_utils.regs['syscall_ret']
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.lgr.debug('dataWatch transformPushHap call loopAdHoc?? recurs?')
@@ -3444,7 +3445,7 @@ class DataWatch():
             if src is not None:
                 while not done_movdqa:
                     next_eip = next_eip + next_instruct[0]
-                    next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                    next_instruct = self.top.disassembleAddress(self.cpu, next_eip)
                     if next_instruct[1].startswith('movdqa'):
                         qcount = qcount + 1
                     elif next_instruct[1].startswith('movups'):
@@ -3462,7 +3463,7 @@ class DataWatch():
         if retval:
             # last instruct was a movups.  See if next is a move of remainder
             next_eip = next_eip + next_instruct[0]
-            next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+            next_instruct = self.top.disassembleAddress(self.cpu, next_eip)
             remain_src = None
             bytes_moved = 16 * qcount
             if next_instruct[1].startswith('mov '):
@@ -3476,17 +3477,17 @@ class DataWatch():
                     self.lgr.error('dataWatch checkXmmMove confused')
                     return False
                 next_eip = next_eip + next_instruct[0]
-                next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                next_instruct = self.top.disassembleAddress(self.cpu, next_eip)
             done_moveups = False
             while not done_moveups:
                 if next_instruct[1].startswith('movups'):
                     next_eip = next_eip + next_instruct[0]
-                    next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                    next_instruct = self.top.disassembleAddress(self.cpu, next_eip)
                 else:
                     done_moveups = True
             if remain_src is not None:
                 next_eip = next_eip + next_instruct[0]
-                next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                next_instruct = self.top.disassembleAddress(self.cpu, next_eip)
             self.lgr.debug('dataWatch checkXmmMove will run forward to next_eip 0x%x' % next_eip)
             index = self.findRangeIndex(addr)
             wm = self.watchMarks.copy(src, dest, bytes_moved, self.start[index], Sim_Trans_Load)
@@ -3570,7 +3571,7 @@ class DataWatch():
             ''' crude test to see if function call is to GOT, which makes actual function call'''
             hack_match = None
             if self.mem_something is not None and self.mem_something.fun_addr is not None and self.mem_something.fun_addr != new_mem_something.fun_addr:
-                fun_instruct = SIM_disassemble_address(self.cpu, self.mem_something.fun_addr, 1, 0)[1]
+                fun_instruct = self.top.disassembleAddress(self.cpu, self.mem_something.fun_addr)[1]
                 self.lgr.debug('dataWatch checkReWatch re_watch look for got in instruct %s' % fun_instruct)
                 ''' TBD generalize this'''
                 if self.cpu.architecture == 'arm' and fun_instruct.startswith('b'):
@@ -3614,7 +3615,7 @@ class DataWatch():
     def isReuse(self, eip):
         ''' guess is a data buffer is being recycled, e.g., loaded with zeros'''
         retval = False
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = self.top.disassembleAddress(self.cpu, eip)
         ''' TBD why care about direct move vs some other reuse of buffer???'''
         if self.decode.isDirectMove(instruct[1]):
             retval = True
@@ -3662,7 +3663,7 @@ class DataWatch():
         return retval
               
     def finishReadHap(self, op_type, trans_size, eip, addr, length, start, tid, index=None):
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = self.top.disassembleAddress(self.cpu, eip)
         offset = addr - start
         cpl = memUtils.getCPL(self.cpu)
         self.lgr.debug('dataWatch finishReadHap eip: 0x%x addr 0x%x' % (eip, addr))
@@ -3975,7 +3976,7 @@ class DataWatch():
             #    self.stopWatch()
 
 
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, eip)
             if self.fun_mgr is not None:
                 fun = self.fun_mgr.getFun(eip)
             else:
@@ -4056,19 +4057,19 @@ class DataWatch():
         if not retval:
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             if sp >= addr and sp <= (addr+4):
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = self.top.disassembleAddress(self.cpu, eip)
                 if self.fun_mgr is not None and self.fun_mgr.isCall(instruct[1]):
                     self.lgr.debug('cheapReuse, looks like stack push into buffer, assume we missed free.')
                     self.rmRange(addr)
                     retval = True
         if not retval:
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = self.top.disassembleAddress(self.cpu, eip)
             self.lgr.debug('dataWatch cheapReuse, eip 0x%x check arm buf set to zero instruct %s' % (eip, instruct[1]))
             if self.cpu.architecture == 'arm' and instruct[1].startswith('str'):
                 self.lgr.debug('cheapReuse, check arm buf set to zero is str')
                 op2, op1 = self.decode.getOperands(instruct[1])
                 prev_eip = eip - instruct[0]
-                prev_instruct = SIM_disassemble_address(self.cpu, prev_eip, 1, 0)
+                prev_instruct = self.top.disassembleAddress(self.cpu, prev_eip)
                 prev_op2, prev_op1 = self.decode.getOperands(prev_instruct[1])
                 self.lgr.debug('cheapReuse, check arm buf set to zero prev_op1 %s op1 %s prev_op2 %s' % (prev_op1, op1, prev_op2)) 
                 if prev_op1 == op1 and prev_op2 == '#0':
@@ -5419,5 +5420,5 @@ class DataWatch():
     def nextCallMark(self):
         return self.watchMarks.nextCallMark() 
 
-    def markSelect(self, msg, fd):
+    def markCall(self, msg, fd):
         self.watchMarks.markCall(msg, fd=fd)
