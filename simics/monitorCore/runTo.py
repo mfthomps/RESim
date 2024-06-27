@@ -43,6 +43,8 @@ class RunTo():
         self.cur_task_break = None
         self.debug_group = False
         self.write_hap = None
+        # just a cheap global used to reflect we are interested in any thread within the proc
+        self.threads = False
 
     def delStopHap(self, dumb):
         if self.stop_hap is not None:
@@ -89,19 +91,28 @@ class RunTo():
     def knownHap(self, tid, third, forth, memory):
         if len(self.hap_list) > 0:
             cpu, comm, cur_tid = self.task_utils.curThread() 
-            if tid == cur_tid: 
+            right_tid = False
+            if self.threads:
+                group_tids = self.task_utils.getGroupTids(tid)
+                if cur_tid in group_tids: 
+                    right_tid = True
+            else:
+                if cur_tid == tid:
+                    right_tid = True
+            if right_tid:
                 value = memory.logical_address
                 fname, start, end = self.so_map.getSOInfo(value)
                 if fname is not None and start is not None:
-                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (tid, value, fname, start, end))
+                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
                 else:
-                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x NO mapping file %s' % (tid, value, fname))
+                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
 
                 SIM_run_alone(self.stopIt, None)
             #else:
             #    self.lgr.debug('soMap knownHap wrong tid, wanted %d got %d' % (tid, cur_tid))
         
-    def runToKnown(self, skip=None, reset=False):        
+    def runToKnown(self, skip=None, reset=False, threads=False):        
+       self.threads = threads
        if reset:
            self.skip_list = []
        cpu, comm, cur_tid = self.task_utils.curThread() 
@@ -350,13 +361,16 @@ class RunTo():
        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, size, 0)
        self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
 
-    def runToSO(self, fname):        
+    def runToSO(self, fname, threads=False):        
        ''' run until the give SO/DLL file.  if not loaded, use soMap/winDLL to call us back when it is loaded'''
        ''' TBD need to update soMap.py'''
+       self.threads = threads
        cpu, comm, cur_tid = self.task_utils.curThread() 
        code_section_list = self.so_map.getCodeSections(cur_tid)
        self.lgr.debug('runTo runToSO tid:%s got %d code sections' % (cur_tid, len(code_section_list)))
        got_one = False
+       if threads:
+           print('WARNING: this is a thread-local function.  If the application does an accept/fork you will miss it')
        for section in code_section_list:
            if section.addr in self.skip_list:
                continue
