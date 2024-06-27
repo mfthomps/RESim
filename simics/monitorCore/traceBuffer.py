@@ -187,6 +187,7 @@ class TraceBuffer():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(trace_info.lib, trace_info.lib_addr)
         if phys_addr is None:
+            self.pending_pages[trace_info.lib_addr] = trace_info
             self.top.pageCallback(linear, self.pagedIn, name=trace_info.lib_addr, use_pid=pid)
         return phys_addr
 
