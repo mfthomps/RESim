@@ -76,6 +76,7 @@ class SharedSyscall():
         ''' Adjust read return counts using writeData '''
         self.read_fixup_callback = None
         self.select_fixup_callback = None
+        self.poll_fixup_callback = None
 
         if self.top.isWindows(target=self.cell_name):
             self.win_call_exit = winCallExit.WinCallExit(top, cpu, cell, cell_name, param, mem_utils, task_utils, 
@@ -1180,7 +1181,7 @@ class SharedSyscall():
                     eax = self.modifySelect(exit_info.select_info, eax)
                     if self.dataWatch is not None:
                         trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 
-                        self.dataWatch.markSelect(trace_msg, exit_info.old_fd)
+                        self.dataWatch.markCall(trace_msg, exit_info.old_fd)
                 else:
                     for call_param in exit_info.call_params:
                         if type(call_param.match_param) is int:
@@ -1190,7 +1191,7 @@ class SharedSyscall():
                                     exit_info.matched_param = call_param
                                     if self.dataWatch is not None:
                                         msg = trace_msg
-                                        self.dataWatch.markSelect(msg, call_param.match_param)
+                                        self.dataWatch.markCall(msg, call_param.match_param)
                                     break
                             elif exit_info.select_info.hasFD(call_param.match_param):
                                 self.lgr.debug('sharedSyscall select fd %d found' % call_param.match_param)
@@ -1201,10 +1202,19 @@ class SharedSyscall():
         elif callname == 'poll' or callname == 'ppoll':
             if exit_info.poll_info is not None:
                 trace_msg = trace_msg+('%s result: %d\n' % (exit_info.poll_info.getString(), eax))
+                if self.poll_fixup_callback is not None and not self.poll_fixup_callback(exit_info.poll_info):
+                    self.lgr.debug('sharedSyscall select, poll_fixup_callback returned false, bail')
+                    return 
+                self.lgr.debug('sharedSyscall %s fool_select is %s' % (callname, self.fool_select))
+                if self.fool_select is not None and eax > 0:
+                    eax = self.modifyPoll(exit_info.poll_info, eax)
+                    if self.dataWatch is not None:
+                        trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 
+                        self.dataWatch.markCall(trace_msg, exit_info.old_fd)
+ 
+                exit_info.matched_param = None
             else:
                 trace_msg = trace_msg+('poll info was None  result: %d\n' % (eax))
- 
-            exit_info.matched_param = None
 
         elif callname == 'vfork':
             trace_msg = trace_msg+('in parent %s child tid:%s\n' % (tid, ueax))
@@ -1339,6 +1349,13 @@ class SharedSyscall():
             self.lgr.debug('sharedSyscall modified select result, cleared fd and set eax to %d' % eax)
         return eax
 
+    def modifyPoll(self, poll_info, eax):
+        if poll_info.hasFD(self.fool_select):
+            eax = 0
+            self.top.writeRegValue('syscall_ret', eax, alone=True)
+            self.lgr.debug('sharedSyscall modified poll result, eax to %d' % eax)
+        return eax
+
     def rmExitBySyscallName(self, name, cell, immediate=False):
         self.lgr.debug('rmExitBySyscallName %s immediate: %r' % (name, immediate))
         exit_name = '%s-exit' % name
@@ -1378,6 +1395,9 @@ class SharedSyscall():
 
     def setSelectFixup(self, select_fixup_callback):
         self.select_fixup_callback = select_fixup_callback
+
+    def setPollFixup(self, poll_fixup_callback):
+        self.poll_fixup_callback = poll_fixup_callback
 
     def preserveExit(self):
         self.preserve_exit = True

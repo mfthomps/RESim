@@ -452,10 +452,10 @@ class WriteData():
             self.lgr.debug('writeData setRetHap call sharedSyscall setReadFixup')
             if self.addr_of_count is not None:
                 self.shared_syscall.setReadFixup(self.doRetIOCtl)
-                self.shared_syscall.setSelectFixup(self.doRetSelect)
             else:
                 self.shared_syscall.setReadFixup(self.doRetFixup)
-            self.shared_syscall.foolSelect(self.fd)
+            self.shared_syscall.setSelectFixup(self.doRetSelect)
+            self.shared_syscall.setPollFixup(self.doRetPoll)
         else:
             self.lgr.error('writeData setRetHap, shared_syscall is None and not tracing io')
 
@@ -670,13 +670,14 @@ class WriteData():
                 self.setRetHap()
 
     def checkSelect(self):
-        # return False if simulation being halted
+        # return False if simulation being halted due to select count or poll count or no_reset
+        # Also used for poll
         retval = True
         if self.no_reset:
             self.doBreakSimulation('writeData checkSelect no reset')
             retval = False
         elif self.select_count_max is not None:
-            #self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
+            self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
             self.select_count = self.select_count+1
             if self.select_count_max is not None and self.select_count  >= self.select_count_max:
                 self.doBreakSimulation('writeData checkSelect select count')
@@ -722,11 +723,24 @@ class WriteData():
         self.lgr.debug('writeData doRetSelect')
         # return False if simulation is being halted
         retval = True
-        if select_info.setHasFD(self.fd, select_info.readfds): 
-            if not self.checkSelect():
-                retval = False
-            self.lgr.debug('writeData doRetSelect has our FD as a read')
-            #self.doBreakSimulation('writeData doRetSelect select on our fd')
+        if self.kernel_buf_consumed:
+            if select_info.setHasFD(self.fd, select_info.readfds): 
+                if not self.checkSelect():
+                    retval = False
+                self.lgr.debug('writeData doRetSelect kbuf consumed and has our FD as a read')
+                #self.doBreakSimulation('writeData doRetSelect select on our fd')
+        return retval
+
+    def doRetPoll(self, poll_info):
+        # return False if simulation is being halted
+        self.lgr.debug('writeData doRetPoll')
+        retval = True
+        if self.kernel_buf_consumed:
+            if poll_info.hasFD(self.fd):
+                if not self.checkSelect():
+                    retval = False
+                self.lgr.debug('writeData doRetPoll kbuf consumed and has our FD as a read retval %r' % retval)
+                #self.doBreakSimulation('writeData doRetSelect select on our fd')
         return retval
                 
     def doRetFixup(self, fd, callname=None):
@@ -755,8 +769,10 @@ class WriteData():
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
-                #self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
+                self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
+                if self.shared_syscall is not None:
+                    self.shared_syscall.foolSelect(self.fd)
         if self.total_read > self.read_limit:
             self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
@@ -772,10 +788,12 @@ class WriteData():
                          self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:eax])
 
                      self.top.writeRegValue('syscall_ret', remain, alone=True, reuse_msg=True)
-                     #self.lgr.debug('writeData adjusted return eax from %d to remain value of %d' % (eax, remain))
+                     self.lgr.debug('writeData adjusted return eax from %d to remain value of %d kernel buf consumed' % (eax, remain))
                      #rprint('**** Adjusted return value, RESET Origin ***') 
                      eax = remain
                      self.kernel_buf_consumed = True
+                     if self.shared_syscall is not None:
+                         self.shared_syscall.foolSelect(self.fd)
                  if not self.no_call_hap and not self.tracing_io:
                      self.setCallHap()
                  if self.top.isWindows():
@@ -923,12 +941,12 @@ class WriteData():
             if self.close_hap is not None:
                 #self.lgr.debug('writeData closeHap')
                 self.closed_fd = True
-                self.handleCall()
+                self.handleCall('close')
 
     def selectStopHap(self, dumb, third, break_num, memory):
         if self.select_hap is not None:
             #self.lgr.debug('writeData selectStopHap')
-            self.handleCall()
+            self.handleCall('select')
             '''
             if self.write_callback is not None:
                 SIM_run_alone(self.write_callback, 0)
