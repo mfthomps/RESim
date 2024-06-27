@@ -244,6 +244,11 @@ class EPollInfo():
     def add(self, fd, events):
         entry = self.FDS(fd, events)
         self.fd_set.append(entry)
+    def hasFD(self, fd):
+        for entry in self.fd_set:
+            if entry.fd == fd:
+                return True
+        return False
 
 class PollInfo():
     class FDS():
@@ -1991,7 +1996,7 @@ class Syscall():
             ida_msg = '%s tid:%s (%s) poll_info: %s\n' % (callname, tid, comm, exit_info.poll_info.getString())
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.poll_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    self.lgr.debug('call param found %d' % (call_param.match_param))
+                    self.lgr.debug('syscall %s call param found %d' % (callname, call_param.match_param))
                     exit_info.call_params.append(call_param)
 
         elif callname == 'epoll_ctl':
