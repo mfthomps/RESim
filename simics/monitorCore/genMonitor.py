@@ -126,6 +126,7 @@ import recordLogEvents
 import pageCallbacks
 import loopN
 import spotFuzz
+import disassemble
 
 #import fsMgr
 import json
@@ -337,6 +338,8 @@ class GenMonitor():
 
         self.report_crash = None
         self.loop_n = {}
+
+        self.disassemble_instruct = {}
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -836,6 +839,7 @@ class GenMonitor():
                           self.context_manager[cell_name], self.run_from_snap, self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+                self.disassemble_instruct[cell_name] = disassemble.Disassemble(self, cpu, self.soMap[cell_name], self.lgr)
             ''' ugly circular dependency'''
             self.context_manager[cell_name].setSOMap(self.soMap[cell_name])
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
@@ -3536,7 +3540,7 @@ class GenMonitor():
                             calls.remove(c)
             else:
                 if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.mem_utils[target].WORD_SIZE == 8:
-                    calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+                    calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'poll']
                     for call in net.readcalls:
                         calls.append(call.lower())
                     if self.mem_utils[target].WORD_SIZE == 8:
@@ -4166,14 +4170,15 @@ class GenMonitor():
         tid = self.task_utils[self.target].getCurrentThreadLeaderTid()
         print(tid)        
 
-    def getGroupTids(self, in_tid):
+    def getGroupTids(self, in_tid, quiet=False):
         leader_tid = self.task_utils[self.target].getGroupLeaderTid(in_tid)
         plist = self.task_utils[self.target].getGroupTids(leader_tid)
         if plist is None:
             print('Could not find leader %s' % leader_tid)
             return
-        for tid in plist:
-            print(tid)
+        if not quiet:
+            for tid in plist:
+                print(tid)
         
     def reportMode(self):
         self.rmDebugWarnHap()
@@ -5321,6 +5326,7 @@ class GenMonitor():
         print('add 0x%x => 0x%x to %s' % (from_bb, to_bb, jname))
     
     def getFullPath(self, fname=None):
+        # get the full local path.
         retval =  self.full_path
         if fname is not None:
             retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
@@ -6070,9 +6076,10 @@ class GenMonitor():
     def tracking(self):
         return self.track_started
 
-    def runToSO(self, file):
+    def runToSO(self, file, threads=False):
         self.rmDebugWarnHap()
-        self.run_to[self.target].runToSO(file)
+        tid_list = None
+        self.run_to[self.target].runToSO(file, threads=threads)
 
     def skipToCycle(self, cycle, cpu=None):
         if cpu is None:
@@ -6343,6 +6350,10 @@ class GenMonitor():
 
     def getSyscallManager(self):
         return self.syscallManager[self.target]
+
+    def disassembleAddress(self, cpu, addr):
+        target = self.cell_config.cellFromCPU(cpu)
+        return self.disassemble_instruct[target].getDisassemble(addr)
     
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
