@@ -112,6 +112,7 @@ class FunctionNoWatch():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(entry_info.lib, entry_info.lib_fun)
         if phys_addr is None:
+            self.pending_pages[entry_info.lib_fun] = entry_info
             self.top.pageCallback(linear, self.pagedIn, name=entry_info.lib_fun, use_pid=pid)
         return phys_addr
 
