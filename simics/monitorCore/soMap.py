@@ -876,8 +876,8 @@ class SOMap():
         retval = []
         tid = self.getSOTid(tid)
         if tid in self.so_file_map: 
-            for load_info in self.so_file_map[map_tid]:
-                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[map_tid][load_info])
+            for load_info in self.so_file_map[tid]:
+                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
                 retval.append(code_section) 
         return retval
 
