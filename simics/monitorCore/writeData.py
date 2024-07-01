@@ -674,6 +674,7 @@ class WriteData():
         # Also used for poll
         retval = True
         if self.no_reset:
+            self.lgr.debug('writeData checkSelect no reset')
             self.doBreakSimulation('writeData checkSelect no reset')
             retval = False
         elif self.select_count_max is not None:
@@ -771,7 +772,7 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr):
                 self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
-                if self.shared_syscall is not None:
+                if self.shared_syscall is not None and not self.no_reset:
                     self.shared_syscall.foolSelect(self.fd)
         if self.total_read > self.read_limit:
             self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
