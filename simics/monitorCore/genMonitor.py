@@ -2696,7 +2696,7 @@ class GenMonitor():
 
     def traceFD(self, fd, raw=False):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
-        self.lgr.debug('traceFD %d' % fd)
+        self.lgr.debug('traceFD %d target is %s' % (fd, self.target))
         outfile = 'logs/output-fd-%d.log' % fd
         self.traceFiles[self.target].watchFD(fd, outfile, raw=raw)
 
@@ -4346,7 +4346,7 @@ class GenMonitor():
         if mark_logs:
             self.traceFiles[self.target].markLogs(self.dataWatch[self.target])
             if self.target in self.trace_buffers:
-                self.trace_buffers[self.target].markLogs(self.DataWatch[self.target])
+                self.trace_buffers[self.target].markLogs(self.dataWatch[self.target])
 
         self.runToIO(fd, linger=True, break_simulation=False, origin_reset=origin_reset, run_fun=run_fun, count=count, kbuf=kbuf,
                      call_list=call_list, run=run, just_input=True)
@@ -4563,7 +4563,7 @@ class GenMonitor():
             sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False):
+            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -4617,7 +4617,7 @@ class GenMonitor():
                   target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
-                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc)
+                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc, trace_fd=trace_fd)
 
         if go:
             self.injectIOInstance.go()
@@ -6128,7 +6128,10 @@ class GenMonitor():
         if target is None:
             target = self.target
         if target in self.trace_buffers:
+            self.lgr.debug('traceBufferMarks for target %s.' % target)
             self.trace_buffers[target].markLogs(self.dataWatch[target])
+        else:
+            self.lgr.debug('traceBufferMarks target %s not in trace_buffers' % target)
 
     def toRunningProc(self, proc, plist, flist):
         self.run_to[self.target].toRunningProc(proc, plist, flist)

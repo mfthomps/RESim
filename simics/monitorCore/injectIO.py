@@ -41,7 +41,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -135,6 +135,7 @@ class InjectIO():
         self.target_proc = target_proc
         self.target_cell = target_cell
         self.targetFD = targetFD
+        self.trace_fd = trace_fd
 
         # No data tracking, just trace all system calls
         self.trace_all = trace_all
@@ -164,6 +165,8 @@ class InjectIO():
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
+        if trace_fd is not None:
+            self.mark_logs=True
         self.filter_module = None
         packet_filter = os.getenv('AFL_PACKET_FILTER')
         if packet_filter is not None:
@@ -393,6 +396,9 @@ class InjectIO():
                     use_backstop = False
                 if self.malloc:
                     self.top.traceMalloc()
+                if self.trace_fd is not None:
+                    self.top.traceAll()
+                    self.top.traceFD(self.trace_fd)
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
@@ -466,11 +472,17 @@ class InjectIO():
         self.bookmarks = self.top.getBookmarksInstance()
         if self.malloc:
             self.top.traceMalloc()
+        if self.mark_logs:
+            self.lgr.debug('injectIO call traceAll for mark_logs')
+            self.top.traceAll()
+            if self.trace_fd is not None:
+                self.top.traceFD(self.trace_fd)
+            self.top.traceBufferMarks(target=self.cell_name)
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
-                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count)
+                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
             else:
-                self.top.trackIO(self.targetFD, quiet=True, count=self.count)
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs)
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:
