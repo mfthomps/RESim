@@ -4677,7 +4677,7 @@ class DataWatch():
         if max_marks is not None:
            self.max_marks = max_marks
            self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % self.max_marks)
-        else:
+        elif self.max_marks is None:
            self.max_marks = 2000
            self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
         self.watch(break_simulation=False)
