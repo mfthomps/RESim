@@ -3059,9 +3059,10 @@ class DataWatch():
  
             if dest_addr is not None:
                 if next_instruct[1].startswith('mov') and self.decode.regIsPartList(op2, our_reg_list) and 'sp' in op1:
-                    self.lgr.debug('dataWatch loopAdHoc push via mov.  hack sp because checkPushedData will subtract word size from it')
-                    track_sp = track_sp + word_size
-                    adhoc = self.checkPushedData(track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
+                    this_sp = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                    self.lgr.debug('dataWatch loopAdHoc push via mov.  Moved to SP value 0x%x,  hack sp because checkPushedData will subtract word size from it' % this_sp)
+                    this_sp = this_sp + word_size
+                    adhoc = self.checkPushedData(this_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
                     break
                 else:
                     adhoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, (move_cycles+jump_cycles), word_size)
@@ -3305,29 +3306,30 @@ class DataWatch():
         ''' Assumes calls we care about to ntohl-type calls immediatly follow push of our register 
             See if result of function is stored to memory. 
         '''
-        self.lgr.debug('dataWatch loopAdHoc is push (or similar), see if the call is to a data transform.  next_next_ip is 0x%x' % (next_next_ip))
+        self.lgr.debug('dataWatch checkPushedData is push (or similar), see if the call is to a data transform.  next_next_ip is 0x%x' % (next_next_ip))
         adhoc = self.checkNTOHL(next_next_ip, addr, trans_size, start, length, recent_instructs=recent_instructs)
         if not adhoc:
             adhoc = self.checkPushedTest(next_next_ip, addr, trans_size, start, length, recent_instructs=recent_instructs)
         if not adhoc:
-            self.lgr.debug('dataWatch loopAdHoc, not a NTOHL into memory')
+            self.lgr.debug('dataWatch checkPushedData, not a NTOHL into memory')
             ''' TBD tweak this for ARM fu '''
             ''' If call to ntohl-like function (but result not stored to memory per above, don't record push '''
             instruct = self.top.disassembleAddress(self.cpu, next_next_ip)
         
-            self.lgr.debug('dataWatch loopAdHoc see if next is a data xform')
+            self.lgr.debug('dataWatch checkPushedData see if next is a data xform')
             fun = self.isDataTransformCall(instruct, next_next_ip, recent_instructs=recent_instructs)
             if fun is None:
                 ''' Will track the push.  Manage so the stack buffer (the push), is removed on return.'''
                 track_sp = track_sp - word_size
-                self.lgr.debug('dataWatch loopAdHoc next was not data xform, track the push to track_sp 0x%x' % track_sp)
-                self.trackPush(track_sp, instruct, addr, start, length, next_next_ip)
+                loop_instructions = len(recent_instructs)
+                self.lgr.debug('dataWatch checkPushedData next was not data xform, track the push to track_sp 0x%x, consumed %d loop instructions' % (track_sp, loop_instructions))
+                self.trackPush(track_sp, instruct, addr, start, length, next_next_ip, loop_instructions=loop_instructions)
                 adhoc = True
             else:
                 ''' set a break/hap on return from transform to see if its eax gets pushed onto the stack for a call.'''
                 self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, fun, ip=orig_ip, cycle=orig_cycle)
                 after_call = next_next_ip + instruct[0]
-                self.lgr.debug('dataWatch loopAdHoc, was push, saw it is a data transform function, look for push of result, thinking after_call is 0x%x.' % after_call)
+                self.lgr.debug('dataWatch checkPushedData, was push, saw it is a data transform function, look for push of result, thinking after_call is 0x%x.' % after_call)
                 break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, after_call, 1, 0)
                 track_sp = track_sp - word_size
                 ntoh_rec = self.NTOHType(track_sp, next_next_ip, fun)
@@ -3335,7 +3337,7 @@ class DataWatch():
                      self.transformPushHap, ntoh_rec, break_num, 'transformPush')
                 adhoc = True
         else:
-            self.lgr.debug('dataWatch loopAdHoc checkNTOHL found write to memory or a test of a pass by value')
+            self.lgr.debug('dataWatch checkPushedData checkNTOHL found write to memory or a test of a pass by value')
             pass
         return adhoc
 
@@ -3346,7 +3348,7 @@ class DataWatch():
             self.fun = fun   
             self.reg = None
 
-    def trackPush(self, sp, instruct, addr, start, length, ip):
+    def trackPush(self, sp, instruct, addr, start, length, ip, loop_instructions=0):
         # A buffer value was pushed on the stack and we don't know the called function,
         # so just track it as a new buffer.
         self.setRange(sp, self.mem_utils.wordSize(self.cpu), no_extend=True)
@@ -3354,7 +3356,7 @@ class DataWatch():
         self.lgr.debug('dataWatch trackPush, did push ip 0x%x cycle 0x%x' % (ip, self.cpu.cycles))
         self.setBreakRange()
         self.move_cycle = self.cpu.cycles
-        self.move_cycle_max = self.cpu.cycles + 1
+        self.move_cycle_max = self.cpu.cycles + 1 + loop_instructions
         self.lgr.debug('dataWatch trackPush move_cycle_max now 0x%x' % self.move_cycle_max)
         ret_to = self.findCallReturn(ip, instruct)
         if ret_to is None:
