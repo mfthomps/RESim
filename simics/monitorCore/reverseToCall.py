@@ -777,7 +777,7 @@ class reverseToCall():
         self.num_bytes = num_bytes
         self.kernel = kernel
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, taint, kernel))
+        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d num_bytes %s taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, num_bytes, taint, kernel))
         self.reg = reg
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
@@ -958,7 +958,7 @@ class reverseToCall():
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
                         #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
                         if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
-                            self.lgr.debug('cycleRegisterMod at %x, we be may done, type is unknown' % eip)
+                            self.lgr.debug('cycleRegisterMod at eip %x, we may be done, type is unknown' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
@@ -967,14 +967,16 @@ class reverseToCall():
                                 addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
-                                    self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
+                                    addr = addr + self.offset
+                                    self.lgr.debug('cycleRegisterMod, set as addr type for addr 0x%x reflects offset %s' % (addr, self.offset))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('mov') and '[' in op1:
                                 self.lgr.debug('is mov op1 is %s' % op1)
                                 addr = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
-                                    self.lgr.debug('cycleRegisterMod, x86 set as addr type for 0x%x' % addr)
+                                    addr = addr + self.offset
+                                    self.lgr.debug('cycleRegisterMod, x86 set as addr type for addr 0x%x reflects offset %d' % (addr, self.offset))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('xchg'):
                                 if self.decode.regIsPart(op1, self.reg):
@@ -1226,7 +1228,7 @@ class reverseToCall():
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
                 if newvalue is not None and value is not None: 
-                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
+                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x loaded into register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
                     self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
@@ -1234,7 +1236,10 @@ class reverseToCall():
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                num_bytes = self.decode.regLen(op0)
+                if self.num_bytes is None:
+                    num_bytes = self.decode.regLen(op0)
+                else:
+                    num_bytes = self.num_bytes
                 self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
