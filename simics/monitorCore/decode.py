@@ -211,6 +211,7 @@ def getValue(s, cpu, lgr=None, reg_values={}):
     retval = None
     #if lgr is not None:
     #    lgr.debug('getValue for %s' % s)
+    s = s.strip()
     if '+' in s:
         parts = s.split('+',1)
         reg_size = 4
@@ -258,7 +259,7 @@ def getValue(s, cpu, lgr=None, reg_values={}):
                 #    lgr.debug('getValue returning 0x%x' % retval)
             except:
                 if lgr is not None:
-                    lgr.error('getValue could not parse %s' % s)
+                    lgr.error('getValue could not parse <%s>' % s)
                 pass
         #if lgr is not None and retval is not None:
         #    lgr.debug('getValue %s is scalar, get its value 0x%x' % (s, retval))
