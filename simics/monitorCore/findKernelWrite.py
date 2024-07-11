@@ -202,7 +202,7 @@ class findKernelWrite():
         else:
             if memory.logical_address != self.addr:
                 offset = memory.logical_address - self.addr
-            self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, eip, self.cpu.cycles))
+            self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d value: 0x%x eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, memory.value, eip, self.cpu.cycles))
         self.memory_transaction = memory
         SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_alone(self.addStopHapForWriteAlone, offset)
@@ -211,10 +211,11 @@ class findKernelWrite():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     class MyMemoryTransaction():
-        def __init__(self, logical_address, physical_address, size):
+        def __init__(self, logical_address, physical_address, size, value):
             self.logical_address = logical_address 
             self.physical_address = physical_address 
             self.size = size 
+            self.value = value 
 
     def deleteBrokenHap(self):
         if self.broken_hap is not None:
@@ -237,50 +238,50 @@ class findKernelWrite():
             SIM_run_alone(self.context_manager.enableAll, None)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
-        elif self.cpu.cycles == self.start_cycles:
-            self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.vt_handler(my_memory)
-        elif self.cpu.cycles < self.start_cycles:
-            location = memory.logical_address
-            phys = memory.physical_address
-            eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.future_count = 0
-            if self.cpu.cycles > self.best_cycle:
-                self.best_cycle = self.cpu.cycles
-                self.lgr.debug('revWriteCallback best cycle now 0x%x' % self.best_cycle)
-            VT_in_time_order(self.vt_handler, my_memory)
         else:
-            location = memory.logical_address
-            phys = memory.physical_address
-            eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            self.future_count = self.future_count+1
-            if self.future_count > 100:
-                if self.best_cycle == 0:
-                    bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
-                    self.bookmarks.setBacktrackBookmark(bm)
-                    SIM_break_simulation('revWriteCallback')
-                    self.top.skipAndMail()
-                    return
-                else:
-                    bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
-                    self.top.quit()
-                    #self.bookmarks.setBacktrackBookmark(bm)
-                    #SIM_break_simulation('revWriteCallbackx')
-                    #self.top.skipAndMail()
-                    return
-                #else:
-                #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
-                #    #self.cleanUp()
-                #    #SIM_break_simulation('remove this and fix it')
-                #    # simics goes into loop, but can still quit
-                #    self.top.quit()
-            VT_in_time_order(self.vt_handler, my_memory)
+            value = SIM_get_mem_op_value_le(memory)
+            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size, value)
+            if self.cpu.cycles == self.start_cycles:
+                self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
+                self.vt_handler(my_memory)
+            elif self.cpu.cycles < self.start_cycles:
+                location = memory.logical_address
+                phys = memory.physical_address
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.future_count = 0
+                if self.cpu.cycles > self.best_cycle:
+                    self.best_cycle = self.cpu.cycles
+                    self.lgr.debug('revWriteCallback best cycle now 0x%x' % self.best_cycle)
+                VT_in_time_order(self.vt_handler, my_memory)
+            else:
+                location = memory.logical_address
+                phys = memory.physical_address
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.future_count = self.future_count+1
+                if self.future_count > 100:
+                    if self.best_cycle == 0:
+                        bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
+                        self.bookmarks.setBacktrackBookmark(bm)
+                        SIM_break_simulation('revWriteCallback')
+                        self.top.skipAndMail()
+                        return
+                    else:
+                        bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
+                        self.top.quit()
+                        #self.bookmarks.setBacktrackBookmark(bm)
+                        #SIM_break_simulation('revWriteCallbackx')
+                        #self.top.skipAndMail()
+                        return
+                    #else:
+                    #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
+                    #    #self.cleanUp()
+                    #    #SIM_break_simulation('remove this and fix it')
+                    #    # simics goes into loop, but can still quit
+                    #    self.top.quit()
+                VT_in_time_order(self.vt_handler, my_memory)
                 
 
     def addStopHapForWriteAlone(self, offset):
@@ -764,7 +765,7 @@ class findKernelWrite():
                 value = self.mem_utils.getRegValue(self.cpu, op1)
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
                 #value = self.cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('findKernelWrite backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                self.lgr.debug('findKernelWrite backOneAlone %s is reg, find where value 0x%x was loaded.  Num bytes %d offset %d   Reversing  from cycle 0x%x' % (op1, value, self.num_bytes, offset, self.cpu.cycles))
                 #if op1.startswith('xmm'):
                 #    SIM_break_simulation('remove this')
                 #    return
