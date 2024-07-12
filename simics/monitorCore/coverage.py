@@ -120,11 +120,11 @@ class Coverage():
         self.halt_coverage = False
         self.diag_hits_counts = {}
         self.diag_hits=False
-        self.suspend_end_bp = None
-        self.suspend_end_hap = None
-        self.suspend_start = None
-        self.suspend_end = None
+        self.suspend_end_bp = {}
+        self.suspend_end_hap = {}
+        self.suspend_start_end = {}
         self.suspendCoverage()
+        self.suspend_callback = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -340,12 +340,13 @@ class Coverage():
         self.lgr.debug('coverage recordhang of program under test cycle 0x%x' % cycles)
         SIM_break_simulation('did hang')
 
-    def watchExits(self, tid=None, callback=None):
+    def watchExits(self, tid=None, callback=None, suspend_callback=None):
         self.context_manager.watchGroupExits(tid=tid)
         if self.afl:
             self.context_manager.setExitCallback(self.recordExit)
         elif callback is not None:
             self.context_manager.setExitCallback(callback)
+        self.suspend_callback=suspend_callback
 
     def getStatus(self):
         return self.proc_status
@@ -657,26 +658,26 @@ class Coverage():
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
             #self.lgr.debug('coverage bbHap 0x%x in del_breaks, return' % this_addr)
             return
-        if self.suspend_start is not None and self.suspend_start == this_addr:
-            #self.lgr.debug('coverage bbHap hit suspend start at 0x%x, disable all breaks' % self.suspend_start)
-            self.disableAll()
-            self.backstop.clearCycle()
-            self.setSuspendEnd()
+        if this_addr in self.suspend_start_end:
+            self.lgr.debug('coverage bbHap hit suspend start at 0x%x, disable all breaks' % this_addr)
+            if self.suspend_start_end[this_addr] is not None:
+                self.lgr.debug('coverage bpHap suspend and restart at addr 0x%x' % self.suspend_start_end[this_addr])
+                self.disableAll()
+                self.backstop.clearCycle()
+                self.setSuspendEnd(this_addr)
+            else:
+                self.lgr.debug('coverage bpHap suspend with no resume, just bail.  suspend_callback is %s' % str(self.suspend_callback))
+                if self.suspend_callback is not None:
+                    self.suspend_callback()
+                else:
+                    SIM_break_simulation('suspend')
+        elif self.backstop_cycles is not None and self.backstop_cycles > 0:
+            #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
+            self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
         #tid = self.top.getTID(target=self.cell_name)
         #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
-        '''
-        byte_array = self.top.getBytes(self.cell_name, self.cpu, 100, 0xad1c40)
-        if byte_array is not None:
-            read_data = resimUtils.getHexDump(byte_array)
-            self.lgr.debug(read_data)
-        self.lgr.debug('now quit')
-        self.top.quit()
-        '''
 
-        if self.backstop_cycles is not None and self.backstop_cycles > 0:
-            #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
-            self.backstop.setFutureCycle(self.backstop_cycles, now=False)
         if (not self.linear or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
             ''' see if a jumper should skip over code by changing the PC '''
@@ -1190,33 +1191,53 @@ class Coverage():
                     if line.startswith('#'):
                         continue
                     parts = line.split()
-                    if len(parts) != 2:
+                    if len(parts) == 1:
+                        # Means we will never resume after suspend, just bail when hit
+                        start_addr = int(parts[0], 16)
+                        self.suspend_start_end[start_addr] = None
+                    elif len(parts) == 2:
+                        start_addr = int(parts[0], 16)
+                        end_addr = int(parts[1], 16)
+                        self.suspend_start_end[start_addr] = end_addr
+                        self.lgr.debug('coverage suspendCoverage start 0x%x end 0x%x' % (start_addr, end_addr))
+                    else:
                         self.lgr.error('coverage bad address range, expected 2 addresses separated by a space, got  %s' % line)
-                    self.suspend_start = int(parts[0], 16)
-                    self.suspend_end = int(parts[1], 16)
-                    self.lgr.debug('coverage suspendCoverage start 0x%x end 0x%x' % (self.suspend_start, self.suspend_end))
+                        self.top.quit()
 
-    def setSuspendEnd(self):
-        phys_addr = self.mem_utils.v2p(self.cpu, self.suspend_end)
-        self.suspend_end_bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
-        self.suspend_end_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.suspendEndHap, None, self.suspend_end_bp)
+    def setSuspendEnd(self, start_addr):
+        phys_addr = self.mem_utils.v2p(self.cpu, self.suspend_start_end[start_addr])
+        self.suspend_end_bp[start_addr] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
+        self.suspend_end_hap[start_addr] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", 
+                    self.suspendEndHap, None, self.suspend_end_bp[start_addr])
         #self.lgr.debug('coverage suspendCoverage set end break on phys 0x%x' % phys_addr)
     
     def rmSuspendHap(self, hap):
         if self.suspend_end_hap is not None:
             self.lgr.debug('coverage rmSuspendHap') 
-            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', self.suspend_end_hap)
-            SIM_delete_breakpoint(self.suspend_end_bp)
+            SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
 
     def suspendEndHap(self, dumb, third, break_num, memory):
         #self.lgr.debug('coverage suspendEndHap eh?')
-        if self.suspend_end_hap is not None:
+        start_addr = self.suspendAddrFromBreakNum(break_num)
+        if start_addr is not None and start_addr in self.suspend_end_hap:
             self.backstop.setFutureCycle(self.backstop_cycles, now=False)
             #self.lgr.debug('coverage suspendEndHap')
             self.enableAll()
-            hap = self.suspend_end_hap
+            hap = self.suspend_end_hap[start_addr]
             SIM_run_alone(self.rmSuspendHap, hap)
-            self.suspend_end_hap = None
+            del self.suspend_end_hap[start_addr]
+            SIM_delete_breakpoint(self.suspend_end_bp[start_addr])
+            del self.suspend_end_bp[start_addr]
+
+    def suspendAddrFromBreakNum(self, break_num):
+        retval = None
+        for start_addr in self.suspend_end_bp:
+            if self.suspend_end_bp[start_addr] == break_num:
+                retval = break_num
+                break
+        if retval is None:
+            self.lgr.error('coverage suspendAddrFromBreakNum failed to find addr for break %d' % break_num)
+        return retval
 
 
 
