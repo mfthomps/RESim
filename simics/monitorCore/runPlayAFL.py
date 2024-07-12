@@ -161,7 +161,9 @@ def runPlay(args, lgr, prog_path):
             lgr.debug('Wrote hits to %s' % hits_path) 
             print('all hits total %d' % len(all_hits))
         else:
-            print('Nothing to do.')
+            print('Was a search list')
+    else:
+        print('Nothing to do.')
 
 def main():
     lgr = resimUtils.getLogger('runPlay', '/tmp/', level=None)
