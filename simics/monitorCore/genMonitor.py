@@ -5103,6 +5103,7 @@ class GenMonitor():
 
     def playAFLTCP(self, dfile, sor=False, linear=False, dead=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, 
                    target=None, fname=None):
+        # TBD remove. Not used.  TCP should use kernel buffers with playAFL
         self.playAFL(dfile,  n=-1, sor=sor, linear=linear, dead=dead, afl_mode=afl_mode, crashes=crashes, parallel=parallel, 
                      only_thread=only_thread, target=target, fname=fname)
 
@@ -5134,9 +5135,9 @@ class GenMonitor():
               show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
-            if trace_all: 
-                self.traceAll()
-                #self.trace_all = True
+            #if trace_all: 
+            #    self.traceAll()
+            #    #self.trace_all = True
             play.go()
         elif play is None:
             print('playAFL failed?')
