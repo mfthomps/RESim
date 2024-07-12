@@ -33,8 +33,8 @@ def ioHandler(read_array, stop, lgr):
                 lgr.debug('select error, must be closed.')
                 return
             for item in r:
-                file_num = item.fileno()
                 try:
+                    file_num = item.fileno()
                     data = os.read(file_num, 800)
                 except:
                     lgr.debug('read error, must be closed.')
@@ -68,7 +68,10 @@ def handleClose(resim_procs, read_array, remote, lgr):
 
 def runPlay(args, lgr, prog_path):
     here= os.path.dirname(os.path.realpath(__file__))
-    os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
+    if args.search_list is None:
+        os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
+    else:
+        os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneSearch.py')
     resim_dir = os.getenv('RESIM_DIR')
     if resim_dir is None:
         print('missing RESIM_DIR envrionment variable')
@@ -102,7 +105,7 @@ def runPlay(args, lgr, prog_path):
         os.environ['ONE_DONE_PARAM5']=args.targetFD
     os.environ['ONE_DONE_PARAM6']=args.count
     os.environ['ONE_DONE_PARAM7']=str(args.no_page_faults)
-    os.environ['ONE_DONE_PARAM8']=str(args.search_list_file)
+    os.environ['ONE_DONE_PARAM8']=str(args.search_list)
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     for cfile in cover_list:
@@ -132,7 +135,7 @@ def runPlay(args, lgr, prog_path):
 
         handleClose(resim_procs, read_array, args.remote, lgr)
 
-        if args.search_list_file is None:
+        if args.search_list is None:
             cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
             all_hits = []
             for hit_file in cover_list:
@@ -177,7 +180,7 @@ def main():
     parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
     parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
-    parser.add_argument('-s', '--search_list_file', action='store', help='Name of file containing search criteria, e.g., to find writes to a range')
+    parser.add_argument('-s', '--search_list', action='store', help='Name of file containing search criteria, e.g., to find writes to a range')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
