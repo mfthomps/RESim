@@ -157,8 +157,9 @@ class PlayAFL():
                     print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
+        self.search_list = search_list
         tid = self.top.getTID()
-        self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname))
+        self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s search_list:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname, search_list))
         self.initial_context = self.target_cpu.current_context
         self.index = -1
         self.stop_hap = None
@@ -205,7 +206,6 @@ class PlayAFL():
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
  
-        self.search_list = search_list
         if self.search_list is not None:
             self.no_cover = True
         
@@ -219,7 +219,7 @@ class PlayAFL():
             self.top.debugTidGroup(tid, to_user=False)
             self.finishInit()
 
-            if self.dfile != 'oneplay':
+            if self.dfile != 'oneplay' or self.afl_mode:
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
@@ -399,6 +399,7 @@ class PlayAFL():
             self.lgr.debug('playAFL search_list at %s' % self.search_list)
             self.setSearch() 
         self.backstop.setCallback(self.backstopCallback)
+        
 
     def go(self, findbb=None):
         if len(self.afl_list) == 0:
@@ -557,16 +558,19 @@ class PlayAFL():
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.trace_buffer is not None:
                 self.trace_buffer.msg('playAFL from '+self.afl_list[self.index])
+            if self.trace_all:
+                self.lgr.debug('playAFL goAlone call traceAll')
+                self.top.traceAll()
 
             if self.afl_mode: 
                 if self.coverage is not None:
                     if self.repeat is False or self.repeat_counter > 1:
-                        self.coverage.watchExits()
+                        self.coverage.watchExits(callback=self.reportExit, suspend_callback=self.reportSuspend, tid=self.target_tid)
                 else:
                     self.lgr.error('playAFL afl_mode but not coverage?')
                     return
             elif self.coverage is not None:
-                self.coverage.watchExits(callback=self.reportExit, tid=self.target_tid)
+                self.coverage.watchExits(callback=self.reportExit, suspend_callback=self.reportSuspend, tid=self.target_tid)
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
@@ -663,10 +667,16 @@ class PlayAFL():
         if index < len(self.afl_list):
             queue_dir = os.path.dirname(self.afl_list[index])
             queue_parent = os.path.dirname(queue_dir)
-            if os.path.basename(queue_dir) == 'manual_queue':
-                coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+            if self.search_list is None:
+                if os.path.basename(queue_dir) == 'manual_queue':
+                    coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+                else:
+                    coverage_dir = os.path.join(queue_parent, 'coverage')
             else:
-                coverage_dir = os.path.join(queue_parent, 'coverage')
+                if os.path.basename(queue_dir) == 'manual_queue':
+                    coverage_dir = os.path.join(queue_parent, 'manual_search')
+                else:
+                    coverage_dir = os.path.join(queue_parent, 'search')
             try:
                 os.makedirs(coverage_dir)
             except:
@@ -819,6 +829,16 @@ class PlayAFL():
         if self.stop_hap is None:
                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('process exit')
+ 
+    def reportSuspend(self):
+        self.did_suspend = True
+        SIM_run_alone(self.reportSuspendAlone, None)
+
+    def reportSuspendAlone(self, dumb):
+        print('Process suspend, bail. cycles 0x%x' % self.target_cpu.cycles)
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+        SIM_break_simulation('process suspend')
  
     def setCycleHap(self, dumb=None):
         if self.cycle_event is None:
