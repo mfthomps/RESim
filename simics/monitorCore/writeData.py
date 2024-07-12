@@ -674,11 +674,11 @@ class WriteData():
         # Also used for poll
         retval = True
         if self.no_reset:
-            self.lgr.debug('writeData checkSelect no reset')
+            #self.lgr.debug('writeData checkSelect no reset')
             self.doBreakSimulation('writeData checkSelect no reset')
             retval = False
         elif self.select_count_max is not None:
-            self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
+            #self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
             self.select_count = self.select_count+1
             if self.select_count_max is not None and self.select_count  >= self.select_count_max:
                 self.doBreakSimulation('writeData checkSelect select count')
@@ -770,12 +770,12 @@ class WriteData():
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
-                self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
+                #self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
                 if self.shared_syscall is not None and not self.no_reset:
                     self.shared_syscall.foolSelect(self.fd)
         if self.total_read > self.read_limit:
-            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain and not self.no_reset:
@@ -809,7 +809,7 @@ class WriteData():
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  SIM_break_simulation('Over read limit')
                  return None
-                 self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         return eax
 
     def retHap(self, dumb, third, break_num, memory):
