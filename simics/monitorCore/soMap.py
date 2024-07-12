@@ -755,7 +755,7 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
-        self.lgr.debug('mapSO loadAddr %s tid %s' % (in_fname, tid))
+        self.lgr.debug('mapSO getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
         retval = None
         prog = self.fullProg(in_fname)
         if tid is None:
@@ -764,6 +764,7 @@ class SOMap():
         if map_tid not in self.so_file_map:
             self.lgr.debug('soMap getLoadAddr tid %s not in so_file_map, perhaps a prog' % map_tid)
         else:
+            self.lgr.debug('mapSO getLoadAddr prog %s tid:%s file_map size %d' % (prog, tid, len(self.so_file_map[map_tid])))
             for load_info in self.so_file_map[map_tid]:
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
