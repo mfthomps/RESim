@@ -208,6 +208,7 @@ class PlayAFL():
  
         if self.search_list is not None:
             self.no_cover = True
+        self.search_found_eip = None
         
         self.snap_name = snap_name
         self.no_page_faults = no_page_faults
@@ -219,7 +220,7 @@ class PlayAFL():
             self.top.debugTidGroup(tid, to_user=False)
             self.finishInit()
 
-            if self.dfile != 'oneplay' or self.afl_mode:
+            if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
@@ -546,8 +547,8 @@ class PlayAFL():
             count = self.write_data.write()
             if self.mem_utils.isKernel(self.addr):
                 if self.addr_of_count is not None and not self.top.isWindows():
-                    self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                    self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
+                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                     self.write_data.watchIOCtl()
             if self.trace_all:
                 self.write_data.tracingIO()
@@ -586,6 +587,9 @@ class PlayAFL():
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not calling resetOrigin')
                 #self.top.resetOrigin()
+
+            if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
+                self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
             self.lgr.debug('playAFL goAlone now continue')
             if self.repeat:
@@ -793,8 +797,10 @@ class PlayAFL():
                 if self.top.hasPendingPageFault(self.tid):
                     print('TID %s has pending page fault' % self.tid)
                     self.lgr.debug('TID %s has pending page fault' % self.tid)
+            elif self.search_list is not None:
+                self.lgr.debug('playAFL stopHap Search completed.')
             else:
-                self.lgr.debug('playAFL stopHap')
+                self.lgr.debug('playAFL stopHap, coverage not set and no search list')
             if self.repeat or self.dfile != 'oneplay':
                 SIM_run_alone(self.goAlone, True)
 
@@ -905,3 +911,19 @@ class PlayAFL():
     def searchHap(self, dumb, third, break_num, memory):
         self.lgr.debug('searchHap hit mem 0x%x' % memory.logical_address)
         print('searchHap hit mem 0x%x' % memory.logical_address)
+        eip = self.top.getEIP(cpu=self.target_cpu)
+        value = SIM_get_mem_op_value_le(memory)
+        self.recordSearchFind(memory.logical_address, eip, value)
+
+    def recordSearchFind(self, addr, eip, value):
+        ''' search finds will go in a "search" directory along side queue, etc. '''
+        self.lgr.debug('playAFL recordSearchFinds')
+        #hit_list = list(hit_bbs.keys())
+        fname = self.getHitsPath(self.index)
+        if fname is not None: 
+            basename = os.path.basename(fname)
+            self.lgr.debug('playAFL recordSearchFind record hit at eip 0x%x value 0x%x from %s' % (eip, value, basename))
+            if not os.path.isfile(fname):
+                self.lgr.debug('playAFL recordSearchFind, assume ad-hoc path')
+            with open(fname, 'w') as fh:
+                fh.write('addr:0x%x eip:0x%x value:0x%x' % (addr, eip, value))
