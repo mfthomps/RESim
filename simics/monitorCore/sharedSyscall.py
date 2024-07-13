@@ -1338,7 +1338,7 @@ class SharedSyscall():
 
     def foolSelect(self, fd):
         ''' Modify return values from select to reflect no data for this fd ''' 
-        self.lgr.debug('sharedSyscall foolSelect fd %d' % fd)
+        self.lgr.debug('sharedSyscall foolSelect set select fd to %d' % fd)
         self.fool_select = fd
 
     def modifySelect(self, select_info, eax):
