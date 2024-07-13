@@ -357,8 +357,8 @@ class InjectIO():
                     self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
                 if self.mem_utils.isKernel(self.addr):
                     if self.addr_of_count is not None and not self.top.isWindows():
-                        self.lgr.debug('injectIO set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                        self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                        self.lgr.debug('injectIO set ioctl wrote %d to 0x%x' % (bytes_wrote, self.addr_of_count))
+                        self.mem_utils.writeWord32(self.cpu, self.addr_of_count, bytes_wrote)
 
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))

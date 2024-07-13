@@ -564,11 +564,11 @@ class AFL():
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
-        self.write_data.write()
+        count = self.write_data.write()
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
-                #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
+                #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                 self.write_data.watchIOCtl()
         # TBD why again and again?
         self.page_faults.watchPageFaults(afl=True)
