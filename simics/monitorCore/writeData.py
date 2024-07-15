@@ -744,7 +744,7 @@ class WriteData():
                 #self.doBreakSimulation('writeData doRetSelect select on our fd')
         return retval
                 
-    def doRetFixup(self, fd, callname=None):
+    def doRetFixup(self, fd, callname=None, addr_of_count=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
         #self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
