@@ -788,7 +788,11 @@ class findKernelWrite():
             #else:
             if True:
                 src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+                dst_addr = self.mem_utils.getRegValue(self.cpu, 'edi')
+                ecx = self.mem_utils.getRegValue(self.cpu, 'ecx')
+                self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x addr 0x%x' % (src_addr, dst_addr, ecx, self.addr))
                 if self.prev_buffer:
+                    # we are just looking for the previous buffer, e.g., to backtrack to a kernel buffer.
                     self.k_buffer_addrs.append(src_addr)
                     if True or len(self.k_buffer_addrs) > 2:
                         SIM_run_alone(self.cleanup, False)
