@@ -396,9 +396,6 @@ class InjectIO():
                     use_backstop = False
                 if self.malloc:
                     self.top.traceMalloc()
-                if self.trace_fd is not None:
-                    self.top.traceAll()
-                    self.top.traceFD(self.trace_fd)
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
@@ -425,6 +422,8 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        if self.trace_fd is not None:
+                            self.top.traceFD(self.trace_fd)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
                     if not did_origin_reset:
