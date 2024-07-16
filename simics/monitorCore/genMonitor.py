@@ -4606,7 +4606,7 @@ class GenMonitor():
         if target_proc is None:
             self.page_faults[target_cell].stopWatchPageFaults()
             self.watchPageFaults(tid)
-        if mark_logs:
+        if mark_logs or trace_fd is not None:
             self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
