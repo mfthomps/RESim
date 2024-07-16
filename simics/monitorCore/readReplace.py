@@ -82,6 +82,7 @@ class ReadReplace():
         self.hap = {}
         self.breakmap = {}
         self.pending_libs = {}
+        self.pending_pages = {}
         self.done_list = []
         if not os.path.isfile(fname):
             self.lgr.error('readReplace: Could not find readReplace file %s' % fname)
