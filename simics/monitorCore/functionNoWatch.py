@@ -134,18 +134,28 @@ class FunctionNoWatch():
             self.lgr.debug('functionNoWatch funHap failed to get ret_addr for entry %s, could be wrong tid linked to same lib' % entry_info.lib_fun)
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('functionNoWatch funHap entry %s eip: 0x%x set break on return addr 0x%x  cycle: 0x%x' % (entry_info.lib_fun, eip, ret_addr, self.cpu.cycles))
-        disableAndRun.DisableAndRun(self.cpu, ret_addr, self.context_manager, self.lgr) 
+        self.lgr.debug('functionNoWatch funHap entry %s eip: 0x%x disable all and set break on return addr 0x%x  cycle: 0x%x' % (entry_info.lib_fun, eip, ret_addr, self.cpu.cycles))
+        SIM_run_alone(self.clearBackstop, None)
+        disableAndRun.DisableAndRun(self.cpu, ret_addr, self.context_manager, self.lgr, callback=self.setBackstop) 
+
+    def clearBackstop(self, dumb=None):
+        self.data_watch.clearBackstop()
+
+    def setBackstop(self):
+        SIM_run_alone(self.setBackstopAlone, None)
+
+    def setBackstopAlone(self, dumb=None):
+        self.data_watch.setBackstop()
 
     def rmBreaks(self, immediate=False):
-        self.lgr.debug('functionNoWatch rmBreaks immediate %r cycle 0x%x' % (immediate, self.cpu.cycles))
+        #self.lgr.debug('functionNoWatch rmBreaks immediate %r cycle 0x%x' % (immediate, self.cpu.cycles))
         for entry in self.entry_list:
             if entry.hap is not None:
                 self.context_manager.genDeleteHap(entry.hap, immediate=immediate)
                 entry.hap = None
 
     def restoreBreaks(self):
-        self.lgr.debug('functionNoWatch restoreBreaks cycle 0x%x' % self.cpu.cycles)
+        #self.lgr.debug('functionNoWatch restoreBreaks cycle 0x%x' % self.cpu.cycles)
         for entry in self.entry_list:
             if entry.phys_addr is not None and entry.hap is None:
                 self.setBreak(entry, entry.phys_addr)

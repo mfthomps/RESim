@@ -4576,6 +4576,7 @@ class DataWatch():
         if 'FUNCTION_NO_WATCH' in self.comp_dict:
             def_file = self.comp_dict['FUNCTION_NO_WATCH']
             self.function_no_watch = functionNoWatch.FunctionNoWatch(self.top, self, self.cpu, def_file, self.cell_name, self.mem_utils, self.context_manager, self.so_map, self.lgr)
+            self.lgr.debug('dataWatch setFunMgr set functin_no_watch for %s' % def_file)
 
     def setCallback(self, callback):
         ''' what should backStop call when no activity for N cycles?  Or if max marks exceeded'''
@@ -5424,3 +5425,13 @@ class DataWatch():
 
     def markCall(self, msg, fd):
         self.watchMarks.markCall(msg, fd=fd)
+
+    def setBackstop(self):
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+            self.lgr.debug('dataWatch setBackstop')
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
+
+    def clearBackstop(self):
+        if self.back_stop is not None:
+            self.lgr.debug('dataWatch clearBackstop')
+            self.back_stop.clearCycle()
