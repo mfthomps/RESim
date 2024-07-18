@@ -35,11 +35,12 @@ import resimUtils
 import time
 '''
     Catch the kernel writing to a memory breakpoint and bring the eip to the return from the syscall.
-    If the memory is written by user space, stop there.
+    If the memory is written by user space, stop there.  If track is set, then continue back tracing
+    the load of the register whose value was stored to memory.
 '''
 class findKernelWrite():
     def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, 
-                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False):
+                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False, track=False):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -54,6 +55,7 @@ class findKernelWrite():
         self.addr = addr
         self.num_bytes = num_bytes
         self.bookmarks = bookmarks
+        self.track = track
         self.mem_hap = None
         self.forward = False
         self.forward_break = None
@@ -101,14 +103,14 @@ class findKernelWrite():
         self.go(addr)
 
 
-    def go(self, addr, num_bytes=None):
+    def go(self, addr, num_bytes=None, track=False):
         if num_bytes is not None:
             self.num_bytes=num_bytes 
         ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
         self.start_cycles = self.cpu.cycles
         cli.quiet_run_command('si')
         self.addr = addr
-
+        self.track = track
 
         phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
@@ -720,6 +722,12 @@ class findKernelWrite():
             self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
             self.lgr.debug('findKernelWrite backOneAlone, was going forward')
+        if not self.track:
+            self.lgr.debug('findKernelWrite backOneAlone, not tracking, we are done.')
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+            return
+
         if self.forward_break is not None:
             self.lgr.debug('findKernelWrite backOne alone delete forward_break')
             RES_delete_breakpoint(self.forward_break)

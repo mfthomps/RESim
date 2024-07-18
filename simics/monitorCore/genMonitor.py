@@ -2368,9 +2368,10 @@ class GenMonitor():
     def getFirstCycle(self):
         return self.bookmarks.getFirstCycle()
 
-    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False):
+    def stopAtKernelWrite(self, addr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False, track=False):
         '''
         Runs backwards until a write to the given address is found.
+        Default is 1 byte since that tells us where the write occurred, regardless of the quantity of bytes written.
         '''
         if self.reverseEnabled():
             #self.context_manager[self.target].showHaps();
@@ -2381,7 +2382,7 @@ class GenMonitor():
                 self.lgr.error('stopAtKernelWrite failed to read from addr 0x%x' % addr)
                 self.skipAndMail()
                 return
-            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d rev_to_call %s cycles: 0x%x' % (value, addr, num_bytes, str(rev_to_call), cpu.cycles))
+            self.lgr.debug('stopAtKernelWrite, call findKernelWrite of 0x%x to address 0x%x num bytes %d rev_to_call %s track %r cycles: 0x%x' % (value, addr, num_bytes, str(rev_to_call), track, cpu.cycles))
             cell = self.cell_config.cell_context[self.target]
             '''
             TBD breaks.  check for HAPs that have not been deleted or hidden.  ROP hap?
@@ -2405,10 +2406,10 @@ class GenMonitor():
                 if self.find_kernel_write is None:
                     self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
                         self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
-                        num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer) 
+                        num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer, track=track)
                 else:
                     self.lgr.debug('stopAtKernelWrite Address found existing find_kernel_write, use it for addr 0x%x num_bytes %d' % (addr, num_bytes))
-                    self.find_kernel_write.go(addr, num_bytes=num_bytes)
+                    self.find_kernel_write.go(addr, num_bytes=num_bytes, track=track)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -2457,7 +2458,8 @@ class GenMonitor():
             self.context_manager[self.target].setIdaMessage('')
             if callback is not None:
                 self.rev_to_call[self.target].setCallback(callback)
-            self.stopAtKernelWrite(addr, rev_to_call=self.rev_to_call[self.target], kernel=kernel, prev_buffer=prev_buffer, num_bytes=num_bytes)
+            self.stopAtKernelWrite(addr, rev_to_call=self.rev_to_call[self.target], kernel=kernel, 
+                 prev_buffer=prev_buffer, num_bytes=num_bytes, track=True)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
