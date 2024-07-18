@@ -300,7 +300,7 @@ class TraceMarks():
         for mark in self.watch_marks:
             self.lgr.debug('mark is %s' % mark['mark_type'])
             ''' TBD expand to handle calls and source addresses '''
-            if mark['mark_type'] == 'call' and mark['length'] is not None:
+            if mark['mark_type'] == 'call' and mark['data_stream'] and mark['length'] is not None:
                 if not did_one:
                     did_one = True
                     injest_fd = mark['fd']
