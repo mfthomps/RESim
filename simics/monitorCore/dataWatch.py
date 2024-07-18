@@ -399,7 +399,7 @@ class DataWatch():
             self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, 
-                 watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False):
+                 watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False, data_stream=False):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
         if self.disabled:
@@ -572,9 +572,9 @@ class DataWatch():
             # TBD why max_len and not count???  Attempt to watch reuse of input buffer, e.g., reading past end recent receive?
             if recv_addr is None:
                 recv_addr = start
-            self.lgr.debug('dataWatch call markCall, length %d' % length)
+            self.lgr.debug('dataWatch call markCall, msg %s length %d data_stream %r' % (fixed, length, data_stream))
             ''' TBD what if fun result? e.g., checkNumericStore'''
-            self.watchMarks.markCall(fixed, max_len=max_len, recv_addr=recv_addr, length=length, fd=fd, is_lib=is_lib)
+            self.watchMarks.markCall(fixed, max_len=max_len, recv_addr=recv_addr, length=length, fd=fd, is_lib=is_lib, data_stream=data_stream)
             if self.prev_cycle is None:
                 ''' first data read, start data session if doing coverage '''
                 self.top.startDataSessions()
