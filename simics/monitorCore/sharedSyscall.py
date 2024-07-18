@@ -500,7 +500,7 @@ class SharedSyscall():
                     if self.kbuffer is not None:
                         self.kbuffer.readReturn(eax)
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, 
-                               max_len=count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd)
+                               max_len=count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd, data_stream=True)
                     if exit_info.fname_addr is not None:
                         count = self.mem_utils.readWord32(self.cpu, exit_info.count)
                         msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
@@ -573,7 +573,7 @@ class SharedSyscall():
                             exit_info.retval_addr = base
                             exit_info.count = data_len
                         self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
-                        self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd)
+                        self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True)
                     self.lgr.debug('recvmsg set dataWatch')
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
@@ -899,7 +899,7 @@ class SharedSyscall():
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read length (eax) is %d' % eax)
                     # Set range over max length of read to catch coding error reference to previous reads or such
                     if eax > 0:
-                        self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd)
+                        self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False, i_am_alone=True)
