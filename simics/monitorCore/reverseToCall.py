@@ -1147,7 +1147,7 @@ class reverseToCall():
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=4)
+                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=4, track=True)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
@@ -1203,7 +1203,7 @@ class reverseToCall():
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
             self.cleanup(None)
             word_size = self.top.getWordSize()
-            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size)
+            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size, track=True)
 
         elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
@@ -1240,7 +1240,7 @@ class reverseToCall():
                     num_bytes = self.decode.regLen(op0)
                 else:
                     num_bytes = self.num_bytes
-                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes)
+                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes, track=True)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
