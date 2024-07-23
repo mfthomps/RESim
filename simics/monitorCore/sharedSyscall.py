@@ -426,7 +426,7 @@ class SharedSyscall():
                 trace_msg = trace_msg+('FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x\n%s\n' % (exit_info.old_fd, 
                     eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
             else:
-                trace_msg = err_trace_msg('FD: %d, exception: %d\n' % (exit_info.old_fd, eax))
+                trace_msg = err_trace_msg+('FD: %d, exception: %d\n' % (exit_info.old_fd, eax))
 
             if exit_info.matched_param is not None:
                 if syscall.DEST_PORT in exit_info.matched_param.param_flags: 
