@@ -2409,7 +2409,7 @@ class GenMonitor():
                         num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer, track=track)
                 else:
                     self.lgr.debug('stopAtKernelWrite Address found existing find_kernel_write, use it for addr 0x%x num_bytes %d' % (addr, num_bytes))
-                    self.find_kernel_write.go(addr, num_bytes=num_bytes, track=track)
+                    self.find_kernel_write.go(addr, num_bytes=num_bytes, track=track, rev_to_call=rev_to_call)
         else:
             print('reverse execution disabled')
             self.skipAndMail()
@@ -4110,7 +4110,10 @@ class GenMonitor():
             print ('cpu cycles  0x%x' % (cpu.cycles))
         else:
             cycles = self.bookmarks.getCurrentCycle(cpu)
-            print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
+            if cycles is not None:
+                print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
+            else:
+                print ('cpu cycles 0x%x -- bookmarks return nothing.' % (cpu.cycles))
         
     def continueForward(self):
         self.lgr.debug('continueForward')
