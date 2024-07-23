@@ -103,14 +103,18 @@ class findKernelWrite():
         self.go(addr)
 
 
-    def go(self, addr, num_bytes=None, track=False):
+    def go(self, addr, num_bytes=None, track=False, rev_to_call=None):
         if num_bytes is not None:
             self.num_bytes=num_bytes 
+        if not self.track:
+            self.track = track
+        if self.rev_to_call is None:
+            self.rev_to_call = rev_to_call
         ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
         self.start_cycles = self.cpu.cycles
         cli.quiet_run_command('si')
         self.addr = addr
-        self.track = track
+        # don't reset if set
 
         phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
