@@ -167,6 +167,10 @@ class DataWatch():
         if 'APPEND_CHAR_RETURNS' in comp_dict:
             def_file = comp_dict['APPEND_CHAR_RETURNS']
             self.append_char_returns = appendCharReturns.AppendCharReturns(top, self, cpu, def_file, cell_name, mem_utils, context_manager, lgr)
+        self.ignore_addr_list = []
+        if 'IGNORE_ADDR_FILE' in comp_dict:
+            ignore_file = comp_dict['IGNORE_ADDR_FILE']
+            self.ignoreAddrList(ignore_file)
 
         self.function_no_watch = None
         self.callback = None
@@ -3780,12 +3784,14 @@ class DataWatch():
         if index >= len(self.start):
             self.lgr.debug('dataWatch readHap index %d but len of start is %d addr 0x%x' % (index, len(self.start), memory.logical_address))
             return
+        addr = memory.logical_address
+        if addr in self.ignore_addr_list:
+            return
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
         tid = self.task_utils.curTID()
         cpl = memUtils.getCPL(self.cpu)
-        addr = memory.logical_address
 
         # may be multiple overlapping buffer ranges, index is simply first reported by Simics.  Find
         # the most recently defined range
@@ -5435,3 +5441,15 @@ class DataWatch():
         if self.back_stop is not None:
             self.lgr.debug('dataWatch clearBackstop')
             self.back_stop.clearCycle()
+
+    def ignoreAddrList(self, ignore_addr_file):
+        if ignore_addr_file is not None:
+            if os.path.isfile(ignore_addr_file):
+                with open(ignore_addr_file) as fh:
+                    for line in fh:
+                        line = line.strip() 
+                        if not line.startswith('#'):
+                            value = int(line, 16)
+                            self.ignore_addr_list.append(value) 
+            else:
+                self.lgr.error('dataWatch ignoreList file %s not found' % ignore_addr_file)
