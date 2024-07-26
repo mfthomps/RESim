@@ -4,6 +4,11 @@ import re
 import sys
 modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
+for i in range(1,31):
+    xreg = 'x%d' % i
+    reglist.append(xreg)
+    wreg = 'w%d' % i
+    reglist.append(wreg)
 def modifiesOp0(mn):
     for mop in modsOp0:
         if mn.startswith(mop):
@@ -24,12 +29,19 @@ def getMn(instruct):
     return retval
 
 def getOperands(instruct):
-    mn, rest = instruct.split(' ',1)
-    if ',' in rest:
-        op1, op2 = rest.split(',', 1)
-        return op2.strip(), op1.strip()
+    
+    parts = instruct.split()
+    mn = parts[0]
+    if len(parts) > 1:
+        rest = parts[1:]
+        mn, rest = instruct.split(' ',1)
+        if ',' in rest:
+            op1, op2 = rest.split(',', 1)
+            return op2.strip(), op1.strip()
+        else:
+            return None, rest.strip()
     else:
-        return None, rest.strip()
+        return None, None
 
 def isIndirect(reg):
     return False    
@@ -109,10 +121,10 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         for p in parts:
             v = getValue(p.strip(), cpu, lgr=None) 
             if v is not None:
-                #lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
+                lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
             else:
-                #lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
+                lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
                 return None    
         if remain is not None and remain.startswith(','):
             remain = remain[1:]
