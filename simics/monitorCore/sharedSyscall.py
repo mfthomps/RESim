@@ -735,6 +735,10 @@ class SharedSyscall():
         trace_msg = '\treturn from %s tid:%s (%s), ' % (callname, tid, comm)
         err_trace_msg = '\terror return from %s tid:%s (%s) ' % (callname, tid, comm)
         if callname == 'clone':
+            if eax == 0:
+                self.lgr.debug('exitHap is clone tid %s  eax zero just return' % tid)
+                return
+          
             self.lgr.debug('exitHap is clone tid %s  eax %d' % (tid, eax))
             if eax > 20000:
                 SIM_break_simulation('confused clone')

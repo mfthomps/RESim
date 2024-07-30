@@ -152,7 +152,7 @@ class TaskUtils():
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
-                if cpu.architecture == 'arm':
+                if cpu.architecture.startswith('arm'):
                     phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
                 else:
                     phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
@@ -843,9 +843,13 @@ class TaskUtils():
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
             self.lgr.debug('getProgArgsFromStack word size 4')
-            if cpu.architecture == 'arm':
-                prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
-                argv = self.mem_utils.getRegValue(cpu, 'r1')
+            if cpu.architecture.startswith('arm'):
+                if cpu.architecture == 'arm':
+                    prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
+                    argv = self.mem_utils.getRegValue(cpu, 'r1')
+                else:
+                    prog_addr = self.mem_utils.getRegValue(cpu, 'x0')
+                    argv = self.mem_utils.getRegValue(cpu, 'x1')
                 while not done and i < limit:
                     xaddr = argv + mult*self.mem_utils.WORD_SIZE
                     arg_addr = self.mem_utils.readPtr(cpu, xaddr)
@@ -896,6 +900,21 @@ class TaskUtils():
                     
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
+        elif self.cpu.architecture == 'arm64':
+            # TBD only for 32 bit apps (for now)
+            prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
+            argv = self.mem_utils.getRegValue(cpu, 'r1')
+            while not done and i < limit:
+                #xaddr = argv + mult*self.mem_utils.WORD_SIZE
+                xaddr = argv + mult*4
+                arg_addr = self.mem_utils.readAppPtr(cpu, xaddr, size=4)
+                if arg_addr is not None and arg_addr != 0:
+                   self.lgr.debug("getProcArgsFromStack ARM64 (32 bit app) adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                   arg_addr_list.append(arg_addr)
+                else:
+                   done = True
+                mult = mult + 1
+                i = i + 1
         else:
             self.lgr.debug('getProgArgsFromStack word size 8')
             # if swap, use rdx
@@ -977,7 +996,7 @@ class TaskUtils():
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
@@ -997,7 +1016,7 @@ class TaskUtils():
     def frameFromStackSyscall(self):
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             frame = self.frameFromRegs()
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
@@ -1041,7 +1060,8 @@ class TaskUtils():
 
     def frameFromRegs(self, compat32=False):
         frame = {}
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
+            #TBD how to deal with arm64 when user space is 64 bit?
             for p in memUtils.param_map['arm']:
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
             cpl = memUtils.getCPL(self.cpu)
@@ -1082,7 +1102,7 @@ class TaskUtils():
         return frame
 
     def socketCallName(self, callname, compat32):
-        if self.cpu.architecture != 'arm' and (self.mem_utils.WORD_SIZE != 8 or compat32):
+        if not self.cpu.architecture.startswith('arm') and (self.mem_utils.WORD_SIZE != 8 or compat32):
             return ['socketcall']
         elif callname == 'accept':
             return ['accept', 'accept4']

@@ -76,6 +76,13 @@ def getCPL(cpu):
             return 0
         else:
             return 1
+    elif cpu.architecture == 'arm64':
+        reg_num = cpu.iface.int_register.get_number('pc')
+        reg_value = cpu.iface.int_register.read(reg_num)
+        if reg_value > 0xfffffff:
+            return 0
+        else:
+            return 1
     else:
         reg_num = cpu.iface.int_register.get_number("cs")
         cs = cpu.iface.int_register.read(reg_num)
@@ -181,7 +188,7 @@ class MemUtils():
             self.regs['this'] = self.regs['ecx']
             self.regs['pc'] = self.regs['eip']
             self.regs['sp'] = self.regs['esp']
-        elif arch == 'arm':
+        elif arch == 'arm' or arch == 'arm64':
             for i in range(13):
                 r = 'R%d' % i
                 self.regs[r] = r
@@ -190,7 +197,10 @@ class MemUtils():
             self.regs['lr'] = 'lr'
             self.regs['cpsr'] = 'cpsr'
             self.regs['syscall_num'] = 'r7'
-            self.regs['syscall_ret'] = 'r0'
+            if arch == 'arm':
+                self.regs['syscall_ret'] = 'r0'
+            else:
+                self.regs['syscall_ret'] = 'x0'
             self.regs['eip'] = 'pc'
             self.regs['esp'] = 'sp'
         else: 
@@ -255,6 +265,12 @@ class MemUtils():
         if cpu.architecture == 'arm':
             phys_addr = v - (self.param.kernel_base - self.param.ram_base)
             retval = self.getUnsigned(phys_addr)
+        elif cpu.architecture == 'arm64':
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
             #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
@@ -366,6 +382,9 @@ class MemUtils():
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
+            if cpu.architecture == 'arm64':
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
+                return ptable_info.page_addr
             else:
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
                 # a mode of 3 is 32 bit mode

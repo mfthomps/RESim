@@ -249,6 +249,8 @@ def getPageEntrySize(cpu):
     ''' TBD FIX THIS '''
     if cpu.architecture == 'arm':
         return 4
+    if cpu.architecture == 'arm64':
+        return 8
     reg_num = cpu.iface.int_register.get_number("cr3")
     cr3 = cpu.iface.int_register.read(reg_num)
     reg_num = cpu.iface.int_register.get_number("cr4")
@@ -261,6 +263,36 @@ def getPageEntrySize(cpu):
     else:
         return 8
 
+def findPageTableArmV8(cpu, va, lgr, use_sld=None):
+    ptable_info = PtableInfo()
+    ttbr = cpu.translation_table_base0
+    l1_index = memUtils.bitRange(va, 30, 39)
+    l1_off = 8 * l1_index
+    l1_base_addr = ttbr + l1_off
+    l1_base = readPhysMemory(cpu, l1_base_addr, 8, lgr)
+    lgr.debug('findPageTableArm va 0x%x ttbr 0x%x l1_index 0x%x  l1_off 0x%x l1_base_addr 0x%x base is 0x%x' % (va, ttbr, l1_index, l1_off, l1_base_addr, l1_base))
+    l2_index = memUtils.bitRange(va, 21, 29)
+    l2_off = 8 * l2_index
+    l2_base_addr = (l1_base + l2_off) & 0xfffffffffffffff8
+    l2_base = readPhysMemory(cpu, l2_base_addr, 8, lgr)
+    lgr.debug('l1_base: 0x%x l2_index 0x%x  l2_off 0x%x l2_base_addr 0x%x l2_base 0x%x' % (l1_base, l2_index, l2_off, l2_base_addr, l2_base))
+    l3_index = memUtils.bitRange(va, 12, 29)
+    l3_off = 8 * l3_index
+    l3_base_addr = (l2_base + l3_off) & 0xfffffffffffffff8
+    l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
+    lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x' % (l2_base, l3_index, l3_off, l3_base_addr, l3_base))
+    vaddr_off = va & 0xfff
+    lgr.debug('vaddr_off 0x%x' % vaddr_off)
+    l3_basex = l3_base & 0x000ffffffffff000 
+    lgr.debug('l3_base masked 0x%x' % l3_basex)
+    phys = l3_basex + vaddr_off
+    lgr.debug('got phys of 0x%x' % phys)
+    ptable_info.ptable_exists = True
+
+    ptable_info.page_base_addr = l3_base_addr
+    ptable_info.page_addr = phys
+    return ptable_info
+
 def findPageTableArm(cpu, va, lgr, use_sld=None):
     ''' sld is 2nd level directory, which we may already know from previous failures '''
     ''' TBD, seems off... if cannot read sld context may be wrong.  Why not always wait until
@@ -269,12 +301,13 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ttbr = cpu.translation_table_base0
     base = memUtils.bitRange(ttbr, 14,31)
     base_shifted = base << 14
+    lgr.debug('findPageTableArm ttbr0 0x%x base 0x%x shifed 0x%x' % (ttbr, base, base_shifted))
     
     first_index = memUtils.bitRange(va, 20, 31)
     first_shifted = first_index << 2
     first_addr = base_shifted | first_shifted
     ptable_info.pdir_addr = first_addr
-    #lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+    lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
    
     fld = readPhysMemory(cpu, first_addr, 4, lgr)
     if fld == 0:
@@ -284,6 +317,7 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     pta = memUtils.bitRange(fld, 10, 31)
     pta_shifted = pta << 10
     #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
+    lgr.debug('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
     
     second_index = memUtils.bitRange(va, 12, 19)
     second_shifted = second_index << 2
@@ -291,6 +325,7 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ptable_info.ptable_addr = second_addr
     sld = readPhysMemory(cpu, second_addr, 4, lgr)
     #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
+    lgr.debug('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
     if use_sld is None:
         if sld == 0:
             return ptable_info
@@ -309,7 +344,8 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
 def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None):
     if cpu.architecture == 'arm':
         return findPageTableArm(cpu, addr, lgr, use_sld)
-
+    if cpu.architecture == 'arm64':
+        return findPageTableArmV8(cpu, addr, lgr, use_sld)
     elif isIA32E(cpu):
         #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr, force_cr3=force_cr3) 

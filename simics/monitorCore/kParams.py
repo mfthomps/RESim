@@ -9,6 +9,9 @@ class Kparams():
             else:
                 self.ram_base = 0
             self.thread_size = 8192
+        if cpu.architecture == 'arm64':
+            self.ram_base = 268435456
+            self.thread_size = 8192
         else:
             self.ram_base = 0
         self.stack_size = 8192
@@ -49,7 +52,7 @@ class Kparams():
        
         self.current_task_fs = False
         self.current_task_gs = False
-        if cpu.architecture != 'arm': 
+        if not cpu.architecture.startswith('arm'): 
             if word_size == 4:
                 self.current_task_fs = True
             else:

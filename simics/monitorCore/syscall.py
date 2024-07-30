@@ -533,7 +533,7 @@ class Syscall():
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = SyscallInfo(self.cpu, None, None,  None, self.trace)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
                 self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
@@ -2281,6 +2281,13 @@ class Syscall():
         ''' NOTE Does not track Tar syscalls! '''
         if self.context_manager.isReverseContext():
             return
+        if self.cpu.architecture == 'arm64':
+            # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
+            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+            reg_value = self.cpu.iface.int_register.read(reg_num)
+            reg_value = reg_value >> 26
+            if reg_value != 0x11:
+                return
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
@@ -2313,7 +2320,7 @@ class Syscall():
                 self.hack_cycle = cpu.cycles
 
         callnum = self.mem_utils.getCallNum(cpu)
-        #self.lgr.debug('syscallHap callnum %d' % callnum)
+        self.lgr.debug('syscallHap callnum %d' % callnum)
         if syscall_info.callnum is None:
            ''' tracing all'''
            callname = self.task_utils.syscallName(callnum, syscall_info.compat32) 
@@ -2344,8 +2351,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        #self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-        #     tid, comm, break_eip, value, callnum, callname, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
+             tid, comm, break_eip, value, callnum, callname, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and tid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
