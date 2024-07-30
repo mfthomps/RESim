@@ -996,11 +996,19 @@ class TaskUtils():
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32):
-        if self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture == 'arm':
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
             #self.lgr.debug('getSyscallEntry syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
+        elif self.cpu.architecture == 'arm64':
+            #         'ldr x1, [x22, x20, lsl #3]'
+            call_shifted = callnum << 3
+            val = self.param.syscall_jump + call_shifted
+            val = self.mem_utils.getUnsigned(val)
+            entry = self.mem_utils.readPtr(self.cpu, val)
+            self.lgr.debug('getSyscallEntry arm64 syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
+            
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
