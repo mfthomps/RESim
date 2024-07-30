@@ -1126,6 +1126,7 @@ class GetKernelParams():
         elif self.cpu.architecture == 'arm64':
             print('arm64 compute.  walk forward to find computed jump')
             self.lgr.debug('arm64 compute.  walk forward to find computed jump')
+            # x20 is the syscall number.  
             prefix = 'ldr x1, [x22, x20, lsl #3]'
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if not self.mem_utils.isKernel(eip):
