@@ -242,7 +242,7 @@ class PageFaultGen():
                 i_access_type = memUtils.testBit(i_fault, 11)
                 fault_addr = self.user_eip
                 #self.lgr.debug('pageFaultGen **INSTRUCTION stuff reg %d fault 0x%x type %d, fault_addr 0x%x' % (i_fault_reg, i_fault, i_access_type, fault_addr))
-        if self.cpu.architecture == 'arm64':
+        elif self.cpu.architecture == 'arm64':
             fault_reg = self.cpu.iface.int_register.get_number("far_el1")
             fault_addr = self.cpu.iface.int_register.read(fault_reg)
         else:
@@ -270,6 +270,8 @@ class PageFaultGen():
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
+        elif cpu.architecture == 'arm64':
+            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr)
         elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
@@ -338,7 +340,7 @@ class PageFaultGen():
                         SIM_run_alone(self.rmPDirHap, hap)
                         self.pdir_hap = None
 
-                elif self.cpu.architecture != 'arm':
+                elif not self.cpu.architecture.startswith('arm'):
                     ''' TBD handle reflection of segv to user space for arm? '''
                     instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
                    
