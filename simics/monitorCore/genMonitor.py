@@ -625,15 +625,24 @@ class GenMonitor():
         SIM_break_simulation('mode changed')
 
     def modeChanged(self, tid_list, one, old, new):
-        dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         cpu = self.cell_config.cpuFromCell(self.target)
+        cpl = memUtils.getCPL(cpu)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
+        if new == Sim_CPU_Mode_Supervisor:
+            mode = 0
+        else:
+            mode = 1
+            if cpu.architecture == 'arm64' and cpu.in_aarch64:
+                self.lgr.debug('modeChanged arm64 in user space with aarch64, not yet handled, bail')
+                return
+        dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         ''' note may both be None due to failure of getProc '''
         if this_tid not in tid_list:
             ''' or just want may be None if debugging some windows dead zone '''
             #if want_tid is None and this_tid is not None:
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
             if this_tid is not None:            
-                self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (str(tid_list), this_tid))
+                self.lgr.debug('mode changed to %d wrong tid, wanted %s got %s' % (mode, str(tid_list), this_tid))
                 alive = False
                 for tid in tid_list:
                     rec = self.task_utils[self.target].getRecAddrForTid(tid)
@@ -649,11 +658,6 @@ class GenMonitor():
                 return
             else:
                 self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
-        cpl = memUtils.getCPL(cpu)
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
-        mode = 1
-        if new == Sim_CPU_Mode_Supervisor:
-            mode = 0
         instruct = SIM_disassemble_address(cpu, eip, 0, 0)
         self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
                 mode, str(one), old, new, eip, instruct[1]))
@@ -2885,6 +2889,7 @@ class GenMonitor():
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         if cpu != prec.cpu or tid not in prec.tid:
             self.lgr.debug('%s hap, wrong something tid:%s prec tid list %s' % (prec.who, tid, str(prec.tid)))
+            #SIM_break_simulation('remove this')
             return
         #cur_eip = SIM_get_mem_op_value_le(memory)
         eip = self.getEIP(cpu)
@@ -3196,7 +3201,7 @@ class GenMonitor():
         stop_action = hapCleaner.StopAction(hap_clean, None, flist)
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
           self.stopHap, stop_action)
-        self.lgr.debug('runToText hap set, now run. flist in stophap is %s' % stop_action.listFuns())
+        self.lgr.debug('runToText hap set, now run. flist in stophap is %s breakpoint set on 0x%x' % (stop_action.listFuns(), start))
 
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
 

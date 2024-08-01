@@ -851,7 +851,7 @@ class Syscall():
         if tid not in self.finish_hap:
             return
         prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.tid, call_info.cpu)
-        if cpu.architecture == 'arm' and prog_string is None:
+        if cpu.architecture.startswith('arm') and prog_string is None:
             self.lgr.debug('finishParseExecve progstring None, arm fu?')
             return
 
@@ -1029,7 +1029,7 @@ class Syscall():
         domain = None
         sock_type = None
         protocol = None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             domain = frame['param1']
             sock_type_full = frame['param2']
             protocol = frame['param3']
@@ -1125,7 +1125,7 @@ class Syscall():
 
         if socket_callname == 'socket':
             self.lgr.debug('syscall socketParse is socket')
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 domain = frame['param1']
                 sock_type_full = frame['param2']
                 protocol = frame['param3']
@@ -1323,17 +1323,17 @@ class Syscall():
                     self.top.stopDataWatch(leave_backstop=True)
         elif socket_callname == "recvmsg": 
             
-            if self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
-                exit_info.old_fd = frame['param1']
-                exit_info.retval_addr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'], self.lgr)
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, frame['param2'], msghdr.getString())
-            elif self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 exit_info.old_fd = frame['param1']
                 msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
                 ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
                 self.lgr.debug(ida_msg) 
+            elif self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
+                exit_info.old_fd = frame['param1']
+                exit_info.retval_addr = frame['param2']
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'], self.lgr)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, frame['param2'], msghdr.getString())
  
             else:
                 ''' TBD is this right for x86 32?'''
@@ -1359,7 +1359,7 @@ class Syscall():
             
         elif socket_callname == "sendmsg":
             # TBD Not complete
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 exit_info.old_fd = frame['param1']
                 msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
@@ -1937,7 +1937,8 @@ class Syscall():
                 else:
                     ida_msg = '%s tid:%s (%s) FD: %s buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, tid, comm, fd, arg_addr, length, prot, flags, offset)
 
-            elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+            #elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
+            elif self.cpu.architecture.startswith('arm'):
                 ''' tbd wth? the above seems wrong, why key on addr of zero? '''
                 fd = frame['param5']
                 if fd == 0xffffffff:
@@ -2243,7 +2244,7 @@ class Syscall():
         elif break_eip == syscall_info.calculated:
             ''' Note EIP in stack frame is unknown '''
             #frame['eax'] = syscall_info.callnum
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 if frame is None:
                     frame = self.task_utils.frameFromRegs()
                 exit_eip1 = self.param.arm_ret
@@ -2647,7 +2648,7 @@ class Syscall():
             
 
     def checkTimeLoop(self, callname, tid):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             return
         limit = 800
         delta_limit = 0x12a05f200

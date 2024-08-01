@@ -185,6 +185,15 @@ class PageFaultGen():
         #use_cell = self.cell
         #if self.debugging_tid is not None:
         #    use_cell = self.context_manager.getRESimContext()
+
+        if self.cpu.architecture == 'arm64':
+            # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
+            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+            reg_value = self.cpu.iface.int_register.read(reg_num)
+            reg_value = reg_value >> 26
+            if reg_value == 0x11:
+                return
+
         cpu, comm, tid = self.task_utils.curThread() 
         sp = self.mem_utils.getRegValue(cpu, 'sp')
 
@@ -233,7 +242,9 @@ class PageFaultGen():
                 i_access_type = memUtils.testBit(i_fault, 11)
                 fault_addr = self.user_eip
                 #self.lgr.debug('pageFaultGen **INSTRUCTION stuff reg %d fault 0x%x type %d, fault_addr 0x%x' % (i_fault_reg, i_fault, i_access_type, fault_addr))
-
+        if self.cpu.architecture == 'arm64':
+            fault_reg = self.cpu.iface.int_register.get_number("far_el1")
+            fault_addr = self.cpu.iface.int_register.read(fault_reg)
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
@@ -417,6 +428,10 @@ class PageFaultGen():
             self.fault_hap1 = RES_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
+        if self.cpu.architecture == 'arm64':
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, self.mem_utils.WORD_SIZE, 0)
+            self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
+            self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
         else:
             #self.lgr.debug('watchPageFaults not arm set break at 0x%x tid %s current context %s' % (self.param.page_fault, tid, self.cpu.current_context))
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)

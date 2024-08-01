@@ -77,12 +77,20 @@ def getCPL(cpu):
         else:
             return 1
     elif cpu.architecture == 'arm64':
-        reg_num = cpu.iface.int_register.get_number('pc')
-        reg_value = cpu.iface.int_register.read(reg_num)
-        if reg_value > 0xfffffff:
-            return 0
+        # if in aarch32, then el found in cpsr, otherwise in CurrentEL
+        is64=cpu.in_aarch64
+        if is64:
+            reg_num = cpu.iface.int_register.get_number('CurrentEL')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            arm_level = bitRange(reg_value, 2,3)
         else:
+            reg_num = cpu.iface.int_register.get_number('cpsr')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            arm_level = bitRange(reg_value, 0,3)
+        if arm_level == 0:
             return 1
+        else:
+            return 0
     else:
         reg_num = cpu.iface.int_register.get_number("cs")
         cs = cpu.iface.int_register.read(reg_num)
@@ -266,11 +274,21 @@ class MemUtils():
             phys_addr = v - (self.param.kernel_base - self.param.ram_base)
             retval = self.getUnsigned(phys_addr)
         elif cpu.architecture == 'arm64':
-            try:
-                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-                retval = phys_block.address
-            except:
-                self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
+            cpl = getCPL(cpu)
+            if cpl > 0:
+                #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, kernel=True)
+                if ptable_info is not None:
+                    retval = ptable_info.page_addr
+                else:
+                    retval = None
+            else:
+                #self.lgr.debug('memUtils v2pKaddr arm64 kernel space, use simics')
+                try:
+                    phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                    retval = phys_block.address
+                except:
+                    self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
             #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
