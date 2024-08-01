@@ -1147,16 +1147,25 @@ class TaskUtils():
         mode = self.cpu.iface.x86_reg_access.get_exec_mode()
         return mode
 
-    def getIds(self, address):
+    def getIds(self, address, hack=False):
         #uid_addr = address + 16
         uid_addr = address 
         uid = self.mem_utils.readWord32(self.cpu, uid_addr)
-        #self.lgr.debug('getIDs address 0x%x uid_addr 0x%x read 0x%x' % (address, uid_addr, uid))
+        if uid is not None:
+            self.lgr.debug('getIDs address 0x%x uid_addr 0x%x read 0x%x' % (address, uid_addr, uid))
+        else:
+            self.lgr.debug('getIDs address 0x%x uid_addr 0x%x got None' % (address, uid_addr))
 
         #e_uid_addr = address + 32
-        e_uid_addr = address + 16
+        if not hack:
+            e_uid_addr = address + 16
+        else:
+            e_uid_addr = address + 8
         e_uid = self.mem_utils.readWord32(self.cpu, e_uid_addr)
-        #self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x read 0x%x' % (address, e_uid_addr, e_uid))
+        if e_uid is not None:
+            self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x read 0x%x' % (address, e_uid_addr, e_uid))
+        else:
+            self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x got None' % (address, e_uid_addr))
         return uid, e_uid
 
 
@@ -1165,10 +1174,26 @@ class TaskUtils():
             cur_addr = self.getCurThreadRec()
         else:
             cur_addr = task_addr
-        real_cred_addr = cur_addr + (self.param.ts_comm - 2*self.mem_utils.WORD_SIZE)
-        cred_addr = cur_addr + (self.param.ts_comm - self.mem_utils.WORD_SIZE)
-        real_cred_struct = self.mem_utils.readPtr(self.cpu, real_cred_addr) + self.mem_utils.WORD_SIZE
-        uid, eu_id = self.getIds(real_cred_struct)
+        cred_offset = self.param.ts_comm - 2*self.mem_utils.WORD_SIZE
+        real_cred_addr = cur_addr + cred_offset
+        #cred_addr = cur_addr + (self.param.ts_comm - self.mem_utils.WORD_SIZE)
+        read_value = self.mem_utils.readPtr(self.cpu, real_cred_addr) 
+        self.lgr.debug('getCred cur_addr 0x%x cred_offset 0x%x read_value 0x%x' % (cur_addr, cred_offset, read_value))
+        hack=False
+        if not self.mem_utils.isKernel(read_value):
+            # hack TBD.  Add logic to getKernelParams to sort out where the creds are
+            real_cred_addr = real_cred_addr - 2*self.mem_utils.WORD_SIZE - 0x10
+            read_value = self.mem_utils.readPtr(self.cpu, real_cred_addr) 
+            self.lgr.debug('getCred read value bad, try addr - 4 0x%x got value 0x%x' % (real_cred_addr, read_value))
+            if not self.mem_utils.isKernel(read_value):
+                self.lgr.warning('taskUtils, failed to find cred.')
+                return None, None
+            real_cred_struct = read_value + 5*self.mem_utils.WORD_SIZE
+            hack=True
+        else:
+            real_cred_struct = read_value + self.mem_utils.WORD_SIZE
+        self.lgr.debug('getCred cur_addr 0x%x cred_offset 0x%x real_cred_addr 0x%x, real_cred_struct 0x%x' % (cur_addr, cred_offset, real_cred_addr, real_cred_struct))
+        uid, eu_id = self.getIds(real_cred_struct, hack)
         return uid, eu_id
 
 

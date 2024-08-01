@@ -14,6 +14,7 @@ for crash in sorted(clist):
     watch_addr = False
     add_to_zero = None
     prior_to_origin = False
+    from_kernel = ''
     with open(full) as fh:
         seg_addr = None
         show_line = ''
@@ -44,12 +45,14 @@ for crash in sorted(clist):
                 break
             elif "START" in line:
                 show_line = line
+            elif "follows kernel write" in line:
+                from_kernel = line
             
         if memcpy is not None:
-            print('%s %s' % (crash, memcpy))
+            print('%s %s %s' % (crash, memcpy, from_kernel))
         elif page_boundary:
             print('%s page boundary, not memcpy' % crash)
         elif add_to_zero is not None:
             print('%s Add offset to zero, prior: %r 1st frame: %s' % (crash, prior_to_origin, add_to_zero))
         else:
-            print('%s **OTHER** %s' % (crash, show_line)) 
+            print('%s **OTHER** %s %s' % (crash, show_line, from_kernel)) 

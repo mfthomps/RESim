@@ -213,3 +213,58 @@ def dumpImports(fname):
         idaapi.enum_import_names(i, import_names.imp_cb)
     import_names.printit()
     import_names.dumpit(fname)
+
+def getString(ea):
+    string_type = idc.get_str_type(idaapi.get_item_head(ea))
+
+    if string_type is None:
+        return None
+
+    string = idc.get_strlit_contents(ea, strtype=string_type)
+    if string is not None:
+        return string.decode()
+    else:
+        return None
+
+def findFunName(s):
+    retval = None 
+    if s is not None and ': START' in s:
+        retval = s.split(':')[0].strip()
+    elif s is not None and '::' in s:
+        parts = s.split()
+        for p in parts:
+            if '::' in p:
+                if p.endswith('()'):
+                    sig = p[:-2]
+                elif p.endswith('.') or p.endswith(':'):
+                    sig = p[:-1]
+                else:
+                    sig = p
+                if '(' in sig:
+                    sig = sig.split('(')[0]
+                if sig.startswith('<'):
+                    sig = sig[1:-1]
+                retval = sig
+    return retval
+
+def renameFromLogger():
+    for ea in idautils.Segments():
+        start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
+        end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
+        for function_ea in idautils.Functions(start,  end):
+            fun_name = idaversion.get_func_name(function_ea)
+            end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)-1
+            done = False
+            for head in idautils.Heads(function_ea, end):
+                refs = idautils.DataRefsFrom(head)
+                for r in refs:
+                    s = getString(r)
+                    name = findFunName(s)
+                    if name is not None:
+                        print(name)
+                        idaapi.set_name(function_ea, name, idaapi.SN_FORCE)
+                        done = True
+                        break
+                if done:
+                    break
+                    

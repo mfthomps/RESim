@@ -58,6 +58,8 @@ class DisableAndRun():
             self.addr_break = None
             SIM_run_alone(self.rmHap, hap)
             self.addr_hap = None
+            if self.callback is not None:
+                self.callback()
 
     def rmHap(self, hap):
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", hap)

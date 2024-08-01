@@ -1362,7 +1362,7 @@ class StackTrace():
                 frame.fun_of_ip = fun_of_ip
                 #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
             self.frames.append(frame)
-            self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
+            #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
             self.prev_frame_sp = frame.sp
             if len(self.frames) > self.most_frames:
                 self.most_frames = len(self.frames)

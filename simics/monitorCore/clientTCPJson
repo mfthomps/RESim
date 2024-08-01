@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+#
+#  Send a file to a given host/port using tcp
+#
+import sys
+import time
+import os
+import socket
+import binascii
+import logging
+import logging.handlers
+import argparse
+import json
+
+def sendTCPxxx(host, port, infile, hang, lgr):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    server_addr = (host, port)
+    #server_addr = ('localhost', port)
+    while True:
+        try:
+            sock.connect(server_addr)
+            lgr.debug('connect ok')
+            break
+        except(socket.error) as e:
+            lgr.debug('connect fail %s' % e)
+            time.sleep(1)
+            
+    with open (infile, 'r') as fh:
+        tcp_json = json.load(fh)
+        for item in tcp_json:
+            item_hex = eval(item)
+            item_bytes = binascii.unhexlify(item_hex)
+            sock.sendall(item_bytes) 
+            lgr.debug('sent %d bytes' % len(item_bytes))
+            #got = sock.recv(1024)
+            #lgr.debug('got %s' % got)
+            time.sleep(1)
+    if hang:
+        lgr.debug('hanging as directed')
+        time.sleep(1000000)
+    lgr.debug('closed connection')
+    sock.close()
+
+def sendTCP(lgr):
+    with open('/tmp/catchme.json', 'r') as fh:
+        jdict = json.load(fh)
+        if 'hang' in jdict:
+            hang = jdict['hang']
+        else:
+            hang = False
+        host = jdict['host']
+        port = jdict['port']
+        data = jdict['data'] 
+    
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+        server_addr = (host, port)
+        while True:
+            try:
+                sock.connect(server_addr)
+                lgr.debug('connect ok')
+                break
+            except(socket.error) as e:
+                lgr.debug('connect fail %s' % e)
+                time.sleep(1)
+            
+        for item in data:
+            item_hex = eval(item)
+            item_bytes = binascii.unhexlify(item_hex)
+            sock.sendall(item_bytes) 
+            lgr.debug('sent %d bytes' % len(item_bytes))
+            #got = sock.recv(1024)
+            #lgr.debug('got %s' % got)
+            time.sleep(1)
+        if hang:
+                lgr.debug('hanging as directed')
+                time.sleep(1000000)
+        lgr.debug('close connection')
+        sock.close()
+
+def createNewJson(host, port, infile, hang, lgr):
+    jdict = {}
+    jdict['host'] = host
+    jdict['port'] = port
+    jdict['hang'] = hang
+    with open (infile, 'r') as fh:
+        tcp_json = json.load(fh)
+        jdict['data']=tcp_json
+    with open('/tmp/catchme.json', 'w') as fh:
+        fh.write(json.dumps(jdict))
+
+    
+def main():
+    parser = argparse.ArgumentParser(prog='clientTCP3', description='Send file content as TCP to a target.')
+    parser.add_argument('-i', '--ip', action='store', help='IP address.')
+    parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
+    parser.add_argument('-f', '--file', action='store', help='Json file.')
+    parser.add_argument('-g', '--hang', action='store_true', help='Hang after last send to leave connection open.')
+    lgr = logging.getLogger('clientTCPlog')
+    #lhStdout = lgr.handlers[0]
+    lgr.setLevel(logging.DEBUG)
+    fh = logging.FileHandler('/tmp/clientTCP.log')
+    fh.setLevel(logging.DEBUG)
+    frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fh.setFormatter(frmt)
+    lgr.addHandler(fh)
+    #lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
+    #lgr.removeHandler(lhStdout)
+    lgr.info('Start of log from clientTCP')
+    print('begin')
+    args = parser.parse_args()
+    createNewJson(args.ip, args.port, args.file, args.hang, lgr)
+    sendTCP(lgr)
+
+if __name__ == '__main__':
+    sys.exit(main())

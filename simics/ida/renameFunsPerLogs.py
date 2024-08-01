@@ -26,7 +26,7 @@ def get_string(ea):
 
     string = idc.get_strlit_contents(ea, strtype=string_type)
 
-    return string 
+    return string.decode()
 
 def getFunFromRef(dref):
    retval = None

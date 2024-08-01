@@ -47,7 +47,9 @@ import winKParams
 class GetKernelParams():
     def __init__(self, comp_dict, run_from_snap):
         #self.cpu = SIM_current_processor()
-        self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()))
+        self.log_dir = './logs'
+        self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
+        self.cell_config = cellConfig.CellConfig(list(comp_dict.keys()), self.lgr)
         self.target = os.getenv('RESIM_TARGET')
         self.cpu = self.cell_config.cpuFromCell(self.target)
         self.comp_dict = comp_dict
@@ -66,8 +68,6 @@ class GetKernelParams():
         print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
 
         #self.log_dir = '/tmp'
-        self.log_dir = './logs'
-        self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
         self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
         platform = None
         if 'PLATFORM' in comp_dict[self.target]:

@@ -69,7 +69,10 @@ class OrigRead():
         offset = addr - self.addr
         return offset
     def toString(self):
-        return ('Read/recv # %d orig addr: %x  orig len: %d  cycle: %x' % (self.read_count, self.addr, self.length, self.cycle))
+        if self.addr is not None:
+            return ('Read/recv # %d orig addr: %x  orig len: %d  cycle: %x' % (self.read_count, self.addr, self.length, self.cycle))
+        else:
+            return ('Error, addr in OrigRead is None')
 
 class DataRef():
     ''' Map copied buffers to their original data injest.  Any given copy may result
@@ -297,7 +300,7 @@ class TraceMarks():
         for mark in self.watch_marks:
             self.lgr.debug('mark is %s' % mark['mark_type'])
             ''' TBD expand to handle calls and source addresses '''
-            if mark['mark_type'] == 'call':
+            if mark['mark_type'] == 'call' and mark['data_stream'] and mark['length'] is not None:
                 if not did_one:
                     did_one = True
                     injest_fd = mark['fd']

@@ -20,6 +20,8 @@ class FunctionNoWatch():
         self.so_map = so_map
         self.context_manager = context_manager
         self.lgr = lgr
+        self.pending_libs = {}
+        self.pending_pages = {}
         self.entry_list = []
         if not os.path.isfile(def_file):
             lgr.error('functionNoWatch failed to find file %s' % def_file)
@@ -101,8 +103,8 @@ class FunctionNoWatch():
         end = load_addr + size - 1
         fun_addr = self.top.getFunWithin(entry_info.fun, load_addr, end) 
         if fun_addr is None:
-            self.lgr.error('functionNoWatch getPhys failed to get fun_addr for %s' % entry_info.fun)
-            return
+            self.lgr.debug('functionNoWatch getPhys failed to get fun_addr for %s load addr 0x%x end 0x%x' % (entry_info.fun, load_addr, end))
+            return None
         linear = fun_addr
         phys_addr = self.mem_utils.v2p(self.cpu, linear, use_pid=pid)
         self.lgr.debug('functionNoWatch getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x pid:%s' % (load_addr, entry_info.image_base, offset, linear, pid))
@@ -110,6 +112,7 @@ class FunctionNoWatch():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(entry_info.lib, entry_info.lib_fun)
         if phys_addr is None:
+            self.pending_pages[entry_info.lib_fun] = entry_info
             self.top.pageCallback(linear, self.pagedIn, name=entry_info.lib_fun, use_pid=pid)
         return phys_addr
 
@@ -131,18 +134,28 @@ class FunctionNoWatch():
             self.lgr.debug('functionNoWatch funHap failed to get ret_addr for entry %s, could be wrong tid linked to same lib' % entry_info.lib_fun)
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('functionNoWatch funHap entry %s eip: 0x%x set break on return addr 0x%x  cycle: 0x%x' % (entry_info.lib_fun, eip, ret_addr, self.cpu.cycles))
-        disableAndRun.DisableAndRun(self.cpu, ret_addr, self.context_manager, self.lgr) 
+        self.lgr.debug('functionNoWatch funHap entry %s eip: 0x%x disable all and set break on return addr 0x%x  cycle: 0x%x' % (entry_info.lib_fun, eip, ret_addr, self.cpu.cycles))
+        SIM_run_alone(self.clearBackstop, None)
+        disableAndRun.DisableAndRun(self.cpu, ret_addr, self.context_manager, self.lgr, callback=self.setBackstop) 
+
+    def clearBackstop(self, dumb=None):
+        self.data_watch.clearBackstop()
+
+    def setBackstop(self):
+        SIM_run_alone(self.setBackstopAlone, None)
+
+    def setBackstopAlone(self, dumb=None):
+        self.data_watch.setBackstop()
 
     def rmBreaks(self, immediate=False):
-        self.lgr.debug('functionNoWatch rmBreaks immediate %r cycle 0x%x' % (immediate, self.cpu.cycles))
+        #self.lgr.debug('functionNoWatch rmBreaks immediate %r cycle 0x%x' % (immediate, self.cpu.cycles))
         for entry in self.entry_list:
             if entry.hap is not None:
                 self.context_manager.genDeleteHap(entry.hap, immediate=immediate)
                 entry.hap = None
 
     def restoreBreaks(self):
-        self.lgr.debug('functionNoWatch restoreBreaks cycle 0x%x' % self.cpu.cycles)
+        #self.lgr.debug('functionNoWatch restoreBreaks cycle 0x%x' % self.cpu.cycles)
         for entry in self.entry_list:
             if entry.phys_addr is not None and entry.hap is None:
                 self.setBreak(entry, entry.phys_addr)

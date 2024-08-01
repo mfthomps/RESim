@@ -10,7 +10,7 @@ import logging
 import logging.handlers
 import argparse
 
-def sendTCP(host, port, infile_list, lgr):
+def sendTCP(host, port, infile_list, hang, lgr):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     server_addr = (host, port)
@@ -32,12 +32,15 @@ def sendTCP(host, port, infile_list, lgr):
             got = sock.recv(1024)
             lgr.debug('got %s' % got)
             time.sleep(1)
+    if hang:
+        time.sleep(1000000)
     
 def main():
     parser = argparse.ArgumentParser(prog='clientTCP3', description='Send file content as TCP to a target.')
     parser.add_argument('-i', '--ip', action='store', help='IP address.')
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-f', '--file', action='store', help='File list.')
+    parser.add_argument('-g', '--hang', action='store_true', help='Hang after last send to leave connection open.')
     lgr = logging.getLogger('clientTCPlog')
     #lhStdout = lgr.handlers[0]
     lgr.setLevel(logging.DEBUG)
@@ -52,7 +55,7 @@ def main():
     print('begin')
     args = parser.parse_args()
     file_list = args.file.split()
-    sendTCP(args.ip, args.port, file_list, lgr)
+    sendTCP(args.ip, args.port, file_list, args.hang, lgr)
 
 if __name__ == '__main__':
     sys.exit(main())
