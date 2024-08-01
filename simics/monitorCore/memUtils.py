@@ -396,11 +396,11 @@ class MemUtils():
             retval = None
         
         if cpl == 0 and (retval is None or retval == 0):
-            #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+            #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x arch %s' % (cpl, v, scpu.architecture))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
-            if cpu.architecture == 'arm64':
+            elif cpu.architecture == 'arm64':
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
                 return ptable_info.page_addr
             else:
