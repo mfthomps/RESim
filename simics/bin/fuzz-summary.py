@@ -20,12 +20,14 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 
-def getRecentDelta(flist):
+def showRecentDelta(flist):
     recent = None
+    recent_q_file = None
     for f in flist:
         dt = os.path.getmtime(f)
         if recent is None or dt > recent:
             recent = dt
+            recent_q_file = f
     now = datetime.now()
     now_ts = datetime.timestamp(now)
     delta = now_ts - recent
@@ -33,7 +35,7 @@ def getRecentDelta(flist):
     #dt = datetime.fromtimestamp(recent)
     #print('recent is %s' % str(recent))
     #print(dt.strftime("%m/%d/%Y, %H:%M:%S"))
-    return delta
+    print('Most recent queue file %d seconds ago %s' % (delta, recent_q_file))
 
 def main():
     afldir = os.getenv('AFL_DIR')
@@ -49,7 +51,6 @@ def main():
     print('RESim sees %d unique execution paths.' % len(unique_files))
     print('\t %d crashes' % len(crash_files))
     print('\t %d hangs' % len(hang_files))
-    delta_queue = getRecentDelta(queue_files)
-    print('Most recent queue file %d seconds ago' % delta_queue)
+    showRecentDelta(queue_files)
 if __name__ == '__main__':
     sys.exit(main())
