@@ -397,6 +397,7 @@ class bookmarkMgr():
         entry['tid'] = tid
         self.mark_json[0] = []
         self.mark_json[0].append(entry)
+        self.__bookmarks['origin'] = CycleRecord(cpu.cycles, cpu.steps, eip)
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:

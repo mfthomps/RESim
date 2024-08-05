@@ -35,11 +35,12 @@ import resimUtils
 import time
 '''
     Catch the kernel writing to a memory breakpoint and bring the eip to the return from the syscall.
-    If the memory is written by user space, stop there.
+    If the memory is written by user space, stop there.  If track is set, then continue back tracing
+    the load of the register whose value was stored to memory.
 '''
 class findKernelWrite():
     def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, 
-                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False):
+                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False, track=False):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -54,6 +55,7 @@ class findKernelWrite():
         self.addr = addr
         self.num_bytes = num_bytes
         self.bookmarks = bookmarks
+        self.track = track
         self.mem_hap = None
         self.forward = False
         self.forward_break = None
@@ -97,15 +99,22 @@ class findKernelWrite():
         self.future_count = 0
         self.best_cycle = 0
 
+        self.lgr.debug('findKernelWrite addr 0x%x num_bytes %d' % (addr, num_bytes))
         self.go(addr)
 
 
-    def go(self, addr):
+    def go(self, addr, num_bytes=None, track=False, rev_to_call=None):
+        if num_bytes is not None:
+            self.num_bytes=num_bytes 
+        if not self.track:
+            self.track = track
+        if self.rev_to_call is None:
+            self.rev_to_call = rev_to_call
         ''' go forward one in case the insruction just executed is what did a write.  cheap way to catch that'''
         self.start_cycles = self.cpu.cycles
         cli.quiet_run_command('si')
         self.addr = addr
-
+        # don't reset if set
 
         phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
         if phys_block.address == 0:
@@ -127,15 +136,22 @@ class findKernelWrite():
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
         #SIM_run_command('list-breakpoints')
 
-        self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.brokenHap, self.cpu.cycles)
+        self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
 
         #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
         self.future_count = 0
         self.best_cycle = 0
-        SIM_run_alone(SIM_run_command, 'reverse')
+        # TBD does this nonsense mask a simics bug in which the reverse never returns?
+        now = self.cpu.cycles
+        prev = now - 1
+        if not resimUtils.skipToTest(self.cpu, prev, self.lgr):
+            self.top.quit()
+        if not resimUtils.skipToTest(self.cpu, now, self.lgr):
+            self.top.quit()
+        #SIM_run_alone(SIM_run_command, 'reverse')
+        SIM_run_command('reverse')
 
     def checkInitialBufferAlone(self, addr):
         self.lgr.debug('findKernelWrite checkInitialBufferAlone 0%x' % addr)
@@ -192,7 +208,7 @@ class findKernelWrite():
         else:
             if memory.logical_address != self.addr:
                 offset = memory.logical_address - self.addr
-            self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, eip, self.cpu.cycles))
+            self.lgr.debug('vt_handler, logical_address is 0x%x size 0x%x offset: %d value: 0x%x eip: 0x%x cycle: 0x%x' % (memory.logical_address, memory.size, offset, memory.value, eip, self.cpu.cycles))
         self.memory_transaction = memory
         SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_alone(self.addStopHapForWriteAlone, offset)
@@ -201,10 +217,11 @@ class findKernelWrite():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     class MyMemoryTransaction():
-        def __init__(self, logical_address, physical_address, size):
+        def __init__(self, logical_address, physical_address, size, value):
             self.logical_address = logical_address 
             self.physical_address = physical_address 
             self.size = size 
+            self.value = value 
 
     def deleteBrokenHap(self):
         if self.broken_hap is not None:
@@ -227,50 +244,50 @@ class findKernelWrite():
             SIM_run_alone(self.context_manager.enableAll, None)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
-        elif self.cpu.cycles == self.start_cycles:
-            self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.vt_handler(my_memory)
-        elif self.cpu.cycles < self.start_cycles:
-            location = memory.logical_address
-            phys = memory.physical_address
-            eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.future_count = 0
-            if self.cpu.cycles > self.best_cycle:
-                self.best_cycle = self.cpu.cycles
-                self.lgr.debug('revWriteCallback best cycle now 0x%x' % self.best_cycle)
-            VT_in_time_order(self.vt_handler, my_memory)
         else:
-            location = memory.logical_address
-            phys = memory.physical_address
-            eip = self.top.getEIP(self.cpu)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size)
-            self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
-            self.future_count = self.future_count+1
-            if self.future_count > 100:
-                if self.best_cycle == 0:
-                    bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
-                    self.bookmarks.setBacktrackBookmark(bm)
-                    SIM_break_simulation('revWriteCallback')
-                    self.top.skipAndMail()
-                    return
-                else:
-                    bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
-                    self.top.quit()
-                    #self.bookmarks.setBacktrackBookmark(bm)
-                    #SIM_break_simulation('revWriteCallbackx')
-                    #self.top.skipAndMail()
-                    return
-                #else:
-                #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
-                #    #self.cleanUp()
-                #    #SIM_break_simulation('remove this and fix it')
-                #    # simics goes into loop, but can still quit
-                #    self.top.quit()
-            VT_in_time_order(self.vt_handler, my_memory)
+            value = SIM_get_mem_op_value_le(memory)
+            my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size, value)
+            if self.cpu.cycles == self.start_cycles:
+                self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
+                self.vt_handler(my_memory)
+            elif self.cpu.cycles < self.start_cycles:
+                location = memory.logical_address
+                phys = memory.physical_address
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.future_count = 0
+                if self.cpu.cycles > self.best_cycle:
+                    self.best_cycle = self.cpu.cycles
+                    self.lgr.debug('revWriteCallback best cycle now 0x%x' % self.best_cycle)
+                VT_in_time_order(self.vt_handler, my_memory)
+            else:
+                location = memory.logical_address
+                phys = memory.physical_address
+                eip = self.top.getEIP(self.cpu)
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.lgr.debug('revWriteCallback hit 0x%x (phys 0x%x) size %d BUT A FUTURE CYCLE cycle: 0x%x eip: 0x%x' % (location, phys, memory.size, self.cpu.cycles, eip))
+                self.future_count = self.future_count+1
+                if self.future_count > 100:
+                    if self.best_cycle == 0:
+                        bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
+                        self.bookmarks.setBacktrackBookmark(bm)
+                        SIM_break_simulation('revWriteCallback')
+                        self.top.skipAndMail()
+                        return
+                    else:
+                        bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
+                        self.top.quit()
+                        #self.bookmarks.setBacktrackBookmark(bm)
+                        #SIM_break_simulation('revWriteCallbackx')
+                        #self.top.skipAndMail()
+                        return
+                    #else:
+                    #    self.lgr.error('revWriteCallback %d hits in the future, bail.  Best cycle was 0x%x' % (self.future_count, self.best_cycle))
+                    #    #self.cleanUp()
+                    #    #SIM_break_simulation('remove this and fix it')
+                    #    # simics goes into loop, but can still quit
+                    #    self.top.quit()
+                VT_in_time_order(self.vt_handler, my_memory)
                 
 
     def addStopHapForWriteAlone(self, offset):
@@ -709,6 +726,12 @@ class findKernelWrite():
             self.lgr.debug('after skip back one, eip 0x%x' % eip)
         else:
             self.lgr.debug('findKernelWrite backOneAlone, was going forward')
+        if not self.track:
+            self.lgr.debug('findKernelWrite backOneAlone, not tracking, we are done.')
+            SIM_run_alone(self.cleanup, False)
+            self.top.skipAndMail()
+            return
+
         if self.forward_break is not None:
             self.lgr.debug('findKernelWrite backOne alone delete forward_break')
             RES_delete_breakpoint(self.forward_break)
@@ -754,7 +777,7 @@ class findKernelWrite():
                 value = self.mem_utils.getRegValue(self.cpu, op1)
                 #reg_num = self.cpu.iface.int_register.get_number(op1)
                 #value = self.cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('findKernelWrite backOneAlone %s is reg, find where wrote value 0x%x reversing  from cycle 0x%x' % (op1, value, self.cpu.cycles))
+                self.lgr.debug('findKernelWrite backOneAlone %s is reg, find where value 0x%x was loaded.  Num bytes %d offset %d   Reversing  from cycle 0x%x' % (op1, value, self.num_bytes, offset, self.cpu.cycles))
                 #if op1.startswith('xmm'):
                 #    SIM_break_simulation('remove this')
                 #    return
@@ -777,7 +800,11 @@ class findKernelWrite():
             #else:
             if True:
                 src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
+                dst_addr = self.mem_utils.getRegValue(self.cpu, 'edi')
+                ecx = self.mem_utils.getRegValue(self.cpu, 'ecx')
+                self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x addr 0x%x' % (src_addr, dst_addr, ecx, self.addr))
                 if self.prev_buffer:
+                    # we are just looking for the previous buffer, e.g., to backtrack to a kernel buffer.
                     self.k_buffer_addrs.append(src_addr)
                     if True or len(self.k_buffer_addrs) > 2:
                         SIM_run_alone(self.cleanup, False)

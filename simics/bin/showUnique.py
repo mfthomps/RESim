@@ -51,6 +51,7 @@ def findTrack(value, blocks, track):
 
 def main():
     parser = argparse.ArgumentParser(prog='showCoverage', description='Show number of hits (coverage) of one or more hits files')
+    parser.add_argument('ini', action='store', help='The ini file')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('instance', action='store', type=int, help='instance')
     parser.add_argument('index', action='store', type=int, help='index')
@@ -59,7 +60,7 @@ def main():
     if args.target.endswith('/'):
         args.target = args.target[:-1]
 
-    blocks, prog_elf = resimUtils.getBasicBlocks(args.program)
+    blocks, prog_elf = resimUtils.getBasicBlocks(args.program, ini=args.ini)
     path = aflPath.getAFLCoveragePath(args.target, args.instance, args.index)
     print('path is %s' % path)
     track_path  = path.replace('coverage', 'trackio')

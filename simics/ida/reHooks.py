@@ -467,6 +467,8 @@ class ShowAddrHandler(idaapi.action_handler_t):
                         print('jump to 0x%x' % x)
                     else:
                         print('did not find Hex View-1 form')
+            else:
+                print('ShowAddrHandler, nothing highlighted')
         def update(self, ctx):
             return idaapi.AST_ENABLE_ALWAYS
 
@@ -621,6 +623,10 @@ class Hooks(UI_Hooks):
                             idaapi.attach_action_to_popup(form, popup, "modMemory:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "stringMemory:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "backtraceData:action", 'RESim/')
+                        else:
+                            print('failed to get hex from highlighted %s' % str(highlighted))
+                else:
+                    print('Hooks nothing highlighted')
                 opnum = idaapi.get_opnum()
                 if opnum >= 0:
                     idaapi.attach_action_to_popup(form, popup, "structField:action", 'RESim/data/')

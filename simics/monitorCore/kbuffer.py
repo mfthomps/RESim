@@ -33,7 +33,7 @@ Kernel buffer size is determined by looking for a fixed character (Z) following 
 of the first write to the application read buffer.
 '''
 class Kbuffer():
-    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr, commence=None):
+    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr, commence=None, stop_when_done=False):
         self.context_manager = context_manager
         self.mem_utils = mem_utils
         self.data_watch = data_watch
@@ -42,7 +42,8 @@ class Kbuffer():
         self.lgr = lgr
         self.watching_addr = None
         self.kbufs = []
-        self.kbuf_len = None
+        # in case buffer lengths vary, e.g., due to starting kbuf in mid-conversation.
+        self.kbuf_len = []
         self.write_hap = None
         self.read_count = None
         self.buf_remain = None
@@ -51,6 +52,8 @@ class Kbuffer():
         self.orig_buffer = None
         self.kernel_cycle_of_write = None
         self.hack_count = 0
+        self.tot_buf_size = 0
+        self.stop_when_done = stop_when_done
 
     def read(self, addr, count):
         ''' syscall got a read call. '''
@@ -147,10 +150,10 @@ class Kbuffer():
             
 
     def updateBuffers(self, src):
-        if self.kbuf_len is not None and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len):
+        if len(self.kbuf_len) > 0 and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len[-1]):
             ''' The read is from the same kernel buffer used on the previous read.'''
             self.lgr.debug('Kbuffer updateBuffers read from previous kernel buffer 0x%x' % self.kbufs[-1])
-            kbuf_remaining = (self.kbufs[-1] + self.kbuf_len) - src + 1
+            kbuf_remaining = (self.kbufs[-1] + self.kbuf_len[-1]) - src + 1
             if self.read_count > kbuf_remaining:
                 ''' change break to write of first byte from next buffer '''
                 new_break = self.watching_addr + kbuf_remaining
@@ -160,10 +163,13 @@ class Kbuffer():
                 self.watching_addr = new_break
 
         else:  
-            self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, kbuf_len is %s' % (src, str(self.kbuf_len)))
+            if len(self.kbuf_len) > 0:
+                self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, previous kbuf_len is %s' % (src, str(self.kbuf_len[-1])))
+            else:
+                self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, this is the first, so we have no length' % (src))
             self.kbufs.append(src)
             print('adding kbuf 0x%x' % src)
-            if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
+            if len(self.kbuf_len) == 0 or (self.buf_remain is None or self.buf_remain > 100):
                 # TBD this may need to be adjustable data files that require specific fields to force consumption of the entire kernel buffer.
                 # Better to parse the primer file  in writeData to identify the non-special characters and allow for them.
                 max_bad = 300
@@ -188,7 +194,7 @@ class Kbuffer():
                         bad_count = 0
                     cur_addr += 1
                 if last_good is None:
-                    if self.kbuf_len is None:
+                    if len(self.kbuf_len) == 0:
                         self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('The kbuf option requires a data stream that contains Zs')
@@ -197,18 +203,22 @@ class Kbuffer():
                     return
                 buf_size = (last_good - src) + 1 
                 self.lgr.debug('Kbuffer updateBuffers, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
-                if self.kbuf_len is None:
-                    self.kbuf_len = buf_size
+                #if self.kbuf_len is None:
+                #    self.kbuf_len = buf_size
+                self.kbuf_len.append(buf_size)
+                self.tot_buf_size = self.tot_buf_size + buf_size
         
-        
-                self.buf_remain = self.kbuf_len
-        
-                if self.read_count > self.kbuf_len:
-                    new_break = self.watching_addr + self.kbuf_len
-                    self.lgr.debug('Kbuffer updateBuffers, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
+                self.buf_remain = buf_size
+       
+                 
+                if self.read_count > self.tot_buf_size:
+                    new_break = self.watching_addr + buf_size
+                    self.lgr.debug('Kbuffer updateBuffers, count given in read syscall %d greater than cumulartive buf size %d, set next break at 0x%x' % (self.read_count, self.tot_buf_size, new_break))
                     SIM_run_alone(self.replaceHap, new_break)
                     self.watching_addr = new_break
-                #SIM_break_simulation('tmp')
+                elif self.stop_when_done:
+                    self.lgr.debug('Kbuffer updateBuffers got all bufs, and told to stop')
+                    SIM_break_simulation('Kbuffer updateBuffers got all bufs, and told to stop')
             else:
                 ''' Not enough remaining... just assume same length. '''
                 self.lgr.debug('Kbuffer not enough remaining buf_reamin is %s' % str(self.buf_remain))

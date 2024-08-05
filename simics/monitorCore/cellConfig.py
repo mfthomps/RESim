@@ -8,12 +8,14 @@ class CellConfig():
     cpu_cell = {}
     cell_cpu_list = {}
     cell_context = {}
-    def __init__(self, comp_list):
+    def __init__(self, comp_list, lgr):
         self.cells = list(comp_list)
+        self.lgr = lgr
         self.loadCellObjects()
 
     def loadCellObjects(self):
         for cell_name in self.cells:
+            self.lgr.debug('CellConfig loadCellObjects cell_name %s' % cell_name)
             obj = SIM_get_object(cell_name)
             self.cell_context[cell_name] = obj.cell_context
 

@@ -12,16 +12,18 @@ class Prec():
         self.debugging = False
 
 class Pfamily():
-    def __init__(self, cell, param, cpu, mem_utils, task_utils, lgr):
+    def __init__(self, top, cell, param, cpu, mem_utils, task_utils, lgr):
         self.cpu = cpu
         self.cell = cell
         self.param = param
+        self.top = top
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.prev_parent = None
         self.prev_tabs = ''
         self.lgr = lgr
         self.report_fh = None
+        self.look4_prec = None
 
     def getPfamily(self):
         retval = []
@@ -52,23 +54,26 @@ class Pfamily():
                     break
         return None, None, None
 
-    def execveHap(self, look4_prec, third, forth, memory):
+    #def execveHap(self, look4_prec, third, forth, memory):
+    def execveCallback(self):
         #cpu = SIM_current_processor()
         #if cpu != look4_prec.cpu:
         #    self.lgr.debug('execveHap, wrong cpu %s %s' % (cpu.name, look4_prec.cpu.name))
         #    return
         cpu, comm, tid = self.task_utils.curThread() 
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, None, cpu)
-        if look4_prec.proc is not None:
+        self.lgr.debug('pFamily execveCallback prog_string %s' % prog_string)
+        if self.look4_prec is not None and self.look4_prec.proc is not None:
             if prog_string is None:
+                self.lgr.debug('pFamily prog_string none, look4_prec not none')
                 return
             fname = os.path.basename(prog_string)
-            if not fname.startswith(look4_prec.proc):
+            if not fname.startswith(self.look4_prec.proc):
                 ''' not the proc we are looking for '''
-                #self.lgr.debug('%s does not start with %s' % (fname, look4_prec.proc))
+                self.lgr.debug('pFamily execveCallback %s does not start with %s' % (fname, look4_prec.proc))
                 return
             else:
-                self.lgr.debug('execveHap found proc we are looking for %s' % prog_string)
+                self.lgr.debug('pFamily execveCallback found proc we are looking for %s' % prog_string)
         nargs = min(4, len(arg_string_list))
         arg_string = ''
         for i in range(nargs):
@@ -80,7 +85,7 @@ class Pfamily():
         dumb = pfamily.pop(0)
         flen = len(pfamily)
         if flen > 0:
-            self.lgr.debug('flen is %d, parent_tid is %s  prev %s' % (flen, pfamily[0].tid, str(self.prev_parent)))
+            self.lgr.debug('pFamily execveCallback flen is %d, parent_tid is %s  prev %s' % (flen, pfamily[0].tid, str(self.prev_parent)))
             if pfamily[0].tid != self.prev_parent:
                 tabs = ''
                 while len(pfamily) > 0:
@@ -96,8 +101,8 @@ class Pfamily():
             self.report_fh.write('%s %s\n' % (prog_string, arg_string))
             self.prev_parent = None
             self.prev_tabs = ''
-        if look4_prec.proc is not None:
-            self.report_fh.flush() 
+        self.report_fh.flush() 
+        if self.look4_prec is not None and self.look4_prec.proc is not None:
             SIM_break_simulation('execve %s' % prog_string)
         #print('execve from %d (%s) prog_string %s' % (tid, comm, prog_string))
         #for arg in arg_string_list:
@@ -105,8 +110,11 @@ class Pfamily():
          
 
     def traceExecve(self, comm=None):
-        look4_prec = Prec(self.cpu, comm, None)
-        self.lgr.debug('toExecve set break at 0x%x' % self.param.execve)
-        proc_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.execve, self.mem_utils.WORD_SIZE, 0)
-        proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.execveHap, look4_prec, proc_break)
+        self.look4_prec = Prec(self.cpu, comm, None)
+        #self.lgr.debug('toExecve set break at 0x%x' % self.param.execve)
+        #proc_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.execve, self.mem_utils.WORD_SIZE, 0)
+        #proc_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.execveHap, look4_prec, proc_break)
+        self.top.runTo(['execve'], None, callback=self.execveCallback, run=False)
         self.report_fh = open('/tmp/pfamily.txt', 'w')
+        self.lgr.debug('pFamily traceExecve ready')
+        print('traceExecve ready')

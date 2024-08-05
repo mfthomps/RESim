@@ -175,14 +175,14 @@ class SelectInfo():
 
     def resetFD(self, fd, fd_set):
         if fd < self.nfds:
-            self.lgr.debug('SelectInfo reset fd %d' % fd)
+            #self.lgr.debug('SelectInfo reset fd %d' % fd)
             if fd_set is not None:
                 read_low, read_high = self.readit(fd_set)
                 if read_low is not None:
                     the_set = read_low | (read_high << 32) 
                     new_value = memUtils.clearBit(the_set, fd)
                     self.writeit(fd_set, new_value)
-                    self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
+                    #self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
 
     def getFDString(self, fd_set):
         retval = ''
@@ -244,6 +244,11 @@ class EPollInfo():
     def add(self, fd, events):
         entry = self.FDS(fd, events)
         self.fd_set.append(entry)
+    def hasFD(self, fd):
+        for entry in self.fd_set:
+            if entry.fd == fd:
+                return True
+        return False
 
 class PollInfo():
     class FDS():
@@ -1560,7 +1565,7 @@ class Syscall():
             else:
                 self.lgr.debug('syscallParse got fname %s' % exit_info.fname)
                 for call_param in self.call_params:
-                    #self.lgr.debug('got param type %s' % type(call_param.match_param))
+                    self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
                          mod = call_param.match_param
                          #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
@@ -1573,8 +1578,8 @@ class Syscall():
                             self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
                         else:
                             self.lgr.debug('syscall open, file is %s' % exit_info.fname)
-                        if exit_info.fname is None or exit_info.fname == call_param.match_param: 
-                            #self.lgr.debug('syscall open, found actual match_param %s' % call_param.match_param)
+                        if exit_info.fname is None or call_param.match_param in exit_info.fname:
+                            self.lgr.debug('syscall open, found actual match_param %s' % call_param.match_param)
                             exit_info.call_params.append(call_param)
                         
                         break
@@ -2010,7 +2015,7 @@ class Syscall():
             ida_msg = '%s tid:%s (%s) poll_info: %s\n' % (callname, tid, comm, exit_info.poll_info.getString())
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.poll_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    self.lgr.debug('call param found %d' % (call_param.match_param))
+                    self.lgr.debug('syscall %s call param found %d' % (callname, call_param.match_param))
                     exit_info.call_params.append(call_param)
 
         elif callname == 'epoll_ctl':
@@ -2317,6 +2322,10 @@ class Syscall():
             reg_value = reg_value >> 26
             if reg_value != 0x11 and reg_value != 0x15:
                 return
+        if syscall_info.callnum is None and self.callback is not None:
+            # only used syscall to set breaks, we'll take it from here.
+            self.callback()
+            return
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
@@ -2397,8 +2406,9 @@ class Syscall():
         ''' catch stray calls from wrong tid.  Allow calls if the syscall instance's cell is not None, which means it is not up to the context manager
             to watch or not.  An example is execve, which must be watched for all processes to provide a toExecve function. '''
         if self.debugging and not self.context_manager.amWatching(tid) and syscall_info.callnum is not None and self.background_break is None and self.cell is None and not self.context_manager.watchingExit(tid):
-            self.lgr.debug('syscallHap name: %s tid:%s missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
-                 tid, syscall_info.callnum))
+            # will happen in afl if some other process exits.  TBD, method to watch selected processes as part of AFL run
+            #self.lgr.debug('syscallHap name: %s tid:%s missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
+            #     tid, syscall_info.callnum))
             return
 
         if self.bang_you_are_dead:

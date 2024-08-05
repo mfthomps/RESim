@@ -3,6 +3,8 @@
 # given a an AFL session named by target, provide a summary of
 # queue files and unique hits files (post playAFL).
 #
+# TBD add items from afl fuzzer_stats file, e.g., stability
+#
 import sys
 import os
 import glob

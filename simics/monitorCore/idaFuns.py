@@ -263,10 +263,10 @@ class IDAFuns():
     def getFunWithin(self, fun_name, start, end):
         big = 0
         retval = None
-        self.lgr.debug('idaFuns getFunWithin %s start 0x%x end 0x%x' % (fun_name, start, end))
+        self.lgr.debug('idaFuns getFunWithin look for %s within start 0x%x end 0x%x' % (fun_name, start, end))
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
-                self.lgr.debug('idaFuns getFunWithin %s matches, start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
+                self.lgr.debug('idaFuns getFunWithin found match for %s, fun start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
                 if self.funs[fun]['start'] >= start and self.funs[fun]['end'] <= end:
                     size = self.funs[fun]['end'] - self.funs[fun]['start'] 
                     self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))

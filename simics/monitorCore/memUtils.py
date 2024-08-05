@@ -289,6 +289,9 @@ class MemUtils():
         except AttributeError:
             self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
             return None
+        except TypeError:
+            self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
+            return None
         table_base = self.readWord(cpu, mm_struct+self.param.mm_struct_offset)
         if cpu.architecture == 'arm':
             table_base = table_base | 0x164
@@ -426,7 +429,7 @@ class MemUtils():
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
-            if cpu.architecture == 'arm64':
+            elif cpu.architecture == 'arm64':
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
                 return ptable_info.page_addr
             else:
