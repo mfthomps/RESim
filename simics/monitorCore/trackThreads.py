@@ -46,14 +46,28 @@ class TrackThreads():
         #self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
 
         if not self.top.isWindows(): 
-            execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
-            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
-            self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
-            self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-            self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+            # TBD move execve hap to syscall and use callback?  not good to duplicate computed entry point handling
+            if self.cpu.architecture == 'arm64':
+                platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
+                if platform == 'armMixed':
+                    self.setExecveBreaks(arm64_app=True)
+                    self.setExecveBreaks(arm64_app=False)
+                elif platform == 'arm64':
+                    self.setExecveBreaks(arm64_app=True)
+                else:
+                    self.setExecveBreaks(arm64_app=False)
+            else:
+                self.setExecveBreaks()
 
         self.trackSO()
         #self.trackClone()
+
+    def setExecveBreaks(self, arm64_app=None):
+        execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
+        execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
+        self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+        self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
+        self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
 
     def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))

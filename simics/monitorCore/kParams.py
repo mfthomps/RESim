@@ -74,12 +74,14 @@ class Kparams():
         self.compat_32_jump = None
         # arm entry/exit
         self.arm_entry = None
+        self.arm64_entry = None
         self.arm_ret = None
         self.arm_ret2 = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None
         self.syscall_jump = None
+        self.syscall64_jump = None
         self.stack_frame_eip = None
         # arm call-specific svc 
         self.arm_svc = False

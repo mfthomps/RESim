@@ -182,6 +182,10 @@ class TaskUtils():
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
         else:
             self.syscall_numbers32 = None
+        if cpu.architecture == 'arm64':
+            self.arm64 = True
+        else:
+            self.arm64 = False
 
     def commSize(self):
         return COMM_SIZE
@@ -802,7 +806,7 @@ class TaskUtils():
                 SIM_break_simulation('modified execve param')
      
     def readExecParamStrings(self, tid, cpu):
-        #self.lgr.debug('readExecParamStrings with tid %s' % tid)
+        self.lgr.debug('readExecParamStrings with tid %s' % tid)
         if tid is None:
             self.lgr.debug('readExecParamStrings called with tid of None')
             return None, None, None
@@ -813,7 +817,7 @@ class TaskUtils():
         prog_string = self.mem_utils.readString(cpu, self.exec_addrs[tid].prog_addr, 512)
         if prog_string is not None:
             prog_string = prog_string.strip()
-            #self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
+            self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
             for arg_addr in self.exec_addrs[tid].arg_addr_list:
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
@@ -832,6 +836,7 @@ class TaskUtils():
 
     def getProcArgsFromStack(self, tid, at_enter, cpu):
         ''' NOTE side effect of populating exec_addrs '''
+        # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
         self.lgr.debug('getProgArgsFromStack')
@@ -901,15 +906,31 @@ class TaskUtils():
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
         elif self.cpu.architecture == 'arm64':
-            # TBD only for 32 bit apps (for now)
-            prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
-            argv = self.mem_utils.getRegValue(cpu, 'r1')
+            if at_enter:
+                if self.mem_utils.arm64App(self.cpu):
+                    prog_reg = 'x0'
+                    arg_reg = 'x1'
+                    addr_size = 8
+                    self.lgr.debug('getProcArgsFromStack is 64 bit app')
+                else:
+                    prog_reg = 'r0'
+                    arg_reg = 'r1'
+                    addr_size = 4
+                    self.lgr.debug('getProcArgsFromStack is 32 bit app')
+                prog_addr = self.mem_utils.getRegValue(cpu, prog_reg)
+                argv = self.mem_utils.getRegValue(cpu, arg_reg)
+            else:
+                x0 = self.mem_utils.getRegValue(self.cpu, 'x0')
+                prog_addr = self.mem_utils.readWord(self.cpu, x0)
+                argv = self.mem_utils.readWord(self.cpu, (x0+8))
+                addr_size = 8
+                self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
             while not done and i < limit:
                 #xaddr = argv + mult*self.mem_utils.WORD_SIZE
-                xaddr = argv + mult*4
-                arg_addr = self.mem_utils.readAppPtr(cpu, xaddr, size=4)
+                xaddr = argv + mult*addr_size
+                arg_addr = self.mem_utils.readAppPtr(cpu, xaddr, size=addr_size)
                 if arg_addr is not None and arg_addr != 0:
-                   self.lgr.debug("getProcArgsFromStack ARM64 (32 bit app) adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                   self.lgr.debug("getProcArgsFromStack ARM64 (%d byte app) adding arg addr %x read from 0x%x" % (addr_size, arg_addr, xaddr))
                    arg_addr_list.append(arg_addr)
                 else:
                    done = True
@@ -948,11 +969,12 @@ class TaskUtils():
         #     argv, xaddr, saddr, arg2_string)
 
 
+        self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
         self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
         prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
         self.exec_addrs[tid].prog_name = prog_string
         self.exec_addrs[tid].arg_list = arg_string_list
-        #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
+        self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
         #if prog_string == 'cfe-poll-player':
         #    SIM_break_simulation('debug')
         #self.lgr.debug('args are %s' % str(arg_string_list))
@@ -995,7 +1017,7 @@ class TaskUtils():
         else:
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
-    def getSyscallEntry(self, callnum, compat32):
+    def getSyscallEntry(self, callnum, compat32, arm64_app=None):
         if self.cpu.architecture == 'arm':
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
@@ -1003,8 +1025,14 @@ class TaskUtils():
             #self.lgr.debug('getSyscallEntry syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
         elif self.cpu.architecture == 'arm64':
             #         'ldr x1, [x22, x20, lsl #3]'
+            if arm64_app is None:
+                self.lgr.debug('taskUtils getSyscallEntry with arm64_app of None')
+                arm64_app = self.mem_utils.arm64App(self.cpu)
             call_shifted = callnum << 3
-            val = self.param.syscall_jump + call_shifted
+            if arm64_app:
+                val = self.param.syscall64_jump + call_shifted
+            else:
+                val = self.param.syscall_jump + call_shifted
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
             self.lgr.debug('getSyscallEntry arm64 syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
@@ -1066,10 +1094,19 @@ class TaskUtils():
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
         return retval
 
+    def frameArm64Computed(self):
+        frame = {}
+        addr = self.mem_utils.getRegValue(self.cpu, 'x0')
+        for p in memUtils.param_map['arm64']:
+            frame[p] = self.mem_utils.readWord(self.cpu, addr)
+            addr = addr + 8
+        frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
+        frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'x14')
+        return frame
+
     def frameFromRegs(self, compat32=False):
         frame = {}
-        if self.cpu.architecture.startswith('arm'):
-            #TBD how to deal with arm64 when user space is 64 bit?
+        if self.cpu.architecture == ('arm') or (self.cpu.architecture == 'arm64' and not self.mem_utils.arm64App(self.cpu)):
             for p in memUtils.param_map['arm']:
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
             cpl = memUtils.getCPL(self.cpu)
@@ -1081,6 +1118,12 @@ class TaskUtils():
                 frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
                 frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
                 frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+        elif self.cpu.architecture == ('arm64'):
+            # only works on entry
+            for p in memUtils.param_map['arm64']:
+                frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm64'][p])
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
+            frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'x14')
         else:
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -1118,7 +1161,23 @@ class TaskUtils():
             return [callname]
 
     def syscallName(self, callnum, compat32):
-        if not compat32:
+        if self.arm64:
+            self.lgr.debug('taskUtils syscallName for num %d' % callnum)
+            if self.mem_utils.arm64App(self.cpu):
+                if callnum in self.syscall_numbers.syscalls:
+                    return self.syscall_numbers.syscalls[callnum]
+                else:
+                    return 'not_mapped'
+            else:
+                if self.syscall_numbers32 is None:
+                    self.lgr.warning('taskUtils syscallName is 32bit app but no 32 bit call numbers defined in ini file')
+                    return 'not_mapped'
+                elif callnum in self.syscall_numbers32.syscalls:
+                    return self.syscall_numbers32.syscalls[callnum]
+                else:
+                    return 'not_mapped'
+                
+        elif not compat32:
             if callnum in self.syscall_numbers.syscalls:
                 return self.syscall_numbers.syscalls[callnum]
             else:
@@ -1131,8 +1190,24 @@ class TaskUtils():
         else:
             self.lgr.error('taskUtils syscallName, compat32 but no syscall_numbers32.  Was the unistd file loaded?')
 
-    def syscallNumber(self, callname, compat32):
-        if not compat32:
+    def syscallNumber(self, callname, compat32, arm64_app=None):
+        if self.arm64:
+            if arm64_app is None:
+                self.lgr.debug('taskUtils syscallNumber, eh?')
+                arm64_app = self.mem_utils.arm64App(self.cpu)
+            if arm64_app:
+               if callname in self.syscall_numbers.callnums:
+                   return self.syscall_numbers.callnums[callname]
+               else:
+                   self.lgr.debug('taskUtils syscallNumber %s not in callnums' % callname)
+                   return -1
+            else:
+                if callname in self.syscall_numbers32.callnums:
+                    return self.syscall_numbers32.callnums[callname]
+                else:
+                    self.lgr.debug('taskUtils syscallNumber %s not in callnums32' % callname)
+                    return -1
+        elif not compat32:
             if callname in self.syscall_numbers.callnums:
                 return self.syscall_numbers.callnums[callname]
             else:

@@ -70,8 +70,25 @@ class GetKernelParams():
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
         self.lgr.debug('GetKernelParams using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
         platform = None
+        self.want_arm32 = False
+        self.want_arm64 = False
         if 'PLATFORM' in comp_dict[self.target]:
             platform = comp_dict[self.target]['PLATFORM']
+            self.lgr.debug('PLATFORM is %s' % platform)
+            if platform.startswith('arm'):
+                if platform == 'armMixed':
+                    self.want_arm32 = True
+                    self.want_arm64 = True
+                    self.lgr.debug('Will look for ARM 32 and 64 bit syscall jump tables')
+                    print('Will look for ARM 32 and 64 bit syscall jump tables')
+                elif platform == 'arm64':
+                    self.want_arm64 = True
+                    self.lgr.debug('Will look for only ARM 64 bit syscall jump tables')
+                    print('Will look for only ARM 64 bit syscall jump tables')
+                else:
+                    self.want_arm32 = True
+                    self.lgr.debug('Will look for only ARM 32 bit syscall jump tables')
+                    print('Will look for only ARM 32 bit syscall jump tables')
         if self.os_type =='WIN7':
             self.param = winKParams.WinKParams()
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
@@ -122,6 +139,7 @@ class GetKernelParams():
         self.page_hap2 = None
         self.prev_instruct = ''
         self.current_task_phys = None
+        # TBD remove unistd from here, only passed because taskutils cannot handle none
         self.unistd = comp_dict[self.target]['RESIM_UNISTD']
         self.unistd32 = None
         if 'RESIM_UNISTD_32' in comp_dict[self.target]:
@@ -155,6 +173,9 @@ class GetKernelParams():
 
         # another hack.  if the kernel entry we find early are sysenter, use fs, otherwise it is a fools errand.
         self.ignore_fs = False
+ 
+        # yah to avoid mode change haps while skipping around 
+        self.ignore_mode = False
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -366,6 +387,7 @@ class GetKernelParams():
             self.lgr.debug('gsEnableReverse back from gsFindAlone')
 
     def currentTaskStopHap(self, dumb, one, exception, error_string):
+        # stop hap when stopped from task mode change
         self.lgr.debug('currentTaskStopHap')
         if self.current_task_stop_hap is None:
             self.lgr.debug('currentTaskStopHap, hap was gone, bail')
@@ -652,6 +674,7 @@ class GetKernelParams():
         self.lgr.debug('back from getInit, now call checkTasks')
         self.checkTasks()
         self.lgr.debug('back from checkTasks')
+        print('back from checkTasks, now check kernel entry')
         ''' get kernel entry points/exits '''
         #SIM_run_alone(self.checkKernelEntry, None)
         self.checkKernelEntry(None)
@@ -891,17 +914,20 @@ class GetKernelParams():
         
    
     def entryModeChangedARM(self, dumb, one, old, new):
+        if self.ignore_mode:
+            return
         if self.entry_mode_hap is None:
             return
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         #self.lgr.debug('entryModeChanged ARM, pc is  0x%x ' % (eip))
-        if old == Sim_CPU_Mode_Supervisor:
+        if old == Sim_CPU_Mode_Supervisor and new == Sim_CPU_Mode_User:
             #self.lgr.debug('entryModeChanged ARM, supervisor  mode')
             ''' leaving kernel, capture address, note instruction cannot be read '''
             if eip not in self.hits:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if instruct[1] == '<illegal memory mapping>':
-                    self.lgr.debug('entryModeChangedARM, nothing mapped at eip 0x%x ' % (eip))
+                    #self.lgr.debug('entryModeChangedARM, nothing mapped at eip 0x%x ' % (eip))
+                    pass
                 if self.param.arm_ret is None:
                     self.lgr.debug('entryModeChangedARM, think arm_ret is 0x%x' % eip)
                     self.param.arm_ret = eip
@@ -917,7 +943,7 @@ class GetKernelParams():
             #if self.param.page_table is None:
             #    self.param.page_table = self.getPageTableDirectory()
             self.dumb_count += 1
-            self.lgr.debug('entryModeChanged ARM, user mode pc 0x%x' % eip)
+            self.lgr.debug('entryModeChanged ARM, from user mode pc 0x%x' % eip)
             '''
             if self.cpu.architecture == 'arm64':
                 # while the pc register reflects the user eip, the translation logic thinks we are in pl0 and thus breaks.  Simics model issue?
@@ -929,6 +955,9 @@ class GetKernelParams():
             else:
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             '''
+            if self.cpu.architecture == 'arm64' and not self.isSyscall():
+                self.lgr.debug('entryModeChanged ARM, from user mode but not syscall, bail')
+                return
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('entryModeChanged ARM, user mode instruct %s' % instruct[1])
             if self.param.arm_entry is None and instruct[1].startswith('svc 0'):
@@ -941,8 +970,8 @@ class GetKernelParams():
                 self.prev_instruct = instruct[1]
                 self.lgr.debug('entryModeChanged ARM found svc 9999..')
                 SIM_break_simulation('entryModeChanged found svc 9999')
-            if self.param.arm_entry is None and instruct[1].startswith('<illegal'):
-                self.lgr.debug('mode changed old %d  new %d eip: 0x%x armv8 broken?' % (old, new, eip))
+            if (self.param.arm_entry is None or self.param.arm64_entry is None) and instruct[1].startswith('<illegal'):
+                self.lgr.debug('mode changed old %d  new %d eip: 0x%x armv8 cannot get user instruction from kernel mode' % (old, new, eip))
                 self.prev_instruct = 'broken'
                 self.lgr.debug('entryModeChanged ARM must be armv8, stop simulation')
                 SIM_break_simulation('entryModeChanged stop simulation')
@@ -1098,7 +1127,6 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.task_hap = None
         self.stop_hap = None
-        self.computeStopHap = None
         count = 0
         if self.cpu.architecture == 'arm':
             prefix = 'ldrcc pc, [r8, r7, LSL #2]'
@@ -1124,6 +1152,7 @@ class GetKernelParams():
             ''' do not need to fix up stack frame eip offset for arm, go right to page faults '''
             SIM_run_alone(self.setPageFaultHap, None)
         elif self.cpu.architecture == 'arm64':
+            # Need to get values for 32 and 64 bit apps.  TBD override switch for just one of them 
             print('arm64 compute.  walk forward to find computed jump')
             self.lgr.debug('arm64 compute.  walk forward to find computed jump')
             # x20 is the syscall number.  
@@ -1140,16 +1169,31 @@ class GetKernelParams():
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('stepCompute arm64 pc 0x%x  %s' % (eip, instruct[1]))
                 if instruct[1].startswith(prefix):
-                    self.param.syscall_compute = eip
+                    #self.param.syscall_compute = eip
                     print(instruct[1])
-                    self.param.syscall_jump = self.mem_utils.getRegValue(self.cpu, 'x22')
-                    self.lgr.debug('got compute at 0x%x jump constant is 0x%x  %s' % (eip, self.param.syscall_jump, instruct[1]))
+                    esr_el1 = self.getEL1()
+                    if esr_el1 == 0x11:
+                        self.param.syscall_jump = self.mem_utils.getRegValue(self.cpu, 'x22')
+                        self.lgr.debug('got compute at 0x%x jump constant for 32 bit is 0x%x  %s' % (eip, self.param.syscall_jump, instruct[1]))
+                    elif esr_el1 == 0x15:
+                        self.param.syscall64_jump = self.mem_utils.getRegValue(self.cpu, 'x22')
+                        self.lgr.debug('got compute at 0x%x jump constant for 64 bit is 0x%x  %s' % (eip, self.param.syscall64_jump, instruct[1]))
+                    else:
+                        self.lgr.error('arm64 compute esr_el1 not for syscall? 0x%x' % esr_el1)
+                        return
                     break
                 count += 1
                 if count > 1000:
                     self.lgr.error('failed to find compute %s  for ARM64' % prefix)
-            ''' armv8 page fault entry is same as syscall entry, call it done'''
-            self.saveParam()
+                    SIM_break_simulation('failed to find compute %s for ARM64' % prefix)
+                    return
+            # assumes we look for arm32 first if it was needed.
+            if self.want_arm64 and self.param.syscall64_jump is None:
+                self.lgr.debug('stepCompute got arm32 now look for arm64 compute')
+                self.findCompute()
+            else:
+                ''' armv8 page fault entry is same as syscall entry, call it done'''
+                self.saveParam()
         elif self.os_type == 'WIN7':
             # looks like  cs:0xfffff800034f1e1d p:0x0034f1e1d  movsx r11,dword ptr [r10+rax*4]
             #             cs:0xfffff800034f1e24 p:0x0034f1e24  sar r11,4
@@ -1238,6 +1282,15 @@ class GetKernelParams():
         self.lgr.debug('computeStopHap')
         SIM_run_alone(self.stepCompute, compat32)
 
+    def isSyscall(self):
+        reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+        reg_value = self.cpu.iface.int_register.read(reg_num)
+        reg_value = reg_value >> 26
+        if reg_value == 0x11 or reg_value == 0x15:
+            return True
+        else:
+            return False
+
     def computeDoStop(self, compat32, third, forth, memory):
         # entered via break at kernel entry address
         if self.cpu.architecture != 'arm' and self.os_type == 'WIN7':
@@ -1251,11 +1304,13 @@ class GetKernelParams():
         if self.cpu.architecture == 'arm64':
             # armv8 syscalls and page faults all come in via same kernel address.  Uses esr_el1
             # to determine which?
-            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
-            reg_value = self.cpu.iface.int_register.read(reg_num)
-            reg_value = reg_value >> 26
-            if reg_value == 0x11:
-                self.lgr.debug('computeDoStop arm64 looks like syscall now call computeDoStopAlone')
+            
+            esr_el1 = self.getEL1()
+            if esr_el1 == 0x11 and self.param.syscall_jump is None:
+                self.lgr.debug('computeDoStop arm64 looks like 32 bit syscall and we do not yet have syscall_jump, now call computeDoStopAlone')
+                SIM_run_alone(self.computeDoStopAlone, compat32)
+            elif esr_el1 == 0x15 and self.param.syscall64_jump is None:
+                self.lgr.debug('computeDoStop arm64 looks like 64 bit syscall and we do not yet have syscall64_jump, now call computeDoStopAlone')
                 SIM_run_alone(self.computeDoStopAlone, compat32)
             else:
                 self.lgr.debug('computeDoStop arm64 not a syscall')
@@ -1281,10 +1336,16 @@ class GetKernelParams():
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.testComputeHap, None, self.task_break)
 
     def findCompute(self, compat32=False):
+        # find value(s) needed to compute jump table destination of system calls.
         #cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('findCompute')
         if self.cpu.architecture.startswith('arm'):
-            self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+            if self.want_arm32 and self.param.syscall_jump is None:
+                print('Looking for ARM 32-bit app syscall jump table computation.  Cause an arm32 syscall to happen.')
+                self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+            elif self.want_arm64 and self.param.syscall64_jump is None:
+                print('Looking for ARM 64-bit app syscall jump table computation.  Cause an arm64 syscall to happen.')
+                self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
             self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.computeDoStop, compat32, self.task_break)
             self.lgr.debug('findCompute task break set on 0x%x' % self.param.arm_entry)
         else:
@@ -1406,7 +1467,15 @@ class GetKernelParams():
                 self.getWinEntries()
         self.lgr.debug('entryStopHapWin cycles 0x%x hack_cycles 0x%x' % (self.cpu.cycles, self.hack_cycles))
 
+    def getEL1(self):
+        reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+        reg_value = self.cpu.iface.int_register.read(reg_num)
+        reg_value = reg_value >> 26
+        return reg_value
+
     def entryArmAlone(self, dumb):
+        # we entered supervisor on arm from what we think is a syscall.  record syscall address
+        # NOTE returns
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         call_num = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -1420,24 +1489,48 @@ class GetKernelParams():
             self.param.arm_entry = eip 
             self.param.arm_svc = True
         elif self.param.arm_entry is None and self.prev_instruct.startswith('broken'): 
-            self.lgr.debug('entryStopHapARM broken, try back one')
+            esr_el1 = self.getEL1()
+            caller = None
+            if esr_el1 == 0x11 :
+                if self.param.arm_entry is not None:
+                    SIM_run_command('continue')
+                    return
+                caller = 'aarch32'
+            elif esr_el1 == 0x15: 
+                if self.param.arm64_entry is not None:
+                    SIM_run_command('continue')
+                    return
+                caller = 'aarch64'
+            else:
+                self.lgr.debug('entryStopHapARM esr_el1 0x%x, not syscall?, bail' % esr_el1)
+                SIM_run_command('continue')
+                return
+            self.lgr.debug('entryStopHapARM arm64 do not yet know previous instruction, try back one')
+            # hack to skip mode haps while we skip
+            self.ignore_mode = True
             here = self.cpu.cycles 
             prev = self.cpu.cycles - 1
             resimUtils.skipToTest(self.cpu, prev, self.lgr)
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('entryStopHapARM went back one eip now 0x%x' % eip)
+            self.lgr.debug('entryStopHapARM went back one eip now 0x%x caller %s' % (eip, caller))
             prev_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            if not prev_instruct[1].startswith('svc 0'):
+            if not prev_instruct[1].startswith('svc 0') and not prev_instruct[1].startswith('svc #0x0'):
                 self.lgr.debug('entryStopHapARM user instruct at 0x%x is %s NOT svc, so continue' % (eip, prev_instruct[1]))
+                self.ignore_mode = False
                 SIM_run_command('continue')
                 return
             else:
                 resimUtils.skipToTest(self.cpu, here, self.lgr)
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-                self.param.arm_entry = eip 
-                self.lgr.debug('entryStopHapARM set arm_entry for v8 to 0x%x' % eip) 
+                if caller == 'aarch32':
+                    self.param.arm_entry = eip 
+                    self.lgr.debug('entryStopHapARM set arm_entry for v8 to 0x%x' % eip) 
+                else:
+                    self.param.arm64_entry = eip 
+                    self.lgr.debug('entryStopHapARM set arm64_entry for v8 to 0x%x' % eip) 
+            self.ignore_mode = False
             
-        if self.param.arm_entry is not None and self.param.arm_ret is not None and self.param.arm_ret2 is not None:
+        if self.param.arm_entry is not None and self.param.arm64_entry is not None and self.param.arm_ret is not None and (self.param.arm_ret2 is not None or self.cpu.architecture == 'arm64'):
             self.deleteHaps(None)
             self.lgr.debug('kernel entry and exits found')
 
@@ -1841,13 +1934,23 @@ class GetKernelParams():
         return False
 
     def taskModeChangedArm64(self, cpu, one, old, new):
-         self.lgr.debug('taskModeChangedARM64')
-         ''' will piggy back on the currentTaskStopHap'''
-         SIM_run_alone(self.delTaskModeAlone, None)
-         self.arm64_hap = True
-         self.param.current_task = None
-         self.lgr.debug('taskModeChangedARM64, now break')
-         SIM_break_simulation('arm64 stop')
+        if new == Sim_CPU_Mode_Hypervisor or old == Sim_CPU_Mode_Hypervisor:
+            return  
+        if new == Sim_CPU_Mode_User:
+            return  
+        self.lgr.debug('taskModeChangedArm64 old %d new %d' % (old, new))
+        reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+        reg_value = self.cpu.iface.int_register.read(reg_num)
+        reg_value = reg_value >> 26
+        if reg_value != 0x11 and reg_value != 0x15:
+            self.lgr.debug('taskModeChangedArm64 supervisor, but not syscall, bail')
+            return
+        ''' will piggy back on the currentTaskStopHap'''
+        SIM_run_alone(self.delTaskModeAlone, None)
+        self.arm64_hap = True
+        self.param.current_task = None
+        self.lgr.debug('taskModeChangedARM64 looks like syscall, now break')
+        SIM_break_simulation('arm64 stop')
 
     def getARM64Task(self, dumb):
         self.deleteHaps(None)

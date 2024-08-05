@@ -255,8 +255,7 @@ class SharedSyscall():
             my_exit_tids[exit_eip3].append(tid)
 
         if exit_info is not None:
-            callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
-            if callname == 'execve':
+            if exit_info.callname == 'execve':
                 self.addPendingExecve(tid)
         else:
             self.lgr.debug('exit_info was None for name: %s' % name)
@@ -295,7 +294,7 @@ class SharedSyscall():
             trace_msg = '\treturn from socketcall %s tid:%s (%s), ' % (socket_callname, tid, comm)
             err_trace_msg = '\terror return from socketcall %s tid:%s (%s) ' % (socket_callname, tid, comm)
         else:
-            socket_callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32) 
+            socket_callname = exit_info.callname
             socket_syscall = self.top.getSyscall(self.cell_name, socket_callname)
             trace_msg = '\treturn from %s tid:%s (%s), ' % (socket_callname, tid, comm)
             err_trace_msg = '\terror return from %s tid:%s (%s) ' % (socket_callname, tid, comm)
@@ -730,7 +729,7 @@ class SharedSyscall():
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
-        callname = self.task_utils.syscallName(exit_info.callnum, exit_info.compat32)
+        callname = exit_info.callname
         #self.lgr.debug('exitHap cell %s callnum %d name %s  tid %s ' % (self.cell_name, exit_info.callnum, callname, tid))
         trace_msg = '\treturn from %s tid:%s (%s), ' % (callname, tid, comm)
         err_trace_msg = '\terror return from %s tid:%s (%s) ' % (callname, tid, comm)

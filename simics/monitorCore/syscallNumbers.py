@@ -3,8 +3,11 @@ class SyscallNumbers():
     def __init__(self, fpath, lgr):
         self.syscalls = {}
         self.callnums = {}
+        self.lgr = lgr
         if fpath.endswith('ia64.tbl'):
             self.fromTbl(fpath)
+        elif fpath.endswith('arm64.tbl'):
+            self.fromArm64Tbl(fpath)
         else:
             self.fromInclude(fpath)
 
@@ -16,6 +19,27 @@ class SyscallNumbers():
                 name = parts[1].strip()
                 self.syscalls[callnum] = name
                 self.callnums[name] = callnum
+
+    def fromArm64Tbl(self, fpath):
+        with open(fpath) as fh:
+            for line in fh:
+                parts = line.split()
+                try:
+                    callnum = int(parts[0])
+                except:
+                    continue
+                name = parts[1].strip()
+                self.syscalls[callnum] = name
+                self.callnums[name] = callnum
+        if 'open' not in self.callnums:
+            # ug
+            if 'openat' in self.callnums:
+                callnum = self.callnums['openat']
+                self.callnums['open'] = callnum
+                self.syscalls[callnum] = ['open']
+            else:
+                self.lgr.error('SyscallNumbers no open???')
+                self.lgr.error('%s' % str(self.callnums))
 
     def fromInclude(self, fpath):
         hackvals = {}

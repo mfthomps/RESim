@@ -66,6 +66,7 @@ def writePhysBytes(cpu, paddr, data):
 
 
 def getCPL(cpu):
+    # return RESim cpl value (0 = kernel)
     #print('arch %s' % cpu.architecture)
     if cpu.architecture == 'arm':
         ''' TBD FIX this! '''
@@ -127,6 +128,13 @@ param_map['arm']['param3'] = 'r2'
 param_map['arm']['param4'] = 'r3'
 param_map['arm']['param5'] = 'r4'
 param_map['arm']['param6'] = 'r5'
+param_map['arm64'] = {}
+param_map['arm64']['param1'] = 'x0'
+param_map['arm64']['param2'] = 'x1'
+param_map['arm64']['param3'] = 'x2'
+param_map['arm64']['param4'] = 'x3'
+param_map['arm64']['param5'] = 'x4'
+param_map['arm64']['param6'] = 'x5'
 param_map['x86_64'] = {}
 param_map['x86_64']['param1'] = 'rdi'
 param_map['x86_64']['param2'] = 'rsi'
@@ -181,6 +189,22 @@ class MemUtils():
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
         self.ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
+        self.arm_regs = []
+        for i in range(13):
+            r = 'r%d' % i
+            self.arm_regs.append(r)
+        self.arm_regs.append('sp')
+        self.arm_regs.append('pc')
+        self.arm_regs.append('lr')
+
+        self.arm64_regs = []
+        for i in range(31):
+            r = 'x%d' % i
+            self.arm64_regs.append(r)
+        self.arm64_regs.append('pc')
+        self.arm64_regs.append('sp_el0')
+        self.arm64_regs.append('sp_el1')
+
         self.regs = {}
         self.lgr.debug('memUtils init. cell %s word size %d  arch is %s' % (cell_name, word_size, arch))
         if arch == 'x86-64':
@@ -196,7 +220,7 @@ class MemUtils():
             self.regs['this'] = self.regs['ecx']
             self.regs['pc'] = self.regs['eip']
             self.regs['sp'] = self.regs['esp']
-        elif arch == 'arm' or arch == 'arm64':
+        elif arch == 'arm':
             for i in range(13):
                 r = 'R%d' % i
                 self.regs[r] = r
@@ -205,12 +229,12 @@ class MemUtils():
             self.regs['lr'] = 'lr'
             self.regs['cpsr'] = 'cpsr'
             self.regs['syscall_num'] = 'r7'
-            if arch == 'arm':
-                self.regs['syscall_ret'] = 'r0'
-            else:
-                self.regs['syscall_ret'] = 'x0'
+            self.regs['syscall_ret'] = 'r0'
             self.regs['eip'] = 'pc'
             self.regs['esp'] = 'sp'
+        elif arch == 'arm64':
+            # will use arm_regs
+            pass
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
        
@@ -227,6 +251,8 @@ class MemUtils():
         if reg.upper() in self.regs:
             return True
         elif reg.lower() in self.regs:
+            return True
+        elif reg.lower() in self.arm64_regs:
             return True
         else:
             self.lgr.debug('reg not in %s' % self.regs)
@@ -396,7 +422,7 @@ class MemUtils():
             retval = None
         
         if cpl == 0 and (retval is None or retval == 0):
-            #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+            #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x arch: %s' % (cpl, v, cpu.architecture))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
@@ -618,7 +644,9 @@ class MemUtils():
             word_size = self.WORD_SIZE
         if cpu.architecture == 'arm':
             #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
-            regs = self.regs.keys()
+            regs = self.arm_regs.keys()
+        if cpu.architecture == 'arm64':
+            regs = self.arm64_regs.keys()
         elif word_size == 8:
             ''' check for 32-bit compatibility mode '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
@@ -706,7 +734,9 @@ class MemUtils():
             return None
 
     def getRegValue(self, cpu, reg):
+        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
         reg_value = None
+        reg_num = None
         if reg.startswith('xmm'):
             h_l = None
             if reg.endswith('L'):
@@ -720,13 +750,73 @@ class MemUtils():
                 reg_value = cpu.xmm[index][h_l]
                 self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
         else:     
-            if reg in self.regs:
-                reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-                #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
+            if cpu.architecture != 'arm64':
+                if reg in self.regs:
+                    reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+                    #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
+                else:
+                    reg_num = cpu.iface.int_register.get_number(reg)
             else:
-                reg_num = cpu.iface.int_register.get_number(reg)
-            reg_value = cpu.iface.int_register.read(reg_num)
+                if reg in self.arm64_regs or reg in self.arm_regs:
+                    # simply use name of register
+                    reg_num = cpu.iface.int_register.get_number(reg)
+                elif reg in ['eip']:
+                    reg_num = cpu.iface.int_register.get_number('pc')
+                elif reg == 'syscall_ret':
+                    if cpu.in_aarch64:
+                        reg_num = cpu.iface.int_register.get_number('x0')
+                    else:
+                        reg_num = cpu.iface.int_register.get_number('r0')
+                else:
+                    # depends.  may be syscall_num, param reg or such.   We don't know if app is 32 or 64 bits.
+                    # If in user space then just rely on cpu.in_aarch64.  Otherwise, assume we came in via a syscall
+                    # and the esr_el1 reg tells us whether app was 32 or 64.
+                    self.lgr.debug('getRegValue look for reg %s, if in kernel, expecting via syscall' % reg)
+                    arm64_app = self.arm64App(cpu)
+                    if reg == 'syscall_num':
+                        if arm64_app:
+                            reg_num = cpu.iface.int_register.get_number('x8')
+                        else:
+                            reg_num = cpu.iface.int_register.get_number('r7')
+                    elif reg.startswith('param'):
+                        if arm64_app:
+                            reg_num = cpu.iface.int_register.get_number(param_map['arm64'][reg])
+                        else:
+                            reg_num = cpu.iface.int_register.get_number(param_map['arm'][reg])
+                    elif reg == 'sp_usr':
+                        reg_num = cpu.iface.int_register.get_number('x15')
+                    elif reg == 'lr_usr':
+                        reg_num = cpu.iface.int_register.get_number('x14')
+                    else:
+                        self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
+            if reg_num is not None:
+                reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
+
+    def arm64App(self, cpu):
+        arm64_app = True
+        if getCPL(cpu) == 0:
+            reg_num = cpu.iface.int_register.get_number('esr_el1')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            esr_el1_shifted = reg_value >> 26
+            #print('esr_el1_shifted is 0x%x' % esr_el1_shifted)
+            if esr_el1_shifted == 0x15:
+                # arm64 app
+                #self.lgr.debug('arm64App is arm64 call from 64')
+                pass
+            elif esr_el1_shifted == 0x11:
+                # arm32 app
+                #self.lgr.debug('arm64App is arm64 call from 32')
+                arm64_app = False
+            else:
+                self.lgr.error('arm64App in kernel but not via a syscall? esr_el1 is 0x%x' % esr_el1_shifted)
+                SIM_break_simulation('remove this')
+                return False
+        else:
+            # in user space, rely on in_aarch64
+            if not cpu.in_aarch64:
+                arm64_app = False 
+        return arm64_app
 
     def kernelArch(self, cpu):
         if cpu == 'arm':
@@ -1222,3 +1312,13 @@ class MemUtils():
         reg_num = cpu.iface.int_register.get_number("cr3")
         current_cr3 = cpu.iface.int_register.read(reg_num)
         return current_cr3
+
+    def getCallRetReg(self, cpu):
+        if cpu.architecture == 'arm64':
+            if cpu.in_aarch64:
+                retval = 'x0'
+            else:
+                retval = 'r0'
+        else:
+            retval = self.regs['syscall_ret']
+        return retval

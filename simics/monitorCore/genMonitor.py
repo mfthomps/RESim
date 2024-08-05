@@ -598,8 +598,10 @@ class GenMonitor():
             return
         if new == Sim_CPU_Mode_Supervisor:
             new_mode = 'kernel'
-        else:
+        elif new == Sim_CPU_Mode_User:
             new_mode = 'user'
+        else:
+            new_mode = 'hypervisor'
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         phys = self.mem_utils[self.target].v2p(cpu, eip)
         callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
@@ -615,8 +617,10 @@ class GenMonitor():
                 elif eip == self.param[self.target].sysexit:
                     reason = "sysexit"
                 self.lgr.debug('modeChangeReport returned to user from eip 0x%x %s reason: %s' % (eip, instruct[1], reason))
-            else:
+            elif new_mode == 'kernel':
                 self.lgr.debug('modeChangeReport entering kernel from eip 0x%x %s ' % (eip, instruct[1]))
+            else:
+                self.lgr.debug('modeChangeReport entering hypervisor from eip 0x%x %s ' % (eip, instruct[1]))
                 
         else:
             self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
@@ -630,11 +634,14 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
         if new == Sim_CPU_Mode_Supervisor:
             mode = 0
-        else:
+        elif new == Sim_CPU_Mode_User:
             mode = 1
             if cpu.architecture == 'arm64' and cpu.in_aarch64:
                 self.lgr.debug('modeChanged arm64 in user space with aarch64, not yet handled, bail')
                 return
+        else:
+            # hypervisor
+            return
         dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         ''' note may both be None due to failure of getProc '''
         if this_tid not in tid_list:
@@ -1911,8 +1918,12 @@ class GenMonitor():
         eip = self.mem_utils[target].getRegValue(cpu, 'eip')
         return eip
 
-    def getReg(self, reg, cpu):
-        target = self.cell_config.cpu_cell[cpu]
+    def getReg(self, reg, cpu=None):
+        if cpu is None:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            target = self.target
+        else:
+            target = self.cell_config.cpu_cell[cpu]
         value = self.mem_utils[target].getRegValue(cpu, reg)
         #self.lgr.debug('debugGetReg for %s is %x' % (reg, value))
         return value
