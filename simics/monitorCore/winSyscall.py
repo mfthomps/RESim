@@ -520,7 +520,7 @@ class WinSyscall():
         Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
         syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
         '''
-        exit_info = syscall.ExitInfo(self, cpu, tid, callnum, None, frame)
+        exit_info = syscall.ExitInfo(self, cpu, tid, callnum, callname, None, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         trace_msg = None
         frame_string = taskUtils.stringFromFrame(frame)
@@ -1572,7 +1572,7 @@ class WinSyscall():
 
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[tid])
 
-            exit_info = syscall.ExitInfo(self, self.cpu, tid, callnum, syscall_info.compat32, frame)
+            exit_info = syscall.ExitInfo(self, self.cpu, tid, callnum, callname, syscall_info.compat32, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
