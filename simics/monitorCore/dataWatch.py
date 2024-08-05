@@ -1055,7 +1055,7 @@ class DataWatch():
             next_instruct = SIM_disassemble_address(self.cpu, next_ip, 1, 0)
             if next_instruct[1].startswith('str'):
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                if op1 == self.mem_utils.regs['syscall_ret']:
+                if op1 == self.mem_utils.getCallRetReg(self.cpu):
                     #self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
                     addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
                     if addr is not None:
@@ -2867,7 +2867,7 @@ class DataWatch():
         reg_values = {}
         if fun is not None:
                 self.lgr.debug('dataWatch checkNTOHL is %s' % fun)
-                our_reg = self.mem_utils.regs['syscall_ret']
+                our_reg = self.mem_utils.getCallRetReg(self.cpu)
                 next_instruct = instruct
                 for i in range(5):
                     next_ip = next_ip + next_instruct[0]
@@ -3357,7 +3357,7 @@ class DataWatch():
         See if this value is passed to some function of interest.
         '''
         eip = self.top.getEIP(self.cpu)
-        our_reg = self.mem_utils.regs['syscall_ret']
+        our_reg = self.mem_utils.getCallRetReg(self.cpu)
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.lgr.debug('dataWatch lookPushedReg cycle 0x%x' % self.cpu.cycles)
         instruct = SIM_disassemble_address(self.cpu, self.mem_something.called_from_ip, 1, 0)
@@ -3377,7 +3377,7 @@ class DataWatch():
             self.transform_push_hap = None
             eip = self.top.getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            our_reg = self.mem_utils.regs['syscall_ret']
+            our_reg = self.mem_utils.getCallRetReg(self.cpu)
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.lgr.debug('dataWatch transformPushHap call loopAdHoc?? recurs?')
             adhoc = self.loopAdHoc(self.move_stuff.addr, self.move_stuff.trans_size, self.move_stuff.start, self.move_stuff.length, 
