@@ -763,6 +763,10 @@ class MemUtils():
                 if reg in self.arm64_regs or reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
+                    if reg == 'r0':
+                        reg_value = cpu.iface.int_register.read(reg_num)
+                        self.lgr.debug('wtf reg %s num %d value 0x%x' % (reg, reg_num, reg_value))
+                    
                 elif reg in ['eip']:
                     reg_num = cpu.iface.int_register.get_number('pc')
                 elif reg == 'syscall_ret':
@@ -868,7 +872,7 @@ class MemUtils():
 
     def adjustParam(self, cpu):
 
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             return
 
         if self.WORD_SIZE == 4:

@@ -635,16 +635,15 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
-        if new == Sim_CPU_Mode_Supervisor:
+        if new == Sim_CPU_Mode_Hypervisor or old == Sim_CPU_Mode_Hypervisor:
+            return
+        elif new == Sim_CPU_Mode_Supervisor: 
             mode = 0
         elif new == Sim_CPU_Mode_User:
             mode = 1
-            if cpu.architecture == 'arm64' and cpu.in_aarch64:
-                self.lgr.debug('modeChanged arm64 in user space with aarch64, not yet handled, bail')
-                return
-        else:
-            # hypervisor
-            return
+            #if cpu.architecture == 'arm64' and cpu.in_aarch64:
+            #    self.lgr.debug('modeChanged arm64 in user space with aarch64, not yet handled, bail')
+            #    return
         dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         ''' note may both be None due to failure of getProc '''
         if this_tid not in tid_list:

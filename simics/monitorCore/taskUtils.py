@@ -906,23 +906,25 @@ class TaskUtils():
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
         elif self.cpu.architecture == 'arm64':
+            arm64_app = self.mem_utils.arm64App(self.cpu)
             if at_enter:
-                if self.mem_utils.arm64App(self.cpu):
+                if arm64_app:
                     prog_reg = 'x0'
                     arg_reg = 'x1'
                     addr_size = 8
-                    self.lgr.debug('getProcArgsFromStack is 64 bit app')
+                    self.lgr.debug('getProcArgsFromStack is arm 64 bit app')
                 else:
                     prog_reg = 'r0'
                     arg_reg = 'r1'
                     addr_size = 4
-                    self.lgr.debug('getProcArgsFromStack is 32 bit app')
+                    self.lgr.debug('getProcArgsFromStack is arm 32 bit app')
                 prog_addr = self.mem_utils.getRegValue(cpu, prog_reg)
                 argv = self.mem_utils.getRegValue(cpu, arg_reg)
+                self.lgr.debug('getProcArgsFromStack prog_addr 0x%x  argv 0x%x' % (prog_addr, argv))
+
             else:
-                x0 = self.mem_utils.getRegValue(self.cpu, 'x0')
-                prog_addr = self.mem_utils.readWord(self.cpu, x0)
-                argv = self.mem_utils.readWord(self.cpu, (x0+8))
+                prog_addr = self.mem_utils.getRegValue(self.cpu, 'x0')
+                argv = prog_addr+0
                 addr_size = 8
                 self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
             while not done and i < limit:
@@ -1193,7 +1195,6 @@ class TaskUtils():
     def syscallNumber(self, callname, compat32, arm64_app=None):
         if self.arm64:
             if arm64_app is None:
-                self.lgr.debug('taskUtils syscallNumber, eh?')
                 arm64_app = self.mem_utils.arm64App(self.cpu)
             if arm64_app:
                if callname in self.syscall_numbers.callnums:

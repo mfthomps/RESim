@@ -100,8 +100,9 @@ class TrackThreads():
         ''' One of the threads we are tracking is going its own way via an execve, stop watching it '''
         if self.execve_hap is None:
             return
-        
         cpu, comm, tid = self.task_utils.curThread() 
+        if tid == '0':
+            return
         if not self.context_manager.amWatching(tid):
             self.lgr.debug('TrackThreads  execveHap failed to find tid %s in context manager ' % (tid))
             self.parseExecve()

@@ -2275,7 +2275,7 @@ class Syscall():
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture.startswith('arm'):
                 if frame is None:
-                    if (self.cpu.architecture == 'arm64' and self.mem_utils.arm64App(self.cpu)):
+                    if (self.cpu.architecture == 'arm64'): 
                         frame = self.task_utils.frameArm64Computed()
                     else:
                         # aarch32 regs unmolested
@@ -2327,6 +2327,11 @@ class Syscall():
             self.callback()
             return
         cpu, comm, tid = self.task_utils.curThread() 
+        if tid == '0':
+            return
+        # TBD remove this?
+        if tid == '1':
+            return
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
