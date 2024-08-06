@@ -279,6 +279,9 @@ class Msghdr():
             limit = min(10, self.msg_iovlen)
             for i in range(limit):
                 base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                if base is None:
+                    iov_string = ' failed to get base from 0x%x' % iov_addr
+                    break
                 length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
                 iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
                 iov_addr = iov_addr+iov_size
