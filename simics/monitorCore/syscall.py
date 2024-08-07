@@ -1345,7 +1345,8 @@ class Syscall():
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
         elif socket_callname == "recvmsg": 
-            
+            #frame_string = taskUtils.stringFromFrame(frame)
+            #self.lgr.debug('recvmsg frame %s' % frame_string)
             if self.cpu.architecture.startswith('arm'):
                 exit_info.old_fd = frame['param1']
                 msg_hdr_ptr = frame['param2']
@@ -2330,8 +2331,8 @@ class Syscall():
         if tid == '0':
             return
         # TBD remove this?
-        if tid == '1':
-            return
+        #if tid == '1':
+        #    return
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
 
@@ -2394,8 +2395,8 @@ class Syscall():
             self.lgr.debug('syscallHap callnum is zero')
             return
         value = memory.logical_address
-        self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-             tid, comm, break_eip, value, callnum, callname, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
+        #self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
+        #     tid, comm, break_eip, value, callnum, callname, str(syscall_info.callnum), syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and tid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
