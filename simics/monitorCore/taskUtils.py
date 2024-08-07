@@ -152,10 +152,10 @@ class TaskUtils():
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
-                if cpu.architecture.startswith('arm'):
-                    phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
-                else:
-                    phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                #if cpu.architecture.startswith('arm'):
+                #    phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
+                #else:
                 if phys is not None:
                     pass
                     #self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
@@ -839,7 +839,7 @@ class TaskUtils():
         # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
-        self.lgr.debug('getProgArgsFromStack')
+        #self.lgr.debug('getProgArgsFromStack')
         mult = 0
         done = False
         arg_addr_list = []
@@ -847,7 +847,7 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            self.lgr.debug('getProgArgsFromStack word size 4')
+            #self.lgr.debug('getProgArgsFromStack word size 4')
             if cpu.architecture.startswith('arm'):
                 if cpu.architecture == 'arm':
                     prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
@@ -912,34 +912,34 @@ class TaskUtils():
                     prog_reg = 'x0'
                     arg_reg = 'x1'
                     addr_size = 8
-                    self.lgr.debug('getProcArgsFromStack is arm 64 bit app')
+                    #self.lgr.debug('getProcArgsFromStack is arm 64 bit app')
                 else:
                     prog_reg = 'r0'
                     arg_reg = 'r1'
                     addr_size = 4
-                    self.lgr.debug('getProcArgsFromStack is arm 32 bit app')
+                    #self.lgr.debug('getProcArgsFromStack is arm 32 bit app')
                 prog_addr = self.mem_utils.getRegValue(cpu, prog_reg)
                 argv = self.mem_utils.getRegValue(cpu, arg_reg)
-                self.lgr.debug('getProcArgsFromStack prog_addr 0x%x  argv 0x%x' % (prog_addr, argv))
+                #self.lgr.debug('getProcArgsFromStack prog_addr 0x%x  argv 0x%x' % (prog_addr, argv))
 
             else:
                 prog_addr = self.mem_utils.getRegValue(self.cpu, 'x0')
                 argv = prog_addr+0
                 addr_size = 8
-                self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
+                #self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
             while not done and i < limit:
                 #xaddr = argv + mult*self.mem_utils.WORD_SIZE
                 xaddr = argv + mult*addr_size
                 arg_addr = self.mem_utils.readAppPtr(cpu, xaddr, size=addr_size)
                 if arg_addr is not None and arg_addr != 0:
-                   self.lgr.debug("getProcArgsFromStack ARM64 (%d byte app) adding arg addr %x read from 0x%x" % (addr_size, arg_addr, xaddr))
+                   #self.lgr.debug("getProcArgsFromStack ARM64 (%d byte app) adding arg addr %x read from 0x%x" % (addr_size, arg_addr, xaddr))
                    arg_addr_list.append(arg_addr)
                 else:
                    done = True
                 mult = mult + 1
                 i = i + 1
         else:
-            self.lgr.debug('getProgArgsFromStack word size 8')
+            #self.lgr.debug('getProgArgsFromStack word size 8')
             # if swap, use rdx
             if not at_enter and self.param.x86_reg_swap:
                 use_reg = 'rdx'
@@ -948,10 +948,10 @@ class TaskUtils():
             reg_num = cpu.iface.int_register.get_number(use_reg)
             reg_val = cpu.iface.int_register.read(reg_num)
             prog_addr = self.mem_utils.readPtr(cpu, reg_val)
-            if prog_addr is not None:
-                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
-            else:
-                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
+            #if prog_addr is not None:
+            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
+            #else:
+            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
             i=0
             done = False
             while not done and i < 30:
@@ -971,12 +971,12 @@ class TaskUtils():
         #     argv, xaddr, saddr, arg2_string)
 
 
-        self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
+        #self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
         self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
         prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
         self.exec_addrs[tid].prog_name = prog_string
         self.exec_addrs[tid].arg_list = arg_string_list
-        self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
+        #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
         #if prog_string == 'cfe-poll-player':
         #    SIM_break_simulation('debug')
         #self.lgr.debug('args are %s' % str(arg_string_list))
