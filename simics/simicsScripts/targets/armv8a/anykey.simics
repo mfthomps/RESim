@@ -1,0 +1,49 @@
+# extracted from fvp-linux-setup to run separately after 
+# components are loaded as a PRE_INIT_SCRIPT
+decl {
+    params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+}
+$initrd_size = `VT_logical_file_size(SIM_lookup_file(simenv.initrd_image))`
+$initrd_end = $initrd_addr + $initrd_size
+script-branch {
+    local $l_system = $system
+    local $l_bl1_image = $bl1_image
+    local $l_bl1_addr = $bl1_addr
+    local $l_fip_image = $fip_image
+    local $l_fip_addr = $fip_addr
+    local $l_kernel_image = $kernel_image
+    local $l_kernel_addr = $kernel_addr
+    local $l_initrd_image = $initrd_image
+    local $l_initrd_addr = $initrd_addr
+    local $l_initrd_end = $initrd_end
+    local $l_fdt_addr = $fdt_addr
+    local $l_kernel_cmdline = $kernel_cmdline
+    local $con = $system.console0.con
+    while TRUE {
+        $l_system.phys_mem.load-file filename = $l_bl1_image    offset = $l_bl1_addr
+        $l_system.phys_mem.load-file filename = $l_fip_image    offset = $l_fip_addr
+        if ($l_system->classname == "armv8a_foundation_board") {
+            $l_system.phys_mem.load-file filename = $l_kernel_image offset = $l_kernel_addr
+            $l_system.phys_mem.load-file filename = $l_initrd_image offset = $l_initrd_addr
+        } else {
+            # The default state of the TZC-400 is to abort all accesses.
+            # Skip TZC-400 by writing into the output memory space directly.
+            $l_system.tzc_slave_space[0].load-file filename = $l_kernel_image offset = $l_kernel_addr
+            $l_system.tzc_slave_space[0].load-file filename = $l_initrd_image offset = $l_initrd_addr
+        }
+        bp.console_string.wait-then-write $con "Hit any key to stop autoboot:" "\n"
+        $con.input "setenv fdt_addr " + (hex $l_fdt_addr) + "\n"
+        $con.input "setenv kernel_addr " + (hex $l_kernel_addr) + "\n"
+        $con.input "setenv initrd_addr " + (hex $l_initrd_addr) + "\n"
+        $con.input "setenv initrd_end " + (hex $l_initrd_end) + "\n"
+        if ($l_kernel_cmdline != NIL) {
+            $con.input "setenv bootargs " + $l_kernel_cmdline + "\n"
+        }
+        $con.input "fdt addr $fdt_addr\n"
+        $con.input "fdt resize\n";
+        $con.input "fdt chosen $initrd_addr $initrd_end\n"
+        $con.input "booti $kernel_addr $initrd_addr $fdt_addr\n"
+    }
+}
+#echo "now run 5000 to get to anykey?"
+r 5000

@@ -1,0 +1,40 @@
+
+decl {
+    ! ARMv8-A Foundation FVP - Linux start script.
+    params from "%simics%/targets/armv8a-fvp/fvp-system.include"
+    #params from "fvp-system.include"
+        default create_sata_disk = FALSE
+        result system : string
+
+    params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+    #params from "fvp-linux-setup.include"
+        except system
+        default system_info = "ARMv8-A Foundation FVP Linux"
+        default auto_config_network = FALSE
+        result service_node : string or nil
+        result eth_link : string or nil
+    param mac_address_0 : string
+    param host_name : string
+    result eth0 : string
+    #result switch0_con : string
+    param sys_include : string
+    param setup_include : string
+}
+$num_cores=1
+
+run-command-file $sys_include
+#run-command-file "fvp-system.include"
+instantiate-components
+run-command-file $setup_include
+#run-command-file "fvp-linux-setup.include"
+#$system.mac->mac_address = $mac_address_0
+#$system.mac[1]->mac_address = $mac_address_1
+
+#$eth0 = $system.eth[0]
+#$eth1 = $system.eth[1]
+#$eth0 = $system.eth
+$eth0 = "None"
+
+#$switch0_con = (switch0.get-free-connector)
+
+

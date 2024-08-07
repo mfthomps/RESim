@@ -1,0 +1,93 @@
+decl {
+    ! Setup Linux on ARMv8-A FVP.
+
+    group "Components"
+
+    param system : string
+    ! The default system component.
+
+    group "System"
+
+    param auto_login : bool = TRUE
+    ! Automatically login root to prompt.
+
+    param system_info : string = ""
+    ! The machine system information, used in GUIs.
+
+    group "Runtime"
+
+    param bl1_image : file("*") 
+    ! BL1 image.
+
+    param fip_image : file("*") 
+    ! FIP image. DTB is embedded in fip.bin, use 'fiptool' to replace it.
+
+    param kernel_image : file("*") 
+    ! Kernel image.
+
+    param initrd_image : file("*") 
+    ! Initial ramdisk image.
+
+    param bl1_addr : int = 0x00000000
+    ! BL1 image load address.
+
+    param fip_addr : int = 0x08000000
+    ! FIP image load address.
+
+    param kernel_addr : int = 0x80080000
+    ! Kernel image load address.
+
+    param fdt_addr : int = 0x82000000
+    ! FDT load address.
+
+    param initrd_addr : int = 0x84000000
+    ! Initial ramdisk load address.
+
+    param kernel_cmdline : string or nil = NIL
+    ! Linux kernel command line arguments, passed via bootloader.
+
+    group "Networking"
+
+    params from "%simics%/targets/common/ethernet-setup.include"
+        except eth_connector
+        default create_network = TRUE
+        result service_node : string or nil
+        result eth_link : string or nil
+
+    param ip_address : string = "10.10.0.10"
+    ! The board IP address.
+
+    param auto_config_network : bool = FALSE
+    ! Configure the network in bootloader or/and OS.
+
+    param eth_name : string = "eth0"
+    ! The name of the default ethernet adapter.
+}
+
+$initrd_size = `VT_logical_file_size(SIM_lookup_file(simenv.initrd_image))`
+$initrd_end = $initrd_addr + $initrd_size
+
+foreach $cpu in ($system->cpu_list) {
+        $cpu.set-pc $bl1_addr
+}
+
+if ($system_info) {
+    $system->system_info = $system_info
+} else {
+    $system->system_info = "ARMv8-A FVP Linux"
+}
+
+if $create_network == TRUE {
+    $eth_connector = $system + ".eth"
+    run-command-file "%simics%/targets/common/ethernet-setup.include"
+}
+
+
+if ($create_network == TRUE) {
+    script-branch {
+        $con = $system.console0.con
+        if $auto_config_network == TRUE {
+            bp.console_string.wait-then-write $con "/ #" "ifconfig " + $eth_name + " " + $ip_address +" \n"
+        }
+    }
+}
