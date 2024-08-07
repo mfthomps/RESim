@@ -1209,7 +1209,7 @@ class WatchMarks():
         self.addWatchMark(lm, cycles=mark_cycle)
 
     def pushMark(self, src, dest, buf_start, length, ip):
-        pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.WORD_SIZE)
+        pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.wordSize(self.cpu))
         wm = self.addWatchMark(pm)
         return wm
 
