@@ -17,16 +17,15 @@ decl {
     param host_name : string
     result eth0 : string
     #result switch0_con : string
-    param sys_include : string
-    param setup_include : string
+    param resim_targets : string
 }
 $num_cores=1
 
+$sys_include = $resim_targets+"/armv8a/fvp-system.include"
+$setup_include = $resim_targets+"/armv8a/fvp-linux-setup.include"
 run-command-file $sys_include
-#run-command-file "fvp-system.include"
 instantiate-components
 run-command-file $setup_include
-#run-command-file "fvp-linux-setup.include"
 #$system.mac->mac_address = $mac_address_0
 #$system.mac[1]->mac_address = $mac_address_1
 
