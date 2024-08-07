@@ -982,7 +982,7 @@ class DataWatch():
                     write_fd = frame['param1']
                     iov_addr = frame['param2']
                     src = self.mem_utils.readPtr(self.cpu, iov_addr)
-                    count = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                    count = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
                 else:
                     write_fd = frame['param1']
                     count = eax
