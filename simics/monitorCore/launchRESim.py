@@ -389,7 +389,7 @@ class LaunchRESim():
             script = self.getSimicsScript(section)
             did_net_create = False
             #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
-            if platform == 'arm':
+            if platform in ['arm', 'arm5']:
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
                 params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
@@ -403,7 +403,7 @@ class LaunchRESim():
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
-                        if not platform.startswith('arm'):
+                        if platform is None or not platform.startswith('arm'):
                             if 'create_network' in name:
                                 did_net_create = True
                                 cmd = 'create_network=TRUE eth_link=%s' % value
