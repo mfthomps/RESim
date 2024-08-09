@@ -839,7 +839,7 @@ class TaskUtils():
         # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
-        #self.lgr.debug('getProgArgsFromStack')
+        #self.lgr.debug('getProcArgsFromStack tid:%s at_enter %r' % (tid, at_enter))
         mult = 0
         done = False
         arg_addr_list = []
@@ -847,7 +847,7 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            #self.lgr.debug('getProgArgsFromStack word size 4')
+            #self.lgr.debug('getProcArgsFromStack word size 4')
             if cpu.architecture.startswith('arm'):
                 if cpu.architecture == 'arm':
                     prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
@@ -923,10 +923,12 @@ class TaskUtils():
                 #self.lgr.debug('getProcArgsFromStack prog_addr 0x%x  argv 0x%x' % (prog_addr, argv))
 
             else:
-                prog_addr = self.mem_utils.getRegValue(self.cpu, 'x0')
-                argv = prog_addr+0
+                x0 = self.mem_utils.getRegValue(self.cpu, 'x0')
+                prog_addr = self.mem_utils.readPtr(cpu, x0)
+                argv = self.mem_utils.readPtr(cpu, (x0+8))
                 addr_size = 8
                 #self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
+                
             while not done and i < limit:
                 #xaddr = argv + mult*self.mem_utils.WORD_SIZE
                 xaddr = argv + mult*addr_size
@@ -939,7 +941,7 @@ class TaskUtils():
                 mult = mult + 1
                 i = i + 1
         else:
-            #self.lgr.debug('getProgArgsFromStack word size 8')
+            #self.lgr.debug('getProcArgsFromStack word size 8')
             # if swap, use rdx
             if not at_enter and self.param.x86_reg_swap:
                 use_reg = 'rdx'
