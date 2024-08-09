@@ -3212,16 +3212,17 @@ class DataWatch():
         
     def getNextInstruct(self, instruct, ip, flags, our_reg):        
         # look for branches we can satisfy and adjust instruction and ip accordingly
+        # TBD needs build out for arm
         next_ip = ip + instruct[0]
         next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
         mn = self.decode.getMn(next_instruct[1])
         self.lgr.debug('dataWatch getNextInstruct next_ip 0x%x next_instruc %s' % (next_ip, next_instruct[1]))
         jump_cycles = 1
-        while next_instruct[1].startswith('j'):
+        while next_instruct[1].startswith('j') or mn == 'b':
             jump_cycles =  jump_cycles+1
             # TBD move branch tests into single routine that returns next_ip and next_instruct
             self.lgr.debug('dataWatch getNextInstruct ip 0x%x instruc %s jump_cycles %d' % (next_ip, next_instruct[1], jump_cycles))
-            if next_instruct[1].startswith('jmp'):
+            if next_instruct[1].startswith('jmp') or mn == 'b':
                 parts = next_instruct[1].split()
                 if len(parts) == 2:
                     try:
