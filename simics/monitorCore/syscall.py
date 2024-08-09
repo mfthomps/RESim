@@ -2265,7 +2265,7 @@ class Syscall():
                 frame = self.task_utils.frameFromRegs()
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
-        elif break_eip == self.param.arm64_entry:
+        elif hasattr(self.param, 'arm64_entry') and break_eip == self.param.arm64_entry:
             exit_eip1 = self.param.arm_ret
             if frame is None:
                 frame = self.task_utils.frameFromRegs()
