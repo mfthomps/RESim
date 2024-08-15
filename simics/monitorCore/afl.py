@@ -188,6 +188,7 @@ class AFL():
 
         self.exit_syscall = None
 
+        self.did_page_faults = False
         self.test_file = test_file
         if target_proc is None:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
@@ -392,7 +393,7 @@ class AFL():
                         status = AFL_CRASH
                         break
             # why again and again?
-            self.page_faults.stopWatchPageFaults()
+            #self.page_faults.stopWatchPageFaults()
             self.top.clearExitTid()
             if status == AFL_CRASH:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
@@ -570,8 +571,10 @@ class AFL():
                 #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
                 self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                 self.write_data.watchIOCtl()
-        # TBD why again and again?
-        self.page_faults.watchPageFaults(afl=True)
+        if not self.did_page_faults: 
+            # TBD why again and again?
+            self.page_faults.watchPageFaults(afl=True)
+            self.did_page_faults = True
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()
