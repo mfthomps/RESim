@@ -1,0 +1,11 @@
+matplotlib
+IPython 
+devlib 
+jupyter 
+nose 
+pandas 
+pexpect 
+psutil 
+pyserial 
+trappy
+bart-py

@@ -1,0 +1,149 @@
+# ----- Build image for ARMv8-A FVP Foundation and base in docker container ----- #
+# Targets general-purpose ARMv8-A architecture
+# Simics documentation: /simics-doc/linux64/doc-index/target-guide-armv8a-fvp-images/simulated-machines.html#Building-Images-For-Armv8a-FVP-Foundation-
+# Simics script located in /targets/armv8a-fvp/
+
+# Build a docker image with ubuntu 18
+docker build -t armv8a_ubuntu18 .
+# Start container mounted to a shared folder
+mkdir shared
+docker run -it --mount type=bind,source="$(pwd)"/shared,target=/home/john/shared,readonly=false armv8a_ubuntu18
+
+# Enter shared folder in container
+cd home/john/shared
+
+# Clone git repository
+git clone https://git.linaro.org/landing-teams/working/arm/arm-reference-platforms.git
+cd arm-reference-platforms/
+
+# Add config for git:
+git config --global user.name "john"
+git config --global user.email "john@email.com"
+git config --global color.diff "auto"
+
+# Update sync_workspace.py: change pip2 to pip3 and python2 to python3
+
+# Start sync-workspace with no check for dependencies
+python3 sync_workspace.py --no_check_apt_dep
+
+'''
+## Please select a platform:
+
+ 1) Development boards               
+ 2) Corstone Foundation IP           
+ 3) DesignStart                      
+ 4) Fixed Virtual Platforms (FVPs)   
+
+> 4
+
+## Please select a platform:
+
+ 1) System Guidance      
+ 2) Armv8 architecture   
+
+> 2
+
+## Please select a platform:
+
+ 1) Armv8-A Base Platform      -- 11.3.30+ (Rev C)
+ 2) Armv8-A Foundation Model   -- 11.3.30+
+
+> 2
+
+## Please specify whether you want to:
+
+ 1) Build from source            
+ 2) Use prebuilt configuration   
+
+> 1
+
+## Please select an environment:
+
+ 1) Linux kernel & userspace filesystem   
+ 2) Other                                 
+
+> 1
+
+## Please select your kernel:
+
+ 1) Linaro/ArmLT Android Common Kernel   
+ 2) Linaro/ArmLT Latest Stable Kernel    
+
+> 2
+
+## Please select your filesystem:
+
+ 1) BusyBox        
+ 2) OpenEmbedded   
+
+> 1
+
+## Your chosen configuration is shown below:
+
+    +---------------+-----------------------------------------------------+
+    | Workspace     | /home/john/arm_share/arm-reference-platforms/       |
+    | Platform      | Armv8-A Foundation Model with 64-bit software stack |
+    | Type          | Build from source                                   |
+    | Release       | refs/tags/ARMLT-19.10                               |
+    | Configuration | Linaro/ArmLT Latest Stable Kernel + BusyBox         |
+    +---------------+-----------------------------------------------------+
+
+The following software components are included:
+
+    +-----------------------------------+
+    | Trusted Firmware-A                |
+    | OP-TEE                            |
+    | Linaro/ArmLT Latest Stable Kernel |
+    | BusyBox                           |
+    +-----------------------------------+
+
+## Proceed with this configuration?:
+
+ 1) Yes   
+ 2) No    
+
+> 1
+
+
+'''
+
+# Make build script executable
+chmod a+x build-scripts/build-all.sh
+
+# Check that flex is installed (neccessary for config)
+sudo apt install flex
+
+# Build images
+build-scripts/build-all.sh all
+
+# Location of images after build:
+'''
+bl1.bin: [workspace]/output/fvp/fvp-busybox/uboot/bl1.bin
+fip.bin: [workspace]/output/fvp/fvp-busybox/uboot/fip.bin
+Image: [workspace]/output/fvp/fvp-busybox/uboot/Image
+ramdisk.img: [workspace]/output/fvp/fvp-busybox/uboot/ramdisk.img
+'''
+
+# Embed the Firmware configuration files and the platform device trees file into fip.bin:
+# Location of dtb files:
+'''
+fvp_tb_fw_config.dtb: [workspace]/output/fvp/components/fvp/fvp_tb_fw_config.dtb
+fvp_soc_fw_config.dtb: [workspace]/output/fvp/components/fvp/fvp_soc_fw_config.dtb
+fvp_nt_fw_config.dtb: [workspace]/output/fvp/components/fvp/fvp_nt_fw_config.dtb
+foundation-v8-gicv3-psci.dtb: [workspace]/linux/out/fvp/mobile_bb/arch/arm64/boot/dts/arm/foundation-v8-gicv3-psci.dtb
+'''
+/arm-tf/tools/fiptool/fiptool update --tb-fw-config fvp_tb_fw_config.dtb fip.bin
+/arm-tf/tools/fiptool/fiptool update --soc-fw-config fvp_soc_fw_config.dtb fip.bin
+/arm-tf/tools/fiptool/fiptool update --nt-fw-config fvp_nt_fw_config.dtb fip.bin
+/arm-tf/tools/fiptool/fiptool update --hw-config foundation-v8-gicv3-psci.dtb fip.bin
+
+# To run the simulation on the base board instead of foundation,
+# update the fip file with the dtb file for base
+/arm-tf/tools/fiptool/fiptool update --hw-config fvp-base-aemv8a-aemv8a.dtb fip_baser.bin 
+
+# Run in simics:
+$bl1_image=bl1.bin
+$kernel_image=Image
+$fip_image=fip_foundation.bin
+$initrd_image=ramdisk.img
+run-command-file targets/armv8a-fvp/fvp-foundation-linux.simics
