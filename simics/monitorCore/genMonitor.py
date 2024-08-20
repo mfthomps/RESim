@@ -127,6 +127,10 @@ import pageCallbacks
 import loopN
 import spotFuzz
 import disassemble
+import vxKMonitor
+import vxKMemUtils
+import vxParam
+import vxKTaskUtils
 
 #import fsMgr
 import json
@@ -315,6 +319,9 @@ class GenMonitor():
         ''' catch-all for windows monitoring commands '''
         self.winMonitor = {}
 
+        ''' catch-all for vxWorks DKM monitoring commands '''
+        self.vxKMonitor = {}
+
         ''' Once data tracking seems to have completed, e.g., called goToDataMark,
             do not set debug related haps
         '''
@@ -408,7 +415,10 @@ class GenMonitor():
             for cell_name in comp_dict:
                 self.lgr.debug('genInit snapshot load target %s' % cell_name)
                 param_file = os.path.join('./', self.run_from_snap, cell_name, 'param.pickle')
-                if os.path.isfile(param_file):
+                # Ignore pickle file for vxworks (for now anyway)
+                if 'OS_TYPE' in comp_dict[cell_name] and comp_dict[cell_name]['OS_TYPE'].startswith('VXW'):
+                    self.param[cell_name] = vxParam.VxParam()
+                elif os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
 
@@ -471,6 +481,8 @@ class GenMonitor():
                 self.param[cell_name].ts_state = 0
 
                 self.lgr.debug(self.param[cell_name].getParamString())
+            elif 'OS_TYPE' in comp_dict[cell_name] and comp_dict[cell_name]['OS_TYPE'].startswith('VXW'):
+                self.lgr.debug('No params for vxworks yet.')
             elif cell_name not in self.param:
                 print('Cell %s missing params, it will not be monitored. ' % (cell_name))
                 self.lgr.debug('Cell %s missing params ' % (cell_name))
@@ -483,7 +495,10 @@ class GenMonitor():
                 self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 
             cpu = self.cell_config.cpuFromCell(cell_name)
-            self.mem_utils[cell_name] = memUtils.MemUtils(self, word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
+            if self.isVxDKM(cpu=cpu):
+                self.mem_utils[cell_name] = vxKMemUtils.VxKMemUtils(self.lgr)
+            else:
+                self.mem_utils[cell_name] = memUtils.MemUtils(self, word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
             if cell_name not in self.os_type:
                 # TBD move os type into params file so it need not be in the ini file?
                 self.lgr.error('Missing OS_TYPE for cell %s' % cell_name)
@@ -823,11 +838,11 @@ class GenMonitor():
             self.lgr.debug('finishInit for cell %s, cell.name: %s' % (cell_name, cell.name))
             #self.task_utils[cell_name] = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
             #      self.unistd[cell_name], self.run_from_snap, self.lgr)
- 
-            tu_cur_task_rec = self.task_utils[cell_name].getCurThreadRec()
-            if tu_cur_task_rec is None:
-                self.lgr.error('could not read tu_cur_task_rec from taskUtils')
-                return
+            if not self.isVxDKM(target=cell_name): 
+                tu_cur_task_rec = self.task_utils[cell_name].getCurThreadRec()
+                if tu_cur_task_rec is None:
+                    self.lgr.error('could not read tu_cur_task_rec from taskUtils')
+                    return
             self.traceMgr[cell_name] = traceMgr.TraceMgr(self.lgr)
             #if self.param[cell_name].fs_base is None:
             #    cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
@@ -884,6 +899,9 @@ class GenMonitor():
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
                                                self.syscallManager[cell_name], self.traceMgr[cell_name], self.traceProcs[cell_name], self.context_manager[cell_name], 
                                                self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.rev_to_call[cell_name], self.lgr)
+            elif self.isVxDKM(target=cell_name):
+                self.vxKMonitor[cell_name] = vxKMonitor.VxKMonitor(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
+                                               self.run_from_snap, self.comp_dict[cell_name], self.lgr)
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
@@ -929,6 +947,8 @@ class GenMonitor():
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                elif self.isVxDKM(target=cell_name):
+                    self.task_utils[cell_name] = vxKTaskUtils.VxKTaskUtils(cpu, cell_name, self.mem_utils[cell_name], self.comp_dict[cell_name], self.run_from_snap, self.lgr) 
                 else:
                     self.lgr.error('snapInit unknown os type %s for cell %s' % (self.os_type[cell_name], cell_name))
                     return
@@ -1416,22 +1436,22 @@ class GenMonitor():
             if cpl == 0:
                 self.lgr.warning('debug: not in user space, x86 32-bit compat mode may miss clones')
 
+            if not self.isVxDKM(cpu=cpu):
+                self.syscallManager[self.target].rmSyscall('runToText', immediate=True)
+                #if 'open' in self.call_traces[self.target]:
+                #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
+                self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
-            self.syscallManager[self.target].rmSyscall('runToText', immediate=True)
-            #if 'open' in self.call_traces[self.target]:
-            #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
-            self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
+                if self.track_threads is not None:
+                    # cheesy hack of setting dict to None if we don't want to track threads
+                    self.lgr.debug('genMonitor debug call trackThreads becuase the hack is not None')
+                    self.trackThreads()
+                    ''' By default, no longer watch for new SO files '''
+                    self.track_threads[self.target].stopSOTrack()
 
-            if self.track_threads is not None:
-                # cheesy hack of setting dict to None if we don't want to track threads
-                self.lgr.debug('genMonitor debug call trackThreads becuase the hack is not None')
-                self.trackThreads()
-                ''' By default, no longer watch for new SO files '''
-                self.track_threads[self.target].stopSOTrack()
+                self.watchPageFaults(tid)
 
-            self.watchPageFaults(tid)
-
-            self.sharedSyscall[self.target].setDebugging(True)
+                self.sharedSyscall[self.target].setDebugging(True)
             prog_name = self.getProgName(tid)
             if self.targetFS[self.target] is not None and prog_name is not None:
                 sindex = 0
@@ -1918,7 +1938,7 @@ class GenMonitor():
             if cpu is None:
                 cpu = self.cell_config.cpuFromCell(self.target)
         target = self.cell_config.cpu_cell[cpu]
-        eip = self.mem_utils[target].getRegValue(cpu, 'eip')
+        eip = self.mem_utils[target].getRegValue(cpu, 'pc')
         return eip
 
     def getReg(self, reg, cpu=None):
@@ -2762,17 +2782,20 @@ class GenMonitor():
             self.sharedSyscall[self.target].preserveExit()
 
         self.traceBufferTarget(target, msg='traceAll')
-        if self.isWindows():
-            self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
-            self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
-            self.run_to[target].watchSO()
-            return
 
         if target in self.trace_all:
             self.trace_all[target].setRecordFD(record_fd)
             print('Was tracing.  Limit to FD recording? %r' % (record_fd))
             self.lgr.debug('traceAll Was tracing.  Limit to FD recording? %r' % (record_fd))
         else:
+            if self.isWindows():
+                self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
+                self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
+                self.run_to[target].watchSO()
+                return
+            elif self.isVxDKM():
+                self.trace_all[target]= self.vxKMonitor[target].traceAll(record_fd=record_fd)
+
             context = self.context_manager[target].getDefaultContext()
             cell = self.cell_config.cell_context[target]
             tid, cpu = self.context_manager[target].getDebugTid() 
@@ -2788,32 +2811,34 @@ class GenMonitor():
                     tf = 'logs/syscall_trace-%s.txt' % target
                 else:
                     tf = trace_file
-                cpu, comm, tid = self.task_utils[target].curThread() 
-                self.trackThreads()
+                if not self.isVxDKM(target=target):
+                    cpu, comm, tid = self.task_utils[target].curThread() 
+                    self.trackThreads()
 
             self.traceMgr[target].open(tf, cpu)
-            if not self.context_manager[self.target].watchingTasks():
-                self.traceProcs[target].watchAllExits()
-            self.lgr.debug('traceAll, create syscall hap')
-            self.trace_all[target] = self.syscallManager[self.target].watchAllSyscalls(None, 'traceAll', trace=True, binders=self.binders, connectors=self.connectors,
-                                      record_fd=record_fd, linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok, call_params_list=call_params_list)
-
-            if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
-                ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
-                self.lgr.debug('traceAll running from snap, starting cycle')
-                p_file = os.path.join('./', self.run_from_snap, target, 'sharedSyscall.pickle')
-                if os.path.isfile(p_file):
-                    exit_info_list = pickle.load(open(p_file, 'rb'))
-                    if exit_info_list is None:
-                        self.lgr.error('traceAll No sharedSyscall pickle data found in %s' % p_file)
-                    else:
-                        self.lgr.debug('traceAll got sharedSyscall pickle len of exit_info %d' % len(exit_info_list))
-                        ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
-                        self.trace_all[target].setExits(exit_info_list, context_override = context)
-
-            frames = self.getDbgFrames()
-            self.lgr.debug('traceAll, call to setExits %d frames context %s' % (len(frames), context))
-            self.trace_all[target].setExits(frames, context_override=context)
+            if not self.isVxDKM(target=target):
+                if not self.context_manager[self.target].watchingTasks():
+                    self.traceProcs[target].watchAllExits()
+                self.lgr.debug('traceAll, create syscall hap')
+                self.trace_all[target] = self.syscallManager[self.target].watchAllSyscalls(None, 'traceAll', trace=True, binders=self.binders, connectors=self.connectors,
+                                          record_fd=record_fd, linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok, call_params_list=call_params_list)
+    
+                if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
+                    ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
+                    self.lgr.debug('traceAll running from snap, starting cycle')
+                    p_file = os.path.join('./', self.run_from_snap, target, 'sharedSyscall.pickle')
+                    if os.path.isfile(p_file):
+                        exit_info_list = pickle.load(open(p_file, 'rb'))
+                        if exit_info_list is None:
+                            self.lgr.error('traceAll No sharedSyscall pickle data found in %s' % p_file)
+                        else:
+                            self.lgr.debug('traceAll got sharedSyscall pickle len of exit_info %d' % len(exit_info_list))
+                            ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
+                            self.trace_all[target].setExits(exit_info_list, context_override = context)
+    
+                frames = self.getDbgFrames()
+                self.lgr.debug('traceAll, call to setExits %d frames context %s' % (len(frames), context))
+                self.trace_all[target].setExits(frames, context_override=context)
 
 
     def stopDebug(self, rev=False):
@@ -5958,6 +5983,16 @@ class GenMonitor():
             target = self.target
         #self.lgr.debug('isWindows os type of %s is %s' % (target, self.os_type[target]))
         if self.os_type[target].startswith('WIN'):
+            retval = True
+        return retval
+
+    def isVxDKM(self, target=None, cpu=None):
+        retval = False
+        if cpu is not None:
+            target = self.getTopComponentName(cpu)
+        elif target is None:
+            target = self.target
+        if self.os_type[target].startswith('VXWORKS_DKM'):
             retval = True
         return retval
 

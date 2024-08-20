@@ -840,6 +840,8 @@ class GenContextMgr():
         return retval
 
     def addTask(self, tid, rec=None, watch_exit=True):
+        if self.top.isVxDKM():
+            return
         if rec is None:
             rec = self.task_utils.getRecAddrForTid(tid)
         if rec not in self.watch_rec_list:
@@ -1049,6 +1051,8 @@ class GenContextMgr():
             self.restoreDebugContext()
 
     def watchTasks(self, set_debug_tid = False, tid=None):
+        if self.top.isVxDKM():
+            return
         self.lgr.debug('contextManager watchTasks set_debug_tid: %r' % set_debug_tid)
         if self.task_break is not None:
             self.lgr.debug('contextManager watchTasks called, but already watching')

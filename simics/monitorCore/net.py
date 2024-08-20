@@ -120,7 +120,7 @@ class NetAddresses():
             self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
-    def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None):
+    def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None, lgr=None):
         self.length = length
         self.flags = 0
         if fd is None:
@@ -141,11 +141,16 @@ class SockStruct():
         self.sock_type = sock_type
         self.domain = None
         self.protocol = None
+        self.lgr = lgr
         try:
             self.sa_family = mem_utils.readWord16(cpu, self.addr) 
         except:
-            #print('fail reading socket stuff')
+            print('net sockStruct failed reading sa family from 0x%x' % self.addr)
+            if lgr is not None:
+                lgr.error('net sockStruct failed reading sa family from 0x%x' % self.addr)
             return
+        if lgr is not None:
+            lgr.debug('net sockStruct sa_family read as 0x%x' % self.sa_family)
         if self.sa_family == 1:
             self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)
         elif self.sa_family == 2:
