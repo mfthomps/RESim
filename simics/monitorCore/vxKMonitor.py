@@ -13,7 +13,7 @@ import vxKMemUtils
 import vxNet
 
 class VxKMonitor():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, run_from_snap, comp_dict, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, run_from_snap, comp_dict, lgr):
         
         self.lgr = lgr
         self.cpu = cpu
@@ -24,6 +24,7 @@ class VxKMonitor():
         #self.cpu1 = SIM_get_object(cpu1_str)
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.so_map = so_map
         self.sym_hap = None
         self.cur_task_hap = None
         self.stop_hap = None
@@ -37,20 +38,14 @@ class VxKMonitor():
         #self.module_size = 1094
 
         # values for pltdkm_custom.out
-        self.module = None
-        self.module_addr = None
-        self.module_size = None
-        if 'MODULE' in comp_dict:
-            self.module = comp_dict['MODULE']
-            self.module_addr = int(comp_dict['MODULE_START'], 16)
-            self.module_size = int(comp_dict['MODULE_SIZE'], 16)
-            self.task_utils.setProgName(self.module)
         #self.module_addr = 0x79666208
         #self.module_size = 855614
         self.module_bp = None
         self.module_hap = None
         self.trace_all = False
 
+        # tbd tie this to some debug call
+        self.debug_module = comp_dict['MODULE']
         self.task_list = []
         SIM_run_command('enable-reverse-execution')
         self.lgr.debug('set module break')
@@ -58,9 +53,10 @@ class VxKMonitor():
 
     def setModuleBreak(self, dumb=None):
         ''' set a break range to cover the module.  Intended to catch returns '''
-        self.module_bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.module_addr, self.module_size, 0)
+        module_info = self.so_map.getModuleInfo(self.debug_module)
+        self.module_bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, module_info.addr, module_info.size, 0)
         self.module_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.moduleHap, None, self.module_bp)
-        self.lgr.debug('setModuleBreak set on 0x%x size 0x%x' % (self.module_addr, self.module_size))
+        self.lgr.debug('setModuleBreak set on 0x%x size 0x%x' % (module_info.addr, module_info.size))
 
     def moduleHap(self, user_param, conf_object, break_num, memory):
         # hit when module code entered, e.g., first time or return from vxworks call
@@ -236,7 +232,7 @@ class VxKMonitor():
     def traceAll(self, record_fd=None):
         self.lgr.debug('traceAll')
         self.trace_all = True
-        if self.inApp():
+        if self.inModule(self.debug_module):
             self.lgr.debug('traceAll in app, set globals')
             self.setGlobal()
         else:
@@ -279,18 +275,12 @@ class VxKMonitor():
             frame_string = taskUtils.stringFromFrame(frame)
             self.lgr.debug('getCallParams %s %s' % (fun, frame_string))
 
-    def toApp(self):
-        if self.inApp():
-            print('Already in app')
+    def toModule(self):
+        if self.so_map.inModule(self.debug_module):
+            print('Already in module %s' % self.debug_module)
         else:
             self.setModuleBreak()
             SIM_continue(0)
 
-    def inApp(self):
-        pc = self.getPC(self.cpu)
-        retval = False
-        if pc >= self.module_addr and pc < (self.module_addr+self.module_size):
-            retval = True
-        return retval
 #track = Track()
 

@@ -131,6 +131,7 @@ import vxKMonitor
 import vxKMemUtils
 import vxParam
 import vxKTaskUtils
+import vxKModules
 
 #import fsMgr
 import json
@@ -862,6 +863,9 @@ class GenMonitor():
             if self.isWindows(target=cell_name):
                 self.soMap[cell_name] = winDLLMap.WinDLLMap(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
                           self.context_manager[cell_name], self.run_from_snap, self.lgr)
+            elif self.isVxDKM(target=cell_name):
+                self.soMap[cell_name] = vxKModules.VxKModules(self, cell_name, cpu, self.mem_utils[cell_name], self.task_utils[cell_name], 
+                          self.targetFS[cell_name], self.comp_dict[cell_name], self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
                 self.disassemble_instruct[cell_name] = disassemble.Disassemble(self, cpu, self.soMap[cell_name], self.lgr)
@@ -901,7 +905,7 @@ class GenMonitor():
                                                self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.rev_to_call[cell_name], self.lgr)
             elif self.isVxDKM(target=cell_name):
                 self.vxKMonitor[cell_name] = vxKMonitor.VxKMonitor(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
-                                               self.run_from_snap, self.comp_dict[cell_name], self.lgr)
+                                               self.soMap[cell_name], self.run_from_snap, self.comp_dict[cell_name], self.lgr)
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
@@ -1463,6 +1467,8 @@ class GenMonitor():
                         ''' Assumes winProg has already populated soMap'''
                         # Note this call will add the text section after getting the load address from the peb
                         load_info = self.soMap[self.target].getLoadInfo()
+                    elif self.isVxDKM(target=self.target):
+                        load_info = self.soMap[self.target].getModuleInfo(prog_name)
                     else:
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
                     if load_info is not None:
@@ -1472,6 +1478,10 @@ class GenMonitor():
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
                             offset = load_info.addr - image_base
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
+                        elif self.isVxDKM():
+                            module_info = self.soMap[self.target].getModuleInfo(prog_name)
+                            offset = module_info.addr
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         else:
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, 0)
@@ -1911,7 +1921,10 @@ class GenMonitor():
         self.rmDebugWarnHap()
         self.lgr.debug('toUser')
         cpu = self.cell_config.cpuFromCell(self.target)
-        self.run2User(cpu, flist, want_tid=want_tid)
+        if self.isVxDKM(cpu=cpu):
+            self.vxKMonitor[self.target].toModule()
+        else:
+            self.run2User(cpu, flist, want_tid=want_tid)
 
     def runToUserSpace(self, dumb=None):
         self.lgr.debug('runToUserSpace')

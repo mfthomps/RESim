@@ -808,12 +808,12 @@ class StackTrace():
             self.lgr.debug('stackTrace eip in kernel new eip 0x%x instruct %s .' % (eip, instruct))
         '''
 
-        #if self.stack_base is not None:
-        #    self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
-        #    pass
-        #else:
-        #    self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
-        #    pass
+        if self.stack_base is not None:
+            self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
+            pass
+        else:
+            self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
+            pass
         done  = False
         count = 0
         #ptr = ebp
@@ -821,6 +821,11 @@ class StackTrace():
         been_in_main = False
         been_above_clib = False
         prev_ip = None
+        only_module = False
+        if self.top.isVxDKM():
+            if not self.soMap.inVxWorks(eip):
+                # ignore stack frames that are in vxworks
+                only_module = True 
         if self.soMap.isMainText(eip):
             been_in_main = True
         if self.soMap.isAboveLibc(eip):
@@ -843,7 +848,7 @@ class StackTrace():
         #    first_fun_addr = eip
         #    self.lgr.debug('stackTrace first eip 0x%x not in funs name the fun the eip' % eip)
 
-        #self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x instruct %s  fname %s skip_recurse: %r' % (self.tid, eip, instruct, fname, self.skip_recurse))
+        self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x instruct %s  fname %s skip_recurse: %r' % (self.tid, eip, instruct, fname, self.skip_recurse))
         if fname is None:
             frame = self.FrameEntry(eip, 'unknown', instruct, esp, fun_addr=first_fun_addr)
             #frame = self.FrameEntry(eip, 'unknown', instruct, esp)
@@ -985,6 +990,10 @@ class StackTrace():
                 count += 1
                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 done = True
+                continue
+            if only_module and self.soMap.inVxWorks(val):
+                count += 1
+                ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 continue
             # TBD should be part of readPtr?
             if self.mem_utils.wordSize(self.cpu) == 8:
