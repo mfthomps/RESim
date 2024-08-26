@@ -481,7 +481,7 @@ class Syscall():
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist_in, break_addrs = break_addrs)
             #self.lgr.debug('Syscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif (break_simulation or self.debugging) and not self.breakOnExecve() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
@@ -490,13 +490,13 @@ class Syscall():
             #f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
             f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
             flist = [f1]
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist, break_addrs = break_addrs)
             self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, break_addrs = break_addrs)
             #self.lgr.debug('Syscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
 
         self.exit_calls = []
@@ -2200,8 +2200,6 @@ class Syscall():
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
                 self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
-                for bp in self.stop_action.breakpoints:
-                    self.context_manager.genDeleteBreakpoint(bp)
                 ''' check functions in list '''
                 self.lgr.debug('syscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
@@ -2876,7 +2874,7 @@ class Syscall():
                 f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
                 flist = [f1]
                 hap_clean = hapCleaner.HapCleaner(self.cpu)
-                self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
             self.lgr.debug('syscall addCallParams added params')
         else:
             pass
