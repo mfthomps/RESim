@@ -274,4 +274,6 @@ class IDAFuns():
                         big = size
                         retval = self.funs[fun]['start']
         return retval
-            
+           
+    def getFuns(self):
+        return self.funs 
