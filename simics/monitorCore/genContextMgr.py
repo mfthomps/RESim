@@ -156,7 +156,7 @@ class GenHap():
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
 
-    def disable(self, direction):
+    def disable(self, direction='forward'):
         if not (direction == 'forward' and not self.disable_forward):
             for bp in self.breakpoint_list:
                 bp.disable()
@@ -355,6 +355,18 @@ class GenContextMgr():
         #        return
         #self.lgr.debug('genDeleteBreakpoint could not find break handle %d' % handle)
         pass
+
+    def genDisableHap(self, hap_handle):
+        for hap in self.haps:
+            if hap.handle == hap_handle:
+                hap.disable()
+                break
+
+    def genEnableHap(self, hap_handle):
+        for hap in self.haps:
+            if hap.handle == hap_handle:
+                hap.enable()
+                break
 
     def genDeleteHap(self, hap_handle, immediate=False):
         if hap_handle is None:
