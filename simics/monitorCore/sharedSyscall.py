@@ -1288,11 +1288,11 @@ class SharedSyscall():
             #self.lgr.debug('exitHap found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
-            if not my_syscall.linger: 
-                self.stopTrace()
             if my_syscall is None:
                 self.lgr.error('sharedSyscall could not get syscall for %s' % callname)
             else:
+                if not my_syscall.linger: 
+                    self.stopTrace()
                 self.lgr.debug('sharedSyscall add call param %s to syscall remove list' % exit_info.matched_param.name)
                 my_syscall.appendRmParam(exit_info.matched_param.name)
                 SIM_run_alone(my_syscall.stopAlone, callname)
