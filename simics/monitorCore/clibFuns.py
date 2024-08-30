@@ -22,7 +22,10 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-mem_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_', 'std::']
+std_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_', 'std::']
+opc_prefixes = ['OpcUa_String_', 'UaBase_P_', 'OpcUa_']
+mem_prefixes = std_prefixes + opc_prefixes
+
 def adjustFunName(frame, fun_mgr, lgr): 
         fun = None
         if frame.fun_name is not None:
@@ -45,7 +48,12 @@ def adjustFunName(frame, fun_mgr, lgr):
             for pre in mem_prefixes:
                 if fun.startswith(pre):
                     fun = fun[len(pre):]
+                    if pre in opc_prefixes:
+                        if fun.endswith('A'):
+                            fun = fun[:-1]
+                        fun = fun.lower()
                     lgr.debug('clibFuns found memsomething prefix %s, fun now %s' % (pre, fun))
+                      
             if fun.startswith('string::'):
                 fun = fun[len('string::'):]
                 if '(' in fun:
