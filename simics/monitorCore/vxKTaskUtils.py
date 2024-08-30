@@ -61,7 +61,7 @@ class VxKTaskUtils():
                     self.lgr.debug('vxKMonitor loadSyms got task_id_current of 0x%x' % self.task_id_current)
                     break
 
-    def getGlobalSyms(self):
+    def getGlobalSymDict(self):
         return self.global_sym
 
     def setCurTaskBreak(self, addr):
@@ -109,7 +109,7 @@ class VxKTaskUtils():
     def setProgName(self, prog_name):
         self.prog_name = prog_name
 
-    def frameFromRegs(self):
+    def frameFromRegs(self, compat32=None):
         frame = {}
         for p in memUtils.param_map['arm']:
             frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
@@ -117,4 +117,17 @@ class VxKTaskUtils():
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
             frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
         return frame
+
+    def getGlobalSym(self, addr):
+        retval = None
+        if addr in self.global_sym:
+            #print('VxWorks global symbol at 0x%x is %s' % (addr, self.global_sym[addr]))
+            retval = self.global_sym[addr]
+        return retval
+
+    def syscallName(self, call_num, compat32):
+        return 'eh?' 
+
+    def getCurThreadRec(self):    
+        return self.getCurrentTask()
 

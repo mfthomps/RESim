@@ -1,6 +1,7 @@
 import resimUtils
 import elfText
 import os
+import json
 class ModuleInfo():
     def __init__(self, addr, size, name):
         self.addr = addr
@@ -36,6 +37,7 @@ class VxKModules():
         elf_info = elfText.getText(vx_bin, self.lgr)
         self.vx_start = elf_info.text_start
         self.vx_end = elf_info.text_start + elf_info.text_size - 1
+        self.lgr.debug('vxKModules vx binary start: 0x%x end: 0x%x' % (self.vx_start, self.vx_end))
         path_base = os.path.basename(path)
         analysis_path = os.getenv('IDA_ANALYSIS')
         self.vx_fun_path = os.path.join(analysis_path, path_base, 'vxWorks'+'.fun')
@@ -62,22 +64,34 @@ class VxKModules():
         return retval
  
 
-    def inModule(self, name, pc=None):
-        if name not in self.module_map:
+    def inModule(self, name=None, pc=None):
+        if name is not None and name not in self.module_map:
             self.lgr.error('vxKModules inModule called with unknown name %s' % name)
             return False
         if pc is None:
             pc = self.top.getEIP(self.cpu)
+
+        if pc >= self.vx_start and pc <= self.vx_end:
+            #self.lgr.debug('vxKModules inModule pc 0x%x is in kernel' % pc)
+            return False
+
         retval = False
-        module_info = self.module_map[name]
-        module_end = (module_info.addr + module_info.size)
-        self.lgr.debug('vxKModules inModule pc 0x%x between 0x%x and 0x%x?' % (pc, module_info.addr, module_end))
-        if pc >= module_info.addr and pc < module_end:
-            retval = True
+        if name is None:
+            name_list = list(self.module_map.keys())
+        else:
+            name_list = [name]
+        for module in name_list:
+            module_info = self.module_map[module]
+            module_end = (module_info.addr + module_info.size)
+            #self.lgr.debug('vxKModules inModule pc 0x%x between 0x%x and 0x%x?' % (pc, module_info.addr, module_end))
+            if pc >= module_info.addr and pc < module_end:
+                retval = True
+                break
         return retval
 
     def getLocalPath(self, tid):
         return None
+
     def getProg(self, tid):
         # tbd manage by self
         prog_name, dumb = self.task_utils.getProgName(tid)
@@ -96,6 +110,7 @@ class VxKModules():
 
     def isMainText(self, pc):
         return True
+
     def isAboveLibc(self, pc):
         return True
 
@@ -133,4 +148,18 @@ class VxKModules():
     def pickleit(self, name):
         return
 
+    def moduleList(self):
+        return list(self.module_map.keys())
+
+    def getMachineSize(self, tid):
+        return 4
+
+    def getSO(self, quiet=False):
+        retval = {}
+        retval['tbd'] = 'TBD'
+        ret_json = json.dumps(retval) 
+        return ret_json
+
+    def isLibc(self, pc):
+        return False
 

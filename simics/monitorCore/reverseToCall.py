@@ -168,7 +168,16 @@ class reverseToCall():
             return
         cell = self.top.getCell()
         if self.sysenter_hap is None:
-            if self.cpu.architecture == 'arm':
+            if self.top.isVxDKM(self.cell_name):
+                bp_start = None
+                self.global_sym = self.task_utils.getGlobalSymDict()
+                for addr in self.global_sym:
+                    bp = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                    if bp_start is None:
+                        bp_start = bp
+                self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, bp_start, bp, 'reverseToCall sysenter')
+                self.lgr.debug('vxKSyscall setGlobal set bp range %d %d' % (bp_start, bp))
+            elif self.cpu.architecture == 'arm':
                 self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
                 enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
@@ -1471,12 +1480,16 @@ class reverseToCall():
                 if cycles not in self.sysenter_cycles[tid]:
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     frame = self.task_utils.frameFromRegs(compat32=self.compat32)
-                    call_num = self.mem_utils.getCallNum(self.cpu)
-                    frame['syscall_num'] = call_num
-                    #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
-                    #self.lgr.debug(taskUtils.stringFromFrame(frame))
-                    #SIM_break_simulation('debug me')
-                    callname = self.task_utils.syscallName(call_num, self.compat32)
+                    if not self.top.isVxDKM(target=self.cell_name):
+                        call_num = self.mem_utils.getCallNum(self.cpu)
+                        frame['syscall_num'] = call_num
+                        #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                        #self.lgr.debug(taskUtils.stringFromFrame(frame))
+                        #SIM_break_simulation('debug me')
+                        callname = self.task_utils.syscallName(call_num, self.compat32)
+                    else:
+                        pc = self.top.getEIP(self.cpu)
+                        callname = self.task_utils.getGlobalSym(pc)
                     if callname is None:
                         self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
                         return

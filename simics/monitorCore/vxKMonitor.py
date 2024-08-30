@@ -8,12 +8,11 @@ import decodeArm as decode
 import resimUtils
 import memUtils
 import taskUtils
-import net
 import vxKMemUtils
-import vxNet
+import syscall
 
 class VxKMonitor():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, run_from_snap, comp_dict, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, syscall_mgr, run_from_snap, comp_dict, lgr):
         
         self.lgr = lgr
         self.cpu = cpu
@@ -25,13 +24,11 @@ class VxKMonitor():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.so_map = so_map
+        self.syscall_mgr = syscall_mgr
         self.sym_hap = None
         self.cur_task_hap = None
         self.stop_hap = None
 
-        self.local_sym = {}
-        self.global_sym = task_utils.getGlobalSyms()
-        self.global_sym_break = {}
         
         # values for myCMakeDKM.out
         #self.module_addr = 0x786bb5b8
@@ -42,111 +39,11 @@ class VxKMonitor():
         #self.module_size = 855614
         self.module_bp = None
         self.module_hap = None
-        self.trace_all = False
+        self.stop_in_module = False
 
         # tbd tie this to some debug call
         self.debug_module = comp_dict['MODULE']
-        self.task_list = []
-        SIM_run_command('enable-reverse-execution')
-        self.lgr.debug('set module break')
-        self.setModuleBreak()
 
-    def setModuleBreak(self, dumb=None):
-        ''' set a break range to cover the module.  Intended to catch returns '''
-        module_info = self.so_map.getModuleInfo(self.debug_module)
-        self.module_bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, module_info.addr, module_info.size, 0)
-        self.module_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.moduleHap, None, self.module_bp)
-        self.lgr.debug('setModuleBreak set on 0x%x size 0x%x' % (module_info.addr, module_info.size))
-
-    def moduleHap(self, user_param, conf_object, break_num, memory):
-        # hit when module code entered, e.g., first time or return from vxworks call
-        if self.module_hap is not None:
-            addr = memory.logical_address
-            r0 = self.mem_utils.getRegValue(self.cpu, 'r0')
-            self.lgr.debug('moduleHap addr 0x%x r0: 0x%x ' % (addr, r0))
-            hap = self.module_hap
-            SIM_delete_breakpoint(self.module_bp)
-            SIM_run_alone(self.rmHap, hap)
-            self.module_hap = None
-            pc = self.getPC(self.cpu)
-            if len(self.global_sym_break) == 0:
-                SIM_break_simulation('first entry, pc 0x%x' % pc)
-                self.lgr.debug('moduleHap no global syms yet, set them')
-                if self.trace_all:
-                    SIM_run_alone(self.setGlobal, None)
-            elif not self.trace_all:
-                SIM_break_simulation('Return to application, pc 0x%x' % pc)
-            else:
-                #self.lgr.debug('moduleHap has global syms yet, enable them')
-                SIM_run_alone(self.enableSyms, None)
-
-    def rmHap(self, hap):
-        if hap is not None:
-            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", hap)
-
-    def symbolHap(self, user_param, conf_object, break_num, memory):
-        # entered when a global symbol was hit.
-        addr = memory.logical_address
-        #ttbr = self.cpu.translation_table_base0
-        #cpu = SIM_current_processor()
-        reg_num = self.cpu.iface.int_register.get_number('sp')
-        sp_value = self.cpu.iface.int_register.read(reg_num)
-        cur_task = self.task_utils.getCurrentTask()
-        if addr in self.local_sym:
-            #print('hit local sym %s at 0x%x' % (self.local_sym[addr], addr))
-            self.lgr.debug('hit local sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x cpu: %s' % (self.local_sym[addr], addr, sp_value, cur_task, self.cpu.name))
-        elif addr in self.global_sym:
-            #print('hit global sym %s at 0x%x' % (self.global_sym[addr], addr))
-            # Hack to use stack value to distinguish our thread from other threads
-            #if sp_value > 0x78e00000 and sp_value < 0x78f00000:
-            if sp_value > 0x79000000:
-                self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles))
-                SIM_run_alone(self.disableSyms, None)
-                SIM_run_alone(self.setModuleBreak, None)
-                self.getCallParams(self.global_sym[addr])
-                if self.global_sym[addr] == 'write':
-                    SIM_break_simulation('write')
-                if self.global_sym[addr] == 'bind':
-                    SIM_break_simulation('bind')
-                if not self.trace_all:
-                    SIM_break_simulation('global')
-            else:
-                self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x cpu: %s WRONG STACK?' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name))
-                pass
-            #if addr == self.fwprintf:
-            #    SIM_break_simulation('fwprintf %s' % cpu.name)
-        else:
-            print('hit other at 0x%x' % (addr))
-            self.lgr.debug('hit other at 0x%x conf: %s' % (addr, str(conf_object)))
-            SIM_run_alone(self.setGlobal, None)
-            SIM_break_simulation('other %s' % self.cpu.name)
-        #SIM_break_simulation('hit break')
-
-    def setLocal(self):
-        for addr in self.local_sym:
-            self.setBreak0(addr)
-
-    def setGlobal(self, dumb=None):
-        bp_start = None
-        bp = None
-        for addr in self.global_sym:
-            bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-            if bp_start is None:
-                bp_start = bp
-            self.global_sym_break[addr] = bp
-        self.sym_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.symbolHap, None, bp_start, bp)
-
-    def disableSyms(self, dumb=None):
-        for addr in self.global_sym_break:
-            bp = self.global_sym_break[addr]
-            SIM_disable_breakpoint(bp)
-        #self.lgr.debug('disableSysms done')
-
-    def enableSyms(self, dumb=None):
-        for addr in self.global_sym_break:
-            bp = self.global_sym_break[addr]
-            SIM_enable_breakpoint(bp)
-        #self.lgr.debug('enableSyms done')
         
     def dbg(self):
         cmd = 'new-gdb-remote cpu=%s architecture=arm port=9123' % (self.cpu.name)
@@ -157,18 +54,6 @@ class VxKMonitor():
         reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
 
-    def rmAll(self):
-        self.disableSyms()
-        if self.module_hap is not None:
-            hap = self.module_hap
-            SIM_delete_breakpoint(self.module_bp)
-            self.rmHap(hap)
-            self.module_hap = None
-        if self.sym_hap is not None:
-            hap = self.sym_hap
-            self.rmHap(hap)
-            self.sym_hap = None
-        self.trace_all = False
 
     def runTo(self, fun):
         got_fun = None
@@ -231,56 +116,91 @@ class VxKMonitor():
 
     def traceAll(self, record_fd=None):
         self.lgr.debug('traceAll')
+        context = self.cpu.current_context
+        self.syscall_mgr.watchAllSyscalls(context, 'traceAll', trace=True)
+
+
+        '''
         self.trace_all = True
-        if self.inModule(self.debug_module):
+        if self.so_map.inModule(self.debug_module):
             self.lgr.debug('traceAll in app, set globals')
             self.setGlobal()
         else:
             self.lgr.debug('traceAll not in app, set module break')
             self.setModuleBreak()
+        '''
 
-    def ida(self):
+    def origOffset(self):
         pc = self.getPC(self.cpu)
-        ida = pc - self.module_addr
+        file, start, end = self.so_map.getSOInfo(pc)
+        ida = pc - start
         print('Orig address: 0x%x' % ida)
 
-    def getCallParams(self, fun):
-        frame = self.task_utils.frameFromRegs()
-        if fun == 'socket':
-            domain = frame['param1']
-            sock_type = frame['param2']
-            protocol = frame['param3']
-            domain_name = net.domaintype[domain]
-            type_name = net.socktype[sock_type] 
-            self.lgr.debug('getCallParams %s domain: %s  type: %s' % (fun, domain_name, type_name))
-        if fun == 'ioctl':
-            fd = frame['param1']
-            cmd = frame['param2']
-            arg = frame['param3']
-            arg_val = SIM_read_phys_memory(self.cpu, arg, 4)
-            FIONBIO = 0x90040010
-            if cmd == FIONBIO:
-                self.lgr.debug('getCallParams %s fd: 0x%x FIONBIO (set blocking) arg 0x%x arg_val 0x%x' % (fun, fd, arg, arg_val))
-            elif cmd == 0x10:
-                FIONBIO = 0x90040010
-                self.mem_utils.setRegValue(self.cpu, 'r1', FIONBIO)
-                self.lgr.debug('getCallParams %s fd: 0x%x FORCED set of FIONBIO (set blocking) arg 0x%x arg_val 0x%x' % (fun, fd, arg, arg_val))
-            else:
-                self.lgr.debug('getCallParams %s fd: 0x%x cmd: 0x%x arg: 0x%x' % (fun, fd, cmd, arg))
-        elif fun == 'bind':
-            ss = vxNet.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'], lgr=self.lgr)
-            self.lgr.debug('getCallParams %s %s' % (fun, ss.getString()))
-             
-        else:
-            frame_string = taskUtils.stringFromFrame(frame)
-            self.lgr.debug('getCallParams %s %s' % (fun, frame_string))
 
     def toModule(self):
         if self.so_map.inModule(self.debug_module):
             print('Already in module %s' % self.debug_module)
         else:
             self.setModuleBreak()
+            self.stop_in_module = True
             SIM_continue(0)
 
+
+    def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None, just_input=False):
+
+        call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc, sub_match=sub_match)        
+        ''' nth occurance of syscalls that match params '''
+        call_params.nth = count
+       
+        if True:
+            self.lgr.debug('runToIO on FD %s' % str(fd))
+
+            if True:
+                skip_and_mail = True
+                if flist_in is not None:
+                    ''' Given callback functions, use those instead of skip_and_mail '''
+                    skip_and_mail = False
+                self.lgr.debug('vxKMonitor runToIO, add new syscall')
+                kbuffer_mod = None
+                # TBD move kbuf set to syscallManager?
+                #if kbuf is not None:
+                #    kbuffer_mod = kbuf
+                #    self.sharedSyscall.setKbuffer(kbuffer_mod)
+                if call_list is None:
+                    if just_input:
+                        calls = ['fgets']
+                    else:
+                        calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'RECV_DATAGRAM', 'SEND_DATAGRAM', 'ReadFile', 'WriteFile', 'QueryValueKey', 'EnumerateValueKey', 'Close', 'GET_PEER_NAME']
+                else:
+                    calls = call_list
+                the_syscall = self.syscall_mgr.watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
+                                 skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
+                ''' find processes that are in the kernel on IO calls '''
+                '''
+                frames = self.getDbgFrames()
+                skip_calls = []
+                for tid in list(frames):
+                    if frames[tid] is None:
+                        self.lgr.error('frames[%s] is None' % tid)
+                        continue
+                    call = self.task_utils.syscallName(frames[tid]['syscall_num'], False) 
+                    self.lgr.debug('vxKMonitor runToIO found %s in kernel for pid:%s' % (call, tid))
+                    if call != 'DeviceIoControlFile' and (call not in calls or call in skip_calls):
+                       del frames[tid]
+                       self.lgr.debug('vxKMonitor runToIO removed %s in kernel for tid:%s' % (call, tid))
+                    else:
+                       self.lgr.debug('vxKMonitor runToIO kept frames for tid %s' % tid)
+                if len(frames) > 0:
+                    self.lgr.debug('wnMonitor runToIO, call to setExits')
+                    the_syscall.setExits(frames, origin_reset=origin_reset, context_override=self.context_manager.getRESimContext()) 
+                #self.copyCallParams(the_syscall)
+                '''
+    
+    
+            if run_fun is not None:
+                SIM_run_alone(run_fun, None) 
+            if run:
+                self.lgr.debug('runToIO now run')
+                SIM_continue(0)
 #track = Track()
 

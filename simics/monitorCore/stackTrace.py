@@ -821,11 +821,6 @@ class StackTrace():
         been_in_main = False
         been_above_clib = False
         prev_ip = None
-        only_module = False
-        if self.top.isVxDKM():
-            if not self.soMap.inVxWorks(eip):
-                # ignore stack frames that are in vxworks
-                only_module = True 
         if self.soMap.isMainText(eip):
             been_in_main = True
         if self.soMap.isAboveLibc(eip):
@@ -866,9 +861,16 @@ class StackTrace():
             #else:
             #    self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
         
+        only_module = False
         cur_fun = None
         cur_fun_name = None
         if self.fun_mgr is not None:
+
+            if self.top.isVxDKM():
+                if self.soMap.inVxWorks(eip):
+                    self.recordVxCall()
+                # ignore stack frames that are in vxworks
+                only_module = True 
             cur_fun = self.fun_mgr.getFun(eip)
             if prev_ip == None and cur_fun is not None:
                 cur_fun_name = self.fun_mgr.getFunName(cur_fun)
@@ -1035,8 +1037,8 @@ class StackTrace():
                         if not self.fun_mgr.soChecked(call_to):
                             ''' should we add ida function analysys? '''
                             # windows can take forever to search.  so, no.
-                            if not self.top.isWindows() and not self.fun_mgr.isFun(call_to):
-                                #self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
+                            if not self.top.isWindows() and not self.top.isVxDKM() and not self.fun_mgr.isFun(call_to):
+                                self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
                                     #self.lgr.debug('stackTrace call getFull for %s' % fname)
                                     full_path = self.targetFS.getFull(fname, self.lgr)
@@ -1297,6 +1299,10 @@ class StackTrace():
                             if self.soMap.isMainText(call_ip):
                                 been_in_main = True
                                 #self.lgr.debug('stackTrace been in main')
+                            if self.top.isVxDKM():
+                                if not self.soMap.inVxWorks(eip):
+                                    only_module = True
+                                    self.lgr.debug('stackTrace been in main, ignore vxworks funs')
                     else:
                         #self.lgr.debug('doTrace not a call? %s' % instruct_str)
                         frame = self.FrameEntry(call_ip, fname, instruct_str, ptr, None, None)
@@ -1370,6 +1376,24 @@ class StackTrace():
                 fun_of_ip = self.fun_mgr.getFunName(frame.ip)
                 frame.fun_of_ip = fun_of_ip
                 #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
+
+                if frame.instruct.startswith(self.callmn):
+                    parts = frame.instruct.split()
+                    call_addr = None
+                    if len(parts) == 2:
+                        try:
+                            call_addr = int(parts[1],16)
+                        except ValueError:
+                            pass
+                        if call_addr is not None:
+                            fun = self.fun_mgr.getFunName(call_addr)
+                            if fun is not None:
+                                frame.instruct = '%s %s' % (self.callmn, fun)                     
+                            elif self.top.isVxDKM(cpu=self.cpu):
+                                fun = self.task_utils.getGlobalSym(call_addr)
+                                if fun is not None:
+                                    frame.instruct = '%s %s' % (self.callmn, fun)                     
+
             self.frames.append(frame)
             #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
             self.prev_frame_sp = frame.sp
@@ -1446,3 +1470,29 @@ class StackTrace():
        if self.frames[-1].fname is not None and resimUtils.isClib(self.frames[-1].fname) and (ptr - self.prev_frame_sp) > 2000:
            retval = True
        return retval
+
+    def recordVxCall(self):
+        lr = self.reg_frame['lr']
+        module = self.soMap.getSOFile(lr)
+        if module is not None:
+            self.lgr.debug('stackTrace recordVxCall in module %s' % module)
+            call_pc = lr - 4
+            instruct = self.top.disassembleAddress(self.cpu, call_pc)
+            self.lgr.debug('stackTrace recordVxCall  call instruct is %s' % instruct[1])
+            if instruct[1].startswith('bl'):
+                parts = instruct[1].split()
+                call_to = int(parts[1], 16)
+                global_sym = self.task_utils.getGlobalSym(call_to)
+                if global_sym is not None:
+                    self.lgr.debug('stackTrace recordVxCall global sym %s' % global_sym)
+                    new_instruct = 'bl %s' % global_sym
+                    frame = self.FrameEntry(call_pc, module, new_instruct, 0, ret_addr=lr, fun_addr=call_to, fun_name = global_sym, lr_return=True)
+                    self.addFrame(frame)
+                else:
+                    self.lgr.debug('stackTrace recordVxCall addr 0x%x not global sym' % call_to)
+            else:
+                self.lgr.debug('stackTrace recordVxCall not a call?')
+        elif not self.soMap.inVxWorks(lr):
+            self.lgr.debug('stackTrace recordVxCall not in module or vxworks?')
+        else:
+            self.lgr.debug('stackTrace recordVxCall lr 0x%x is in vxWorks' % lr)
