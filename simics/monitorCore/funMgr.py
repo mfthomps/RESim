@@ -41,6 +41,7 @@ class FunMgr():
         self.top = top
         self.lgr = lgr
         self.so_checked = []
+        self.fun_break = {}
         if cpu.architecture == 'arm':
             self.callmn = 'bl'
             self.jmpmn = 'bx'
@@ -399,3 +400,30 @@ class FunMgr():
             return self.ida_funs.getFunWithin(fun_name, start, end)
         else:
             self.lgr.error('funMgr getFunWithin called but no IDA functions defined')
+
+    def traceFuns(self):
+        ''' generate trace messages for each function call within the target. 
+            TBD assumes arm and only outputs to log. '''
+        funs = self.ida_funs.getFuns()
+        bp_start = None
+        for f in funs:
+            addr = funs[f]['start']
+            bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+            if bp_start is None:
+                bp_start = bp
+            self.fun_break[addr] = bp
+        self.fun_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.funHap, None, bp_start, bp)
+
+    def funHap(self, user_param, conf_object, break_num, memory):
+        # entered when a global symbol was hit.
+        addr = memory.logical_address
+        #ttbr = self.cpu.translation_table_base0
+        #cpu = SIM_current_processor()
+        reg_num = self.cpu.iface.int_register.get_number('pc')
+        pc_value = self.cpu.iface.int_register.read(reg_num)
+        reg_num = self.cpu.iface.int_register.get_number('lr')
+        lr_value = self.cpu.iface.int_register.read(reg_num)
+        fun = self.ida_funs.getFunName(addr)
+        fun_from = self.ida_funs.getFunName(lr_value)
+        self.lgr.debug('funHap addr: 0x%x lr: 0x%x fun: %s from: %s cycle: 0x%x' % (addr, lr_value, fun, fun_from, self.cpu.cycles))
+            
