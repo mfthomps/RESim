@@ -639,7 +639,7 @@ class MemUtils():
         if cpu.architecture == 'arm':
             #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
             regs = self.arm_regs
-        if cpu.architecture == 'arm64':
+        elif cpu.architecture == 'arm64':
             regs = self.arm64_regs
         elif word_size == 8:
             ''' check for 32-bit compatibility mode '''
