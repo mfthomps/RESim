@@ -12,7 +12,7 @@ import vxKMemUtils
 import syscall
 
 class VxKMonitor():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, syscall_mgr, run_from_snap, comp_dict, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, syscall_mgr, context_manager, run_from_snap, comp_dict, lgr):
         
         self.lgr = lgr
         self.cpu = cpu
@@ -23,6 +23,7 @@ class VxKMonitor():
         #self.cpu1 = SIM_get_object(cpu1_str)
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.context_manager = context_manager
         self.so_map = so_map
         self.syscall_mgr = syscall_mgr
         self.sym_hap = None
@@ -37,14 +38,27 @@ class VxKMonitor():
         # values for pltdkm_custom.out
         #self.module_addr = 0x79666208
         #self.module_size = 855614
-        self.module_bp = None
-        self.module_hap = None
+        self.module_hap = {}
         self.stop_in_module = False
 
         # tbd tie this to some debug call
         self.debug_module = comp_dict['MODULE']
 
-        
+        self.not_mapped_hap = SIM_hap_add_callback_index("Core_Address_Not_Mapped", self.notMapped, None, 0)
+
+    def notMapped(self, dumb, conf_obj, addr, access_type, size):
+        if self.not_mapped_hap is None:
+            return
+        msg = 'not mapped: 0x%x' % addr
+        SIM_break_simulation(msg)
+        hap = self.not_mapped_hap
+        SIM_run_alone(self.rmMapHap, hap)
+        self.not_mapped_hap = None
+
+    def rmMapHap(self, hap):
+        if hap is not None:
+            SIM_hap_delete_callback_id("Core_Address_Not_Mapped", hap)
+
     def dbg(self):
         cmd = 'new-gdb-remote cpu=%s architecture=arm port=9123' % (self.cpu.name)
         SIM_run_command(cmd)
@@ -145,6 +159,21 @@ class VxKMonitor():
             self.stop_in_module = True
             SIM_continue(0)
 
+    def setModuleBreak(self):
+        for module in self.so_map.moduleList():
+            if module not in self.module_hap:
+                module_info = self.so_map.getModuleInfo(module)
+                bp = self.context_manager.genBreakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, module_info.addr, module_info.size, 0)
+                hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.moduleHap, None, bp, 'syscall')
+                self.module_hap[module] = hap
+                self.lgr.debug('vxKCallExit setExit set on 0x%x size 0x%x context %s' % (module_info.addr, module_info.size, str(self.cpu.current_context)))
+
+    def moduleHap(self, dumb, conf_object, break_num, memory):
+        self.lgr.debug('vxKMonitor moduleHap')
+        for module in self.module_hap:
+            self.context_manager.genDeleteHap(self.module_hap[module])
+        self.module_hap = {}    
+        SIM_break_simulation('In module ?')
 
     def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None, just_input=False):
 

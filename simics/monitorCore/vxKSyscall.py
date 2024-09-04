@@ -151,9 +151,9 @@ class VxKSyscall():
             #if sp_value > 0x78e00000 and sp_value < 0x78f00000:
             #if sp_value > 0x79000000:
             if self.hackme:
-                self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles))
+                self.lgr.debug('REMOTE THIS hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles))
             elif True:
-                self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles))
+                self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x context: %s' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles, str(self.cpu.current_context)))
                 SIM_run_alone(self.disableSyms, None)
                 stop_on_exit = False
                 #if self.call_list is None:
@@ -279,7 +279,7 @@ class VxKSyscall():
                 self.module_bp.append(bp)
                 hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.moduleHap, None, bp)
                 self.module_hap.append(hap)
-                self.lgr.debug('vxKSyscall setModule Break set on 0x%x size 0x%x' % (module_info.addr, module_info.size))
+                self.lgr.debug('vxKSyscall setModule Break set on 0x%x size 0x%x, context %s' % (module_info.addr, module_info.size, self.cpu.current_context))
 
     def moduleHap(self, dumb, conf_object, break_num, memory):
         self.lgr.debug('vxKSyscall moduleHap')
@@ -361,7 +361,6 @@ class VxKSyscall():
                         #self.lgr.debug('will delete hap %s' % str(hc.hap))
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
-                self.lgr.debug('vxKSyscall stopHap will delete hap %s' % str(self.stop_hap))
                 ''' check functions in list '''
                 self.lgr.debug('vxKSyscall stopHap call to rmExitHap')
                 self.call_exit.rmExitHap(None)

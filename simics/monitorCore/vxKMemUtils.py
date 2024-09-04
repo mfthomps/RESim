@@ -50,7 +50,12 @@ class VxKMemUtils():
 
 
     def getRegValue(self, cpu, reg):
-        reg_num = cpu.iface.int_register.get_number(reg)
+        if reg in ['eip']:
+            reg_num = cpu.iface.int_register.get_number('pc')
+        elif reg == 'syscall_ret':
+            reg_num = cpu.iface.int_register.get_number('r0')
+        else:
+            reg_num = cpu.iface.int_register.get_number(reg)
         reg_value = cpu.iface.int_register.read(reg_num)
         return reg_value
 

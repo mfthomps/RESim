@@ -140,6 +140,7 @@ class VxKModules():
         return file, start, end
 
     def inVxWorks(self, pc):
+        #self.lgr.debug('vxKModules inVxWorks pc 0x%x binary start: 0x%x end: 0x%x' % (pc, self.vx_start, self.vx_end))
         if pc >= self.vx_start and pc <= self.vx_end:
             return True
         else:
@@ -163,3 +164,12 @@ class VxKModules():
     def isLibc(self, pc):
         return False
 
+    def getImageBase(self, prog):
+        return 0
+
+    def getLoadAddr(self, prog):
+        retval = None
+        module_info = self.getModuleInfo(prog)
+        if module_info is not None:
+            retval = module_info.addr
+        return retval
