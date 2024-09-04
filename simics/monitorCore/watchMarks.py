@@ -479,16 +479,16 @@ class PushTestMark():
         return msg
  
 class FGetsMark():
-    def __init__(self, fun, addr, dest, count, start):
-        self.addr = addr
+    def __init__(self, fun, dest, count, start):
+        self.addr = dest
         self.dest = dest
         self.length = count
         self.start = start
         if start is not None:
-            offset = addr - start
-            self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+            offset = dest - start
+            self.msg = 'fgets into 0x%08x (offset %d within buffer starting at 0x%08x)' % (dest, offset, start)
         else:
-            self.msg = 'fgets from 0x%08x (unknown buffer?) to 0x%08x' % (addr, dest)
+            self.msg = 'fgets to 0x%08x (unknown buffer?)' % (dest)
     def getMsg(self):
         return self.msg
 
@@ -1227,8 +1227,8 @@ class WatchMarks():
             retval = wm
         return retval
 
-    def fgetsMark(self, fun, src, dest, count, start):
-        fm = FGetsMark(fun, src, dest, count, start)
+    def fgetsMark(self, fun, dest, count, start):
+        fm = FGetsMark(fun, dest, count, start)
         self.addWatchMark(fm)
 
     def stringMark(self, fun, src, dest, count, start):
