@@ -97,14 +97,14 @@ class Jumpers():
                     if len(line.strip()) == 0:
                         continue
                     if ':' in line:
-                        if not self.handleJumperEntry(line):
+                        if not self.handleJumperEntry(line, fname):
                             self.lgr.error('Failed handling jumper entry %s' % line)
                             return
                     else:
                         self.lgr.error('jumpers loadJumper expected colon, e.g., lib:addr in %s' % line)
                         return
 
-    def handleJumperEntry(self, line):
+    def handleJumperEntry(self, line, fname):
         retval = True
         if line in self.did_lines:
             return retval
@@ -123,7 +123,7 @@ class Jumpers():
         try:
             prog, addr = lib_addr.split(':') 
         except:
-            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon" % (line, fname))
+            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon after prog" % (line, fname))
             raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
             return False
         
@@ -159,6 +159,12 @@ class Jumpers():
             self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
             self.so_map.addSOWatch(jump_rec.prog, self.libLoadCallback, name=lib_addr)
             self.pending_libs[lib_addr] = jump_rec
+        elif self.top.isVxDKM(cpu=self.cpu):
+            jump_rec.image_base = image_base
+            load_addr = self.so_map.getLoadAddr(jump_rec.prog)
+            addr = jump_rec.from_addr + load_addr
+            self.lgr.debug('jumper handleJumperEntry vxworks set break on 0x%x' % addr)
+            self.setBreak(jump_rec, addr)
         else:
             # Library loaded by someone.  Get list of pids
             jump_rec.image_base = image_base
