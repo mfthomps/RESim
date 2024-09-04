@@ -1,4 +1,3 @@
-from simics import *
 import armCond
 import re
 import sys
