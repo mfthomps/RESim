@@ -907,7 +907,8 @@ class GenMonitor():
                                                self.soMap[cell_name], self.sharedSyscall[cell_name], self.run_from_snap, self.rev_to_call[cell_name], self.lgr)
             elif self.isVxDKM(target=cell_name):
                 self.vxKMonitor[cell_name] = vxKMonitor.VxKMonitor(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
-                                               self.soMap[cell_name], self.syscallManager[cell_name], self.run_from_snap, self.comp_dict[cell_name], self.lgr)
+                                               self.soMap[cell_name], self.syscallManager[cell_name], self.context_manager[self.target], 
+                                               self.run_from_snap, self.comp_dict[cell_name], self.lgr)
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
@@ -1525,8 +1526,12 @@ class GenMonitor():
                 self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
             if self.debug_callback is not None:
-                self.lgr.debug('debug do callback to %s' % str(self.command_callback))
-                SIM_run_alone(self.debug_callback, self.debug_callback_param)
+                self.lgr.debug('debug do callback to %s' % str(self.debug_callback))
+                cb = self.debug_callback
+                param = self.debug_callback_param
+                SIM_run_alone(cb, param)
+                self.debug_callback = None
+                self.debug_callback_param = None
         else:
             ''' already debugging as current process '''
             self.lgr.debug('genMonitor debug, already debugging')
@@ -2053,7 +2058,11 @@ class GenMonitor():
             self.coverage.saveCoverage()
         if self.command_callback is not None:
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
-            SIM_run_alone(self.command_callback, self.command_callback_param)
+            cb = self.command_callback
+            param = self.command_callback_param
+            SIM_run_alone(cb, param)
+            self.command_callback = None
+            self.command_callback_param = None
         else:
             cpl = memUtils.getCPL(cpu)
             self.lgr.debug('skipAndMail, cpl %d' % cpl)
@@ -4524,6 +4533,7 @@ class GenMonitor():
         self.lgr.debug('stopTracking')
         self.stopTrackIO(immediate=True, check_crash=False)
         self.dataWatch[self.target].removeExternalHaps(immediate=True)
+        self.dataWatch[self.target].disable()
 
         self.stopThreadTrack(immediate=True)
         self.noWatchSysEnter()
