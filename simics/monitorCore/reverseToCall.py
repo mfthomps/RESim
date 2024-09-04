@@ -1487,12 +1487,15 @@ class reverseToCall():
                         #self.lgr.debug(taskUtils.stringFromFrame(frame))
                         #SIM_break_simulation('debug me')
                         callname = self.task_utils.syscallName(call_num, self.compat32)
+                        if callname is None:
+                            self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
+                            return
                     else:
                         pc = self.top.getEIP(self.cpu)
                         callname = self.task_utils.getGlobalSym(pc)
-                    if callname is None:
-                        self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
-                        return
+                        if callname is None:
+                            self.lgr.debug('sysenterHap pc 0x%x not a vxwork symbol' % pc)
+                            return
                     if callname == 'select' or callname == '_newselect':        
                         select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                              self.cpu, self.mem_utils, self.lgr)
