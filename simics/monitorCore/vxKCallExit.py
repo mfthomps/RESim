@@ -2,8 +2,7 @@ from simics import *
 import resimUtils
 class VxKCallExit():
     ''' assumes all modules could be part of all tasks.  TBD refine relationship between modules and tasks'''
-    ''' TBD will need a context manager to disable breaks when in non-watched tasks '''
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, trace_mgr, dataWatch, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, trace_mgr, dataWatch, context_manager, lgr):
         self.top = top
         self.cpu = cpu
         self.mem_utils = mem_utils
@@ -11,10 +10,10 @@ class VxKCallExit():
         self.so_map = so_map
         self.trace_mgr = trace_mgr
         self.dataWatch = dataWatch
+        self.context_manager = context_manager
         self.cell_name = cell_name
         self.lgr = lgr
         self.pending = {}
-        self.module_bp = {}
         self.module_hap = {}
         self.exit_info = {}
         self.kbuffer = False
@@ -28,18 +27,21 @@ class VxKCallExit():
             return
         self.pending[task] = exit_info.call_name
         self.exit_info[task] = exit_info
+        current_context = self.cpu.current_context
         for module in self.so_map.moduleList():
-            if module not in self.module_bp:
+            if module not in self.module_hap:
                 module_info = self.so_map.getModuleInfo(module)
-                bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, module_info.addr, module_info.size, 0)
-                self.module_bp[module] = bp
-                hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.moduleHap, exit_info, bp)
+                bp = self.context_manager.genBreakpoint(current_context, Sim_Break_Linear, Sim_Access_Execute, module_info.addr, module_info.size, 0)
+                hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.moduleHap, exit_info, bp, 'syscall')
                 self.module_hap[module] = hap
-                self.lgr.debug('vxKCallExit setExit set on 0x%x size 0x%x' % (module_info.addr, module_info.size))
+                self.lgr.debug('vxKCallExit setExit set on 0x%x size 0x%x context %s' % (module_info.addr, module_info.size, str(current_context)))
 
 
     def moduleHap(self, exit_info, conf_object, break_num, memory):
         # hit when module code entered, e.g., first time or return from vxworks call
+        #self.lgr.debug('vxKCallExit moduleHap') 
+        if self.context_manager.isReverseContext():
+            return
         trace_msg = None
         task = self.task_utils.curTID()
         if task not in self.pending:
@@ -56,11 +58,7 @@ class VxKCallExit():
         r0 = self.mem_utils.getRegValue(self.cpu, 'r0')
         trace_msg = '\t return from %s r0: 0x%x' % (self.exit_info[task].call_name, r0)
         self.lgr.debug('vxKCallExit moduleHap cycle: 0x%x %s ' % (self.cpu.cycles, trace_msg))
-        hap = self.module_hap[module]
-        bp = self.module_bp[module]
-        SIM_delete_breakpoint(bp)
-        SIM_run_alone(self.rmHap, hap)
-        del self.module_bp[module]
+        self.context_manager.genDeleteHap(self.module_hap[module])
         del self.module_hap[module]
         self.exit_info[task].syscall_instance.enableSyms()
         pc = self.top.getEIP(self.cpu)
@@ -86,7 +84,7 @@ class VxKCallExit():
                 s = self.mem_utils.readString(self.cpu, exit_info.retval_addr, 200)
                 strlen = len(s)
                 self.lgr.debug('vxKCallExit return from fgets FD: %d' % exit_info.old_fd)
-                trace_msg = trace_msg+('FD: %d returned string length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (exit_info.old_fd, 
+                trace_msg = trace_msg+(' FD: %d returned string length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (exit_info.old_fd, 
                               strlen, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
                 self.lgr.debug(trace_msg)
 

@@ -170,7 +170,7 @@ class SyscallManager():
         self.syscall_dict = {}
         self.trace_all = {}
         if self.top.isVxDKM(target=cell_name):
-            self.sharedSyscall = vxKCallExit.VxKCallExit(top, cpu, cell_name, mem_utils, task_utils, soMap, self.traceMgr, self.dataWatch, lgr)
+            self.sharedSyscall = vxKCallExit.VxKCallExit(top, cpu, cell_name, mem_utils, task_utils, soMap, self.traceMgr, self.dataWatch, self.context_manager, lgr)
         else:
             self.sharedSyscall = sharedSyscall
 
