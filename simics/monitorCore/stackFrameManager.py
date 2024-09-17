@@ -158,8 +158,8 @@ class StackFrameManager():
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
-        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+        esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, tid  = self.task_utils.curThread()
         self.stack_base[tid] = esp
         self.lgr.debug('setStackBase tid:%s to 0x%x init eip is 0x%x' % (tid, esp, eip))
