@@ -23,7 +23,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 std_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_common_', 'std::']
-opc_prefixes = ['OpcUa_String_', 'UaBase_P_', 'OpcUa_']
+opc_prefixes = ['UaBase_P_', 'OpcUa_P_String_', 'OpcUa_']
 mem_prefixes = std_prefixes + opc_prefixes
 
 def adjustFunName(frame, fun_mgr, lgr): 
