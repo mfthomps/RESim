@@ -120,10 +120,10 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         for p in parts:
             v = getValue(p.strip(), cpu, lgr=None) 
             if v is not None:
-                lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
+                #lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
             else:
-                lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
+                #lgr.debug('getAddressFromOperand could not getValue from %s  op %s' % (p, op))
                 return None    
         if remain is not None and remain.startswith(','):
             remain = remain[1:]
