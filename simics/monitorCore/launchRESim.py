@@ -258,6 +258,10 @@ class LaunchRESim():
                 DRIVER_WAIT = True
             elif name == 'CONFIG_COMMAND':
                 config_command = value
+            elif name == 'QUANTUM':
+                cmd = 'set-time-quantum %s' % value
+                lgr.debug('Run command %s' % cmd)
+                run_command(cmd)
             #print('assigned %s to %s' % (name, value))
 
         ''' hack around simics bug generating rafts of x11 traffic '''
@@ -266,6 +270,7 @@ class LaunchRESim():
             os.environ['DISPLAY'] = resim_display
         
         RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
+        ADD_FROM_SNAP = os.getenv('ADD_FROM_SNAP')
         self.SIMICS_VER = os.getenv('SIMICS_VER')
         if self.SIMICS_VER is not None:
             cmd = "$simics_version=%s" % (self.SIMICS_VER)
@@ -276,6 +281,9 @@ class LaunchRESim():
         
         self.comp_dict = createDict(self.config, self.not_a_target, lgr)
         self.link_dict = {}
+        if ADD_FROM_SNAP is not None:
+            print('add from snapshot %s' % ADD_FROM_SNAP)
+            run_command('read-configuration %s' % ADD_FROM_SNAP)
 
         if RUN_FROM_SNAP is None:
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
@@ -331,6 +339,7 @@ class LaunchRESim():
             ''' NOTE RETURN ABOVE '''
             if not DRIVER_WAIT:
                 self.doSections(lgr) 
+            lgr.debug('check config_command')
             if config_command is not None:
                 run_command(config_command)
         else:
@@ -421,14 +430,15 @@ class LaunchRESim():
 
             if did_net_create:
                 self.comp_dict[section]['ETH0_SWITCH'] = 'NONE' 
-                        
-            if self.SIMICS_VER.startswith('4'):
-                cmd='run-command-file "./targets/%s"' % (script)
-            else:
-                cmd='run-command-file "targets/%s" %s' % (script, params)
-            #print('cmd is %s' % cmd)
-            lgr.debug('cmd is %s' % cmd)
-            run_command(cmd)
+                       
+            if script.lower() != 'none': 
+                if self.SIMICS_VER.startswith('4'):
+                    cmd='run-command-file "./targets/%s"' % (script)
+                else:
+                    cmd='run-command-file "targets/%s" %s' % (script, params)
+                #print('cmd is %s' % cmd)
+                lgr.debug('cmd is %s' % cmd)
+                run_command(cmd)
             #print('assign eth link names')
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
             #print('link the switches')
