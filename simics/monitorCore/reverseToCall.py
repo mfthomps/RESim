@@ -169,6 +169,8 @@ class reverseToCall():
         cell = self.top.getCell()
         if self.sysenter_hap is None:
             if self.top.isVxDKM(self.cell_name):
+                # TBD fix this
+                #return
                 bp_start = None
                 self.global_sym = self.task_utils.getGlobalSymDict()
                 for addr in self.global_sym:
@@ -1522,7 +1524,7 @@ class reverseToCall():
                         self.recent_cycle[tid] = [cycles, frame]
                         #self.lgr.debug('sysenterHap setting first recent cycle')
                 else:
-                    self.lgr.debug('sysenterHap, cycles already there for tid %s' % tid) 
+                    self.lgr.debug('sysenterHap, cycles already there for tid %s cycles: 0x%x' % (tid, cycles)) 
 
     def getEnterCycles(self, tid):
         retval = []
