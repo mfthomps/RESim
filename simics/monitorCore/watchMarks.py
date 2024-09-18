@@ -479,16 +479,16 @@ class PushTestMark():
         return msg
  
 class FGetsMark():
-    def __init__(self, fun, addr, dest, count, start):
-        self.addr = addr
+    def __init__(self, fun, dest, count, start):
+        self.addr = dest
         self.dest = dest
         self.length = count
         self.start = start
         if start is not None:
-            offset = addr - start
-            self.msg = 'fgets from 0x%08x (offset %d within buffer starting at 0x%08x) to 0x%08x' % (addr, offset, start, dest)
+            offset = dest - start
+            self.msg = 'fgets into 0x%08x (offset %d within buffer starting at 0x%08x)' % (dest, offset, start)
         else:
-            self.msg = 'fgets from 0x%08x (unknown buffer?) to 0x%08x' % (addr, dest)
+            self.msg = 'fgets to 0x%08x (unknown buffer?)' % (dest)
     def getMsg(self):
         return self.msg
 
@@ -619,6 +619,19 @@ class Base64Decode():
             msg = '%s from 0x%08x (%d bytes into 0x%08x) to 0x%08x' % (self.fun, self.src, offset, self.buf_start, self.dest)
         else:
             msg = '%s from 0x%08x (unknown buffer) to 0x%08x' % (self.fun, self.src, self.dest)
+        return msg
+
+class CharCopyMark():
+    def __init__(self, fun, dest):
+        self.fun = fun
+        self.addr = dest
+        self.end_addr = dest
+        self.count = 1
+    def append(self):
+        self.count = self.count + 1
+        self.end_addr = self.end_addr + 1
+    def getMsg(self):
+        msg = '%s character addr 0x%x count %d' % (self.fun, self.addr, self.count)
         return msg
 
 class WatchMarks():
@@ -1227,8 +1240,8 @@ class WatchMarks():
             retval = wm
         return retval
 
-    def fgetsMark(self, fun, src, dest, count, start):
-        fm = FGetsMark(fun, src, dest, count, start)
+    def fgetsMark(self, fun, dest, count, start):
+        fm = FGetsMark(fun, dest, count, start)
         self.addWatchMark(fm)
 
     def stringMark(self, fun, src, dest, count, start):
@@ -1284,6 +1297,19 @@ class WatchMarks():
         bm = Base64Decode(fun, src, dest, count, buf_start)
         wm = self.addWatchMark(bm)
         return wm
+
+    def charCopy(self, fun, dest):
+        pm = self.recent_ad_hoc
+        if pm is not None and type(pm.mark) == CharCopyMark and ((pm.mark.end_addr+1) == dest):
+            self.lgr.debug('watchMarks charCopy prev addr 0x%x count %d cur dest 0x%x' % (pm.mark.addr, pm.mark.count, dest))
+            pm.mark.append()
+            self.lgr.debug(pm.mark.getMsg())
+        else:
+            dm = CharCopyMark(fun, dest)
+            wm = self.addWatchMark(dm)
+            self.recent_ad_hoc = wm
+            self.lgr.debug(dm.getMsg())
+
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)

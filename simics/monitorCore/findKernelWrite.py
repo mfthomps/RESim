@@ -116,8 +116,10 @@ class findKernelWrite():
         self.addr = addr
         # don't reset if set
 
-        phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
-        if phys_block.address == 0:
+        #phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Write)
+        phys = self.mem_utils.v2p(self.cpu, addr)
+        #if phys_block.address == 0:
+        if phys is None:
             self.lgr.error('findKernelWrite requested address %x, not mapped?' % addr)
             return
         ''' TBD support byte, word, dword '''
@@ -127,10 +129,10 @@ class findKernelWrite():
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         dumb, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys_block.address, self.num_bytes))
+        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys, self.num_bytes))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
-            phys_block.address, self.num_bytes, 0)
+            phys, self.num_bytes, 0)
 
         self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
         self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
@@ -138,7 +140,6 @@ class findKernelWrite():
 
         self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
 
-        #self.lgr.debug( 'breakpoint is %d, done now return from findKernelWrite, set forward break %d at 0x%x (0x%x)' % (self.kernel_write_break, self.forward_break, self.forward_eip, forward_phys_block.address))
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
         self.future_count = 0
@@ -200,8 +201,9 @@ class findKernelWrite():
         self.cleanUp()
         if memory.logical_address == 0:
             ''' TBD this would reflect an error or corruption in Simics due to reality leaks.  Replace with error message. '''
-            phys_block = self.cpu.iface.processor_info.logical_to_physical(self.addr, Sim_Access_Write)
-            phys_addr = phys_block.address
+            #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.addr, Sim_Access_Write)
+            #phys_addr = phys_block.address
+            phys_addr = self.mem_utils.v2p(self.cpu, self.addr)
             if phys_addr != memory.physical_address:
                 offset = memory.physical_address = phys_addr
             self.lgr.debug('vt_handler, physical_address is 0x%x size: %d offset: %d eip: 0x%x cycle: 0x%x' % (memory.physical_address, memory.size, offset, eip, self.cpu.cycles))

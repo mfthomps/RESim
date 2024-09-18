@@ -27,6 +27,8 @@
 '''
 import syscall
 import winSyscall
+import vxKSyscall
+import vxKCallExit
 LAST_PARAM = 1
 REDO_SYSCALLS = 2
 REMOVED_OK = 3
@@ -155,7 +157,6 @@ class SyscallManager():
         self.context_manager = context_manager
         ''' TBD maybe traceProcs passed in for each instance if it is to be traced? or other mechanism '''
         self.traceProcs = traceProcs
-        self.sharedSyscall = sharedSyscall
         self.lgr = lgr
         self.traceMgr = traceMgr
         self.dataWatch = dataWatch
@@ -168,6 +169,10 @@ class SyscallManager():
 
         self.syscall_dict = {}
         self.trace_all = {}
+        if self.top.isVxDKM(target=cell_name):
+            self.sharedSyscall = vxKCallExit.VxKCallExit(top, cpu, cell_name, mem_utils, task_utils, soMap, self.traceMgr, self.dataWatch, self.context_manager, lgr)
+        else:
+            self.sharedSyscall = sharedSyscall
 
     def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
                          trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[]):
@@ -189,6 +194,9 @@ class SyscallManager():
                                background=background, name=name, flist_in=flist, callback=callback, 
                                stop_on_call=stop_on_call, trace=trace, soMap=self.soMap,
                                record_fd=record_fd, swapper_ok=swapper_ok)
+        elif self.top.isVxDKM(target = self.cell_name):
+            retval = vxKSyscall.VxKSyscall(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.soMap, self.sharedSyscall, self.traceMgr, 
+                         self.context_manager, self.lgr, name=name, flist_in=flist, linger=linger)
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
@@ -216,7 +224,7 @@ class SyscallManager():
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
         # TBD callback should be per call parameter, not per syscall instance
-        self.lgr.debug('syscallManager watchSyscall given context %s name: %s' % (context, name))
+        self.lgr.debug('syscallManager watchSyscall given context %s name: %s call_list %s' % (context, name, str(call_list)))
         retval = None 
         if context is None:
             # NOTE may return default context
@@ -230,6 +238,13 @@ class SyscallManager():
             dumb_param = syscall.CallParams(name, None, None)
             call_params_list.append(dumb_param)
             self.lgr.debug('syscallManager watchSyscall context %s, added dummy parameter with name %s' % (context, name))
+        if self.top.isVxDKM(cpu=self.cpu):
+            # hack to ioctl for old binaries
+            if 'ioctl' not in call_list:
+                call_list.append('ioctl')
+            # hack to handle absolute paths on mapped directories
+            if 'fopen' not in call_list:
+                call_list.append('fopen')
 
         call_instance = self.findCalls(call_list, context)
         if call_instance is None:
@@ -245,6 +260,10 @@ class SyscallManager():
                                    self.dataWatch, call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                    background=background, name=name, flist_in=flist, callback=callback, soMap=self.soMap, 
                                    stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
+                elif self.top.isVxDKM(target = self.cell_name):
+                    retval = vxKSyscall.VxKSyscall(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.soMap, 
+                                 self.sharedSyscall, self.traceMgr, self.context_manager, self.lgr, call_list=call_list, call_params=call_params_list, 
+                                 flist_in=flist, name=name, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                    self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
@@ -308,6 +327,9 @@ class SyscallManager():
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
                                call_list=new_call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
+                elif self.top.isVxDKM(target = self.cell_name):
+                    retval = vxKSyscall.VxKSyscall(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.soMap, self.sharedSyscall, 
+                                 self.traceMgr, self.context_manager, self.lgr, call_list=new_call_list, call_params=call_params_list, name=name, flist_in=flist, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
@@ -397,6 +419,10 @@ class SyscallManager():
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
                                call_list=new_call_list, call_params=[], targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, stop_on_call=stop_on_call, kbuffer=kbuffer)
+                elif self.top.isVxDKM(target = self.cell_name):
+                    retval = vxKSyscall.VxKSyscall(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.soMap, 
+                                 self.sharedSyscall, self.traceMgr, self.context_manager, self.lgr, call_list=new_call_list, call_params=[], 
+                                 flist_in=flist, name=name, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
@@ -610,3 +636,6 @@ class SyscallManager():
                         if path not in dmod_list:
                             dmod_list.append(path)
         return dmod_list
+
+    def getSharedSyscall(self):
+        return self.sharedSyscall

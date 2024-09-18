@@ -22,7 +22,7 @@ def findMissing():
                 new_end = load_start
                 # start at zero because IDA will use this manual region on the next start as the memory.  
                 line = 'IDA is confused and is missing a memory area.  Use Debugger/ Manual Region to add region from 0 to 0x%x' % (new_end)
-                print('would add new region to fill in from 0x%x to 0x%x' % (new_start, new_end))
+                print('would add new region to fill in from 0 to 0x%x' % (new_end))
                 ok = simpleDialog.simpleDialog(line)
                 this, that = ok.Compile()
                 ok.Execute()

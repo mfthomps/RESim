@@ -19,6 +19,7 @@ class CellConfig():
             obj = SIM_get_object(cell_name)
             self.cell_context[cell_name] = obj.cell_context
 
+        hack_vx = 'zynqmp.soc.rpu.cores[0]'
         for cell_name in self.cells:
             cmd = '%s.get-processor-list' % cell_name
             proclist = SIM_run_command(cmd)
@@ -27,6 +28,12 @@ class CellConfig():
             self.cpu_cell[cpu] = cell_name
             self.cell_cpu_list[cell_name] = []
             for proc in proclist:
+                if proc == hack_vx:
+                    del self.cpu_cell[cpu]
+                    cpu = SIM_get_object(proc)
+                    self.cpu_cell[cpu] = cell_name
+                    self.cell_cpu[cell_name] = cpu
+                    print('Set cpu to %s for cell %s' % (hack_vx, cell_name))
                 self.cell_cpu_list[cell_name].append(SIM_get_object(proc))
 
     def cpuFromCell(self, cell_name):

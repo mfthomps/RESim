@@ -260,7 +260,7 @@ class RunTo():
                 if proc is not None and proc == comm:
                     self.lgr.debug('runTo toRunningProc Already at proc %s, done' % proc)
                     hap_clean = hapCleaner.HapCleaner(cpu)
-                    stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                    stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
                     stop_action.run()
                     return
                 elif want_tid_list is not None and tid in want_tid_list:
@@ -270,7 +270,7 @@ class RunTo():
                     if final_fun is not None:
                         f3 = stopFunction.StopFunction(final_fun, [], nest=False)
                         flist.append(f3)
-                    stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                    stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
                     stop_action.run()
                     return
 
@@ -285,7 +285,7 @@ class RunTo():
             self.cur_task_hap))
         
         hap_clean = hapCleaner.HapCleaner(cpu)
-        self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+        self.stop_action = hapCleaner.StopAction(hap_clean, breakpoints=[self.cur_task_break], flist=flist)
 
         status = self.top.is_monitor_running.isRunning()
         if not status:
@@ -356,7 +356,7 @@ class RunTo():
        cpu, comm, cur_tid = self.task_utils.curThread() 
        hap_clean = hapCleaner.HapCleaner(self.cpu)
        f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
-       self.stop_action = hapCleaner.StopAction(hap_clean, [], [f1])
+       self.stop_action = hapCleaner.StopAction(hap_clean, flist=[f1])
        end = addr+size
        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, size, 0)
        self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))

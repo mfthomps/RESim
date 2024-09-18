@@ -239,6 +239,7 @@ def main():
     directives_script = '/tmp/directives.sh'
     driver_file = open(remote_directives_file, 'w')
     if args.disconnect:
+        driver_file.write('chmod a+x /tmp/simics-magic\n')
         driver_file.write('/tmp/simics-magic\n')
     file_list = []
     for file in directive.file:

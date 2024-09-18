@@ -20,7 +20,7 @@ class StopAction():
     ''' hap_clearer is a list of haps to delete
         breakpoints is a list to be deleted
         flist is list of functions to be executed of type stopFunction'''
-    def __init__(self, hap_cleaner, breakpoints, flist=None, break_addrs = [], tid=None, prelude=None, wrong_tid_action=None):
+    def __init__(self, hap_cleaner, breakpoints=[], flist=None, break_addrs = [], tid=None, prelude=None, wrong_tid_action=None):
         self.hap_clean = hap_cleaner
         self.break_addrs = break_addrs
         self.exit_addr = None
