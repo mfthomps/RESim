@@ -621,6 +621,19 @@ class Base64Decode():
             msg = '%s from 0x%08x (unknown buffer) to 0x%08x' % (self.fun, self.src, self.dest)
         return msg
 
+class CharCopyMark():
+    def __init__(self, fun, dest):
+        self.fun = fun
+        self.addr = dest
+        self.end_addr = dest
+        self.count = 1
+    def append(self):
+        self.count = self.count + 1
+        self.end_addr = self.end_addr + 1
+    def getMsg(self):
+        msg = '%s character addr 0x%x count %d' % (self.fun, self.addr, self.count)
+        return msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -1284,6 +1297,19 @@ class WatchMarks():
         bm = Base64Decode(fun, src, dest, count, buf_start)
         wm = self.addWatchMark(bm)
         return wm
+
+    def charCopy(self, fun, dest):
+        pm = self.recent_ad_hoc
+        if pm is not None and type(pm.mark) == CharCopyMark and ((pm.mark.end_addr+1) == dest):
+            self.lgr.debug('watchMarks charCopy prev addr 0x%x count %d cur dest 0x%x' % (pm.mark.addr, pm.mark.count, dest))
+            pm.mark.append()
+            self.lgr.debug(pm.mark.getMsg())
+        else:
+            dm = CharCopyMark(fun, dest)
+            wm = self.addWatchMark(dm)
+            self.recent_ad_hoc = wm
+            self.lgr.debug(dm.getMsg())
+
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
