@@ -1,6 +1,7 @@
 from simics import *
 import memUtils
 import json
+import sys
 class VxKMemUtils():
     def __init__(self, lgr):
         self.lgr = lgr
@@ -13,6 +14,12 @@ class VxKMemUtils():
         self.arm_regs.append('pc')
         self.arm_regs.append('lr')
         self.SIZE_MASK = 0xffffffff
+
+    def readPtr(self, cpu, addr):
+        return self.readWord32(cpu, addr)
+
+    def readWord(self, cpu, addr):
+        return self.readWord32(cpu, addr)
 
     def readWord32(self, cpu, addr):
         retval = None
@@ -136,3 +143,71 @@ class VxKMemUtils():
 
     def getCallRetReg(self, cpu):
         return 'r0'
+
+    def getSigned(self, val):
+        if(val & 0x80000000):
+            val = -0x100000000 + val
+        return val
+
+    def writeWord(self, cpu, address, value):
+        SIM_write_phys_memory(cpu, address, value, self.WORD_SIZE)
+
+    def writeByte(self, cpu, address, value):
+        SIM_write_phys_memory(cpu, address, value, 1)
+
+    def writeWord32(self, cpu, address, value):
+        if value is None:
+            self.lgr.error('vxKMemUtils writeWord32 value given is None')
+            return
+        SIM_write_phys_memory(cpu, address, value, 4)
+
+    def writeBytes(self, cpu, address, byte_tuple):
+        if len(byte_tuple) == 0:
+            self.lgr.error('vxKMemUtils writeBytes got empty byte_tuple')
+            return
+        cur_addr = address
+        for b in byte_tuple:
+            SIM_write_phys_memory(cpu, cur_addr, b, 1)
+            cur_addr = cur_addr + 1
+
+    def writeString(self, cpu, address, string):
+        #self.lgr.debug('writeString len %d adress: 0x%x %s' % (len(string), address, string))
+
+        lcount = int(len(string)/4)
+        carry = len(string) % 4
+        if carry != 0:
+            lcount += 1
+        
+        sindex = 0
+        for i in range(lcount):
+            eindex = min(sindex+4, len(string))
+            if sys.version_info[0] > 2 and type(string) != bytearray and type(string) != bytes:
+                sub = string[sindex:eindex].encode('utf-8','ignore') 
+            else:
+                sub = string[sindex:eindex]
+            count = len(sub)
+            #sub = sub.zfill(4)
+            sub = sub.ljust(4, b'0')
+            #print('sub is %s' % sub)
+            #value = int(sub.encode('hex'), 16)
+            if len(sub) < 4:
+                self.lgr.error('writeString failed writing sub %s, len less than 4?' % (str(sub)))
+                continue
+            try:
+                value = struct.unpack("<L", sub)[0]
+            except:
+                self.lgr.error('writeString failed unpacking sub %s,???' % (str(sub)))
+                sindex +=4
+                address += 4
+                continue
+            sindex +=4
+            try:
+                SIM_write_phys_memory(cpu, address, value, count)
+                #self.lgr.debug('writeString wrote %d bytes' % count)
+            except TypeError:
+                self.lgr.error('writeString failed writing to address 0x%x, value %s' % (address, value))
+                return
+            address += 4
+
+    def v2p(self, cpu, v, use_pid=None):
+        return v

@@ -1,4 +1,5 @@
 from simics import *
+import os
 import taskUtils
 import net
 import vxNet
@@ -6,17 +7,19 @@ import syscall
 import hapCleaner
 from resimHaps import *
 class ExitInfo():
-    def __init__(self, syscall, stop_on_exit, call_name):
+    def __init__(self, syscall, call_name):
         self.syscall_instance = syscall
         #self.restore_bps = restore_bps
-        self.stop_on_exit = stop_on_exit
         self.call_name = call_name
         self.call_params = []
         self.matched_param = None
         self.fname = None
+        self.select_info = None
+        self.retval_addr = None
+        self.retval_addr_list = []
 class VxKSyscall():
     def __init__(self, top, cpu, cell_name, mem_utils, task_utils, so_map, call_exit, trace_mgr, context_manager, lgr, call_list=None, call_params=[], 
-                   name=None, flist_in=None, linger=False):
+                   name=None, flist_in=None, linger=False, stop_on_call=False):
         self.cpu = cpu
         self.cell_name = cell_name
         self.mem_utils = mem_utils
@@ -30,6 +33,12 @@ class VxKSyscall():
         self.top = top
         self.name = name
         self.linger = linger
+        self.stop_on_call = stop_on_call
+        self.syscall_info = None
+        self.trace = False
+        self.callback = False
+        self.compat32 = False
+        self.background = False
         self.lgr = lgr
         self.module_bp = []
         self.module_hap = []
@@ -61,27 +70,81 @@ class VxKSyscall():
     def setGlobal(self, call_list):
         bp_start = None
         bp = None
+        self.syscall_info = syscall.SyscallInfo(self.cpu, None, None,  None, self.trace)
+        skip_trace = self.top.getCompDict(self.cell_name, 'SKIP_TRACE')
+        no_call_list = []
+        # TBD skip_trace is not useful because subfunctions will be hit?
+        if call_list is None and skip_trace is not None:
+            if os.path.isfile(skip_trace):
+                with open(skip_trace) as fh:
+                    print('Will skip VXWorks calls found in %s' % skip_trace)
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith('#'):
+                            continue
+                        no_call_list.append(line)
+            else:
+                self.lgr.error('vxKSyscall setGlobal did not find skip_trace file %s' % skip_trace)
+                self.top.quit()
         for addr in self.global_sym:
             
             #self.lgr.debug('vxKSyscall setGlobal check for %s' % self.global_sym[addr])
-            if call_list is None or self.global_sym[addr] in call_list:
-                self.lgr.debug('vxKSyscall setGlobal for %s addr 0x%x context %s' % (self.global_sym[addr], addr, self.cpu.current_context))
+            if (call_list is None and self.global_sym[addr] not in no_call_list) or (call_list is not None and self.global_sym[addr] in call_list):
                 #bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
                 bp = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                self.lgr.debug('vxKSyscall setGlobal for %s addr 0x%x bp: %d context %s name: %s' % (self.global_sym[addr], addr, bp, self.cpu.current_context, self.name))
                 if bp_start is None:
                     bp_start = bp
         if bp_start is not None:
             if bp_start != bp:
                 #self.sym_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.symbolHap, None, bp_start, bp)
-                self.sym_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.symbolHap, None, bp_start, bp, 'syscall')
+                self.sym_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.symbolHap, None, bp_start, bp, self.name)
                 self.lgr.debug('vxKSyscall setGlobal set bp range %d %d' % (bp_start, bp))
             else:
                 #self.sym_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.symbolHap, None, bp)
-                self.sym_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.symbolHap, None, bp, 'syscall')
+                self.sym_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.symbolHap, None, bp, self.name)
                 self.lgr.debug('vxKSyscall setGlobal set bp %d' % (bp))
 
     def parseCall(self, fun, exit_info):
         trace_msg = None
+        tid = self.task_utils.curTID()
+        if self.name not in ['traceAll']:
+            got_one = False
+            bail_if_not_got = False
+            for call_param in self.call_params:
+                #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
+                if call_param.match_param.__class__.__name__ == 'TidFilter':
+                    if tid != call_param.match_param.tid:
+                        #self.lgr.debug('syscall syscallParse, tid filter did not match')
+                        bail_if_not_got = True
+                    else:
+                        exit_info.call_params.append(call_param)
+                        self.lgr.debug('syscall syscallParse %s, tid filter matched, added call_param' % callname)
+                        got_one = True
+                elif call_param.match_param.__class__.__name__ == 'Dmod' and len(self.call_params) == 1:
+                    if call_param.match_param.comm is not None and call_param.match_param.comm != comm:
+                        #self.lgr.debug('syscall syscallParse, Dmod %s does not match comm %s, return' % (call_param.match_param.comm, comm))
+                        #self.lgr.debug('syscall syscallParse, Dmod does not match comm %s, return' % (comm))
+                        bail_if_not_got = True
+                    elif call_param.match_param is not None:
+                        self.lgr.debug('syscall syscallParse, Dmod %s match comm %s' % (call_param.match_param.comm, comm))
+                        got_one = True
+                      
+                elif call_param.name == 'runToCall':
+                    if callname not in self.call_list:
+                        self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
+                        bail_if_not_got = True
+                    else:
+                        if self.stop_on_call:
+                            do_stop_from_call = True
+                        exit_info.call_params.append(call_param)
+                        self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
+                        got_one = True
+                        # default this to the matched param in case call that is not otherwised parsed in sharedSyscall
+                        exit_info.matched_param = call_param
+            if bail_if_not_got and not got_one:
+                return
+
         frame = self.task_utils.frameFromRegs()
         if fun == 'socket':
             domain = frame['param1']
@@ -89,7 +152,7 @@ class VxKSyscall():
             protocol = frame['param3']
             domain_name = net.domaintype[domain]
             type_name = net.socktype[sock_type] 
-            trace_msg = ('%s domain: %s  type: %s' % (fun, domain_name, type_name))
+            trace_msg = ('%s domain: %s  type: %s tid:%s' % (fun, domain_name, type_name, tid))
         if fun == 'ioctl':
             fd = frame['param1']
             cmd = frame['param2']
@@ -97,24 +160,32 @@ class VxKSyscall():
             arg_val = SIM_read_phys_memory(self.cpu, arg, 4)
             FIONBIO = 0x90040010
             if cmd == FIONBIO:
-                trace_msg = ('%s fd: 0x%x FIONBIO (set blocking) arg 0x%x arg_val 0x%x' % (fun, fd, arg, arg_val))
+                trace_msg = ('%s fd: 0x%x FIONBIO (set blocking) arg 0x%x arg_val 0x%x tid:%s' % (fun, fd, arg, arg_val, tid))
+                self.lgr.debug(trace_msg)
             elif cmd == 0x10:
-                self.mem_utils.setRegValue(self.cpu, 'r1', FIONBIO)
-                trace_msg = ('%s fd: 0x%x FORCED set of FIONBIO (set blocking) arg 0x%x arg_val 0x%x' % (fun, fd, arg, arg_val))
+                #self.mem_utils.setRegValue(self.cpu, 'r1', FIONBIO)
+                self.top.writeRegValue('r1', FIONBIO, target_cpu=self.cpu)
+                trace_msg = ('%s fd: 0x%x FORCED set of FIONBIO (set blocking) arg 0x%x arg_val 0x%x tid:%s' % (fun, fd, arg, arg_val, tid))
+                self.lgr.debug(trace_msg)
             else:
-                trace_msg = ('parseCall %s fd: 0x%x cmd: 0x%x arg: 0x%x' % (fun, fd, cmd, arg))
+                trace_msg = ('parseCall %s fd: 0x%x cmd: 0x%x arg: 0x%x tid:%s' % (fun, fd, cmd, arg, tid))
+                self.lgr.debug(trace_msg)
         if fun == 'fopen':
             faddr = frame['param1']
             exit_info.fname = self.mem_utils.readString(self.cpu, faddr, 256)
+            #if exit_info.fname == '/usr/App/my.map':
+            #   SIM_break_simulation('funaddr 0x%x fname %s' % (faddr, exit_info.fname))
+            #   return
             if exit_info.fname.startswith('/'):
                 new_addr = faddr+1
-                self.mem_utils.setRegValue(self.cpu, 'r0', new_addr)
-            trace_msg = '%s fname addr: 0x%x fname: %s' % (fun, faddr, exit_info.fname)
+                #self.top.setRegValue(self.cpu, 'r0', new_addr)
+                self.top.writeRegValue('r0', new_addr, target_cpu=self.cpu)
+            trace_msg = '%s fname addr: 0x%x fname: %s tid:%s' % (fun, faddr, exit_info.fname, tid)
             self.openParams(exit_info)
 
         elif fun == 'bind':
             ss = vxNet.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'], lgr=self.lgr)
-            trace_msg = ('%s %s' % (fun, ss.getString()))
+            trace_msg = ('%s %s tid:%s' % (fun, ss.getString(), tid))
         elif fun == 'fgets':
             addr = frame['param1']
             count = frame['param2']
@@ -122,12 +193,50 @@ class VxKSyscall():
             exit_info.old_fd = fd
             exit_info.count = count
             exit_info.retval_addr = addr
-            trace_msg = '%s addr: 0x%x count: 0x%x FD: 0x%x' % (fun, addr, count, fd)
+            trace_msg = '%s addr: 0x%x count: 0x%x FD: 0x%x tid:%s' % (fun, addr, count, fd, tid)
+            self.readParams(exit_info, frame)
+        elif fun == 'fgetc':
+            fd = frame['param1']
+            exit_info.old_fd = fd
+            exit_info.count = 1
+            self.readParams(exit_info, frame)
+        elif fun == 'fscanf':
+            fd = frame['param1']
+            exit_info.old_fd = fd
+            format_addr = frame['param2']
+            format_str = self.mem_utils.readString(self.cpu, format_addr, 256)
+            exit_info.fname = format_str
+            exit_info.retval_addr_list.append(frame['param3'])
+            exit_info.retval_addr_list.append(frame['param4'])
+            exit_info.retval_addr_list.append(frame['param5'])
+            exit_info.retval_addr_list.append(frame['param6'])
+            trace_msg = '%s fd: 0x%x format_addr 0x%x format: %s retval_addr 0x%x other addr 0x%x tid:%s' % (fun, fd, format_addr, format_str, exit_info.retval_addr_list[0],
+                 exit_info.retval_addr_list[1], tid) 
             self.readParams(exit_info, frame)
              
+        elif fun == 'printf':
+            fd = frame['param1']
+            exit_info.old_fd = fd
+            format_addr = frame['param2']
+            format_str = self.mem_utils.readString(self.cpu, format_addr, 256)
+            frame_string = taskUtils.stringFromFrame(frame)
+            trace_msg = '%s fd: 0x%x format_addr 0x%x format: %s frame: %s tid:%s' % (fun, fd, format_addr, format_str, frame_string, tid)
+            self.lgr.debug(trace_msg)
+        elif fun == 'select':
+            exit_info.select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
+                 self.cpu, self.mem_utils, self.lgr)
+
+            trace_msg = '%s tid:%s %s\n' % (fun, tid, exit_info.select_info.getString())
+        elif fun == 'recv':
+            fd = frame['param1']
+            exit_info.old_fd = fd
+            exit_info.retval_addr = frame['param2']
+            exit_info.count = frame['param3']
+            trace_msg = '%s tid:%s FD: 0x%x addr: 0x%x count: 0x%x' % (fun, tid, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
+            self.readParams(exit_info, frame)
         else:
             frame_string = taskUtils.stringFromFrame(frame)
-            trace_msg = ('%s %s' % (fun, frame_string))
+            trace_msg = ('%s %s tid:%s' % (fun, frame_string, tid))
         if trace_msg is not None: 
             self.lgr.debug('vxKSyscall parseCall '+trace_msg.strip()) 
             if trace_msg is not None and self.trace_mgr is not None:
@@ -138,14 +247,21 @@ class VxKSyscall():
 
     def symbolHap(self, user_param, conf_object, break_num, memory):
         # entered when a global symbol was hit.
+        if self.context_manager.isHapDisabled(self.sym_hap):
+            #self.lgr.debug('vxKSyscall symbolHap but hap disabled')
+            return
         addr = memory.logical_address
-        self.lgr.debug('symbolHap addr 0x%x' % addr)
-        #ttbr = self.cpu.translation_table_base0
-        #cpu = SIM_current_processor()
-        reg_num = self.cpu.iface.int_register.get_number('sp')
-        sp_value = self.cpu.iface.int_register.read(reg_num)
-        cur_task = self.task_utils.getCurrentTask()
         if addr in self.global_sym:
+            cur_task = self.task_utils.getCurrentTask()
+            pending = self.call_exit.getPendingCall(cur_task)
+            if pending is not None:
+                self.lgr.debug('vxKSyscall symbolHap task 0x%x break_num %d call to %s, but already pending call %s, must be nested functions. cycle 0x%x' % (cur_task, break_num, self.global_sym[addr], pending, self.cpu.cycles))
+                return 
+            self.lgr.debug('vxKSyscall symbolHap task 0x%x addr 0x%x break_num %d cycles: 0x%x' % (cur_task, addr, break_num, self.cpu.cycles))
+            #ttbr = self.cpu.translation_table_base0
+            #cpu = SIM_current_processor()
+            reg_num = self.cpu.iface.int_register.get_number('sp')
+            sp_value = self.cpu.iface.int_register.read(reg_num)
             #print('hit global sym %s at 0x%x' % (self.global_sym[addr], addr))
             # Hack to use stack value to distinguish our thread from other threads
             #if sp_value > 0x78e00000 and sp_value < 0x78f00000:
@@ -155,17 +271,8 @@ class VxKSyscall():
             elif True:
                 self.lgr.debug('hit global sym %s at 0x%x sp_value: 0x%x cur_task: 0x%x self.cpu: %s cycles: 0x%x context: %s' % (self.global_sym[addr], addr, sp_value, cur_task, self.cpu.name, self.cpu.cycles, str(self.cpu.current_context)))
                 SIM_run_alone(self.disableSyms, None)
-                stop_on_exit = False
-                #if self.call_list is None:
-                #    stop_on_exit = False
-                #else:
-                #    stop_on_exit = True
-                exit_info = ExitInfo(self, stop_on_exit, self.global_sym[addr])
+                exit_info = ExitInfo(self, self.global_sym[addr])
                 self.parseCall(self.global_sym[addr], exit_info)
-                if self.call_list is None:
-                    stop_on_exit = False
-                else:
-                    stop_on_exit = True
                 self.call_exit.setExit(exit_info)
                 #if self.global_sym[addr] == 'fopen':
                 #    #SIM_break_simulation('fopen')
@@ -184,19 +291,18 @@ class VxKSyscall():
             #if addr == self.fwprintf:
             #    SIM_break_simulation('fwprintf %s' % cpu.name)
         else:
-            print('hit other at 0x%x' % (addr))
-            self.lgr.debug('hit other at 0x%x conf: %s' % (addr, str(conf_object)))
-            SIM_break_simulation('other %s' % self.cpu.name)
+            # likey effect of a hap with a breakpoint range that is not contiguous
+            pass
         #SIM_break_simulation('hit break')
 
 
     def disableSyms(self, dumb=None):
-        #self.lgr.debug('disableSysms done')
         self.context_manager.genDisableHap(self.sym_hap)
+        self.lgr.debug('disableSyms done')
 
     def enableSyms(self, dumb=None):
-        #self.lgr.debug('enableSyms done')
         self.context_manager.genEnableHap(self.sym_hap)
+        self.lgr.debug('enableSyms done')
 
     def rmAll(self):
         self.disableSyms()
@@ -209,19 +315,34 @@ class VxKSyscall():
         if hap is not None:
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", hap)
 
-    def addCallParams(self, removed_params):
-        return
+    def addCallParams(self, call_params):
+        gotone = False
+        for call in call_params:
+            if not self.hasCallParam(call.name):
+                self.lgr.debug('vxKSyscall addCallParams %s' % call.name)
+                self.call_params.append(call)
+                gotone = True
+        ''' TBD inconsistent stop actions????'''
+        if gotone:
+            if self.stop_action is None:
+                f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
+                flist = [f1]
+                hap_clean = hapCleaner.HapCleaner(self.cpu)
+                self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
+            self.lgr.debug('vxKSyscall addCallParams added params')
+        else:
+            pass
 
     def openParams(self, exit_info):
                 for call_param in self.call_params:
                     self.lgr.debug('vxKSyscall openParams got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
-                         mod = call_param.match_param
-                         #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
-                         #if mod.fname_addr is None:
-                         if mod.getMatch() == exit_info.fname:
-                             self.lgr.debug('vxKSyscall openParams , dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
-                             exit_info.call_params.append(call_param)
+                        mod = call_param.match_param
+                        #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
+                        #if mod.fname_addr is None:
+                        if mod.getMatch() == exit_info.fname:
+                            self.lgr.debug('vxKSyscall openParams , dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
+                            syscall.addParam(exit_info, call_param)
                     elif type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('fopen') and (call_param.proc is None or call_param.proc == self.comm_cache[tid])):
                         if exit_info.fname is None:
                             self.lgr.debug('vxKSyscall openParams open, found potential match_param %s' % call_param.match_param)
@@ -229,12 +350,8 @@ class VxKSyscall():
                             self.lgr.debug('vxKSyscall openParams open, file is %s' % exit_info.fname)
                         if exit_info.fname is None or call_param.match_param in exit_info.fname:
                             self.lgr.debug('vxKSyscall openParams open, found actual match_param %s' % call_param.match_param)
-                            exit_info.call_params.append(call_param)
-                            exit_info.stop_on_exit = True                    
+                            syscall.addParam(exit_info, call_param)
                         break
-                    elif call_param.name == 'runToCall' and exit_info.call_name == call_param.subcall:
-                        self.lgr.debug('vxKSyscall openParams open runToCall for fopen')
-                        exit_info.call_params.append(call_param)
 
     def readParams(self, exit_info, frame):
         self.lgr.debug('vxKSyscall readParams num call_params %d' % len(self.call_params))
@@ -242,7 +359,7 @@ class VxKSyscall():
             ''' look for matching FD '''
             if type(call_param.match_param) is int:
                 self.lgr.debug('vxKSyscall readParams is int, match_param is %s' % (call_param.match_param))
-                if call_param.match_param == frame['param3'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                if call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
                         self.lgr.debug('vxKSyscall readParams read call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
@@ -322,6 +439,26 @@ class VxKSyscall():
         for cp in rm_list:
             self.call_params.remove(cp)
         return return_list
+
+    def getCallParams(self):
+        if self.syscall_info is not None:
+            return self.call_params
+        else:
+            return []
+
+    def remainingDmod(self, besides):
+        for call_param in self.call_params:
+            if call_param.match_param.__class__.__name__ == 'Dmod' and call_param.name != besides:
+                 return True
+        return False
+
+    def hasCallParam(self, param_name):
+        retval = False
+        for call_param in self.call_params:
+            if call_param.name == param_name:
+                retval = True
+                break 
+        return retval
 
     def stopTrace(self, immediate=False):
         self.rmAll()

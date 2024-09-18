@@ -132,6 +132,7 @@ import vxKMemUtils
 import vxParam
 import vxKTaskUtils
 import vxKModules
+import findRefs
 
 #import fsMgr
 import json
@@ -348,6 +349,8 @@ class GenMonitor():
         self.loop_n = {}
 
         self.disassemble_instruct = {}
+        self.max_marks = None
+        self.no_reset = False
 
         ''' ****NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -439,7 +442,7 @@ class GenMonitor():
         self.lgr.debug('genInit each target in comp_dict (%d targets)' % len(comp_dict))
         for cell_name in comp_dict:
             self.lgr.debug('genInit for cell %s' % (cell_name))
-            if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param:
+            if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param and comp_dict[cell_name]['RESIM_PARAM'].lower() != 'none':
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
                 print('Cell %s using params from %s' % (cell_name, param_file))
                 self.lgr.debug('Cell %s using params from %s' % (cell_name, param_file))
@@ -484,6 +487,7 @@ class GenMonitor():
                 self.lgr.debug(self.param[cell_name].getParamString())
             elif 'OS_TYPE' in comp_dict[cell_name] and comp_dict[cell_name]['OS_TYPE'].startswith('VXW'):
                 self.lgr.debug('No params for vxworks yet.')
+                self.param[cell_name] = None
             elif cell_name not in self.param:
                 print('Cell %s missing params, it will not be monitored. ' % (cell_name))
                 self.lgr.debug('Cell %s missing params ' % (cell_name))
@@ -498,6 +502,7 @@ class GenMonitor():
             cpu = self.cell_config.cpuFromCell(cell_name)
             if self.isVxDKM(cpu=cpu):
                 self.mem_utils[cell_name] = vxKMemUtils.VxKMemUtils(self.lgr)
+                self.lgr.debug('genInit set memUtils for VxDKM cell %s' % cell_name)
             else:
                 self.mem_utils[cell_name] = memUtils.MemUtils(self, word_size, self.param[cell_name], self.lgr, arch=cpu.architecture, cell_name=cell_name)
             if cell_name not in self.os_type:
@@ -977,6 +982,7 @@ class GenMonitor():
         while not done:
             done = True
             for cell_name in self.cell_config.cell_context:
+                self.lgr.debug('genMonitor doInit cell_name %s' % cell_name)
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
                     continue
@@ -985,6 +991,10 @@ class GenMonitor():
                     self.lgr.debug('already got %s' % cell_name)
                     continue
                 cpu = self.cell_config.cpuFromCell(cell_name)
+                if self.isVxDKM(target=cell_name):
+                    self.task_utils[cell_name] = vxKTaskUtils.VxKTaskUtils(cpu, cell_name, self.mem_utils[cell_name], self.comp_dict[cell_name], None, self.lgr) 
+                    self.finishInit(cell_name)
+                    continue 
                 ''' run until we get something sane '''
                 eip = self.getEIP(cpu)
                 cpl = memUtils.getCPL(cpu)
@@ -1008,27 +1018,6 @@ class GenMonitor():
                         #self.lgr.debug('doInit cell %s cur_task_rec 0x%x tid None ' % (cell_name, cur_task_rec))
                         done = False
                         continue
-                    ''' TBD clean this up '''
-                    self.lgr.debug('doInit cell %s tid is %d' % (cell_name, tid))
-                    '''
-                    phys = self.mem_utils[cell_name].v2p(cpu, self.param[cell_name].current_task)
-                    tu_cur_task_rec = self.mem_utils[cell_name].readPhysPtr(cpu, phys)
-                    if tu_cur_task_rec is None:
-                        self.lgr.debug('doInit cell %s cur_task_rec 0x%x tid:%s but None from task_utils ' % (cell_name, cur_task_rec, tid))
-                        done = False
-                        continue
-                    self.lgr.debug('doInit cell %s cur_task_rec 0x%x tid:%s from task_utils 0x%x   current_task: 0x%x (0x%x)' % (cell_name, 
-                           cur_task_rec, tid, tu_cur_task_rec, self.param[cell_name].current_task, phys))
-                    if tu_cur_task_rec != 0:
-                        if cur_task_rec != tu_cur_task_rec:
-                            self.lgr.debug('doInit memUtils getCurrentTaskRec does not match found at para.current_task, try again')
-                            tid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
-                            tu_tid = self.mem_utils[cell_name].readWord32(cpu, tu_cur_task_rec + self.param[cell_name].ts_pid)
-                            self.lgr.debug('tid %s  tu_tid %s' % (str(tid), str(tu_tid)))
-                            #SIM_break_simulation('no match')
-                            done = False
-                            continue
-                    '''
                     if True:
                         if self.isWindows(cell_name):
                             task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
@@ -2978,6 +2967,8 @@ class GenMonitor():
         retval = None
         if self.isWindows():
             self.winMonitor[self.target].debugExitHap(flist, context=context)
+        elif self.isVxDKM():
+            self.lgr.debug('debugExitHap, TBD for vxDKM')
         else:
             if self.target not in self.exit_group_syscall:
                 somap = None
@@ -3000,6 +2991,8 @@ class GenMonitor():
             the contextManager and we do not want this rudundant stopage. '''
         if self.isWindows():
             self.winMonitor[self.target].rmDebugExitHap()
+        elif self.isVxDKM():
+            self.lgr.debug('rmDebugExitHap, TBD for vxDKM')
         elif self.target in self.exit_group_syscall:
             self.lgr.debug('rmDebugExit')
             self.syscallManager[self.target].rmSyscall('debugExit')
@@ -3080,7 +3073,7 @@ class GenMonitor():
                 self.user_break.doBreak()
             #self.lgr.debug('restoreDebugBreaks back  break')
             if self.target in self.magic_origin:
-                #self.lgr.debug('restoreDebugBreaks set magic?')
+                self.lgr.debug('restoreDebugBreaks set magic?')
                 self.magic_origin[self.target].setMagicHap()
             #self.lgr.debug('restoreDebugBreaks return')
             self.jumperEnable()
@@ -3143,7 +3136,7 @@ class GenMonitor():
             if self.user_break is not None:
                 self.user_break.stopBreak()
             if self.target in self.magic_origin:
-                #self.lgr.debug('genMon removeDebugBreaks magic')
+                self.lgr.debug('genMon removeDebugBreaks magic')
                 self.magic_origin[self.target].deleteMagicHap()
             self.jumperDisable()
             if self.target in self.read_replace:
@@ -3337,6 +3330,11 @@ class GenMonitor():
             flist.append(f1)
             flist.append(f2)
         the_syscall = None
+        if self.isVxDKM():
+            if 'fopen' not in call_list:
+                call_list.append('fopen')
+            if 'ioctl' not in call_list:
+                call_list.append('ioctl')
         if all_contexts:
             for context in self.context_manager[self.target].getContexts():
                 self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
@@ -3453,7 +3451,7 @@ class GenMonitor():
         self.runTo(call_list, call_params, name='write')
         self.lgr.debug('runToWrite to %s' % substring)
 
-    def runToOpen(self, substring):
+    def runToOpen(self, substring, run=True):
         #if self.track_threads is not None and self.target in self.track_threads:
         #    self.track_threads[self.target].stopSOTrack()
         #else:
@@ -3469,7 +3467,7 @@ class GenMonitor():
             open_call_list = ['open']
         call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
-        self.runTo(open_call_list, call_params, name='open')
+        self.runTo(open_call_list, call_params, name='open', run=run)
 
     def runToOpenKey(self, substring):
         if self.isWindows():
@@ -3878,6 +3876,10 @@ class GenMonitor():
         return True
 
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
+        if self.no_reset:
+            SIM_break_simulation('no reset')
+            print('Would reset origin, bail')
+            return
         if target_cpu is None:
             target = self.target
             target_cpu = self.cell_config.cpuFromCell(self.target)
@@ -3892,6 +3894,10 @@ class GenMonitor():
                 self.clearBookmarks(reuse_msg=reuse_msg)
 
     def writeWord(self, address, value, target_cpu=None, word_size=None):
+        if self.no_reset:
+            SIM_break_simulation('no reset')
+            print('Would reset origin, bail')
+            return
         ''' NOTE: wipes out bookmarks! '''
         if target_cpu is None:
             target = self.target
@@ -3912,6 +3918,10 @@ class GenMonitor():
             self.clearBookmarks()
 
     def writeByte(self, address, value, target_cpu=None):
+        if self.no_reset:
+            SIM_break_simulation('no reset')
+            print('Would reset origin, bail')
+            return
         ''' NOTE: wipes out bookmarks! '''
         if target_cpu is None:
             target = self.target
@@ -3926,6 +3936,10 @@ class GenMonitor():
             self.clearBookmarks()
 
     def writeString(self, address, string, target_cpu=None):
+        if self.no_reset:
+            SIM_break_simulation('no reset')
+            print('Would reset origin, bail')
+            return
         if target_cpu is None:
             target = self.target
         else:
@@ -3940,6 +3954,25 @@ class GenMonitor():
                 self.clearBookmarks()
             else:
                 self.lgr.debug('writeString reverse execution was not enabled.')
+
+    def writeBytes(self, cpu, address, bstring, target_cpu=None):
+        if self.no_reset:
+            SIM_break_simulation('no reset')
+            print('Would reset origin, bail')
+            return
+        if target_cpu is None:
+            target = self.target
+        else:
+            target = self.cell_config.cellFromCPU(target_cpu)
+        if target in self.task_utils:
+            ''' NOTE: wipes out bookmarks! '''
+            cpu, comm, tid = self.task_utils[target].curThread() 
+            self.mem_utils[target].writeBytes(cpu, address, bstring)
+            if self.reverseEnabled():
+                self.lgr.debug('writeBytes, disable reverse execution to clear bookmarks, then set origin')
+                self.clearBookmarks()
+            else:
+                self.lgr.debug('writeBytes reverse execution was not enabled.')
 
     def stopDataWatch(self, immediate=False, leave_backstop=False):
         self.lgr.debug('genMonitor stopDataWatch immediate %r leave_backstop %r' % (immediate, leave_backstop))
@@ -4391,6 +4424,8 @@ class GenMonitor():
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None):
+        if max_marks is None:
+            max_marks = self.max_marks
         self.lgr.debug('trackIO max_marks %s' % max_marks) 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
@@ -4499,6 +4534,7 @@ class GenMonitor():
 
     def saveWatchMarksJson(self, fpath):
         self.dataWatch[self.target].saveJson(fpath)
+
 
     def getWatchMarks(self):
         self.lgr.debug('getWatchMarks')
@@ -5732,7 +5768,7 @@ class GenMonitor():
         return prog_name
  
     def getSharedSyscall(self):
-        return self.sharedSyscall[self.target]
+        return self.syscallManager[self.target].getSharedSyscall()
 
     def showDataRange(self, addr):
         self.dataWatch[self.target].showRange(addr)
@@ -5996,7 +6032,7 @@ class GenMonitor():
             cell_name = self.target
         self.lgr.debug('regSet %s' % fname)
         cpu, comm, tid = self.task_utils[cell_name].curThread() 
-        self.reg_set[cell_name] = regSet.RegSet(self, cpu, cell_name, fname, self.lgr, snapshot=snapshot)
+        self.reg_set[cell_name] = regSet.RegSet(self, cpu, cell_name, fname, self.mem_utils[self.target], self.soMap[cell_name], self.lgr, snapshot=snapshot)
         return True
 
     def testSnap(self):
@@ -6476,7 +6512,20 @@ class GenMonitor():
         self.lgr.debug('trackFile') 
         self.setCommandCallback(self.trackIO)
         self.runToOpen(substring)    
-    
+
+    def watchHack(self):
+        self.vxKMonitor[self.target].watchHack()
+   
+    def maxMarks(self, max_marks):
+        self.max_marks = max_marks 
+
+    def noReset(self):
+        self.no_reset = True
+
+    def findRefs(self, offset):
+        marks = self.dataWatch[self.target].getAllJson()
+        refs = findRefs.FindRefs(offset, marks, self.lgr)
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

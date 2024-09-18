@@ -4,6 +4,7 @@ Experimental VxWorks DKM tracker.
 import os
 import sys
 from simics import *
+from resimHaps import *
 import decodeArm as decode
 import resimUtils
 import memUtils
@@ -41,10 +42,23 @@ class VxKMonitor():
         self.module_hap = {}
         self.stop_in_module = False
 
+        self.hack_syscall = None
+
         # tbd tie this to some debug call
         self.debug_module = comp_dict['MODULE']
 
         self.not_mapped_hap = SIM_hap_add_callback_index("Core_Address_Not_Mapped", self.notMapped, None, 0)
+        undefined_instruction = 5
+        #self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
+        #         self.faultCallback, self.cpu, 0, 13) 
+        self.fault_hap1 = RES_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
+                 self.faultCallback, self.cpu, undefined_instruction) 
+
+        self.top.loadJumpers()
+
+    def faultCallback(self, cpu, one, exception_number):
+        self.lgr.error('fault callback %d' % exception_number)
+        SIM_break_simulation('fault callback')
 
     def notMapped(self, dumb, conf_obj, addr, access_type, size):
         if self.not_mapped_hap is None:
@@ -175,6 +189,9 @@ class VxKMonitor():
         self.module_hap = {}    
         SIM_break_simulation('In module ?')
 
+    def watchHack(self):
+        self.hack_syscall = self.syscall_mgr.watchSyscall(None, ['printf', 'bind', 'listen', 'select'], [], 'watchHack')
+
     def runToIO(self, fd, linger, break_simulation, count, flist_in, origin_reset, run_fun, proc, run, kbuf, call_list, sub_match=None, just_input=False):
 
         call_params = syscall.CallParams('runToIO', None, fd, break_simulation=break_simulation, proc=proc, sub_match=sub_match)        
@@ -197,8 +214,9 @@ class VxKMonitor():
                 #    self.sharedSyscall.setKbuffer(kbuffer_mod)
                 if call_list is None:
                     if just_input:
-                        calls = ['fgets']
+                        calls = ['fgets', 'fgetc', 'fscanf', 'read', 'recv']
                     else:
+                        # TBD fix this
                         calls = ['BIND', 'CONNECT', 'RECV', 'SEND', 'RECV_DATAGRAM', 'SEND_DATAGRAM', 'ReadFile', 'WriteFile', 'QueryValueKey', 'EnumerateValueKey', 'Close', 'GET_PEER_NAME']
                 else:
                     calls = call_list

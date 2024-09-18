@@ -87,13 +87,14 @@ class VxKTaskUtils():
         return
 
     def curTID(self):
-        return self.getCurrentTask()
+        tid = '0x%x' % self.getCurrentTask()
+        return tid
 
     def getGroupLeaderTid(self, tid):
-        return self.getCurrentTask()
+        return self.curTID
 
     def getGroupTids(self, tid):
-        return [self.getCurrentTask()]
+        return [self.curTID()]
 
     def getProgName(self, tid):
         return self.prog_name, None
@@ -103,7 +104,7 @@ class VxKTaskUtils():
 
     def curThread(self):
         comm = self.prog_name
-        tid = SIM_read_phys_memory(self.cpu, self.task_id_current, 4)
+        tid = self.curTID()
         return self.cpu, comm, tid
 
     def setProgName(self, prog_name):
@@ -131,3 +132,5 @@ class VxKTaskUtils():
     def getCurThreadRec(self):    
         return self.getCurrentTask()
 
+    def recentExitTid(self):
+        return None
