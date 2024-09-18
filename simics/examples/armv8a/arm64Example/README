@@ -20,3 +20,6 @@ kernel traits.  What is the address of kernel entry code?  How do you
 know you entered via a syscall vs a page fault?  What does the task record
 look like?   Can you record each unique task record that is loaded?
 
+Consider using a write breakpoint to set a hap on updates to this pointer.
+Note you would use SIM_get_mem_op_value_le(memory) to get the new value
+that is about to be written into the memory address.
