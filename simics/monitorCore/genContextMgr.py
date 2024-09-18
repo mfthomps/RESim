@@ -60,6 +60,7 @@ class GenBreakpoint():
         SIM_disable_breakpoint(self.break_num)
 
     def enable(self):
+        #self.lgr.debug('GenBreakpoint enable break_num %d' % self.break_num)
         SIM_enable_breakpoint(self.break_num)
 
 class GenHap():
@@ -79,6 +80,7 @@ class GenHap():
         self.name = name
         self.disable_forward = disable_forward
         self.set(immediate)
+        self.disabled = False
 
     def show(self):
         if self.handle is not None and self.hap_num is not None:
@@ -104,6 +106,7 @@ class GenHap():
     def set(self, immediate=True):
         ''' NOTE: different calls to SIM_brekapoint below '''
         if len(self.breakpoint_list) > 1:
+            # TBD remove breakpoint ranges. Simics has no way to ensure sequential bp's
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
                 if bp.prefix is not None:
@@ -160,10 +163,14 @@ class GenHap():
         if not (direction == 'forward' and not self.disable_forward):
             for bp in self.breakpoint_list:
                 bp.disable()
+            self.disabled = True
 
     def enable(self):
-        for bp in self.breakpoint_list:
+        #self.lgr.debug('GenHap enable %s' % self.name)
+        for bp in self.breakpoint_list:       
+            #self.lgr.debug('GenHap enable bp %d' % bp.break_num)
             bp.enable()
+        self.disabled = False
 
     def getContext(self):
         retval = None
@@ -365,6 +372,7 @@ class GenContextMgr():
     def genEnableHap(self, hap_handle):
         for hap in self.haps:
             if hap.handle == hap_handle:
+                #self.lgr.debug('contextManager genEnableHap handle %d is hap %s, enable it' % (hap_handle, hap.name))
                 hap.enable()
                 break
 
@@ -1635,3 +1643,10 @@ class GenContextMgr():
             return True
         else:
             return False
+
+    def isHapDisabled(self, hap_handle):
+        for hap in self.haps:
+            if hap.handle == hap_handle:
+                return hap.disabled
+        self.lgr.error('contextManager isHapDisabled called with unknown hap handle %d' % hap_handle)
+        
