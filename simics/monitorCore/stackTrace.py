@@ -75,7 +75,7 @@ class StackTrace():
                  reg_frame, lgr, max_frames=None, max_bytes=None, skip_recurse=False):
         self.top = top
         self.cpu = cpu
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture in ['arm', 'arm64']:
             self.decode = decodeArm
         else:
             self.decode = decode
@@ -94,7 +94,7 @@ class StackTrace():
         self.skip_recurse = skip_recurse
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
-        if cpu.architecture == 'arm':
+        if cpu.architecture in ['arm', 'arm64']:
             self.callmn = 'bl'
             self.jmpmn = 'bx'
         else:
@@ -131,7 +131,7 @@ class StackTrace():
         if return_to <= 10 or not self.soMap.isCode(return_to, self.tid):
             self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
             return None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture in ['arm', 'arm64']:
             #self.lgr.debug('followCall return_to 0x%x' % return_to)
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -228,7 +228,7 @@ class StackTrace():
     def isCallToMe(self, fname, eip):
         ''' if LR looks like a call to current function, add frame? '''
         retval = None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture in ['arm', 'arm64']:
             ''' macro-type calls, e.g., memset don't bother with stack frame return value? '''
             '''
             cpl = memUtils.getCPL(self.cpu)
@@ -348,7 +348,7 @@ class StackTrace():
         if not retval and fun2 == 'strcmp':
             if fun1 in ['wcscmp', 'mbscmp', 'mbscmp_l']:
                 retval = True 
-        if not retval and self.cpu.architecture == 'arm':
+        if not retval and self.cpu.architecture in ['arm', 'arm64']:
             ''' TBD seems incomplete.  Should only be meaningful for first frame? '''
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
             lr_fun_name = self.fun_mgr.funFromAddr(lr)
@@ -826,7 +826,7 @@ class StackTrace():
             been_in_main = True
         if self.soMap.isAboveLibc(eip):
             been_above_clib = True
-            if self.cpu.architecture != 'arm' or not self.soMap.isMainText(self.reg_frame['lr']):
+            if self.cpu.architecture not in ['arm', 'arm64'] or not self.soMap.isMainText(self.reg_frame['lr']):
                 #self.lgr.debug('stackTrace starting in main with lr that is not above libc, text set prev_ip to 0x%x' %eip)
                 prev_ip = eip
         #prev_ip = eip
@@ -855,7 +855,7 @@ class StackTrace():
             self.addFrame(frame)
         #self.lgr.debug('stackTrace first added frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
-        if prev_ip is None and self.cpu.architecture == 'arm':
+        if prev_ip is None and self.cpu.architecture in ['arm', 'arm64']:
             prev_ip = self.isCallToMe(fname, eip)
             #if prev_ip is not None:
             #    self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x' % prev_ip)
@@ -893,7 +893,7 @@ class StackTrace():
                 #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
 
         hacked_bp = False
-        if self.cpu.architecture != 'arm':
+        if self.cpu.architecture not in ['arm', 'arm64']:
             # TBD need way to indicate whether bp register is used
             if not self.top.isWindows():
                 if self.word_size != 8:
@@ -928,7 +928,7 @@ class StackTrace():
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''
             #if not been_above_clib and (ptr - self.prev_frame_sp) > 1500:
-            if self.cpu.architecture != 'arm' and (self.mindTheGap(ptr) or self.mind_the_gap):
+            if self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
                 self.mind_the_gap = False
                 fun_addr = self.frames[-1].fun_addr
                 if fun_addr is None:
@@ -1063,12 +1063,12 @@ class StackTrace():
                                 #self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
                                 cur_fun = self.fun_mgr.getFun(call_ip)
                                 cur_fun_name = self.fun_mgr.funFromAddr(cur_fun)
-                                if self.cpu.architecture == 'arm' and first_instruct[1].lower().startswith('b '):
+                                if self.cpu.architecture in ['arm', 'arm64'] and first_instruct[1].lower().startswith('b '):
                                     skip_this = self.checkArmDirect(first_instruct, call_to, prev_ip, ptr, fname, call_ip)
                                 elif self.top.isVxDKM(cpu=self.cpu):
                                     #self.lgr.debug('stackTrace call checkVxDirect for fun 0x%x' % call_to)
                                     skip_this = self.checkVxDirect(call_to, fname)
-                                elif self.cpu.architecture != 'arm':
+                                elif self.cpu.architecture not in ['arm', 'arm64']:
                                     # look for GOT
                                     # ptr -- current sp
                                     # call_to -- destination of call
@@ -1130,7 +1130,7 @@ class StackTrace():
 
                             if cur_fun_name is not None:
                                 if not hacked_bp and not self.funMatch(fun_name, cur_fun_name): 
-                                    if self.cpu.architecture != 'arm':
+                                    if self.cpu.architecture not in ['arm', 'arm64']:
                                         if been_above_clib or call_to is None or not self.isJumpTable(call_to):
                                             bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                             if (bp + self.mem_utils.wordSize(self.cpu)) != ptr:
@@ -1261,7 +1261,7 @@ class StackTrace():
                             if not skip_this:
                                 cur_fun_name = fun_name
                                 #self.lgr.debug('stackTrace set cur_fun_name to %s' % cur_fun_name)
-                                if self.cpu.architecture == 'arm':
+                                if self.cpu.architecture in ['arm', 'arm64']:
                                     ret_addr = call_ip + 4
                                     #if fun_hex is None:
                                     #    self.lgr.debug('stackTrace FUN HEX NONE')
