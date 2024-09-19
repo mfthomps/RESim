@@ -64,7 +64,6 @@ file_type=$( ssh $user$remote "df $remote_program -TP | tail -n -1 | awk '{print
 if [[ $file_type == nfs* ]]; then
     echo "Remote is NSF, assume no need to synch analyisis artifacts."
 else
-    exit
     echo "remote program is $remote_program"
     ssh $user$remote "mkdir -p $remote_program"
     rsync -avh $analysis_dir $usr$remote:$remote_program
