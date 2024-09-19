@@ -95,8 +95,12 @@ class IdaSIM():
                 r = 'EFL'
             elif r == 'CPSR':
                 r = 'PSR'
+            elif r == 'SP_EL0':
+                r = 'SP'
+            elif r == 'SP_EL1':
+                continue
             #print('set %s to 0x%x' % (r, regs[reg]))
-            idaversion.set_reg_value(regs[reg], r)
+            idaversion.set_reg_value(r, regs[reg])
         idaversion.refresh_debugger_memory()
 
 

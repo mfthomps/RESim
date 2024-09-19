@@ -287,7 +287,7 @@ def set_reg_value(reg, value):
     if idaapi.IDA_SDK_VERSION <= 699:
         idc.SetRegValue(reg, value)
     else:
-        idc.set_reg_value(reg, value)
+        idc.set_reg_value(value, reg)
 
 def get_screen_ea():
     if idaapi.IDA_SDK_VERSION <= 699:
