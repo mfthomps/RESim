@@ -663,7 +663,7 @@ class MemUtils():
                 #self.lgr.debug('except for %s' % reg)
                 ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
                 continue
-            reg_values[reg] = reg_value
+            reg_values[reg] = self.getUnsigned(reg_value)
         
         s = json.dumps(reg_values)
         print(s)
