@@ -3,6 +3,7 @@ import ida_nalt
 import idaversion
 import colorBlocks
 import os
+import ida_kernwin
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -531,6 +532,7 @@ def register(isim):
         'F9', 'Continue', idaapi.load_custom_icon(file_name=play_icon, format="png"))
 
     idaapi.unregister_action("ThreadStepOver")
+    idaapi.unregister_action("ThreadStepInto")
     idaapi.register_action(do_show_cycle_action)
     idaapi.register_action(do_rebase_action)
     idaapi.register_action(do_reverse_action)
@@ -567,20 +569,21 @@ def register(isim):
 def attach():
     ''' Determines where entry appears in menu '''
     idaapi.attach_action_to_menu(
-        'Debugger/Step over',
-        'do_step_over:action',
-        idaapi.SETMENU_APP) 
-    idaapi.attach_action_to_menu(
         'Debugger/Step into',
         'do_step_into:action',
         idaapi.SETMENU_APP) 
+
     idaapi.attach_action_to_menu(
-        'Debugger/Step over (RESim)',
-        'do_rev_step_over:action',
+        'Debugger/Step into (RESim)',
+        'do_step_over:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/Step into',
+        'Debugger/Step over (RESim)',
         'do_rev_step_into:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/^Rev step into',
+        'do_rev_step_over:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Run until return',

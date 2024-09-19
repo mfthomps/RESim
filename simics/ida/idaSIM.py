@@ -708,7 +708,7 @@ class IdaSIM():
     
     
     def doStepInto(self):
-        print('in doInto')
+        #print('in doInto')
         idaversion.step_into()
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
@@ -718,7 +718,7 @@ class IdaSIM():
             self.runToUserSpace()
    
     def doStepOver(self):
-        print('in doStepOver')
+        #print('in doStepOver')
         idaversion.step_over()
         #print('back from step over')
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
