@@ -1313,7 +1313,8 @@ class MemUtils():
                 retval = 4
         elif cpu.architecture == 'arm64':
             # TBD still will break on returns from kernel
-            if not self.arm64App(cpu):
+            cpl = getCPL(cpu)
+            if not self.arm64App(cpu) and cpl != 0:
                 retval = 4
             
         return retval
