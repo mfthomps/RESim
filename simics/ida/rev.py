@@ -452,7 +452,7 @@ def RESimClient(re_hooks=None, dbg_hooks=None, idb_hooks=None):
     info = idaapi.get_inf_structure()
     if info.is_64bit():
         print('64-bit')
-        kernel_base = 0xFFFFFFFF00000000
+        kernel_base = 0xffff800000000000
     else:
         print('32-bit')
     idc.refresh_lists()
