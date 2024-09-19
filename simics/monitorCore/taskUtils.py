@@ -1128,6 +1128,7 @@ class TaskUtils():
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm64'][p])
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
             frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'x14')
+            frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
         else:
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
