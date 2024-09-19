@@ -1329,9 +1329,15 @@ class GenMonitor():
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
         if tid is None:
             tid = this_tid 
-        self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r' % (cpu.name, self.gdb_port, tid, self.is_compat32))
+        machine_size = self.soMap[self.target].getMachineSize(tid)
+        self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, self.gdb_port, tid, self.is_compat32, machine_size))
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
+        if cpu.architecture == 'arm64':
+            if machine_size is 32:
+                cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
+            else:
+                cmd = 'new-gdb-remote cpu=%s architecture=arm64 port=%d' % (cpu.name, self.gdb_port)
         #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
         elif self.isWindows(self.target):
             machine_size = self.soMap[self.target].getMachineSize(tid)
