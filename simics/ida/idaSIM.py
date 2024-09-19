@@ -708,16 +708,17 @@ class IdaSIM():
     
     
     def doStepInto(self):
-        #print('in doInto')
+        print('in doInto')
         idaversion.step_into()
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
+        #print('cur_addr is 0x%x kernel_base 0x%x' % (cur_addr, self.kernel_base))
         if cur_addr > self.kernel_base:
             print('doStepInto run to user space')
             self.runToUserSpace()
    
     def doStepOver(self):
-        #print('in doStepOver')
+        print('in doStepOver')
         idaversion.step_over()
         #print('back from step over')
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
@@ -725,7 +726,7 @@ class IdaSIM():
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
-            #print('doStepOver in kernel run to user space')
+            print('doStepOver in kernel run to user space')
             self.runToUserSpace()
         else:
             #print('doStepOver signal client')
