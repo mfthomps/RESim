@@ -74,6 +74,16 @@ class DoRevStepOverHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class DoStepIntoHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.doStepInto()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class DoStepOverHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -83,6 +93,7 @@ class DoStepOverHandler(idaapi.action_handler_t):
         return 1
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
 
 class DoRevStepIntoHandler(idaapi.action_handler_t):
     def __init__(self, isim):
@@ -372,6 +383,12 @@ def register(isim):
         DoStepOverHandler(isim),
         'F8')
 
+    do_step_into_action = idaapi.action_desc_t(
+        'do_step_into:action',
+        'Step into (RESim)', 
+        DoStepIntoHandler(isim),
+        'F7')
+
     do_rev_step_into_action = idaapi.action_desc_t(
         'do_rev_step_into:action',
         '^ Rev step into', 
@@ -518,6 +535,7 @@ def register(isim):
     idaapi.register_action(do_rebase_action)
     idaapi.register_action(do_reverse_action)
     idaapi.register_action(do_rev_step_over_action)
+    idaapi.register_action(do_step_into_action)
     idaapi.register_action(do_step_over_action)
     idaapi.register_action(do_rev_step_into_action)
     idaapi.register_action(do_rev_finish_action)
@@ -549,8 +567,12 @@ def register(isim):
 def attach():
     ''' Determines where entry appears in menu '''
     idaapi.attach_action_to_menu(
-        'Debugger/Step into',
+        'Debugger/Step over',
         'do_step_over:action',
+        idaapi.SETMENU_APP) 
+    idaapi.attach_action_to_menu(
+        'Debugger/Step into',
+        'do_step_into:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Step over (RESim)',
