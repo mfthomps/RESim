@@ -4272,10 +4272,10 @@ class GenMonitor():
             So leverage the fact that client calls this often, and switch target if needed.'''
         if self.debugger_target is not None and self.target != self.debugger_target:
             self.setTarget(self.debugger_target)
-        self.lgr.debug('printRegJson')
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         word_size = self.mem_utils[self.target].wordSize(cpu)
         prog_machine_size = self.soMap[self.target].getMachineSize(tid)
+        self.lgr.debug('printRegJson prog_machine_size %d' % prog_machine_size)
         if prog_machine_size is not None:
             if prog_machine_size == 64:
                 word_size = 8
