@@ -278,6 +278,7 @@ def findPageTableArmV8(cpu, va, lgr, use_sld=None, kernel=False):
         ttbr = cpu.translation_table_base0
     ptable_info = PtableInfo()
     vaddr_off = va & 0xfff
+    ptable_info.ptable_exists = False
     #lgr.debug('vaddr_off 0x%x' % vaddr_off)
     l1_index = memUtils.bitRange(va, 30, 38)
     l1_off = 8 * l1_index
@@ -299,17 +300,20 @@ def findPageTableArmV8(cpu, va, lgr, use_sld=None, kernel=False):
         l3_off = 8 * l3_index
         l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
         l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
-        #lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x' % (l2_basex, l3_index, l3_off, l3_base_addr, l3_base))
-        l3_basex = l3_base & 0x0000fffffffff000 
-        #lgr.debug('l3_base masked 0x%x' % l3_basex)
-        phys = l3_basex + vaddr_off
+        if l3_base is not None:
+            #lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x' % (l2_basex, l3_index, l3_off, l3_base_addr, l3_base))
+            l3_basex = l3_base & 0x0000fffffffff000 
+            #lgr.debug('l3_base masked 0x%x' % l3_basex)
+            phys = l3_basex + vaddr_off
+        else:
+            phys = None
         ptable_info.page_base_addr = l3_base_addr
+        ptable_info.ptable_exists = True
     else:
         #lgr.debug('l2_base base looks like last level, use it 0x%x' % l2_basex)
         ptable_info.page_base_addr = l2_base_addr
         phys = l2_basex + vaddr_off
     #lgr.debug('got phys of 0x%x' % phys)
-    ptable_info.ptable_exists = True
     ptable_info.page_addr = phys
     return ptable_info
 
