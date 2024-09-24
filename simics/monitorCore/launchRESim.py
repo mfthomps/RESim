@@ -264,6 +264,7 @@ class LaunchRESim():
                 run_command(cmd)
             #print('assigned %s to %s' % (name, value))
 
+        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         ''' hack around simics bug generating rafts of x11 traffic '''
         resim_display = os.getenv('RESIM_DISPLAY')
         if resim_display is not None:
@@ -288,6 +289,9 @@ class LaunchRESim():
         if RUN_FROM_SNAP is None:
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             checkVLAN(self.config)
+            if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
+                print('Will create RESim parameters')
+            # TBD check this
             run_command('set-min-latency min-latency = 0.01')
             interact = None
             if self.config.has_section('driver'):
@@ -357,7 +361,6 @@ class LaunchRESim():
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
-        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         MONITOR = os.getenv('MONITOR')
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
@@ -379,6 +382,7 @@ class LaunchRESim():
         return script
           
     def doSections(self, lgr):
+        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         for section in self.config.sections():
             if section in self.not_a_target:
                 continue
@@ -457,6 +461,12 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
+            PRE_INIT_SCRIPT = os.getenv('PRE_INIT_SCRIPT')
+            if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES' and PRE_INIT_SCRIPT is not None:
+                print('Will create resim params, run pre_init_script %s' % PRE_INIT_SCRIPT)
+                cmd = 'run-command-file %s' % PRE_INIT_SCRIPT
+                run_command(cmd)
+ 
     def doAlways(self):
         ''' scripts to run regardless of whether starting from a snapshot'''
         for section in self.config.sections():
