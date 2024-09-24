@@ -273,7 +273,7 @@ def inBracket(op):
     return retval
 
 def isBranch(cpu, instruct):
-    if instruct.startswith('b') or isCall(cpu, instruct):
+    if instruct.startswith('b') or isCall(cpu, instruct) or instruct.startswith('tb') or instruct.startswith('cb'):
         return True
     else:
         return False
