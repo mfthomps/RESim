@@ -1022,6 +1022,9 @@ class TaskUtils():
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32, arm64_app=None):
+        if callnum is None:
+            self.lgr.error('taskUtils getSyscallEntry called with callnum of None')
+            return None
         if self.cpu.architecture == 'arm':
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
@@ -1039,7 +1042,11 @@ class TaskUtils():
                 val = self.param.syscall_jump + call_shifted
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
-            self.lgr.debug('getSyscallEntry arm64 syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
+            if entry is not None:
+                self.lgr.debug('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry: 0x%x' % (callnum, callnum, val, entry))
+            else:
+                self.lgr.error('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry is none' % (callnum, callnum, val))
+                 
             
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
@@ -1194,6 +1201,8 @@ class TaskUtils():
                 return 'not_mapped'
         else:
             self.lgr.error('taskUtils syscallName, compat32 but no syscall_numbers32.  Was the unistd file loaded?')
+            return 'not_mapped'
+        return 'not_mapped'
 
     def syscallNumber(self, callname, compat32, arm64_app=None):
         if self.arm64:
