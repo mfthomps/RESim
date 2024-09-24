@@ -1564,7 +1564,7 @@ class Syscall():
                             self.finish_hap_page[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnamePage, exit_info, self.finish_break[tid])
                         
                 #SIM_break_simulation('fname is none...')
-            else:
+            elif exit_info.fname is not None:
                 self.lgr.debug('syscallParse got fname %s' % exit_info.fname)
                 for call_param in self.call_params:
                     self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
@@ -1589,6 +1589,8 @@ class Syscall():
                         # TBD what SO libs loaded after we hit text?
                         self.lgr.debug('syscall open, is runToText, set param')
                         exit_info.call_params.append(call_param)
+            elif exit_info.fname is not None:
+                self.lgr.debug('syscallParse did not get fname')
                          
 
         if callname == 'mkdir':        
@@ -2092,6 +2094,24 @@ class Syscall():
             ida_msg = '%s tid:%s (%s) FD: %d return buffer: 0x%x' % (callname, tid, comm, fd, retval_addr)
             #SIM_break_simulation(ida_msg)
             #return
+        elif callname.startswith('newfstatat'):
+            fd = frame['param1']
+            fname_addr = frame['param2']
+            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            retval_addr = frame['param2']
+            exit_info.retval_addr = retval_addr
+            exit_info.old_fd = fd
+            ida_msg = '%s tid:%s (%s) FD: %d file: %s return buffer: 0x%x' % (callname, tid, comm, fd, fname, retval_addr)
+        elif callname.startswith('faccessat'):
+            fd = frame['param1']
+            fname_addr = frame['param2']
+            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.old_fd = fd
+            mode = frame['param3']
+            flags = frame['param4']
+            ida_msg = '%s tid:%s (%s) FD: %d file: %s mode: 0x%x flags: 0x%x' % (callname, tid, comm, fd, fname, mode, flags)
+            #SIM_break_simulation(ida_msg)
+            #return
         elif callname == 'prctl':
             option = frame['param1']
             opt_name = 'unknown'
@@ -2139,8 +2159,13 @@ class Syscall():
             ida_msg = '%s id: %d tid:%s (%s) cycle:0x%x' % (callname, uid, tid, comm, self.cpu.cycles)
         elif callname in ['unlink']:
             exit_info.fname_addr = frame['param1']
-            exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
-            ida_msg = '%s %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, tid, comm, self.cpu.cycles)
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            ida_msg = '%s tid:%s (%s) fname: %s cycle:0x%x' % (callname, tid, comm, exit_info.fname, self.cpu.cycles)
+        elif callname in ['unlinkat']:
+            exit_info.old_fd = frame['param1']
+            exit_info.fname_addr = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            ida_msg = '%s tid:%s (%s) fname: %s cycle:0x%x' % (callname, tid, comm, exit_info.fname, self.cpu.cycles)
         elif callname in ['rename']:
             exit_info.fname_addr = frame['param1']
             exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
