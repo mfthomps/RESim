@@ -541,14 +541,15 @@ class Syscall():
             self.syscall_info = SyscallInfo(self.cpu, None, None,  None, self.trace)
             if self.cpu.architecture.startswith('arm'):
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
-                self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
-                proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
-                if self.syscall_context is None:
-                    self.syscall_context = self.context_manager.getBPContext(proc_break)
-                    #self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
-                #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
-                break_addrs.append(self.param.arm_entry)
-                self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
+                if self.param.arm_entry is not None:
+                    self.lgr.debug('Syscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
+                    proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+                    if self.syscall_context is None:
+                        self.syscall_context = self.context_manager.getBPContext(proc_break)
+                        #self.lgr.debug('syscall, setting syscall_context to %s' % self.syscall_context)
+                    #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
+                    break_addrs.append(self.param.arm_entry)
+                    self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
                 if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
                     self.lgr.debug('syscall doBreaks set entry for arm64')
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
