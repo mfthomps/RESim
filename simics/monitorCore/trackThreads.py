@@ -64,10 +64,13 @@ class TrackThreads():
 
     def setExecveBreaks(self, arm64_app=None):
         execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
-        execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
-        self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
-        self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-        self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+        if execve_callnum is not None:
+            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
+            self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+            self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
+            self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+        else:
+            self.lgr.error('TrackThreads setExecveBreaks callnum is None')
 
     def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
