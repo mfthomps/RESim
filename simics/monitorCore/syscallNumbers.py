@@ -36,7 +36,7 @@ class SyscallNumbers():
             if 'openat' in self.callnums:
                 callnum = self.callnums['openat']
                 self.callnums['open'] = callnum
-                self.syscalls[callnum] = 'open'
+                #self.syscalls[callnum] = 'open'
             else:
                 self.lgr.error('SyscallNumbers no open???')
                 self.lgr.error('%s' % str(self.callnums))
