@@ -183,6 +183,7 @@ class ReadReplace():
         if phys_addr is None:
             self.lgr.debug('readReplace getPhys got None, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=replace_entry.lib_addr, use_pid=pid)
+            self.pending_pages[replace_entry.lib_addr] = replace_entry
         else:
             replace_entry.linear_addr =  linear
         return phys_addr
@@ -312,7 +313,7 @@ class ReadReplace():
             return
         replace_entry = self.pending_pages[name]
         load_addr = self.so_map.getLoadAddr(replace_entry.lib)
-        self.lgr.debug('readReplace paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
+        self.lgr.debug('readReplace pagedIn load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
         phys = self.getPhys(replace_entry, load_addr, None)
         if phys is not None and phys != 0:
             self.setBreak(self.pending_pages[name], phys)
