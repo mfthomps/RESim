@@ -846,7 +846,8 @@ class SOMap():
                 prog = self.prog_base_map[prog_in] 
             
             else:
-                self.lgr.error('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
+                # may be call from readReplace or jumper
+                self.lgr.debug('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
         else:
             prog = prog_in
         return prog
