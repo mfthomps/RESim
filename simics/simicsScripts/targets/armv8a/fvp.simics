@@ -20,6 +20,7 @@ decl {
     param resim_targets : string
 }
 $num_cores=1
+$create_network = FALSE
 
 $sys_include = $resim_targets+"/armv8a/fvp-system.include"
 $setup_include = $resim_targets+"/armv8a/fvp-linux-setup.include"
@@ -29,11 +30,6 @@ run-command-file $setup_include
 #$system.mac->mac_address = $mac_address_0
 #$system.mac[1]->mac_address = $mac_address_1
 
-#$eth0 = $system.eth[0]
-#$eth1 = $system.eth[1]
-#$eth0 = $system.eth
-$eth0 = "None"
-
-#$switch0_con = (switch0.get-free-connector)
+$eth0 = $system.eth
 
 
