@@ -39,6 +39,8 @@ class Dmod():
         def __init__(self, match, was, becomes, cmds=[]):
             self.match = match
             self.was = was
+            if type(becomes) == bytes:
+                becomes = becomes.decode()
             if becomes is not None:
                 mod = becomes.replace('\\n', '\n')
                 self.becomes = mod
