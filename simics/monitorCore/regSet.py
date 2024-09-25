@@ -101,7 +101,8 @@ class RegSet():
                 comm = parts[0]
                 load_addr = self.so_map.getLoadAddr(comm)
                 if load_addr is None:
-                    self.lgr.error('RegSet failed to get load addr for %s' % comm)
+                    #TBD add load/page callback for regSet
+                    self.lgr.debug('RegSet failed to get load addr for %s' % comm)
                     return
                 prog_addr = None
                 try:
