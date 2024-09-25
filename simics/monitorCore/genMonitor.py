@@ -1330,10 +1330,10 @@ class GenMonitor():
         if tid is None:
             tid = this_tid 
         machine_size = self.soMap[self.target].getMachineSize(tid)
-        self.lgr.debug('doDebugCmd for cpu %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, self.gdb_port, tid, self.is_compat32, machine_size))
+        self.lgr.debug('doDebugCmd for cpu %s arch: %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.is_compat32, machine_size))
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
-        if cpu.architecture == 'arm64':
+        elif cpu.architecture == 'arm64':
             if machine_size is 32:
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
             else:
