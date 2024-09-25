@@ -82,6 +82,9 @@ class TargetFS():
                 if real.startswith('/'):
                     real = real[1:]
                     retval = os.path.join(self.root_prefix, real)
+                elif real.startswith('../'):
+                    real = real[3:]
+                    retval = os.path.join(self.root_prefix, real)
                 else:
                     retval = os.path.join(os.path.dirname(full), real)
             elif not os.path.isfile(full):
