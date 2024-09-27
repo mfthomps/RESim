@@ -1344,7 +1344,7 @@ class GetKernelParams():
         #cell = self.cell_config.cell_context[self.target]
         self.lgr.debug('findCompute')
         if self.cpu.architecture.startswith('arm'):
-            if self.want_arm32 and self.param.syscall_jump is None:
+            if self.want_arm32 and self.param.syscall_jump is None and not self.only_64:
                 print('Looking for ARM 32-bit app syscall jump table computation.  Cause an arm32 syscall to happen.')
                 self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
                 self.lgr.debug('findCompute task break set on 0x%x' % self.param.arm_entry)
