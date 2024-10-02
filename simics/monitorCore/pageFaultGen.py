@@ -773,3 +773,8 @@ class PageFaultGen():
         else:
             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
             SIM_run_alone(self.rmModeHapAlone, None) 
+
+    def clearPendingFaults(self):
+        self.pending_faults.clear()
+        self.pending_sigill.clear()
+        self.pending_double_faults.clear()

@@ -394,6 +394,7 @@ class AFL():
                         break
             # why again and again?
             #self.page_faults.stopWatchPageFaults()
+            self.page_faults.clearPendingFaults()
             self.top.clearExitTid()
             if status == AFL_CRASH:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
