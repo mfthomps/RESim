@@ -75,12 +75,23 @@ def fcntlCmdIs(cmd, s):
     if cmd in range(len(F_CNTL_CMDS)):
         if F_CNTL_CMDS[cmd] == s:
             retval = True
+    elif cmd == 0x406 and s == 'F_DUPFD':
+            retval = True
     return retval
 
 def fcntlCmd(cmd):
     retval =  str(cmd)
     if cmd in range(len(F_CNTL_CMDS)):
         retval = F_CNTL_CMDS[cmd] 
+    return retval
+
+def fcntlGetCmd(cmd):
+    if cmd in range(len(F_CNTL_CMDS)):
+        retval = F_CNTL_CMDS[cmd]
+    elif cmd == 0x406:
+        retval = 'F_DUPFD_CLO_EXEC'
+    else:  
+        retval = '0x%x' % cmd
     return retval
 
 class NetInfo():
@@ -145,9 +156,9 @@ class SockStruct():
         try:
             self.sa_family = mem_utils.readWord16(cpu, self.addr) 
         except:
-            print('net sockStruct failed reading sa family from 0x%x' % self.addr)
+            #print('net sockStruct failed reading sa family from 0x%x' % self.addr)
             if lgr is not None:
-                lgr.error('net sockStruct failed reading sa family from 0x%x' % self.addr)
+                lgr.debug('net sockStruct failed reading sa family from 0x%x' % self.addr)
             return
         if lgr is not None:
             lgr.debug('net sockStruct sa_family read as 0x%x' % self.sa_family)
