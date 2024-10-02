@@ -343,7 +343,7 @@ class LaunchRESim():
             ''' NOTE RETURN ABOVE '''
             if not DRIVER_WAIT:
                 self.doSections(lgr) 
-            lgr.debug('check config_command')
+            lgr.debug('check config_command %s' % config_command)
             if config_command is not None:
                 run_command(config_command)
         else:
