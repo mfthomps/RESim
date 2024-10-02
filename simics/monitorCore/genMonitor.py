@@ -975,14 +975,17 @@ class GenMonitor():
             self.snapInit()
             self.runScripts()
             return
-        run_cycles = self.getBootCycleChunk()
-        done = False
         self.runPreScripts()
         #self.fs_mgr = fsMgr.FSMgr(self.cell_config.cell_context, self.param, self.cell_config, self.lgr)
+        self.initCells()
+
+    def initCells(self, dumb=None):
+        done = False
+        run_cycles = self.getBootCycleChunk()
         while not done:
             done = True
             for cell_name in self.cell_config.cell_context:
-                self.lgr.debug('genMonitor doInit cell_name %s' % cell_name)
+                self.lgr.debug('genMonitor initCells cell_name %s' % cell_name)
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
                     continue
@@ -999,7 +1002,19 @@ class GenMonitor():
                 eip = self.getEIP(cpu)
                 cpl = memUtils.getCPL(cpu)
                 if cpl == 0 and not self.mem_utils[cell_name].isKernel(eip):
-                    self.lgr.debug('doInit cell %s cpl 0 but not in kernel code yet eip 0x%x cycles: 0x%x' % (cell_name, eip, cpu.cycles))
+                    stall_time = cpu.stall_time
+                    self.lgr.debug('doInit cell %s cpl 0 but not in kernel code yet eip 0x%x cycles: 0x%x stall_time 0x%x' % (cell_name, eip, cpu.cycles, stall_time))
+                    if False and stall_time is not 0:
+                        #TBD this should not happen.  If it does, might cause other cells to get to far ahead?
+                        if memUtils.cpuWordSize(cpu) == 4:
+                            count = 0xffffffff - self.param[cell_name].kernel_base
+                        else:
+                            count = 0xffffffffffffffff - self.param[cell_name].kernel_base
+                        self.proc_bp = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.param[cell_name].kernel_base, count, 0)
+                        self.proc_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.kernelCodeHap, cpu, self.proc_bp)
+                        self.lgr.debug('initCell, stalling, run to kernel')
+                        SIM_continue(0)
+                        return 
                     done = False
                     continue
                 self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
@@ -1015,7 +1030,7 @@ class GenMonitor():
                 else:
                     tid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if tid is None:
-                        #self.lgr.debug('doInit cell %s cur_task_rec 0x%x tid None ' % (cell_name, cur_task_rec))
+                        self.lgr.debug('doInit cell %s cur_task_rec 0x%x tid None ' % (cell_name, cur_task_rec))
                         done = False
                         continue
                     if True:
@@ -1069,10 +1084,25 @@ class GenMonitor():
                 dumb, ret = cli.quiet_run_command(cmd)
                 cmd = 'c %s cycles' % run_cycles
                 dumb, ret = cli.quiet_run_command(cmd)
-                #self.lgr.debug('back from continue')
+                self.lgr.debug('back from continue dumb %s ret %s' % (dumb, ret))
             else: 
                 self.lgr.debug('doInit done, call runScripts')
         self.runScripts()
+
+    def kernelCodeHap(self, cpu, the_obj, the_break, memory):
+        eip = self.getEIP(cpu)
+        self.lgr.debug('kernelCodeHap eip 0x%x' % eip)
+        RES_delete_breakpoint(self.proc_bp)
+        hap = self.proc_hap
+        self.proc_hap = None
+        self.proc_bp = None
+        SIM_run_alone(self.rmKernelCodeHap, hap)
+        SIM_run_alone(self.stopAndCall, self.initCells)
+
+    def rmKernelCodeHap(self, hap):
+        self.lgr.debug('rmKernelCodeHap')
+        RES_hap_delete_callback_id("Core_Breakpoint_Memop", hap)
+
 
     def getDbgFrames(self):
         ''' Get stack frames from kernel entries as recorded by the reverseToCall module. 
@@ -4698,7 +4728,7 @@ class GenMonitor():
             the instance is not defined until it is done.
             use no_reset True to stop the tracking if RESim would need to reset the origin.'''
         self.track_started = True
-        self.lgr.debug('injectIO max_marks %s' % max_marks)
+        self.lgr.debug('injectIO dfile: %s max_marks %s' % (dfile, max_marks))
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
@@ -5587,6 +5617,23 @@ class GenMonitor():
         	     self.stopHap, stop_action)
         self.lgr.debug('stopAndGoAlone, hap set now stop it')
         SIM_break_simulation('Stopping simulation')
+
+    def stopAndCall(self, callback):
+        self.lgr.debug('stopAndCall')
+        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+        	     self.stopAndCallHap, callback)
+        SIM_break_simulation('stopAndCall')
+
+    def stopAndCallHap(self, callback, one, exception, error_string):
+        self.lgr.debug('stopAndCallHap')
+        if self.stop_hap is not None:
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHapAlone, hap)
+            self.stop_hap = None
+            SIM_run_alone(callback, None)
+
+    def rmStopHapAlone(self, hap):
+        RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)
