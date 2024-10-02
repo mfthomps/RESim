@@ -1356,6 +1356,7 @@ class StackTrace():
     def checkGOTJmp(self, ptr, call_to, cur_fun, fname, call_ip, first_instruct):
         skip_this = False
         instruct_of_call = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
+        cur_fun_name = self.fun_mgr.getFunName(cur_fun)
         return_addr = self.isGOT(ptr, call_to, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname, False)
         if return_addr is not None:
             #self.lgr.debug('stackTrace was GOT')
