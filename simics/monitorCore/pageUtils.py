@@ -325,13 +325,13 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ttbr = cpu.translation_table_base0
     base = memUtils.bitRange(ttbr, 14,31)
     base_shifted = base << 14
-    lgr.debug('findPageTableArm ttbr0 0x%x base 0x%x shifed 0x%x' % (ttbr, base, base_shifted))
+    #lgr.debug('findPageTableArm ttbr0 0x%x base 0x%x shifed 0x%x' % (ttbr, base, base_shifted))
     
     first_index = memUtils.bitRange(va, 20, 31)
     first_shifted = first_index << 2
     first_addr = base_shifted | first_shifted
     ptable_info.pdir_addr = first_addr
-    lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+    #lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
    
     fld = readPhysMemory(cpu, first_addr, 4, lgr)
     if fld == 0:
@@ -341,7 +341,7 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     pta = memUtils.bitRange(fld, 10, 31)
     pta_shifted = pta << 10
     #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
-    lgr.debug('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
+    #lgr.debug('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
     
     second_index = memUtils.bitRange(va, 12, 19)
     second_shifted = second_index << 2
@@ -349,7 +349,7 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ptable_info.ptable_addr = second_addr
     sld = readPhysMemory(cpu, second_addr, 4, lgr)
     #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
-    lgr.debug('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
+    #lgr.debug('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
     if use_sld is None:
         if sld == 0:
             return ptable_info
