@@ -331,6 +331,8 @@ class ExitInfo():
         # address used if asynch read is not ready
         self.delay_count_addr = None
         self.did_delay = False
+        self.src_addr = None
+        self.src_addr_len = None
 
 EXTERNAL = 1
 AF_INET = 2
@@ -623,7 +625,7 @@ class Syscall():
             self.syscall_info = syscall_info
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None:
-                self.lgr.debug('Syscall callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s' % (callnum, call, entry, compat32, str(syscall_info), self.cell))
+                self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s' % (callnum, call, entry, compat32, str(syscall_info), self.cell))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                 proc_break1 = None
                 break_list.append(proc_break)
@@ -631,7 +633,7 @@ class Syscall():
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, syscall_info, proc_break, call))
             if background:
                 dc = self.context_manager.getDefaultContext()
-                self.lgr.debug('doBreaks set background breaks at 0x%x' % entry)
+                self.lgr.debug('Syscall setComputeBreaks doBreaks set background breaks at 0x%x' % entry)
                 self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                 self.background_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, syscall_info, self.background_break)
         
@@ -1128,22 +1130,42 @@ class Syscall():
             #if syscall_info.compat32:
             #    SIM_break_simulation('socketcall')
             exit_info.socket_callname = socket_callname
-            if socket_callname != 'socket' and socket_callname != 'setsockopt':
-                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
+            if socket_callname != 'socket':
+                # Overloaded structure being used for parsing 32 bit sockcall
+                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, lgr=self.lgr)
                 if tid in self.tid_fd_sockets and ss.fd is not None and ss.fd in self.tid_fd_sockets[tid]:
                     ss.addParams(self.tid_fd_sockets[tid][ss.fd])
+                exit_info.old_fd = ss.fd
+                if socket_callname.startswith('rec') or socket_callname.startswith('send'): 
+                    exit_info.count = ss.length
+                    exit_info.retval_addr = ss.addr
+                    exit_info.old_fd = ss.fd
+                    self.lgr.debug('syscall socketParse socketcall rec/send count %d FD: %d' % (exit_info.count, exit_info.old_fd))
+                elif socket_callname.startswith('accept'):
+                    exit_info.retval_addr = ss.addr
+                    exit_info.count_addr = ss.length
                 #self.lgr.debug('syscall socketParse socket_callname %s got SockStruct from param2: 0x%x %s' % (socket_callname, frame['param2'], ss.getString()))
         else:
             # Not socketcall
             socket_callname = callname
-            #self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
-            if callname != 'socket':
-                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], length=frame['param3'])
+            exit_info.old_fd = frame['param1']
+            self.lgr.debug('syscall socketParse call %s param1 0x%x param2 0x%x' % (callname, frame['param1'], frame['param2']))
+            if callname == 'socket':
+                self.tid_sockets[tid] = self.getSockParams(frame, syscall_info)
+            elif callname in ['bind', 'connect', 'getsockname']:
+                self.lgr.debug('socketParse param1: 0x%x param2: 0x%x' % (frame['param1'], frame['param2']))
+                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, fd=frame['param1'], lgr=self.lgr)
                 if tid in self.tid_fd_sockets and ss.fd is not None and ss.fd in self.tid_fd_sockets[tid]:
                     ss.addParams(self.tid_fd_sockets[tid][ss.fd])
                 self.lgr.debug('socketParse ss %s  param2: 0x%x' % (ss.getString(), frame['param1']))
+            elif callname.startswith('rec') or callname.startswith('send'):
+                exit_info.count = frame['param3']
+                exit_info.retval_addr = frame['param2']
+            elif callname.startswith('accept'):
+                exit_info.retval_addr = frame['param2']
+                exit_info.count_addr = frame['param3']
             else:
-                self.tid_sockets[tid] = self.getSockParams(frame, syscall_info)
+                pass
         ''' NOTE returns above '''
         exit_info.sock_struct = ss
 
@@ -1258,42 +1280,41 @@ class Syscall():
                          self.sockwatch.bind(tid, ss.fd, call_param)
 
         elif socket_callname == 'getpeername':
-            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
             for call_param in self.call_params:
-                if (call_param.subcall is None or call_param.subcall == 'getpeername') and type(call_param.match_param) is int and call_param.match_param == ss.fd:
+                if (call_param.subcall is None or call_param.subcall == 'getpeername') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd:
                 #if call_param.subcall == 'GETPEERNAME' and call_param.match_param == ss.fd:
                     addParam(exit_info, call_param)
 
         elif socket_callname == 'accept' or socket_callname == 'accept4':
-            phys = self.mem_utils.v2p(self.cpu, ss.addr)
-            if ss.addr is not None and ss.addr != 0:
-                ida_msg = '%s - %s tid:%s (%s) FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, comm, ss.fd, ss.addr, ss.length, phys)
-            elif ss.fd is not None:
-                ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
+            if exit_info.retval_addr is not None and exit_info.retval_addr != 0:
+                phys = self.mem_utils.v2p(self.cpu, exit_info.retval_addr)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, 
+                       exit_info.retval_addr, exit_info.count, phys)
+            elif exit_info.old_fd is not None:
+                ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
             else:
                 ida_msg = '%s - %s tid:%s (%s) FD is None?' % (callname, socket_callname, tid, comm)
                 self.lgr.debug('syscall acccept with ss.fd of none?')
              
-            if ss.fd is not None:
+            if exit_info.old_fd is not None:
                 for call_param in self.call_params:
-                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), ss.fd))
+                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                     if type(call_param.match_param) is int:
-                        if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == ss.fd):
+                        if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
                             self.lgr.debug('did accept match')
                             addParam(exit_info, call_param)
 
         elif socket_callname == 'getsockname':
-            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, ss.fd)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
             for call_param in self.call_params:
-                if call_param.subcall == 'getsockname' and call_param.match_param == ss.fd:
+                if call_param.subcall == 'getsockname' and call_param.match_param == exit_info.old_fd:
                     addParam(exit_info, call_param)
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
-            exit_info.old_fd = ss.fd
-            sock_param = self.sockwatch.getParam(tid, ss.fd)
+            sock_param = self.sockwatch.getParam(tid, exit_info.old_fd)
             if sock_param is not None:
                 exit_info.call_params.append(sock_param)
-            exit_info.retval_addr = ss.addr
             src_addr = None
             src_addr_len = 0
             if socket_callname == 'recvfrom':
@@ -1305,28 +1326,26 @@ class Syscall():
                     src_addr_len = frame['param6']
                     #SIM_break_simulation('recvfrom param5 0x%x' % src_addr)
             if src_addr is not None and src_addr != 0:
-                source_ss = net.SockStruct(self.cpu, src_addr, self.mem_utils, fd=-1)
+                source_ss = net.SockStruct(self.cpu, src_addr, self.mem_utils, fd=-1, lgr=self.lgr)
                 if source_ss.sa_family is not None:
-                    exit_info.fname_addr = src_addr
-                    exit_info.count = src_addr_len
-                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, ss.fd, ss.length)
+                    exit_info.src_addr = src_addr
+                    exit_info.src_addr_len = src_addr_len
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
                 #    SIM_break_simulation(ida_msg)
-            elif ss.length is None:
-                self.lgr.error('ss length none') 
-            elif ss.fd is None:
-                self.lgr.error('ss fd none') 
+            elif exit_info.old_fd is None:
+                self.lgr.error('sock fd none') 
             elif tid is None:
                 self.lgr.error('tid is none') 
             else:
-                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d %s' % (callname, socket_callname, tid, comm, ss.fd, ss.length, ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count)
             for call_param in self.call_params:
-                self.lgr.debug('syscall parse tid:%s socket rec... param: %s subcall is %s ss.fd is %s match_param is %s' % (tid, call_param.name, call_param.subcall, str(ss.fd), str(call_param.match_param)))
+                self.lgr.debug('syscall parse tid:%s socket rec... param: %s subcall is %s exit_info.old_fd is %s match_param is %s' % (tid, call_param.name, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param)))
                 if call_param.name == 'runToReceive':
                     exit_info.call_params.append(call_param)
-                elif (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                elif (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     if call_param.nth is not None:
                         call_param.count = call_param.count + 1
                         self.lgr.debug('syscall parse socket recv call_param.nth not none, is %d, count incremented to  %d' % (call_param.nth, call_param.count))
@@ -1335,13 +1354,13 @@ class Syscall():
                             addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, ss.length)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     else:
                         self.lgr.debug('call_param.nth is none, call it matched')
                         addParam(exit_info, call_param)
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, ss.length)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
                     # keep kernel from triggering data watch mods if just reading more data into buffer
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
@@ -1395,14 +1414,12 @@ class Syscall():
             else:
                 self.lgr.error('syscall sendmsg not yet built for x86!')
                 return
-                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d' % (callname, socket_callname, tid, comm, exit_info.retval_addr, exit_info.old_fd)
             self.checkSendParams(syscall_info, exit_info, None, None, None)
 
         elif socket_callname == "send" or socket_callname == "sendto":
             # there are 2 sockets, the ss is our socket, with the buffer and the addr.  dest_ss has the destination IP/Port, etc.
-            exit_info.old_fd = ss.fd
-            exit_info.retval_addr = ss.addr
-            sock_param = self.sockwatch.getParam(tid, ss.fd)
+            sock_param = self.sockwatch.getParam(tid, exit_info.old_fd)
             if sock_param is not None:
                 exit_info.call_params.append(sock_param)
             dest_addr = None
@@ -1417,32 +1434,32 @@ class Syscall():
             #if ss.fd == 5:
             #    SIM_break_simulation('is sendto dest_addr 0x%x' % dest_addr)
             if dest_addr is not None and dest_addr != 0:
-                dest_ss = net.SockStruct(self.cpu, dest_addr, self.mem_utils, fd=-1)
+                dest_ss = net.SockStruct(self.cpu, dest_addr, self.mem_utils, fd=-1, lgr=self.lgr)
                 #frame_string = taskUtils.stringFromFrame(frame)
                 #print(frame_string)
-                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s dest: %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString(), dest_ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d dest: %s' % (callname, socket_callname, tid, comm, exit_info.retval_addr, exit_info.old_fd, dest_ss.getString())
                 #self.lgr.debug(ida_msg)
                 #if dest_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
                 #    SIM_break_simulation(ida_msg)
             else:
-                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x %s' % (callname, socket_callname, tid, comm, ss.addr, ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d' % (callname, socket_callname, tid, comm, exit_info.retval_addr, exit_info.old_fd)
 
 
 
-            max_len = max(ss.length, 300)
-            byte_array = self.mem_utils.getBytes(self.cpu, max_len, ss.addr)
+            max_len = max(exit_info.count, 300)
+            byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
             s = None
             if byte_array is not None:
                 s = resimUtils.getHexDump(byte_array[:max_len])
             self.checkSendParams(syscall_info, exit_info, ss, dest_ss, s)
 
         elif socket_callname == 'listen':
-            sock_param = self.sockwatch.getParam(tid, ss.fd)
+            sock_param = self.sockwatch.getParam(tid, exit_info.old_fd)
             if sock_param is not None:
                 exit_info.call_params.append(sock_param)
-            ida_msg = '%s - %s tid:%s (%s) %s' % (callname, socket_callname, tid, comm, ss.getString())
+            ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
                 
         elif socket_callname == 'setsockopt' or socket_callname == 'getsockopt':
             if callname == 'socketcall':
@@ -1773,10 +1790,11 @@ class Syscall():
             ida_msg = 'nanosleep tid:%s (%s) time_spec: 0x%x seconds: %d nano: %d' % (tid, comm, time_spec, seconds, nano)
             #SIM_break_simulation(ida_msg)
 
-        elif callname == 'fcntl64':        
+        elif callname in ['fcntl64', 'fcntl']:        
             fd = frame['param1']
             cmd_val = frame['param2']
-            cmd = net.fcntlCmd(cmd_val)
+            #cmd = net.fcntlCmd(cmd_val)
+            cmd = net.fcntlGetCmd(cmd_val)
             arg = frame['param3']
             if cmd == 'F_SETFD':
                 ida_msg = 'fcntl64 tid:%s (%s) FD: %d %s flags: 0%o' % (tid, comm, fd, cmd, arg)
@@ -2753,7 +2771,7 @@ class Syscall():
         # TBD merge call parameter handling into common functions 
         retval = None
         the_callname = callname
-        if 'ss' in frame:
+        if 'ss' in frame and frame['ss'] is not None:
             ss = frame['ss']
             #ida_msg = self.socketParse(callname, syscall_info, frame, exit_info, tid)
             exit_info.old_fd = ss.fd
@@ -2766,6 +2784,7 @@ class Syscall():
             if ss.addr is not None:
                 exit_info.retval_addr = ss.addr
                 self.lgr.debug('syscall handleReadOrSocket ss addr is 0x%x len is %d' % (ss.addr, ss.length))
+                exit_info.count = ss.length
             if the_callname == 'recvfrom' and callname == 'socketcall':        
                 addr_addr = frame['param2']+16
                 src_addr = self.mem_utils.readWord32(self.cpu, addr_addr)

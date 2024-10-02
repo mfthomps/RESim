@@ -355,29 +355,30 @@ class SharedSyscall():
             new_fd = eax
             if new_fd < 0:
                 trace_msg = err_trace_msg+('error: %d\n' % (eax))
-            elif exit_info.sock_struct is not None and exit_info.sock_struct.addr != 0:
-                in_ss = exit_info.sock_struct
-                addr_len = self.mem_utils.readWord32(self.cpu, in_ss.length)
-                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (in_ss.addr, in_ss.length, addr_len))
-                ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
+            #elif exit_info.sock_struct is not None and exit_info.sock_struct.addr != 0:
+            elif exit_info.retval_addr is not None and exit_info.retval_addr != 0:
+                #in_ss = exit_info.sock_struct
+                addr_len = self.mem_utils.readWord32(self.cpu, exit_info.count_addr)
+                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (exit_info.retval_addr, exit_info.count, addr_len))
+                ss = net.SockStruct(self.cpu, exit_info.retval_addr, self.mem_utils)
                 if ss.sa_family == 1:
                     if tid in self.trace_procs:
-                        self.traceProcs.accept(tid, exit_info.sock_struct.fd, new_fd, None)
-                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  name: %s\n' % (exit_info.sock_struct.fd,
+                        self.traceProcs.accept(tid, exit_info.old_fd, new_fd, None)
+                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  name: %s\n' % (exit_info.old_fd,
                        new_fd, ss.famName(), ss.getName()))
                 elif ss.sa_family == 2:
                     if tid in self.trace_procs:
-                        self.traceProcs.accept(tid, exit_info.sock_struct.fd, new_fd, ss.getName())
-                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  addr: %s\n' % (exit_info.sock_struct.fd,
+                        self.traceProcs.accept(tid, exit_info.old_fd, new_fd, ss.getName())
+                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  addr: %s\n' % (exit_info.old_fd,
                        new_fd, ss.famName(), ss.getName()))
                 else:
-                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  SA Family not handled addr: 0x%x\n' % (exit_info.sock_struct.fd, new_fd, ss.famName(), exit_info.sock_struct.addr))
+                    trace_msg = trace_msg+('sock_fd: %d  new_fd: %d sa_family: %s  SA Family not handled addr: 0x%x\n' % (exit_info.old_fd, new_fd, ss.famName(), exit_info.retval_addr))
                     #SIM_break_simulation(trace_msg)
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of address data '''
-                    self.dataWatch.setRange(in_ss.addr, addr_len, trace_msg, back_stop=False)
+                    self.dataWatch.setRange(exit_info.retval_addr, addr_len, trace_msg, back_stop=False)
                     #if my_syscall.linger: 
                     ''' TBD better way to distinguish linger from trackIO '''
                     if not self.dataWatch.wouldBreakSimulation():
@@ -385,15 +386,15 @@ class SharedSyscall():
                         #self.dataWatch.watch(break_simulation=False)
                         self.lgr.debug('sharedSyscall accept call dataWatch watch')
                         self.dataWatch.watch(break_simulation=exit_info.matched_param.break_simulation, i_am_alone=True)
-                if exit_info.matched_param is not None and my_syscall.name == 'runToIO' and exit_info.matched_param.match_param == exit_info.sock_struct.fd:
+                if exit_info.matched_param is not None and my_syscall.name == 'runToIO' and exit_info.matched_param.match_param == exit_info.old_fd:
                     self.lgr.debug('sharedSyscall for runToIO, change param fd to %d' % new_fd)
                     exit_info.matched_param.match_param = new_fd
                 if socket_syscall is not None:
                     binders = socket_syscall.getBinders()
                     if binders is not None:
-                        binders.accept(tid, exit_info.sock_struct.fd, new_fd)
-            elif exit_info.sock_struct is not None:
-                trace_msg = trace_msg+('sock_fd: %d  new_fd: %d NULL addr\n' % (exit_info.sock_struct.fd, new_fd))
+                        binders.accept(tid, exit_info.old_fd, new_fd)
+            elif exit_info.old_fd is not None:
+                trace_msg = trace_msg+('sock_fd: %d  new_fd: %d NULL addr\n' % (exit_info.old_fd, new_fd))
             else:
                 trace_msg = trace_msg+('no sock struct, maybe half baked setExits?\n')
         elif socket_callname == "socketpair":
@@ -473,9 +474,8 @@ class SharedSyscall():
                 else:
                     s = '<< NOT MAPPED >>'
                 src = ''
-                if exit_info.fname_addr is not None:
-                    ''' obscure use of fname_addr to store source of recvfrom '''
-                    src_ss = net.SockStruct(self.cpu, exit_info.fname_addr, self.mem_utils, fd=-1)
+                if exit_info.src_addr is not None:
+                    src_ss = net.SockStruct(self.cpu, exit_info.src_addr, self.mem_utils, fd=-1)
                     src = 'from: %s' % src_ss.getString()
                 if exit_info.old_fd is None:
                     # TBD remove this block?  reachable?
@@ -483,11 +483,12 @@ class SharedSyscall():
                     exit_info.matched_param = None
                     trace_msg = trace_msg+('\treturn from socketcall %s tid:%s  FD: None' % (socket_callname, tid))
                     return trace_msg 
-                if exit_info.sock_struct is None or exit_info.sock_struct.length is None:
-                    self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call, assume was a setExit from snapshot')
-                    count = exit_info.count
-                else:
-                    count = exit_info.sock_struct.length
+                #if exit_info.sock_struct is None or exit_info.sock_struct.length is None:
+                #    self.lgr.debug('sharedSyscall exit_info sock_struct.length is None for recv call, assume was a setExit from snapshot')
+                #    count = exit_info.count
+                #else:
+                #    count = exit_info.sock_struct.length
+                count = exit_info.count
                 trace_msg = trace_msg+('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, tid, 
                      exit_info.old_fd, count, eax, exit_info.retval_addr, src, s))
                 self.lgr.debug(trace_msg)
@@ -500,10 +501,10 @@ class SharedSyscall():
                         self.kbuffer.readReturn(eax)
                     self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, 
                                max_len=count, recv_addr=exit_info.retval_addr, fd=exit_info.old_fd, data_stream=True)
-                    if exit_info.fname_addr is not None:
-                        count = self.mem_utils.readWord32(self.cpu, exit_info.count)
-                        msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.fname_addr, count)
-                        self.dataWatch.setRange(exit_info.fname_addr, count, msg)
+                    if exit_info.src_addr is not None:
+                        count = self.mem_utils.readWord32(self.cpu, exit_info.src_addr_len)
+                        msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.src_addr, count)
+                        self.dataWatch.setRange(exit_info.src_addr, count, msg)
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False, i_am_alone=True)
@@ -663,8 +664,10 @@ class SharedSyscall():
             trace_msg = ('F_DUPFD  old_fd: %d new: %d\n' % (exit_info.old_fd, eax))
         elif net.fcntlCmdIs(exit_info.cmd, 'F_GETFL'):
             trace_msg = ('F_GETFL, old_fd: %d  flags: 0%o\n' % (exit_info.old_fd, eax))
-        else:
+        elif exit_info.old_fd is not None:
             trace_msg = ('old_fd: %d retval: %d\n' % (exit_info.old_fd, eax))
+        else:
+            trace_msg = (' retval: %d\n' % (eax))
         return trace_msg
        
             
@@ -991,13 +994,26 @@ class SharedSyscall():
                 trace_msg = trace_msg+('FD: %d count: %d' % (exit_info.old_fd, eax))
                 for i in range(limit):
                     base = self.mem_utils.readPtr(self.cpu, iov_addr)
+                    if base == 0:
+                        continue
                     length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
                     if remain > length:
                         data_len = length
                     else:
                         data_len = remain
-                    self.lgr.debug('sharedSyscall writev base: 0x%x length: %d' % (base, length))
-                    trace_msg = trace_msg+' buffer: 0x%x len: %d' % (base, length)
+
+                    max_len = min(length, 1024)
+                    max_max_len = min(eax, 10000)
+                    byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, base)
+                    if byte_array is not None:
+                        s = resimUtils.getHexDump(byte_array[:max_len])
+                        if self.traceFiles is not None:
+                            self.traceFiles.write(tid, exit_info.old_fd, byte_array)
+                    else:
+                        s = '<<NOT MAPPED>>'
+
+                    self.lgr.debug('sharedSyscall writev base: 0x%x length: %d data: %s' % (base, length, s))
+                    trace_msg = trace_msg+' buffer: 0x%x len: %d data: %s' % (base, length, s)
                     remain = remain - data_len 
                     iov_addr = iov_addr+iov_size
                 trace_msg = trace_msg+'\n'
@@ -1103,7 +1119,7 @@ class SharedSyscall():
             if not got_msg:
                 trace_msg = err_trace_msg+('FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
             
-        elif callname == 'fcntl64':        
+        elif callname in ['fcntl64', 'fcntl']:        
             if eax >= 0:
                 trace_msg = trace_msg+self.fcntl(eax, exit_info, tid)
             else:
