@@ -298,7 +298,8 @@ class TaskUtils():
                     #self.lgr.debug('taskUtils findSwapper read comm task is 0x%x' % task)
                     comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, COMM_SIZE)
                     pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
-                    #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
+                    #if pid is not None:
+                    #    self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                     ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
                     if ts_real_parent == task:
                         #print 'parent is same as task, done?'
