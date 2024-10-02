@@ -27,6 +27,7 @@ import pageUtils
 import json
 import sys
 import struct
+import traceback
 from simics import *
 MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
@@ -118,6 +119,19 @@ def bitRange(value, start, end):
 def setBitRange(initial, value, start):
     shifted = value << start
     retval = initial | shifted
+    return retval
+
+def cpuWordSize(cpu):
+    if cpu.architecture == 'arm':
+        retval = 4
+    elif cpu.architecture == 'arm64':
+        retval = 8
+    else:
+        mode = cpu.iface.x86_reg_access.get_exec_mode()
+        if mode == 3:
+            retval = 4
+        else:
+            retval = 8
     return retval
 
 param_map = {}
@@ -809,9 +823,10 @@ class MemUtils():
                 #self.lgr.debug('arm64App is arm64 call from 32')
                 arm64_app = False
             else:
-                self.lgr.error('arm64App in kernel but not via a syscall? esr_el1 is 0x%x' % esr_el1_shifted)
-                SIM_break_simulation('remove this')
-                return False
+                self.lgr.debug('arm64App in kernel but not via a syscall? esr_el1 is 0x%x' % esr_el1_shifted)
+                #traceback.print_stack()
+                #SIM_break_simulation('remove this')
+                arm64_app = False
         else:
             # in user space, rely on in_aarch64
             if not cpu.in_aarch64:
@@ -947,7 +962,7 @@ class MemUtils():
         
 
     def getCurrentTask(self, cpu):
-        self.lgr.debug('memUtils getCurrentTask WORD_SIZE %d' % self.WORD_SIZE)
+        #self.lgr.debug('memUtils getCurrentTask WORD_SIZE %d cpu architecure %s' % (self.WORD_SIZE, cpu.architecture))
         retval = None 
         if self.WORD_SIZE == 4 and cpu.architecture == 'arm':
             retval = self.getCurrentTaskARM(self.param, cpu)
@@ -1027,6 +1042,7 @@ class MemUtils():
     def getCurrentTaskARM64(self, param, cpu):
         reg_num = cpu.iface.int_register.get_number("sp_el0")
         retval = cpu.iface.int_register.read(reg_num)
+        #self.lgr.debug('getCurrentTaskARM64 reg_num %s retval %s' % (reg_num, retval))
         return retval
       
     def getCurrentTaskARM(self, param, cpu):
@@ -1091,7 +1107,7 @@ class MemUtils():
         while not done and bytes_to_go > 0 and curr_addr is not None:
             bytes_to_read = bytes_to_go
             remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
-            #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
+            self.lgr.debug('getBytes remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x' % (remain_in_page, bytes_to_read, curr_addr))
             if remain_in_page < bytes_to_read:
                 bytes_to_read = remain_in_page
             if bytes_to_read > 1024:
@@ -1105,16 +1121,16 @@ class MemUtils():
                 #self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
-            #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
+            self.lgr.debug('getBytes read (bytes_to_read) 0x%x bytes from 0x%x phys 0x%x ' % (bytes_to_read, curr_addr, phys))
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
             except ValueError:
             #except:
                 #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
-                print('trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
+                print('readBytes trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
                 print('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
-                self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
+                self.lgr.error('readBytes bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 return retbytes
             holder = ''
             count = 0
@@ -1126,7 +1142,7 @@ class MemUtils():
                 retbytes = retbytes+read_data
             del read_data
             bytes_to_go = bytes_to_go - bytes_to_read
-            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
+            self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
             curr_addr = curr_addr + bytes_to_read
         return retbytes
 
