@@ -812,7 +812,7 @@ class SharedSyscall():
                 exit_info.fname = 'unknown'
             trace_msg = trace_msg+('FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
-            self.lgr.debug('return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
+            self.lgr.debug('sharedSyscall exitHap return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
                    eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
             if eax >= 0:
                 if tid in self.trace_procs:
@@ -1141,9 +1141,10 @@ class SharedSyscall():
                 else:
                     trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (eax))
         elif callname == 'mmap2' or callname == 'mmap':
+                self.lgr.debug('sharedSyscall exitHap for %s' % callname)
                 # TBD still need error detection/handline
                 if exit_info.fname is not None and self.soMap is not None:
-                    self.lgr.debug('return from mmap tid:%s, addr: 0x%x so fname: %s' % (tid, ueax, exit_info.fname))
+                    self.lgr.debug('sharedSyscall return from mmap tid:%s, addr: 0x%x so fname: %s' % (tid, ueax, exit_info.fname))
                     trace_msg = trace_msg+('addr: 0x%x so fname: %s\n' % (ueax, exit_info.fname))
                     if '/etc/ld.so.cache' not in exit_info.fname:
                         if self.top.trackingThreads() or self.context_manager.amWatching(tid):
@@ -1151,7 +1152,7 @@ class SharedSyscall():
                         else:
                             self.lgr.debug('sharedSyscall %s not watching threads or debugging tid:%s.  SO not recorded.' % (callname, tid))
                 else:
-                    self.lgr.debug('fname soMap none')
+                    self.lgr.debug('sharedSyscall exitHap fname soMap none')
                     trace_msg = trace_msg+('addr: 0x%x \n' % (ueax))
                     self.dataWatch.mmap(ueax)
         elif callname == 'ipc':
@@ -1242,6 +1243,7 @@ class SharedSyscall():
                 self.traceProcs.copyOpen(tid, eax)
         elif callname == 'execve':
             self.lgr.debug('sharedSyscall execve tid:%s  remove from pending_execve' % tid)
+            trace_msg = trace_msg+('result: 0x%x\n' % eax)
             if self.isPendingExecve(tid):
                 self.rmPendingExecve(tid)
         elif callname == 'socketcall' or callname.upper() in net.callname:
@@ -1314,7 +1316,7 @@ class SharedSyscall():
                 SIM_run_alone(my_syscall.stopAlone, callname)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
-            self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
+            self.lgr.debug('sharedSyscall exitHap cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
         return True
 
