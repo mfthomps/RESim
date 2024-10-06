@@ -50,8 +50,10 @@ class FunMgr():
             self.callmn = 'call'
             self.jmpmn = 'jmp'
             self.decode = decode
+        self.trace_addrs = []
 
     def getFun(self, addr):
+        ''' Returns the loaded function address of the fuction containing a given ip '''
         return self.ida_funs.getFun(addr)
 
     def getName(self, addr):
@@ -110,6 +112,7 @@ class FunMgr():
         return fun
 
     def getFunName(self, addr):
+        ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
         if self.ida_funs is None:
             self.lgr.error('funMgr getFunName, ida_funs is not defined')
@@ -136,6 +139,8 @@ class FunMgr():
 
 
     def getIDAFuns(self, full_path, root_prefix, offset):
+        # The offset value will be zero for executables that are not dynamically located.
+        # It will be the load address for dynamically located binaries.
         if not self.top.isWindows():
             ''' much of the link mess is due to linux target file systems with links.  Also using links while
                 figuring out the windows directory structures. '''
@@ -406,17 +411,28 @@ class FunMgr():
             TBD assumes arm and only outputs to log. '''
         funs = self.ida_funs.getFuns()
         bp_start = None
+        self.trace_addrs = []
+        tid = self.top.getTID()
         for f in funs:
             addr = funs[f]['start']
+            self.trace_addrs.append(addr)
             bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+            self.lgr.debug('funMgr traceFuns fun 0x%x start 0x%x bp: 0x%x' % (f, addr, bp))
             if bp_start is None:
                 bp_start = bp
             self.fun_break[addr] = bp
-        self.fun_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.funHap, None, bp_start, bp)
+        self.fun_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.funHap, tid, bp_start, bp)
 
-    def funHap(self, user_param, conf_object, break_num, memory):
+    def funHap(self, want_tid, conf_object, break_num, memory):
         # entered when a global symbol was hit.
         addr = memory.logical_address
+        if addr not in self.trace_addrs:
+            # callback_range is an attractive nuisance
+            return
+        tid = self.top.getTID()
+        if tid != want_tid:
+            self.lgr.debug('funMgr funHap wrong tid want %s got %s' % (want_tid, tid))
+            return    
         #ttbr = self.cpu.translation_table_base0
         #cpu = SIM_current_processor()
         reg_num = self.cpu.iface.int_register.get_number('pc')
@@ -425,5 +441,5 @@ class FunMgr():
         lr_value = self.cpu.iface.int_register.read(reg_num)
         fun = self.ida_funs.getFunName(addr)
         fun_from = self.ida_funs.getFunName(lr_value)
-        self.lgr.debug('funHap addr: 0x%x lr: 0x%x fun: %s from: %s cycle: 0x%x' % (addr, lr_value, fun, fun_from, self.cpu.cycles))
+        self.lgr.debug('funHap addr: 0x%x lr: 0x%x fun: %s from: %s break_num: 0x%x cycle: 0x%x' % (addr, lr_value, fun, fun_from, break_num, self.cpu.cycles))
             
