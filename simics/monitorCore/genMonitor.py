@@ -1004,7 +1004,7 @@ class GenMonitor():
                 if cpl == 0 and not self.mem_utils[cell_name].isKernel(eip):
                     stall_time = cpu.stall_time
                     self.lgr.debug('doInit cell %s cpl 0 but not in kernel code yet eip 0x%x cycles: 0x%x stall_time 0x%x' % (cell_name, eip, cpu.cycles, stall_time))
-                    if False and stall_time is not 0:
+                    if False and stall_time != 0:
                         #TBD this should not happen.  If it does, might cause other cells to get to far ahead?
                         if memUtils.cpuWordSize(cpu) == 4:
                             count = 0xffffffff - self.param[cell_name].kernel_base
@@ -1364,7 +1364,7 @@ class GenMonitor():
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
         elif cpu.architecture == 'arm64':
-            if machine_size is 32:
+            if machine_size == 32:
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
             else:
                 cmd = 'new-gdb-remote cpu=%s architecture=arm64 port=%d' % (cpu.name, self.gdb_port)
@@ -1514,7 +1514,13 @@ class GenMonitor():
                             offset = module_info.addr
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         else:
-                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, 0)
+                            if self.soMap[self.target].isDynamic(prog_name):
+                                image_base = self.soMap[self.target].getImageBase(prog_name)
+                                offset = load_info.addr - image_base
+                                self.lgr.debug('debug is dynamic, offset 0x%x image_base 0x%x' % (offset, image_base))
+                            else:
+                                offset = 0
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         ''' TBD alter stackTrace to use this and buid it out'''
                         #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setFunMgr(self.fun_mgr, tid)
@@ -5987,7 +5993,8 @@ class GenMonitor():
             return
         fun_name = self.fun_mgr.funFromAddr(addr)
         if fun_name is not None:
-            print('Function for address 0x%x is %s' % (addr, fun_name))
+            entry = self.fun_mgr.getFunEntry(fun_name)
+            print('Function for address 0x%x is %s, entry 0x%x' % (addr, fun_name, entry))
         elif self.isVxDKM():
             fun_name = self.task_utils[self.target].getGlobalSym(addr)
             print('Function for address 0x%x is VxWorks symbol %s' % (addr, fun_name))
