@@ -1,6 +1,7 @@
 from simics import *
 import syscall
 import elfText
+import doInUser
 from resimHaps import *
 ''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
@@ -128,18 +129,21 @@ class TrackThreads():
         if cpu.architecture == 'arm' and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
-        #self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
+        self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
         self.traceProcs.setName(tid, prog_string, None)
-        self.addSO(prog_string, tid)
+        param = (prog_string, tid)
+        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+        #self.addSO(prog_string, tid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
         RES_delete_breakpoint(self.finish_break[tid])
         del self.finish_hap[tid]
         del self.finish_break[tid]
 
-    def addSO(self, prog_name, tid):
+    def addSO(self, param_tuple):
+        prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         if full_path is not None:
-            #self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
+            self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
             elf_info = self.soMap.addText(full_path, prog_name, tid)
             if elf_info is None:
@@ -163,7 +167,9 @@ class TrackThreads():
             return
         else:
             self.traceProcs.setName(tid, prog_string, None)
-            self.addSO(prog_string, tid)
+            param = (prog_string, tid)
+            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+            #self.addSO(prog_string, tid)
 
 
     def trackSO(self):
