@@ -21,6 +21,8 @@ class ProgInfo():
     def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path):
         self.text_start = text_start
         self.text_size = text_size
+        self.text_end = None
+        self.dynamic = False
         if self.text_start is not None and text_size is not None:
            self.text_end = text_start + text_size
         self.text_offset = text_offset
@@ -33,10 +35,15 @@ class ProgInfo():
             self.plt_offset = plt_offset
             self.plt_size = plt_size
         self.local_path = local_path
+    def setDynamic(self):
+        self.dynamic = True
+
     def toString(self):
-        if self.plt_size is not None:
+        if self.text_start is not None and self.plt_size is not None:
             return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
                 self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
+        elif self.text_offset is not None:
+            return('relocatable text_offset 0x%x size: 0x%x' % (self.text_offset, self.text_size))
         else:
             return('Not a binary')
 
@@ -215,7 +222,7 @@ class SOMap():
                 return True
         return False
 
-    def isAboveLibc(self, address):
+    def isFunNotLibc(self, address):
         retval = False
         if self.isMainText(address):
             retval = True
@@ -240,6 +247,7 @@ class SOMap():
             return False
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
+        self.lgr.debug('soMap isMainText address 0x%x tid %s' % (address, tid))
         if tid is None:
             return False
         if tid in self.prog_start and self.prog_start[tid] is not None:
@@ -300,12 +308,29 @@ class SOMap():
             if self.prog_base_map[prog_basename] != prog:
                 self.lgr.warning('soMap addText collision on program base name %s adding %s, replace old with new' % (prog_basename, prog))
                 self.prog_base_map[prog_basename] = prog
+        eip = None
         if prog not in self.prog_info:
             elf_info = elfText.getText(path, self.lgr)
             if elf_info is not None:
                 self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                        elf_info.plt_offset, elf_info.plt_size, path)
                 self.lgr.debug('soMap addText prog info %s %s' % (prog, self.prog_info[prog].toString()))
+                if self.prog_info[prog].text_start is None:
+                    eip = self.top.getEIP(self.cpu)
+                    mem_utils = self.task_utils.getMemUtils()
+                    if mem_utils.isKernel(eip):
+                        eip = mem_utils.getKReturnAddr(self.cpu)
+                        if eip is None:
+                            self.lgr.error('soMap addText no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
+                            return
+                        self.lgr.debug('soMap addText no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                    else:
+                        self.lgr.debug('soMap addText no text start, assume dynamic eip is 0x%x' % eip)
+                    self.prog_info[prog].text_start = 0
+                    self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
+                    self.prog_info[prog].setDynamic()
+                    
+                     
             else:
                 self.lgr.debug('soMap addText no elf info for %s' % path)
                 pass
@@ -321,10 +346,13 @@ class SOMap():
             self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
         
         if prog in self.prog_info:    
-            # TBD until we can get load address from process info, assume no ASLR
-            load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+            if self.prog_info[prog].dynamic:
+                load_addr = eip - self.prog_info[prog].text_offset
+                self.prog_end[tid] = self.prog_info[prog].text_end + load_addr 
+            else:
+                load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                self.prog_end[tid] = self.prog_info[prog].text_end
             self.prog_start[tid] = load_addr
-            self.prog_end[tid] = self.prog_info[prog].text_end
             self.text_prog[tid] = prog
             self.checkSOWatch(load_addr, prog)
             #size = self.prog_info[prog].text_end - self.prog_start[tid]
@@ -369,6 +397,7 @@ class SOMap():
                 self.fun_mgr.add(full_path, locate)
             
     def addSO(self, tid_in, prog, addr, count):
+        self.lgr.debug('soMap addSO')
         if '..' in prog:
             prog = str(Path(prog).resolve())
         prog_basename = os.path.basename(prog)
@@ -383,6 +412,7 @@ class SOMap():
         if tid is None:
             tid = tid_in
         if tid in self.so_addr_map and prog in self.so_addr_map[tid]:
+            self.lgr.debug('soMap addSO tid %s already in map' % tid)
             ''' multiple mmap calls for one so file.  assume continguous and adjust
                 address to lowest '''
             if self.so_addr_map[tid][prog].addr> addr:
@@ -396,6 +426,7 @@ class SOMap():
                 self.so_file_map[tid] = {}
 
             full_path = self.targetFS.getFull(prog, lgr=self.lgr)
+            self.lgr.debug('soMap addSO tid %s prog %s full %s' % (tid, prog, full_path))
             if full_path is not None and prog not in self.prog_info:
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
@@ -643,6 +674,8 @@ class SOMap():
         return retval
 
     def getSOInfo(self, addr_in):
+        # return file name, start and end for the binary file whose load range includes the given address.
+        # start and end are the load addresses
         retval = None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
@@ -777,11 +810,29 @@ class SOMap():
                 retval = self.prog_start[map_tid]
         return retval
 
+    def isDynamic(self, in_fname):
+        retval = False
+        if in_fname in self.prog_info:
+            try:
+                retval = self.prog_info[in_fname].dynamic
+            except AttributeError:
+                pass
+        else:
+            prog = self.fullProg(in_fname)
+            if prog in self.prog_info:
+                retval = self.prog_info[prog].dynamic
+            else:
+                self.lgr.debug('soMap isDynamic in_fname %s not found in prog_info' % in_fname)
+        return retval
+
     def getImageBase(self, in_fname):
         prog = self.fullProg(in_fname)
         retval = None
         if prog in self.prog_info:
-            retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+            if self.prog_info[prog].text_start == 0:
+                retval = 0
+            else:
+                retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
         else:
             self.lgr.debug('soMap getImageBase not in prog_info: %s' % prog)
 
