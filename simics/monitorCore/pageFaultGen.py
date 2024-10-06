@@ -191,6 +191,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number('esr_el1')
             reg_value = self.cpu.iface.int_register.read(reg_num)
             reg_value = reg_value >> 26
+            #self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
             if reg_value == 0x11:
                 return
 
@@ -199,6 +200,10 @@ class PageFaultGen():
 
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
         self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
+        if self.user_eip is None:
+            SIM_break_simulation('remove this')
+            self.lgr.error('nothing read from user_ip_addr 0x%x' % user_ip_addr)
+            return
         if self.user_eip in self.ignore_probes:
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
@@ -245,6 +250,10 @@ class PageFaultGen():
         elif self.cpu.architecture == 'arm64':
             fault_reg = self.cpu.iface.int_register.get_number("far_el1")
             fault_addr = self.cpu.iface.int_register.read(fault_reg)
+            #ret_reg = self.cpu.iface.int_register.get_number("elr_el1")
+            #ret_addr = self.cpu.iface.int_register.read(ret_reg)
+            #if fault_addr == ret_addr:
+            #    self.lgr.debug('pageFaultHap arm64 Instruction page fault addr 0x%x' % (fault_addr))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
@@ -266,6 +275,7 @@ class PageFaultGen():
             return
         self.faulted_pages[tid].append(fault_addr)
         #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
+
         #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
@@ -431,7 +441,8 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         if self.cpu.architecture == 'arm64':
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, self.mem_utils.WORD_SIZE, 0)
+            self.lgr.debug('watchPageFaults set break at at arm entry 0x%x' % self.param.arm_entry)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
         else:
