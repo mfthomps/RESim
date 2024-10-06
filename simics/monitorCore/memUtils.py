@@ -768,11 +768,16 @@ class MemUtils():
                 else:
                     reg_num = cpu.iface.int_register.get_number(reg)
             else:
-                if reg in self.arm64_regs or reg in self.arm_regs:
+                arm64_app = self.arm64App(cpu)
+               
+                if reg == 'sp':
+                    reg = 'sp_el0'
+                if not arm64_app and reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
-                    if reg == 'r0':
-                        reg_value = cpu.iface.int_register.read(reg_num)
+                elif arm64_app and reg in self.arm64_regs:
+                    # simply use name of register
+                    reg_num = cpu.iface.int_register.get_number(reg)
                     
                 elif reg in ['eip']:
                     reg_num = cpu.iface.int_register.get_number('pc')
@@ -784,9 +789,8 @@ class MemUtils():
                 else:
                     # depends.  may be syscall_num, param reg or such.   We don't know if app is 32 or 64 bits.
                     # If in user space then just rely on cpu.in_aarch64.  Otherwise, assume we came in via a syscall
-                    # and the esr_el1 reg tells us whether app was 32 or 64.
+                   # and the esr_el1 reg tells us whether app was 32 or 64.
                     #self.lgr.debug('getRegValue look for reg %s, if in kernel, expecting via syscall' % reg)
-                    arm64_app = self.arm64App(cpu)
                     if reg == 'syscall_num':
                         if arm64_app:
                             reg_num = cpu.iface.int_register.get_number('x8')
@@ -797,14 +801,18 @@ class MemUtils():
                             reg_num = cpu.iface.int_register.get_number(param_map['arm64'][reg])
                         else:
                             reg_num = cpu.iface.int_register.get_number(param_map['arm'][reg])
-                    elif reg == 'sp_usr':
-                        reg_num = cpu.iface.int_register.get_number('x15')
-                    elif reg == 'lr_usr':
-                        reg_num = cpu.iface.int_register.get_number('x14')
+                    if arm64_app:
+                        if reg == 'lr':
+                            reg_num = cpu.iface.int_register.get_number('x30')
                     else:
-                        self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
+                        if reg == 'sp_usr':
+                            reg_num = cpu.iface.int_register.get_number('x15')
+                        elif reg == 'lr_usr':
+                            reg_num = cpu.iface.int_register.get_number('x14')
             if reg_num is not None:
                 reg_value = cpu.iface.int_register.read(reg_num)
+            else:
+                self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
         return reg_value
 
     def arm64App(self, cpu):
@@ -1355,4 +1363,11 @@ class MemUtils():
                 retval = 'r0'
         else:
             retval = self.regs['syscall_ret']
+        return retval
+
+    def getKReturnAddr(self, cpu):
+        retval = None
+        if cpu.architecture == 'arm64':
+            ret_reg = cpu.iface.int_register.get_number("elr_el1")
+            retval = cpu.iface.int_register.read(ret_reg)
         return retval

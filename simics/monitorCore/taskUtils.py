@@ -1131,11 +1131,13 @@ class TaskUtils():
                 frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
                 frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
         elif self.cpu.architecture == ('arm64'):
+            # arm64 64 bit app
             # only works on entry
             for p in memUtils.param_map['arm64']:
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm64'][p])
-            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
-            frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'x14')
+            #frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+            frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
         else:
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
