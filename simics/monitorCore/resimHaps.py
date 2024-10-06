@@ -50,3 +50,6 @@ def RES_delete_breakpoint(bp):
     #print('del breakpoint')
     SIM_delete_breakpoint(bp)
     #print('done')
+
+def RES_delete_mode_hap(hap):
+    SIM_hap_delete_callback_id("Core_Mode_Change", hap)
