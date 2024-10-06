@@ -50,9 +50,9 @@ def getText(path, lgr):
         lgr.debug('elfText nothing at %s' % path)
         return None
     retval = None
-    cmd = 'readelf -WS %s' % path
+    cmd = 'readelf -a %s' % path
     #grep = 'grep " .text"'
-    grep = 'grep "-e .plt -e .text"'
+    #grep = 'grep "-e .plt -e .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     #proc2 = subprocess.Popen(shlex.split(grep),stdin=proc1.stdout,
     #                     stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -66,7 +66,24 @@ def getText(path, lgr):
     plt_addr = None
     plt_offset = None
     plt_size = None
+    iself = False
+    is_dyn = False
     for line in out[0].decode("utf-8").splitlines():
+        if line.startswith('ELF Header'):
+            iself = True
+            continue
+        if line.strip().startswith('Type:') and 'DYN' in line:
+            is_dyn = True
+            continue
+        if is_dyn and line.strip().startswith('Entry point'):
+            parts = line.strip().split()
+            offset = int(parts[3], 16)
+        if is_dyn and line.strip().startswith('[ 0]'):
+            hack = line[7:]
+            parts = hack.strip().split()
+            size_s = parts[1][:-1]
+            size = int(size_s, 16)
+            break
      
         ''' section numbering has whitespace '''
         hack = line[7:]
@@ -95,7 +112,7 @@ def getText(path, lgr):
             else:
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
-    if addr is not None:
+    if addr is not None or is_dyn:
         retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size)
    
     return retval
