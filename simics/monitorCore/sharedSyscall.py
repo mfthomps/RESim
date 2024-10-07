@@ -359,7 +359,7 @@ class SharedSyscall():
             elif exit_info.retval_addr is not None and exit_info.retval_addr != 0:
                 #in_ss = exit_info.sock_struct
                 addr_len = self.mem_utils.readWord32(self.cpu, exit_info.count_addr)
-                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (exit_info.retval_addr, exit_info.count, addr_len))
+                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (exit_info.retval_addr, exit_info.count_addr, addr_len))
                 ss = net.SockStruct(self.cpu, exit_info.retval_addr, self.mem_utils)
                 if ss.sa_family == 1:
                     if tid in self.trace_procs:
