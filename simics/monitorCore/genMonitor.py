@@ -3650,6 +3650,7 @@ class GenMonitor():
                         #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
                         calls.append(scall.lower())
                 if self.mem_utils[target].WORD_SIZE == 8:
+                    self.lgr.debug('runToIO not just input remove calls not in 64 bit apps')
                     #calls.remove('recv')
                     calls.remove('_llseek')
                     calls.remove('_newselect')
@@ -3661,17 +3662,26 @@ class GenMonitor():
                         if c in calls:
                             calls.remove(c)
             else:
-                if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.mem_utils[target].WORD_SIZE == 8:
+                # TBD fix all this to reflect machine size of target binary
+                self.lgr.debug('runToIO just input') 
+                if (cpu.architecture == 'arm' and not self.param[target].arm_svc):
                     calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'poll']
                     for call in net.readcalls:
                         calls.append(call.lower())
-                    if self.mem_utils[target].WORD_SIZE == 8:
-                        calls.remove('recv')
+                elif self.mem_utils[target].WORD_SIZE == 8:
+                    self.lgr.debug('runToIO just input wordisize 8') 
+                    calls = ['read', 'close', 'ioctl', 'pselect6', 'ppoll']
+                    for call in net.readcalls:
+                        calls.append(call.lower())
+                    calls.remove('recv')
                 else: 
                     calls = ['read', 'close', 'socketcall', 'ioctl', 'select', 'pselect6', '_newselect']
 
             calls.append('clone')
-            calls.append('dup2')
+            if self.mem_utils[target].WORD_SIZE == 8:
+                calls.append('dup3')
+            else:
+                calls.append('dup2')
             skip_and_mail = True
             if flist_in is not None:
                 ''' Given callback functions, use those instead of skip_and_mail '''
