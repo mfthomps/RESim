@@ -772,6 +772,7 @@ class MemUtils():
                
                 if reg == 'sp':
                     reg = 'sp_el0'
+                #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
                 if not arm64_app and reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
@@ -831,10 +832,10 @@ class MemUtils():
                 #self.lgr.debug('arm64App is arm64 call from 32')
                 arm64_app = False
             else:
-                self.lgr.debug('arm64App in kernel but not via a syscall? esr_el1 is 0x%x' % esr_el1_shifted)
+                self.lgr.debug('arm64App in kernel but not via a syscall? esr_el1 is 0x%x  assume page fault on arm64 app' % esr_el1_shifted)
                 #traceback.print_stack()
                 #SIM_break_simulation('remove this')
-                arm64_app = False
+                arm64_app = True
         else:
             # in user space, rely on in_aarch64
             if not cpu.in_aarch64:
