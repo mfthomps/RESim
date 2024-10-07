@@ -5564,7 +5564,12 @@ class DataWatch():
             pass
 
     def watchMmap(self):
-        call_list = ['mmap', 'mmap2']
+        dum_cpu, comm, tid = self.task_utils.curThread()
+        word_size = self.top.wordSize(tid, target=self.cell_name)
+        if word_size == 8:
+            call_list = ['mmap']
+        else:
+            call_list = ['mmap', 'mmap2']
         self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
         self.lgr.debug('dataWatch did watchMmap')
 
