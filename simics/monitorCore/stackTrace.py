@@ -292,6 +292,8 @@ class StackTrace():
                                 retval = lr
                     else:
                         self.lgr.isCallToMe('not a call %s' % (instruct[1]))
+                elif cur_fun is None:
+                    self.lgr.debug('isCallToMe cur_fun is None')
                 else:
                     self.lgr.debug('isCallToMe cur_fun == ret_to 0x%x' % cur_fun)
         ''' Function is for ARM'''
