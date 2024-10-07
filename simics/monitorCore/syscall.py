@@ -1321,8 +1321,10 @@ class Syscall():
         elif socket_callname == 'accept' or socket_callname == 'accept4':
             if exit_info.retval_addr is not None and exit_info.retval_addr != 0:
                 phys = self.mem_utils.v2p(self.cpu, exit_info.retval_addr)
+                #ida_msg = '%s - %s tid:%s (%s) FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, 
+                #       exit_info.retval_addr, exit_info.count, phys)
                 ida_msg = '%s - %s tid:%s (%s) FD: %d addr:0x%x len_addr:0x%x  phys_addr:0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, 
-                       exit_info.retval_addr, exit_info.count, phys)
+                       exit_info.retval_addr, exit_info.count_addr, phys)
             elif exit_info.old_fd is not None:
                 ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
             else:
