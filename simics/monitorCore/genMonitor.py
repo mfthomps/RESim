@@ -1728,7 +1728,7 @@ class GenMonitor():
                         #return
                     else:
                         self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
-                    self.runToText(flist)
+                    self.runToText(flist, this_tid=True)
                     return
                 else:
                     self.lgr.debug('execToText text segment, just run to user flist')
@@ -3269,23 +3269,33 @@ class GenMonitor():
         self.is_monitor_running.setRunning(True)
         #start, end = self.context_manager[self.target].getText()
         load_info = self.soMap[self.target].getLoadInfo()
+        if this_tid:
+            cpu, comm, tid = self.task_utils[self.target].curThread() 
+        else:
+            tid, cpu = self.context_manager[self.target].getDebugTid() 
         if load_info is None:
             print('No text load info for current process?')
             return
+        loader_load_info = None
+        if load_info.interp is not None:
+            ip = self.getEIP() 
+            loader_load_info = self.soMap[self.target].addLoader(tid, load_info.interp, ip)
+
         if load_info.addr is not None:
             start = load_info.addr
             end = load_info.end
             count = end - start
             self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
         else:
-            # assume dynamic load.
-            start = 0
-            ip = self.getEIP()
-            # crude guess TBD look for loader in root fs?
-            end = ip - 0x53b00
-            count = end - start
-            self.lgr.debug('runToText dynamic load break on range 0x%x 0x%x' % (start, end))
-
+            if loader_load_info is not None:
+                # assume dynamic load.  Set break on zero to start of loader
+                start = 0
+                count = loader_load_info.addr 
+                self.lgr.debug('runToText dynamic load break on range 0x%x 0x%x tid:%s' % (start, count, tid))
+            else:
+                self.lgr.error('runToText dynamic load but no load info for the loader itself')
+                return
+            
         self.context_manager[self.target].watchTasks()
         if flist is not None and self.listHasDebug(flist):
             ''' We will be debugging.  Set debugging context now so that any reschedule does not 
@@ -3293,10 +3303,6 @@ class GenMonitor():
             self.context_manager[self.target].setDebugTid()
 
         proc_break = self.context_manager[self.target].genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, count, 0)
-        if this_tid:
-            cpu, comm, tid = self.task_utils[self.target].curThread() 
-        else:
-            tid, cpu = self.context_manager[self.target].getDebugTid() 
         if tid is None or this_tid:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
             prec = Prec(cpu, None, [tid], who='to text')

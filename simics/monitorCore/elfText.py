@@ -8,13 +8,14 @@ sys.path.append('/usr/local/lib/python3.6/dist-packages')
 sys.path.append('/usr/lib/python3/dist-packages')
 import magic
 class Text():
-    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size):
+    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp):
         self.text_start = address
         self.text_offset = offset
         self.text_size = size
         self.plt_addr = plt_addr
         self.plt_offset = plt_offset
         self.plt_size = plt_size
+        self.interp = interp
 
 def getRelocate(path, lgr, ida_funs):
     cmd = 'readelf -r %s -W' % path
@@ -68,6 +69,7 @@ def getText(path, lgr):
     plt_size = None
     iself = False
     is_dyn = False
+    interp = None
     for line in out[0].decode("utf-8").splitlines():
         if line.startswith('ELF Header'):
             iself = True
@@ -78,13 +80,16 @@ def getText(path, lgr):
         if is_dyn and line.strip().startswith('Entry point'):
             parts = line.strip().split()
             offset = int(parts[3], 16)
+            continue
         if is_dyn and line.strip().startswith('[ 0]'):
             hack = line[7:]
             parts = hack.strip().split()
             size_s = parts[1][:-1]
             size = int(size_s, 16)
-            break
-     
+            continue
+        if '[Requesting program interpreter' in line:
+            parts = line.strip().split()
+            interp = parts[-1][:-1] 
         ''' section numbering has whitespace '''
         hack = line[7:]
         #if lgr is not None:
@@ -113,6 +118,6 @@ def getText(path, lgr):
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
     if addr is not None or is_dyn:
-        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size)
+        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp)
    
     return retval
