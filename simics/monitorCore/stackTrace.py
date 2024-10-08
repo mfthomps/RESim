@@ -1032,17 +1032,17 @@ class StackTrace():
                 count += 1
                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 continue
-            self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
+            #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
             if hacked_bp and len(self.frames)>1:
                 hacked_bp = False
             if self.soMap.isCode(val, self.tid):
                 call_ip = self.followCall(val)
-                if call_ip is not None:
-                   self.lgr.debug('stackTrace is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
-                   pass
-                else:
-                   self.lgr.debug('stackTrace is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
-                   pass
+                #if call_ip is not None:
+                #   self.lgr.debug('stackTrace is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, call_ip))
+                #   pass
+                #else:
+                #   self.lgr.debug('stackTrace is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                #   pass
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once been_in_main assume we never leave? what about callbacks?'''
