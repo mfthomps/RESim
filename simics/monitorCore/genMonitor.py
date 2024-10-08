@@ -133,6 +133,7 @@ import vxParam
 import vxKTaskUtils
 import vxKModules
 import findRefs
+import findText
 
 #import fsMgr
 import json
@@ -1722,11 +1723,11 @@ class GenMonitor():
                 prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
                 if prog_info is not None:
                     if prog_info.addr is None:
-                        self.lgr.error('execToText found file %s, but address is None?' % full_path)
-                        stopFunction.allFuns(flist)
-                        return
-                    self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
-                    #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
+                        self.lgr.debug('execToText found file %s, but address is None? Assume dynamic' % full_path)
+                        #stopFunction.allFuns(flist)
+                        #return
+                    else:
+                        self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
                     self.runToText(flist)
                     return
                 else:
@@ -2595,6 +2596,7 @@ class GenMonitor():
         SIM_run_command('pselect %s' % cpu.name)
         SIM_run_command('skip-to cycle = %d' % new_cycle)
         self.lgr.debug('rev1NoMail skipped to 0x%x  cycle is 0x%x' % (new_cycle, cpu.cycles))
+        SIM_run_command('disassemble')
 
     def rev1(self):
         if self.reverseEnabled():
@@ -2994,8 +2996,13 @@ class GenMonitor():
             self.lgr.debug('%s hap, wrong something tid:%s prec tid list %s' % (prec.who, tid, str(prec.tid)))
             #SIM_break_simulation('remove this')
             return
-        #cur_eip = SIM_get_mem_op_value_le(memory)
+
         eip = self.getEIP(cpu)
+        load_info = self.soMap[self.target].getLoadInfo()
+        if load_info.addr is None:
+            self.lgr.debug('textHap load_info addr is None, assume dynamic? eip 0x%x' % eip)
+            self.soMap[self.target].setProgStart(eip, tid)
+        #cur_eip = SIM_get_mem_op_value_le(memory)
         self.lgr.debug('textHap eip is 0x%x' % eip)
         self.is_monitor_running.setRunning(False)
         SIM_break_simulation('text hap')
@@ -3265,10 +3272,19 @@ class GenMonitor():
         if load_info is None:
             print('No text load info for current process?')
             return
-        start = load_info.addr
-        end = load_info.end
-        count = end - start
-        self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
+        if load_info.addr is not None:
+            start = load_info.addr
+            end = load_info.end
+            count = end - start
+            self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
+        else:
+            # assume dynamic load.
+            start = 0
+            ip = self.getEIP()
+            # crude guess TBD look for loader in root fs?
+            end = ip - 0x53b00
+            count = end - start
+            self.lgr.debug('runToText dynamic load break on range 0x%x 0x%x' % (start, end))
 
         self.context_manager[self.target].watchTasks()
         if flist is not None and self.listHasDebug(flist):
@@ -5564,8 +5580,14 @@ class GenMonitor():
 
     def setBreak(self, addr):
         resim = self.getRESimContext()
-        bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Write, addr, self.mem_utils[self.target].WORD_SIZE, 0)
+        #bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Execute, addr, self.mem_utils[self.target].WORD_SIZE, 0)
+        bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
         print('set execution break at 0x%x bp %d' % (addr, bp))
+
+    def setWriteBreak(self, addr):
+        resim = self.getRESimContext()
+        bp = SIM_breakpoint(resim, Sim_Break_Linear, Sim_Access_Write, addr, self.mem_utils[self.target].WORD_SIZE, 0)
+        print('set write break at 0x%x bp %d' % (addr, bp))
 
 
     def showSyscallExits(self):
@@ -6384,7 +6406,7 @@ class GenMonitor():
             self.goAddr(addr)
 
     def showFunEntries(self, fun_name):
-        self.fun_mgr.getAddr(fun_name)
+        self.fun_mgr.showFunAddrs(fun_name)
 
     def getFunEntry(self, fun_name):
         ''' get the entry of a given function name, with preference to the largest function '''
@@ -6595,6 +6617,15 @@ class GenMonitor():
     def findRefs(self, offset):
         marks = self.dataWatch[self.target].getAllJson()
         refs = findRefs.FindRefs(offset, marks, self.lgr)
+
+    def rev1(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        back_one = cpu.cycles - 1
+        self.skipToCycle(back_one, cpu=cpu)
+
+    def findText(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        findText.FindText(self, cpu, self.mem_utils[self.target], self.soMap[self.target], self.lgr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

@@ -52,7 +52,8 @@ class LoadInfo():
     def __init__(self, addr, size):
         self.addr = addr
         self.size = size
-        self.end = addr+size
+        if addr is not None:
+            self.end = addr+size
     
 class SOMap():
     def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, run_from_snap, lgr):
@@ -347,8 +348,9 @@ class SOMap():
         
         if prog in self.prog_info:    
             if self.prog_info[prog].dynamic:
-                load_addr = eip - self.prog_info[prog].text_offset
-                self.prog_end[tid] = self.prog_info[prog].text_end + load_addr 
+                load_addr = None
+                #load_addr = eip - self.prog_info[prog].text_offset
+                #self.prog_end[tid] = self.prog_info[prog].text_end + load_addr 
             else:
                 load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                 self.prog_end[tid] = self.prog_info[prog].text_end
@@ -876,6 +878,16 @@ class SOMap():
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (fpath, name))
                     self.so_watch_callback[fpath][name](load_addr, name)
 
+    def setProgStart(self, text_entry, tid):
+        if tid in self.prog_start and self.prog_start[tid] is not None:
+            self.lgr.debug('soMap setProgStart tid %s already in prog_start' % tid)
+        else:
+            prog = self.text_prog[tid]
+            text_start = text_entry - self.prog_info[prog].text_offset
+            self.prog_start[tid] = text_start
+            self.prog_end[tid] = self.prog_info[prog].text_end + text_start
+            self.lgr.debug('soMap setProgStart tid %s set prog_start 0x%x end 0x%x' % (tid, self.prog_start[tid], self.prog_end[tid]))
+
     def getLoadInfo(self, tid=None):
         # get load information for a tid program.
         # TBD assumes not ASLR
@@ -883,10 +895,15 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        if tid in self.prog_start and self.prog_start[tid] is not None:
+        #if tid in self.prog_start and self.prog_start[tid] is not None:
+        if tid in self.text_prog:
             prog = self.text_prog[tid]
-            size = self.prog_end[tid] - self.prog_start[tid] + 1 
-            load_info = LoadInfo(self.prog_start[tid], size)
+            if tid in self.prog_start and self.prog_start[tid] is not None:
+                size = self.prog_end[tid] - self.prog_start[tid] + 1 
+                load_info = LoadInfo(self.prog_start[tid], size)
+            else:
+                size = self.prog_info[prog].text_size
+                load_info = LoadInfo(None, size)
         return load_info
 
     def fullProg(self, prog_in):
