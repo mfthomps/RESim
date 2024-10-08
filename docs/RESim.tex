@@ -32,7 +32,7 @@ platform's high fidelity models of processors, peripheral devices (e.g., network
 rather than instrumenting the software.
 
 RESim aids reverse engineering of networks of Linux-based systems\footnote{And preliminary support for analyzing Windows applications, see \ref{Windows}.} by inventorying processes in terms of the programs they execute and the data they consume.  Data sources include files, device interfaces and inter-process communication mechanisms.   Process execution and data consumption is recorded through dynamic analysis of a running simulated system without installation or injection of software into the simulated system, and without detailed knowledge of the kernel hosting the processes.
-The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicitly modify memory or register content, and can also dynamically augment memory 
+The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicitly modify memory or register content, and can also dynamically augment memory content
 based on system events, e.g., change a password file entry as it is read by the {\tt su} program (see the Dmod function described in\ref{dmod}).
 
 RESim also provides interactive analysis of individual executing programs through use of either the IDA Pro or the Ghidra
@@ -113,8 +113,8 @@ in the memory containing the referenced code.\footnote{See \ref{external} for an
 A key property that distinguishes RESim from other RE strategies is that analysis occurs on processes as they execute in their native environment, and as they interact with other processes and devices within the system.  Consider an example process that communicates with a remote computer via a network while also interacting with a local process via a pipe.  When the analyst pauses RESim for inspection, the entire system pauses.  The simulation can then be resumed (or single-stepped) from the precise state at which it was paused, without having to account for timeouts and other temporal-based discontinuities between the process of interest and its environment.
 
 \subsection{Limitations}
-RESim analyzes Linux-based systems (and some Windows based systems) for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 and 32-bit ARM.  It can also be 
-extended to support alternate architectures, e.g., 64-bit ARM, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
+RESim analyzes Linux-based systems (and some Windows based systems) for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 ARM platforms.  It can also be 
+extended to support alternate architectures, e.g., PowerPC, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 See section \ref{divergence} for information on potential divergence of simulations from real systems.
 
@@ -142,7 +142,7 @@ of gdb needed for use with the Ghidra plugin is at \url{https://github.com/mftho
 \item A fork of the AFL fuzzer integrated with 
 RESim is available at: \url{https://github.com/mfthomps/AFL}.
 
-\item Preliminary Windows support is provided as described in \ref{Windows.}
+\item Preliminary Windows support is provided as described in \ref{Windows}.
 
 \item In addition to running on a local Simics installation, RESim can be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  
 \end{itemize}
@@ -823,6 +823,7 @@ command.  The simulation will be started from this snapshot.
 \item {\tt RESIM\_TARGET} Name of the host that is to be the target of RESim analysis.  Currently only one host can be analyzed during a given
 \item {\tt CREATE\_RESIM\_PARAMS} If set to {\tt YES}, the getKernelParams utility will be run instead of the RESim monitor.  This will
 generate the Linux kernel parameters needed by RESim.  Use the {\tt @gkp.go()} command from the Simics command prompt to generate the file.
+For ARM platforms, use the optional only\_64=True to only look for arm64 entry points.  Also see the PLATFORM env variable.
 \item {\tt DRIVER\_WAIT} Causes RESim delay boot of target platforms (i.e., those other than the driver) until the 
 user runs the {\tt @resim.go()} command.  Intended to allow you (or scripts)
 to configure the driver platform after it boots, but before other platforms will boot.
@@ -955,6 +956,9 @@ partition is mounted on /mnt by the stock root fs as /dev/qspdc1.
 \item integrator-cp -- A 32-bit ARM platform modeled after the Integrator-cp.  A kernel and sample initrd image are at:
 \newline
 \url{https://nps.box.com/v/resim-arm5-images}
+
+\item armv8a -- The Simics ARMv8-A Fixed Virtual Platform.  See the README at simics/image\_build/arm\_fvp/README for information on building a kernel
+and ram disk.
 \end{itemize}
 
 
@@ -1251,7 +1255,7 @@ name as a command line option to open a ssh tunnel.  See section \ref{ida-instal
 The first time you start IDA, use the {\tt Debugger / Process options} to ensure your host is either localhost, or the name of the remote host
 on which Simics is running, and the port is 9123.  Save those as 
 the default.  Then go the {\tt Debugger setup} and select {\tt Edit exceptions}.  Change the SIGTRAP entry to pass the signal to the application;
-and to only log the exception.  Save the settings.  You should only need to do this step once.
+and to only log the exception.  Save the settings.  You should only need to do this step once per binary.
 
 From the Simics command line (after starting RESim), run the {\tt @cgc.debugProc$<$program$>$} command, naming the program of interest.
 RESim will continue the simulation until the program is {\tt exec}'ed and execution is transferred to the text segment, at which point it will pause.
@@ -3864,10 +3868,15 @@ many kernel entry points, and functions call other funtions that are also entry 
 calls made from within the kernel.  A downside is the possibility that a large numbers of breakpoints being hit will affect performance -- but that is unknown.
 
 \subsection{Performance}
-Starting the zynqmp platform for VxWorks can be extremely slow if any other components, e.g., a driver, are defined.  Alterning time quantums and the frequency of
+Starting the zynqmp platform for VxWorks can be extremely slow if any other components, e.g., a driver, are defined.  Altering time quantums and the frequency of
 the driver cpu does not seem to significantly speed this up.  As a work-around, the ADD\_FROM\_SNAPSHOT will load a snapshot and then add other components to it.
 First start only the zynqmp platform, without starting any application on it.  Create a snapshot and then run a ini file that includes a driver and names the snapshot
 as the ADD\_FROM\_SNAPSHOT.  The driver loads slowly, but will finish.  Once both are loaded, performance improves considerably.
+
+\section{Dynamically loaded Linux programs}
+We find the location of the loaded text segment by looking at entry point of the loader named in the target binary ELF header.  We subtract that from the address
+at which we return from execve, (which we assume is the loader entry), and set a break from zero to the base of the loader.  This assumes that no libraries are
+executed before the program start is hit.  If that turns out to be wrong, we can track the libraries and set holes in the break range.
 
 
 \end{appendices}
