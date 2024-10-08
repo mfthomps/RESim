@@ -651,6 +651,7 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
+            self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -878,21 +879,8 @@ class Syscall():
             if os.path.isfile(full_path):
                 elf_info = None
                 if self.soMap is not None:
-                    self.soMap.addText(full_path, prog_string, tid)
-                '''
-                if elf_info is not None:
-                    if self.soMap is not None:
-                        if elf_info.address is not None:
-                            self.lgr.debug('syscall addElf 0x%x - 0x%x' % (elf_info.address, elf_info.address+elf_info.size))       
-                            self.context_manager.recordText(elf_info.address, elf_info.address+elf_info.size)
-                        else:
-                            self.lgr.error('addElf got text segment but no text, unexpected.  tid %s' % tid)
-                else:
-                    if self.soMap is not None:
-                        self.lgr.debug('syscall addElf, no text segment found, advise SO we have an exec, but no starting map')
-                        self.soMap.noText(prog_string, tid)
-                    retval = False
-                '''
+                    load_info = self.soMap.addText(full_path, prog_string, tid)
+                    
                 ftype = magic.from_file(full_path)
                 if self.traceProcs is not None:
                     self.traceProcs.setFileType(tid, ftype) 
@@ -938,7 +926,11 @@ class Syscall():
         if self.traceProcs is not None:
             self.traceProcs.setName(call_info.tid, prog_string, arg_string)
 
-        self.addElf(prog_string, tid)
+        if self.name != 'traceAll':
+            self.addElf(prog_string, tid)
+        else:
+            # Assume done by trackThreads
+            pass
 
         if self.netInfo is not None:
             self.netInfo.checkNet(prog_string, arg_string)
@@ -2458,10 +2450,12 @@ class Syscall():
            if callname == 'mmap' and tid in self.first_mmap_hap:
                return
         else:
-           arm64_app = self.mem_utils.arm64App(self.cpu)
+           arm64_app = None
+           if self.cpu.architecture == 'arm64':
+               arm64_app = self.mem_utils.arm64App(self.cpu)
            callnum = self.syscall_info.getCall(break_eip, arm64_app)
            if callnum is None:
-               self.lgr.error('syscallHap break eip 0x%x not in syscall_info' % break_eip)
+               self.lgr.error('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r' % (self.name, break_eip, arm64_app))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
            self.lgr.debug('syscallHap callnum is %s name %s' % (callnum, callname))
@@ -2492,7 +2486,7 @@ class Syscall():
 
         ''' catch stray calls from wrong tid.  Allow calls if the syscall instance's cell is not None, which means it is not up to the context manager
             to watch or not.  An example is execve, which must be watched for all processes to provide a toExecve function. '''
-        if self.debugging and not self.context_manager.amWatching(tid) and not traceing_all and self.background_break is None and self.cell is None and not self.context_manager.watchingExit(tid):
+        if self.debugging and not self.context_manager.amWatching(tid) and not tracing_all and self.background_break is None and self.cell is None and not self.context_manager.watchingExit(tid):
             # will happen in afl if some other process exits.  TBD, method to watch selected processes as part of AFL run
             #self.lgr.debug('syscallHap name: %s tid:%s missing from context manager.  Debugging and specific syscall watched. callnum: %d' % (self.name, 
             #     tid, self.syscall_info.callnum))

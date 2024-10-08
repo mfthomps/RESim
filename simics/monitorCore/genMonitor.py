@@ -3001,7 +3001,7 @@ class GenMonitor():
         load_info = self.soMap[self.target].getLoadInfo()
         if load_info.addr is None:
             self.lgr.debug('textHap load_info addr is None, assume dynamic? eip 0x%x' % eip)
-            self.soMap[self.target].setProgStart(eip, tid)
+            self.soMap[self.target].setProgStart()
         #cur_eip = SIM_get_mem_op_value_le(memory)
         self.lgr.debug('textHap eip is 0x%x' % eip)
         self.is_monitor_running.setRunning(False)

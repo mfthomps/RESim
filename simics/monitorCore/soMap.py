@@ -906,7 +906,9 @@ class SOMap():
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (fpath, name))
                     self.so_watch_callback[fpath][name](load_addr, name)
 
-    def setProgStart(self, text_entry, tid):
+    def setProgStart(self, dumb=None):
+        cpu, comm, tid = self.task_utils.curThread() 
+        text_entry = self.top.getEIP()
         if tid in self.prog_start and self.prog_start[tid] is not None:
             self.lgr.debug('soMap setProgStart tid %s already in prog_start' % tid)
         else:

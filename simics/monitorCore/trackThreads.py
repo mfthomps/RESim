@@ -2,6 +2,7 @@ from simics import *
 import syscall
 import elfText
 import doInUser
+import breakAndCall
 from resimHaps import *
 ''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
@@ -145,9 +146,22 @@ class TrackThreads():
         if full_path is not None:
             self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
-            elf_info = self.soMap.addText(full_path, prog_name, tid)
-            if elf_info is None:
+            load_info = self.soMap.addText(full_path, prog_name, tid)
+            if load_info is None:
                 self.lgr.debug('trackThreads addSO, could not get elf info from %s' % full_path)
+            else:
+                if load_info.addr is None:
+                    self.lgr.debug('syscall addElf no addr, assume dynamic')
+                    loader_load_info = None
+                    if load_info.interp is not None:
+                        ip = self.top.getEIP() 
+                        loader_load_info = self.soMap.addLoader(tid, load_info.interp, ip)
+                        if loader_load_info is not None:
+                            # assume dynamic load.  Set break on zero to start of loader
+                            start = 0
+                            count = loader_load_info.addr 
+                            breakAndCall.BreakAndCall(self.top, self.cpu, start, count, self.soMap.setProgStart, None, self.lgr)
+                            self.lgr.debug('trackThreads addSO use breakAndDo to set prog start when text entered.')
 
     def parseExecve(self):
         cpu, comm, tid = self.task_utils.curThread() 
@@ -157,7 +171,7 @@ class TrackThreads():
         if prog_string is None:
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(tid, cpu)
-            call_info = syscall.SyscallInfo(cpu, tid, None, None, None)
+            call_info = syscall.SyscallInfo(cpu, tid, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
                 self.lgr.error('trackThreads parseExecve zero prog_addr tid:%s' % tid)
