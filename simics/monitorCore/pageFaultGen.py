@@ -329,7 +329,7 @@ class PageFaultGen():
                 phys_addr = self.mem_utils.v2p(self.cpu, prec.cr2)
                 if phys_addr is None:
                     #TBD remove this, seems redundant
-                    self.lgr.debug('pageFaultGen modeChanged v2p failed.')
+                    self.lgr.debug('pageFaultGen modeChanged v2p failed on prec.cr2 of 0x%x.' % prec.cr2)
                     phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
                     if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
                         #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
