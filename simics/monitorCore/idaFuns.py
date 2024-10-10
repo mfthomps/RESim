@@ -118,6 +118,8 @@ class IDAFuns():
                     fun_name = newfuns[f]['name']
                     fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
+                    if 'adjust_sp' in newfuns[f]:
+                        self.funs[fun]['adjust_sp'] = newfuns[f]['adjust_sp']
                     #if fun_name == 'memcpy':
                     #    self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
@@ -277,3 +279,11 @@ class IDAFuns():
            
     def getFuns(self):
         return self.funs 
+
+    def stackAdjust(self, fun_name):
+        retval = 0
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                if 'adjust_sp' in self.funs[fun]:
+                    retval = self.funs[fun]['adjust_sp']
+        return retval

@@ -6633,6 +6633,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         findText.FindText(self, cpu, self.mem_utils[self.target], self.soMap[self.target], self.lgr)
 
+    def stackAdjust(self, fun_name):
+        adjust = self.fun_mgr.stackAdjust(fun_name)
+        print('adjust 0x%x' % adjust)
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

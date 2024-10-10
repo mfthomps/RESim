@@ -443,3 +443,8 @@ class FunMgr():
         fun_from = self.ida_funs.getFunName(lr_value)
         self.lgr.debug('funHap addr: 0x%x lr: 0x%x fun: %s from: %s break_num: 0x%x cycle: 0x%x' % (addr, lr_value, fun, fun_from, break_num, self.cpu.cycles))
             
+    def getStartEnd(self, fun):
+        return self.ida_funs.getAddr(fun)
+
+    def stackAdjust(self, fun):
+        return self.ida_funs.stackAdjust(fun)
