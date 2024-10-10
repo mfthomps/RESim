@@ -129,6 +129,9 @@ class PageFaultGen():
         if self.pdir_break is not None:
             #self.lgr.debug('pageFaultGen watchPdir already a break. wanted to set one one 0x%x' % pdir_addr)
             return
+        if self.pdir_addr is None:
+            self.lgr.error('pageFaultGen called with pdir_addr of None')
+        
         pcell = self.cpu.physical_memory
         #self.pdir_break = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
         self.pdir_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
@@ -395,6 +398,9 @@ class PageFaultGen():
             # TBD fix for ability to watch full system for segv
             #self.context_manager.watchExit()
         if not page_info.page_exists:
+            if page_info.ptable_addr is None:
+                self.lgr.debug('pageFaultGen pageFaultHapAlone ptable_addr is None? %s' % page_info.valueString())
+                return
 
             if not page_info.ptable_exists:
                 if page_info.ptable_addr is not None:
