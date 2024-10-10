@@ -40,11 +40,12 @@ class BreakAndCall():
         self.tid = self.top.getTID()
         self.break_num = None
         self.hap = None
+        self.lgr.debug('breakAndCall start 0x%x count 0x%x' % (start, count))
         self.setBreak()
         
  
     def setBreak(self):
-        self.break_num = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, 0, self.start, self.count)
+        self.break_num = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, self.start, self.count, 0)
         self.hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.doCallback, self.cpu, self.break_num)
         self.lgr.debug('breakAndCall set break range 0x%x to 0x%x' % (self.start, self.count))
 
