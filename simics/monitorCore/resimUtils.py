@@ -608,6 +608,9 @@ def isClib(lib_file):
         elif lf.endswith('.dll'):
             if 'msvcr' in lf or 'msvcp' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
                 retval = True
+        elif lf.startswith('ld-'):
+            # loader as libc
+            retval = True
     return retval
 
 def getLoadOffsetFromSO(so_json, prog, lgr=None):
