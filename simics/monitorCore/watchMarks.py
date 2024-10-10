@@ -634,6 +634,22 @@ class CharCopyMark():
         msg = '%s character addr 0x%x count %d' % (self.fun, self.addr, self.count)
         return msg
 
+
+class StrtokMark():
+    def __init__(self,fun, cur_ptr, delim, the_string, retaddr, buf_start):
+        self.fun = fun
+        self.cur_ptr = cur_ptr
+        self.delim = delim
+        self.the_string = the_string
+        self.retaddr = retaddr
+        self.buf_start = buf_start
+    def getMsg(self):
+        if self.retaddr == 0:
+            msg = '%s failed to find delimiter <%s> in string at addr 0x%x' % (self.fun, self.delim, self.cur_ptr)
+        else:
+            msg = '%s got token %s from string at addr 0x%x using delimiter <%s>' % (self.fun, self.the_string, self.cur_ptr, self.delim)
+        return msg
+
 class WatchMarks():
     def __init__(self, top, mem_utils, cpu, cell_name, run_from_snap, lgr):
         self.mark_list = []
@@ -1076,6 +1092,7 @@ class WatchMarks():
                     self.lgr.debug('watchMarks compare, do decode')
                     src_str = src_str.decode('ascii', 'replace')
                 src_str = src_str.replace('\n\r','<newline>')
+                src_str = src_str.replace('\r\n','<newline>')
                 src_str = src_str.replace('\n','<newline>')
                 src_str = src_str.replace('\t','<tab>')
                 #hexstring = ":".join("{:02x}".format(ord(c)) for c in src_str)
@@ -1310,6 +1327,11 @@ class WatchMarks():
             self.recent_ad_hoc = wm
             self.lgr.debug(dm.getMsg())
 
+
+    def strtok(self, fun, cur_ptr, delim, the_string, retaddr, buf_start):
+        sm = StrtokMark(fun, cur_ptr, delim, the_string, retaddr, buf_start)
+        wm = self.addWatchMark(sm)
+        return wm
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
