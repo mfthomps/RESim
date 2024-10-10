@@ -250,7 +250,7 @@ class SOMap():
             return False
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        self.lgr.debug('soMap isMainText address 0x%x tid %s' % (address, tid))
+        #self.lgr.debug('soMap isMainText address 0x%x tid %s' % (address, tid))
         if tid is None:
             return False
         if tid in self.prog_start and self.prog_start[tid] is not None:
@@ -419,7 +419,8 @@ class SOMap():
             return
         load_addr = addr -  elf_info.text_offset
         self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
-        load_info = LoadInfo(load_addr, elf_info.text_size)
+        load_size = elf_info.text_size + elf_info.text_offset
+        load_info = LoadInfo(load_addr, load_size)
 
         self.so_addr_map[tid][prog] = load_info
         self.so_file_map[tid][load_info] = prog
