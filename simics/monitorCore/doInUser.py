@@ -44,12 +44,18 @@ class DoInUser():
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
         cell_name = self.top.getTopComponentName(self.cpu)
+        ip = self.top.getEIP()
         #cpl = SIM_processor_privilege_level(self.cpu)
         cpl = memUtils.getCPL(cpu)
-        self.lgr.debug('doInUser mode_changed %s %s (%s) look for %s, cpl is %d ' % (cell_name, tid, comm, self.tid, cpl))
-        if tid == self.tid and cpl != 0:
-            self.lgr.debug('doInUser mode_changed do callback')
-            self.callback(self.param) 
-            hap = self.mode_hap
-            SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
-            self.mode_hap = None
+        self.lgr.debug('doInUser mode_changed %s %s (%s) look for %s, cpl is %d eip: 0x%x' % (cell_name, tid, comm, self.tid, cpl, ip))
+        if new == Sim_CPU_Mode_User:
+            if tid == self.tid:
+                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                value = self.mem_utils.readWord(self.cpu, sp)
+                self.lgr.debug('doInUser modeChanged sp 0x%x value 0x%x' % (sp, value))
+                self.lgr.debug('doInUser mode_changed in user mode, do callback')
+                SIM_run_alone(self.callback, self.param) 
+                hap = self.mode_hap
+                SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
+                self.mode_hap = None
+
