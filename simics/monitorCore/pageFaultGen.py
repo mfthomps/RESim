@@ -195,7 +195,7 @@ class PageFaultGen():
             reg_value = self.cpu.iface.int_register.read(reg_num)
             reg_value = reg_value >> 26
             #self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
-            if reg_value == 0x11:
+            if reg_value == 0x11 or reg_value == 0x15:
                 return
 
         cpu, comm, tid = self.task_utils.curThread() 
