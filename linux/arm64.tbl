@@ -1,0 +1,293 @@
+NR	SYSCALL NAME	references	x8	ARG0 (x0)	ARG1 (x1)	ARG2 (x2)	ARG3 (x3)	ARG4 (x4)	ARG5 (x5)
+0	io_setup	man/ cs/	0	unsigned nr_reqs	aio_context_t *ctx	-	-	-	-
+1	io_destroy	man/ cs/	1	aio_context_t ctx	-	-	-	-	-
+2	io_submit	man/ cs/	2	aio_context_t	long	struct iocb * *	-	-	-
+3	io_cancel	man/ cs/	3	aio_context_t ctx_id	struct iocb *iocb	struct io_event *result	-	-	-
+4	io_getevents	man/ cs/	4	aio_context_t ctx_id	long min_nr	long nr	struct io_event *events	struct __kernel_timespec *timeout	-
+5	setxattr	man/ cs/	5	const char *path	const char *name	const void *value	size_t size	int flags	-
+6	lsetxattr	man/ cs/	6	const char *path	const char *name	const void *value	size_t size	int flags	-
+7	fsetxattr	man/ cs/	7	int fd	const char *name	const void *value	size_t size	int flags	-
+8	getxattr	man/ cs/	8	const char *path	const char *name	void *value	size_t size	-	-
+9	lgetxattr	man/ cs/	9	const char *path	const char *name	void *value	size_t size	-	-
+10	fgetxattr	man/ cs/	A	int fd	const char *name	void *value	size_t size	-	-
+11	listxattr	man/ cs/	B	const char *path	char *list	size_t size	-	-	-
+12	llistxattr	man/ cs/	C	const char *path	char *list	size_t size	-	-	-
+13	flistxattr	man/ cs/	D	int fd	char *list	size_t size	-	-	-
+14	removexattr	man/ cs/	E	const char *path	const char *name	-	-	-	-
+15	lremovexattr	man/ cs/	F	const char *path	const char *name	-	-	-	-
+16	fremovexattr	man/ cs/	10	int fd	const char *name	-	-	-	-
+17	getcwd	man/ cs/	11	char *buf	unsigned long size	-	-	-	-
+18	lookup_dcookie	man/ cs/	12	u64 cookie64	char *buf	size_t len	-	-	-
+19	eventfd2	man/ cs/	13	unsigned int count	int flags	-	-	-	-
+20	epoll_create1	man/ cs/	14	int flags	-	-	-	-	-
+21	epoll_ctl	man/ cs/	15	int epfd	int op	int fd	struct epoll_event *event	-	-
+22	epoll_pwait	man/ cs/	16	int epfd	struct epoll_event *events	int maxevents	int timeout	const sigset_t *sigmask	size_t sigsetsize
+23	dup	man/ cs/	17	unsigned int fildes	-	-	-	-	-
+24	dup3	man/ cs/	18	unsigned int oldfd	unsigned int newfd	int flags	-	-	-
+25	fcntl	man/ cs/	19	unsigned int fd	unsigned int cmd	unsigned long arg	-	-	-
+26	inotify_init1	man/ cs/	1A	int flags	-	-	-	-	-
+27	inotify_add_watch	man/ cs/	1B	int fd	const char *path	u32 mask	-	-	-
+28	inotify_rm_watch	man/ cs/	1C	int fd	__s32 wd	-	-	-	-
+29	ioctl	man/ cs/	1D	unsigned int fd	unsigned int cmd	unsigned long arg	-	-	-
+30	ioprio_set	man/ cs/	1E	int which	int who	int ioprio	-	-	-
+31	ioprio_get	man/ cs/	1F	int which	int who	-	-	-	-
+32	flock	man/ cs/	20	unsigned int fd	unsigned int cmd	-	-	-	-
+33	mknodat	man/ cs/	21	int dfd	const char * filename	umode_t mode	unsigned dev	-	-
+34	mkdirat	man/ cs/	22	int dfd	const char * pathname	umode_t mode	-	-	-
+35	unlinkat	man/ cs/	23	int dfd	const char * pathname	int flag	-	-	-
+36	symlinkat	man/ cs/	24	const char * oldname	int newdfd	const char * newname	-	-	-
+37	linkat	man/ cs/	25	int olddfd	const char *oldname	int newdfd	const char *newname	int flags	-
+38	renameat	man/ cs/	26	int olddfd	const char * oldname	int newdfd	const char * newname	-	-
+39	umount2	man/ cs/	27	?	?	?	?	?	?
+40	mount	man/ cs/	28	char *dev_name	char *dir_name	char *type	unsigned long flags	void *data	-
+41	pivot_root	man/ cs/	29	const char *new_root	const char *put_old	-	-	-	-
+42	nfsservctl	man/ cs/	2A	?	?	?	?	?	?
+43	statfs	man/ cs/	2B	const char * path	struct statfs *buf	-	-	-	-
+44	fstatfs	man/ cs/	2C	unsigned int fd	struct statfs *buf	-	-	-	-
+45	truncate	man/ cs/	2D	const char *path	long length	-	-	-	-
+46	ftruncate	man/ cs/	2E	unsigned int fd	unsigned long length	-	-	-	-
+47	fallocate	man/ cs/	2F	int fd	int mode	loff_t offset	loff_t len	-	-
+48	faccessat	man/ cs/	30	int dfd	const char *filename	int mode	-	-	-
+49	chdir	man/ cs/	31	const char *filename	-	-	-	-	-
+50	fchdir	man/ cs/	32	unsigned int fd	-	-	-	-	-
+51	chroot	man/ cs/	33	const char *filename	-	-	-	-	-
+52	fchmod	man/ cs/	34	unsigned int fd	umode_t mode	-	-	-	-
+53	fchmodat	man/ cs/	35	int dfd	const char * filename	umode_t mode	-	-	-
+54	fchownat	man/ cs/	36	int dfd	const char *filename	uid_t user	gid_t group	int flag	-
+55	fchown	man/ cs/	37	unsigned int fd	uid_t user	gid_t group	-	-	-
+56	openat	man/ cs/	38	int dfd	const char *filename	int flags	umode_t mode	-	-
+57	close	man/ cs/	39	unsigned int fd	-	-	-	-	-
+58	vhangup	man/ cs/	3A	-	-	-	-	-	-
+59	pipe2	man/ cs/	3B	int *fildes	int flags	-	-	-	-
+60	quotactl	man/ cs/	3C	unsigned int cmd	const char *special	qid_t id	void *addr	-	-
+61	getdents64	man/ cs/	3D	unsigned int fd	struct linux_dirent64 *dirent	unsigned int count	-	-	-
+62	lseek	man/ cs/	3E	unsigned int fd	off_t offset	unsigned int whence	-	-	-
+63	read	man/ cs/	3F	unsigned int fd	char *buf	size_t count	-	-	-
+64	write	man/ cs/	40	unsigned int fd	const char *buf	size_t count	-	-	-
+65	readv	man/ cs/	41	unsigned long fd	const struct iovec *vec	unsigned long vlen	-	-	-
+66	writev	man/ cs/	42	unsigned long fd	const struct iovec *vec	unsigned long vlen	-	-	-
+67	pread64	man/ cs/	43	unsigned int fd	char *buf	size_t count	loff_t pos	-	-
+68	pwrite64	man/ cs/	44	unsigned int fd	const char *buf	size_t count	loff_t pos	-	-
+69	preadv	man/ cs/	45	unsigned long fd	const struct iovec *vec	unsigned long vlen	unsigned long pos_l	unsigned long pos_h	-
+70	pwritev	man/ cs/	46	unsigned long fd	const struct iovec *vec	unsigned long vlen	unsigned long pos_l	unsigned long pos_h	-
+71	sendfile	man/ cs/	47	int out_fd	int in_fd	off_t *offset	size_t count	-	-
+72	pselect6	man/ cs/	48	int	fd_set *	fd_set *	fd_set *	struct __kernel_timespec *	void *
+73	ppoll	man/ cs/	49	struct pollfd *	unsigned int	struct __kernel_timespec *	const sigset_t *	size_t	-
+74	signalfd4	man/ cs/	4A	int ufd	sigset_t *user_mask	size_t sizemask	int flags	-	-
+75	vmsplice	man/ cs/	4B	int fd	const struct iovec *iov	unsigned long nr_segs	unsigned int flags	-	-
+76	splice	man/ cs/	4C	int fd_in	loff_t *off_in	int fd_out	loff_t *off_out	size_t len	unsigned int flags
+77	tee	man/ cs/	4D	int fdin	int fdout	size_t len	unsigned int flags	-	-
+78	readlinkat	man/ cs/	4E	int dfd	const char *path	char *buf	int bufsiz	-	-
+79	newfstatat	man/ cs/	4F	int dfd	const char *filename	struct stat *statbuf	int flag	-	-
+80	fstat	man/ cs/	50	unsigned int fd	struct __old_kernel_stat *statbuf	-	-	-	-
+81	sync	man/ cs/	51	-	-	-	-	-	-
+82	fsync	man/ cs/	52	unsigned int fd	-	-	-	-	-
+83	fdatasync	man/ cs/	53	unsigned int fd	-	-	-	-	-
+84	sync_file_range	man/ cs/	54	int fd	loff_t offset	loff_t nbytes	unsigned int flags	-	-
+85	timerfd_create	man/ cs/	55	int clockid	int flags	-	-	-	-
+86	timerfd_settime	man/ cs/	56	int ufd	int flags	const struct __kernel_itimerspec *utmr	struct __kernel_itimerspec *otmr	-	-
+87	timerfd_gettime	man/ cs/	57	int ufd	struct __kernel_itimerspec *otmr	-	-	-	-
+88	utimensat	man/ cs/	58	int dfd	const char *filename	struct __kernel_timespec *utimes	int flags	-	-
+89	acct	man/ cs/	59	const char *name	-	-	-	-	-
+90	capget	man/ cs/	5A	cap_user_header_t header	cap_user_data_t dataptr	-	-	-	-
+91	capset	man/ cs/	5B	cap_user_header_t header	const cap_user_data_t data	-	-	-	-
+92	personality	man/ cs/	5C	unsigned int personality	-	-	-	-	-
+93	exit	man/ cs/	5D	int error_code	-	-	-	-	-
+94	exit_group	man/ cs/	5E	int error_code	-	-	-	-	-
+95	waitid	man/ cs/	5F	int which	pid_t pid	struct siginfo *infop	int options	struct rusage *ru	-
+96	set_tid_address	man/ cs/	60	int *tidptr	-	-	-	-	-
+97	unshare	man/ cs/	61	unsigned long unshare_flags	-	-	-	-	-
+98	futex	man/ cs/	62	u32 *uaddr	int op	u32 val	struct __kernel_timespec *utime	u32 *uaddr2	u32 val3
+99	set_robust_list	man/ cs/	63	struct robust_list_head *head	size_t len	-	-	-	-
+100	get_robust_list	man/ cs/	64	int pid	struct robust_list_head * *head_ptr	size_t *len_ptr	-	-	-
+101	nanosleep	man/ cs/	65	struct __kernel_timespec *rqtp	struct __kernel_timespec *rmtp	-	-	-	-
+102	getitimer	man/ cs/	66	int which	struct itimerval *value	-	-	-	-
+103	setitimer	man/ cs/	67	int which	struct itimerval *value	struct itimerval *ovalue	-	-	-
+104	kexec_load	man/ cs/	68	unsigned long entry	unsigned long nr_segments	struct kexec_segment *segments	unsigned long flags	-	-
+105	init_module	man/ cs/	69	void *umod	unsigned long len	const char *uargs	-	-	-
+106	delete_module	man/ cs/	6A	const char *name_user	unsigned int flags	-	-	-	-
+107	timer_create	man/ cs/	6B	clockid_t which_clock	struct sigevent *timer_event_spec	timer_t * created_timer_id	-	-	-
+108	timer_gettime	man/ cs/	6C	timer_t timer_id	struct __kernel_itimerspec *setting	-	-	-	-
+109	timer_getoverrun	man/ cs/	6D	timer_t timer_id	-	-	-	-	-
+110	timer_settime	man/ cs/	6E	timer_t timer_id	int flags	const struct __kernel_itimerspec *new_setting	struct __kernel_itimerspec *old_setting	-	-
+111	timer_delete	man/ cs/	6F	timer_t timer_id	-	-	-	-	-
+112	clock_settime	man/ cs/	70	clockid_t which_clock	const struct __kernel_timespec *tp	-	-	-	-
+113	clock_gettime	man/ cs/	71	clockid_t which_clock	struct __kernel_timespec *tp	-	-	-	-
+114	clock_getres	man/ cs/	72	clockid_t which_clock	struct __kernel_timespec *tp	-	-	-	-
+115	clock_nanosleep	man/ cs/	73	clockid_t which_clock	int flags	const struct __kernel_timespec *rqtp	struct __kernel_timespec *rmtp	-	-
+116	syslog	man/ cs/	74	int type	char *buf	int len	-	-	-
+117	ptrace	man/ cs/	75	long request	long pid	unsigned long addr	unsigned long data	-	-
+118	sched_setparam	man/ cs/	76	pid_t pid	struct sched_param *param	-	-	-	-
+119	sched_setscheduler	man/ cs/	77	pid_t pid	int policy	struct sched_param *param	-	-	-
+120	sched_getscheduler	man/ cs/	78	pid_t pid	-	-	-	-	-
+121	sched_getparam	man/ cs/	79	pid_t pid	struct sched_param *param	-	-	-	-
+122	sched_setaffinity	man/ cs/	7A	pid_t pid	unsigned int len	unsigned long *user_mask_ptr	-	-	-
+123	sched_getaffinity	man/ cs/	7B	pid_t pid	unsigned int len	unsigned long *user_mask_ptr	-	-	-
+124	sched_yield	man/ cs/	7C	-	-	-	-	-	-
+125	sched_get_priority_max	man/ cs/	7D	int policy	-	-	-	-	-
+126	sched_get_priority_min	man/ cs/	7E	int policy	-	-	-	-	-
+127	sched_rr_get_interval	man/ cs/	7F	pid_t pid	struct __kernel_timespec *interval	-	-	-	-
+128	restart_syscall	man/ cs/	80	-	-	-	-	-	-
+129	kill	man/ cs/	81	pid_t pid	int sig	-	-	-	-
+130	tkill	man/ cs/	82	pid_t pid	int sig	-	-	-	-
+131	tgkill	man/ cs/	83	pid_t tgid	pid_t pid	int sig	-	-	-
+132	sigaltstack	man/ cs/	84	const struct sigaltstack *uss	struct sigaltstack *uoss	-	-	-	-
+133	rt_sigsuspend	man/ cs/	85	sigset_t *unewset	size_t sigsetsize	-	-	-	-
+134	rt_sigaction	man/ cs/	86	int	const struct sigaction *	struct sigaction *	size_t	-	-
+135	rt_sigprocmask	man/ cs/	87	int how	sigset_t *set	sigset_t *oset	size_t sigsetsize	-	-
+136	rt_sigpending	man/ cs/	88	sigset_t *set	size_t sigsetsize	-	-	-	-
+137	rt_sigtimedwait	man/ cs/	89	const sigset_t *uthese	siginfo_t *uinfo	const struct __kernel_timespec *uts	size_t sigsetsize	-	-
+138	rt_sigqueueinfo	man/ cs/	8A	pid_t pid	int sig	siginfo_t *uinfo	-	-	-
+139	rt_sigreturn	man/ cs/	8B	?	?	?	?	?	?
+140	setpriority	man/ cs/	8C	int which	int who	int niceval	-	-	-
+141	getpriority	man/ cs/	8D	int which	int who	-	-	-	-
+142	reboot	man/ cs/	8E	int magic1	int magic2	unsigned int cmd	void *arg	-	-
+143	setregid	man/ cs/	8F	gid_t rgid	gid_t egid	-	-	-	-
+144	setgid	man/ cs/	90	gid_t gid	-	-	-	-	-
+145	setreuid	man/ cs/	91	uid_t ruid	uid_t euid	-	-	-	-
+146	setuid	man/ cs/	92	uid_t uid	-	-	-	-	-
+147	setresuid	man/ cs/	93	uid_t ruid	uid_t euid	uid_t suid	-	-	-
+148	getresuid	man/ cs/	94	uid_t *ruid	uid_t *euid	uid_t *suid	-	-	-
+149	setresgid	man/ cs/	95	gid_t rgid	gid_t egid	gid_t sgid	-	-	-
+150	getresgid	man/ cs/	96	gid_t *rgid	gid_t *egid	gid_t *sgid	-	-	-
+151	setfsuid	man/ cs/	97	uid_t uid	-	-	-	-	-
+152	setfsgid	man/ cs/	98	gid_t gid	-	-	-	-	-
+153	times	man/ cs/	99	struct tms *tbuf	-	-	-	-	-
+154	setpgid	man/ cs/	9A	pid_t pid	pid_t pgid	-	-	-	-
+155	getpgid	man/ cs/	9B	pid_t pid	-	-	-	-	-
+156	getsid	man/ cs/	9C	pid_t pid	-	-	-	-	-
+157	setsid	man/ cs/	9D	-	-	-	-	-	-
+158	getgroups	man/ cs/	9E	int gidsetsize	gid_t *grouplist	-	-	-	-
+159	setgroups	man/ cs/	9F	int gidsetsize	gid_t *grouplist	-	-	-	-
+160	uname	man/ cs/	A0	struct old_utsname *	-	-	-	-	-
+161	sethostname	man/ cs/	A1	char *name	int len	-	-	-	-
+162	setdomainname	man/ cs/	A2	char *name	int len	-	-	-	-
+163	getrlimit	man/ cs/	A3	unsigned int resource	struct rlimit *rlim	-	-	-	-
+164	setrlimit	man/ cs/	A4	unsigned int resource	struct rlimit *rlim	-	-	-	-
+165	getrusage	man/ cs/	A5	int who	struct rusage *ru	-	-	-	-
+166	umask	man/ cs/	A6	int mask	-	-	-	-	-
+167	prctl	man/ cs/	A7	int option	unsigned long arg2	unsigned long arg3	unsigned long arg4	unsigned long arg5	-
+168	getcpu	man/ cs/	A8	unsigned *cpu	unsigned *node	struct getcpu_cache *cache	-	-	-
+169	gettimeofday	man/ cs/	A9	struct timeval *tv	struct timezone *tz	-	-	-	-
+170	settimeofday	man/ cs/	AA	struct timeval *tv	struct timezone *tz	-	-	-	-
+171	adjtimex	man/ cs/	AB	struct __kernel_timex *txc_p	-	-	-	-	-
+172	getpid	man/ cs/	AC	-	-	-	-	-	-
+173	getppid	man/ cs/	AD	-	-	-	-	-	-
+174	getuid	man/ cs/	AE	-	-	-	-	-	-
+175	geteuid	man/ cs/	AF	-	-	-	-	-	-
+176	getgid	man/ cs/	B0	-	-	-	-	-	-
+177	getegid	man/ cs/	B1	-	-	-	-	-	-
+178	gettid	man/ cs/	B2	-	-	-	-	-	-
+179	sysinfo	man/ cs/	B3	struct sysinfo *info	-	-	-	-	-
+180	mq_open	man/ cs/	B4	const char *name	int oflag	umode_t mode	struct mq_attr *attr	-	-
+181	mq_unlink	man/ cs/	B5	const char *name	-	-	-	-	-
+182	mq_timedsend	man/ cs/	B6	mqd_t mqdes	const char *msg_ptr	size_t msg_len	unsigned int msg_prio	const struct __kernel_timespec *abs_timeout	-
+183	mq_timedreceive	man/ cs/	B7	mqd_t mqdes	char *msg_ptr	size_t msg_len	unsigned int *msg_prio	const struct __kernel_timespec *abs_timeout	-
+184	mq_notify	man/ cs/	B8	mqd_t mqdes	const struct sigevent *notification	-	-	-	-
+185	mq_getsetattr	man/ cs/	B9	mqd_t mqdes	const struct mq_attr *mqstat	struct mq_attr *omqstat	-	-	-
+186	msgget	man/ cs/	BA	key_t key	int msgflg	-	-	-	-
+187	msgctl	man/ cs/	BB	int msqid	int cmd	struct msqid_ds *buf	-	-	-
+188	msgrcv	man/ cs/	BC	int msqid	struct msgbuf *msgp	size_t msgsz	long msgtyp	int msgflg	-
+189	msgsnd	man/ cs/	BD	int msqid	struct msgbuf *msgp	size_t msgsz	int msgflg	-	-
+190	semget	man/ cs/	BE	key_t key	int nsems	int semflg	-	-	-
+191	semctl	man/ cs/	BF	int semid	int semnum	int cmd	unsigned long arg	-	-
+192	semtimedop	man/ cs/	C0	int semid	struct sembuf *sops	unsigned nsops	const struct __kernel_timespec *timeout	-	-
+193	semop	man/ cs/	C1	int semid	struct sembuf *sops	unsigned nsops	-	-	-
+194	shmget	man/ cs/	C2	key_t key	size_t size	int flag	-	-	-
+195	shmctl	man/ cs/	C3	int shmid	int cmd	struct shmid_ds *buf	-	-	-
+196	shmat	man/ cs/	C4	int shmid	char *shmaddr	int shmflg	-	-	-
+197	shmdt	man/ cs/	C5	char *shmaddr	-	-	-	-	-
+198	socket	man/ cs/	C6	int	int	int	-	-	-
+199	socketpair	man/ cs/	C7	int	int	int	int *	-	-
+200	bind	man/ cs/	C8	int	struct sockaddr *	int	-	-	-
+201	listen	man/ cs/	C9	int	int	-	-	-	-
+202	accept	man/ cs/	CA	int	struct sockaddr *	int *	-	-	-
+203	connect	man/ cs/	CB	int	struct sockaddr *	int	-	-	-
+204	getsockname	man/ cs/	CC	int	struct sockaddr *	int *	-	-	-
+205	getpeername	man/ cs/	CD	int	struct sockaddr *	int *	-	-	-
+206	sendto	man/ cs/	CE	int	void *	size_t	unsigned	struct sockaddr *	int
+207	recvfrom	man/ cs/	CF	int	void *	size_t	unsigned	struct sockaddr *	int *
+208	setsockopt	man/ cs/	D0	int fd	int level	int optname	char *optval	int optlen	-
+209	getsockopt	man/ cs/	D1	int fd	int level	int optname	char *optval	int *optlen	-
+210	shutdown	man/ cs/	D2	int	int	-	-	-	-
+211	sendmsg	man/ cs/	D3	int fd	struct user_msghdr *msg	unsigned flags	-	-	-
+212	recvmsg	man/ cs/	D4	int fd	struct user_msghdr *msg	unsigned flags	-	-	-
+213	readahead	man/ cs/	D5	int fd	loff_t offset	size_t count	-	-	-
+214	brk	man/ cs/	D6	unsigned long brk	-	-	-	-	-
+215	munmap	man/ cs/	D7	unsigned long addr	size_t len	-	-	-	-
+216	mremap	man/ cs/	D8	unsigned long addr	unsigned long old_len	unsigned long new_len	unsigned long flags	unsigned long new_addr	-
+217	add_key	man/ cs/	D9	const char *_type	const char *_description	const void *_payload	size_t plen	key_serial_t destringid	-
+218	request_key	man/ cs/	DA	const char *_type	const char *_description	const char *_callout_info	key_serial_t destringid	-	-
+219	keyctl	man/ cs/	DB	int cmd	unsigned long arg2	unsigned long arg3	unsigned long arg4	unsigned long arg5	-
+220	clone	man/ cs/	DC	unsigned long	unsigned long	int *	int *	unsigned long	-
+221	execve	man/ cs/	DD	const char *filename	const char *const *argv	const char *const *envp	-	-	-
+222	mmap	man/ cs/	DE	?	?	?	?	?	?
+223	fadvise64	man/ cs/	DF	int fd	loff_t offset	size_t len	int advice	-	-
+224	swapon	man/ cs/	E0	const char *specialfile	int swap_flags	-	-	-	-
+225	swapoff	man/ cs/	E1	const char *specialfile	-	-	-	-	-
+226	mprotect	man/ cs/	E2	unsigned long start	size_t len	unsigned long prot	-	-	-
+227	msync	man/ cs/	E3	unsigned long start	size_t len	int flags	-	-	-
+228	mlock	man/ cs/	E4	unsigned long start	size_t len	-	-	-	-
+229	munlock	man/ cs/	E5	unsigned long start	size_t len	-	-	-	-
+230	mlockall	man/ cs/	E6	int flags	-	-	-	-	-
+231	munlockall	man/ cs/	E7	-	-	-	-	-	-
+232	mincore	man/ cs/	E8	unsigned long start	size_t len	unsigned char * vec	-	-	-
+233	madvise	man/ cs/	E9	unsigned long start	size_t len	int behavior	-	-	-
+234	remap_file_pages	man/ cs/	EA	unsigned long start	unsigned long size	unsigned long prot	unsigned long pgoff	unsigned long flags	-
+235	mbind	man/ cs/	EB	unsigned long start	unsigned long len	unsigned long mode	const unsigned long *nmask	unsigned long maxnode	unsigned flags
+236	get_mempolicy	man/ cs/	EC	int *policy	unsigned long *nmask	unsigned long maxnode	unsigned long addr	unsigned long flags	-
+237	set_mempolicy	man/ cs/	ED	int mode	const unsigned long *nmask	unsigned long maxnode	-	-	-
+238	migrate_pages	man/ cs/	EE	pid_t pid	unsigned long maxnode	const unsigned long *from	const unsigned long *to	-	-
+239	move_pages	man/ cs/	EF	pid_t pid	unsigned long nr_pages	const void * *pages	const int *nodes	int *status	int flags
+240	rt_tgsigqueueinfo	man/ cs/	F0	pid_t tgid	pid_t pid	int sig	siginfo_t *uinfo	-	-
+241	perf_event_open	man/ cs/	F1	struct perf_event_attr *attr_uptr	pid_t pid	int cpu	int group_fd	unsigned long flags	-
+242	accept4	man/ cs/	F2	int	struct sockaddr *	int *	int	-	-
+243	recvmmsg	man/ cs/	F3	int fd	struct mmsghdr *msg	unsigned int vlen	unsigned flags	struct __kernel_timespec *timeout	-
+244	not implemented		F4						
+245	not implemented		F5						
+246	not implemented		F6						
+247	not implemented		F7						
+248	not implemented		F8						
+249	not implemented		F9						
+250	not implemented		FA						
+251	not implemented		FB						
+252	not implemented		FC						
+253	not implemented		FD						
+254	not implemented		FE						
+255	not implemented		FF						
+256	not implemented		100						
+257	not implemented		101						
+258	not implemented		102						
+259	not implemented		103						
+260	wait4	man/ cs/	104	pid_t pid	int *stat_addr	int options	struct rusage *ru	-	-
+261	prlimit64	man/ cs/	105	pid_t pid	unsigned int resource	const struct rlimit64 *new_rlim	struct rlimit64 *old_rlim	-	-
+262	fanotify_init	man/ cs/	106	unsigned int flags	unsigned int event_f_flags	-	-	-	-
+263	fanotify_mark	man/ cs/	107	int fanotify_fd	unsigned int flags	u64 mask	int fd	const char *pathname	-
+264	name_to_handle_at	man/ cs/	108	int dfd	const char *name	struct file_handle *handle	int *mnt_id	int flag	-
+265	open_by_handle_at	man/ cs/	109	int mountdirfd	struct file_handle *handle	int flags	-	-	-
+266	clock_adjtime	man/ cs/	10A	clockid_t which_clock	struct __kernel_timex *tx	-	-	-	-
+267	syncfs	man/ cs/	10B	int fd	-	-	-	-	-
+268	setns	man/ cs/	10C	int fd	int nstype	-	-	-	-
+269	sendmmsg	man/ cs/	10D	int fd	struct mmsghdr *msg	unsigned int vlen	unsigned flags	-	-
+270	process_vm_readv	man/ cs/	10E	pid_t pid	const struct iovec *lvec	unsigned long liovcnt	const struct iovec *rvec	unsigned long riovcnt	unsigned long flags
+271	process_vm_writev	man/ cs/	10F	pid_t pid	const struct iovec *lvec	unsigned long liovcnt	const struct iovec *rvec	unsigned long riovcnt	unsigned long flags
+272	kcmp	man/ cs/	110	pid_t pid1	pid_t pid2	int type	unsigned long idx1	unsigned long idx2	-
+273	finit_module	man/ cs/	111	int fd	const char *uargs	int flags	-	-	-
+274	sched_setattr	man/ cs/	112	pid_t pid	struct sched_attr *attr	unsigned int flags	-	-	-
+275	sched_getattr	man/ cs/	113	pid_t pid	struct sched_attr *attr	unsigned int size	unsigned int flags	-	-
+276	renameat2	man/ cs/	114	int olddfd	const char *oldname	int newdfd	const char *newname	unsigned int flags	-
+277	seccomp	man/ cs/	115	unsigned int op	unsigned int flags	void *uargs	-	-	-
+278	getrandom	man/ cs/	116	char *buf	size_t count	unsigned int flags	-	-	-
+279	memfd_create	man/ cs/	117	const char *uname_ptr	unsigned int flags	-	-	-	-
+280	bpf	man/ cs/	118	int cmd	union bpf_attr *attr	unsigned int size	-	-	-
+281	execveat	man/ cs/	119	int dfd	const char *filename	const char *const *argv	const char *const *envp	int flags	-
+282	userfaultfd	man/ cs/	11A	int flags	-	-	-	-	-
+283	membarrier	man/ cs/	11B	int cmd	int flags	-	-	-	-
+284	mlock2	man/ cs/	11C	unsigned long start	size_t len	int flags	-	-	-
+285	copy_file_range	man/ cs/	11D	int fd_in	loff_t *off_in	int fd_out	loff_t *off_out	size_t len	unsigned int flags
+286	preadv2	man/ cs/	11E	unsigned long fd	const struct iovec *vec	unsigned long vlen	unsigned long pos_l	unsigned long pos_h	rwf_t flags
+287	pwritev2	man/ cs/	11F	unsigned long fd	const struct iovec *vec	unsigned long vlen	unsigned long pos_l	unsigned long pos_h	rwf_t flags
+288	pkey_mprotect	man/ cs/	120	unsigned long start	size_t len	unsigned long prot	int pkey	-	-
+289	pkey_alloc	man/ cs/	121	unsigned long flags	unsigned long init_val	-	-	-	-
+290	pkey_free	man/ cs/	122	int pkey	-	-	-	-	-
+291	statx	man/ cs/	123	int dfd	const char *path	unsigned flags	unsigned mask	struct statx *buffer	-
