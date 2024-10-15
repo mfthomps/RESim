@@ -179,10 +179,15 @@ class reverseToCall():
                         bp_start = bp
                 self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, bp_start, bp, 'reverseToCall sysenter')
                 self.lgr.debug('vxKSyscall setGlobal set bp range %d %d' % (bp_start, bp))
-            elif self.cpu.architecture == 'arm':
-                self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
-                enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
-                self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
+            elif self.cpu.architecture.startswith('arm'):
+                if self.param.arm_entry is not None:
+                    self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
+                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
+                    self.lgr.debug('watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
+                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
             else:
                 if self.param.sysenter is not None and self.param.sys_entry is not None:
                     self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
@@ -1552,6 +1557,8 @@ class reverseToCall():
                 ret_cycles, frame = self.recent_cycle[tid]
             else:
                 self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+        else:
+            self.lgr.debug('getRecentCycleFrame cpu was None')
         return frame, ret_cycles
 
     def getPreviousCycleFrame(self, tid, cpu=None):
