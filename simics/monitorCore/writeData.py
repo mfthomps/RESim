@@ -424,14 +424,19 @@ class WriteData():
         
     def setSelectStopHap(self):
         if self.select_hap is None:
-            if self.mem_utils.WORD_SIZE == 8:
-                entry = self.top.getSyscallEntry('select')
+            word_size = self.top.getWordSize()
+            # TBD what about select for older linux.
+            if word_size == 8:
+                entry = self.top.getSyscallEntry('pselect6')
             else:
                 entry = self.top.getSyscallEntry('_newselect')
             #self.lgr.debug('writeData setSelectStopHap on 0x%x' % entry)
             if entry is not None:
                 self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-                entry = self.top.getSyscallEntry('poll')
+                if word_size == 8:
+                    entry = self.top.getSyscallEntry('ppoll')
+                else:
+                    entry = self.top.getSyscallEntry('poll')
                 self.poll_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                 self.select_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.select_break)
                 self.poll_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.selectStopHap, None, self.poll_break)
