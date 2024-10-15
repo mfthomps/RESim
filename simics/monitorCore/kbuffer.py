@@ -102,9 +102,10 @@ class Kbuffer():
             gotone = False
             skipped_list = []
             for i in range(limit):
-                eip = eip - self.mem_utils.WORD_SIZE
+                #eip = eip - self.mem_utils.WORD_SIZE
+                eip = eip - 4
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                self.lgr.debug('findArmBuf instruct: %s' % instruct[1])
+                self.lgr.debug('findArmBuf pc: 0x%x instruct: %s' % (eip, instruct[1]))
                 if instruct[1].startswith('ldm') or instruct[1].startswith('ldr'):
                     op2, op1 = decodeArm.getOperands(instruct[1])
                     writeback = False
@@ -239,8 +240,8 @@ class Kbuffer():
             else:
                 # do not wait for 2nd write, this is the 2nd write most likely
                 self.hack_count = 2
-        self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x' % (memory.logical_address, value))
-        if self.cpu.architecture != 'arm':
+        self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x cycle: 0x%x' % (memory.logical_address, value, self.cpu.cycles))
+        if not self.cpu.architecture.startswith('arm'):
             eip = self.top.getEIP()
             if self.top.isWindows() and self.hack_count < 1:
                 self.hack_count = self.hack_count + 1
