@@ -295,6 +295,8 @@ class PollInfo():
             fd = self.mem_utils.readWord32(cpu, cur_addr)
             if fd == 0xffffffff:
                 break
+            elif fd == 0xffffffffffffffff:
+                break
             cur_addr += 4
             events = self.mem_utils.readWord32(cpu, cur_addr)
             cur_addr += 2
@@ -639,7 +641,7 @@ class Syscall():
     def setComputeBreaks(self, compat32, background, break_list, break_addrs, arm64_app=None):
         for call in self.call_list:
             callnum = self.task_utils.syscallNumber(call, compat32, arm64_app=arm64_app)
-            self.lgr.debug('SysCall setComputeBreaks call: %s  num: %d arm64_app %s' % (call, callnum, str(arm64_app)))
+            #self.lgr.debug('SysCall setComputeBreaks call: %s  num: %d arm64_app %s' % (call, callnum, str(arm64_app)))
             if callnum is not None and callnum < 0:
                 self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
                 return None, None
@@ -651,7 +653,7 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
-            self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
+            #self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -662,7 +664,7 @@ class Syscall():
                 if not arm64_app:
                     callname = '%s-arm32' % call
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, callname))
-                self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
+                #self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
             if background:
                 dc = self.context_manager.getDefaultContext()
                 self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -1993,6 +1995,8 @@ class Syscall():
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
                 if fd == 0xffffffff:
                     fd = 'NULL'
+                elif fd == 0xffffffffffffffff:
+                    fd = 'NULL'
                 elif fd is not None:
                     fd = str(fd)  
                 if fd is not None:
@@ -2013,6 +2017,8 @@ class Syscall():
                 ''' tbd wth? the above seems wrong, why key on addr of zero? '''
                 fd = frame['param5']
                 if fd == 0xffffffff:
+                    fd = 'NULL'
+                elif fd == 0xffffffffffffffff:
                     fd = 'NULL'
                 elif fd is not None:
                     fd = str(fd)  
