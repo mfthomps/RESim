@@ -581,8 +581,8 @@ class Syscall():
                     break_addrs.append(self.param.arm_entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
                 if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
-                    self.lgr.debug('syscall doBreaks set entry for arm64')
                     proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
+                    self.lgr.debug('syscall doBreaks set entry for arm64 proc_break 0x%x' % proc_break)
                     break_addrs.append(self.param.arm64_entry)
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall64'))
             else:
@@ -597,7 +597,8 @@ class Syscall():
                         proc_break1 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
                         break_addrs.append(self.param.sys_entry)
                         break_list.append(proc_break1)
-                        self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, proc_break1, 'syscall'))
+                        self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
+                        self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break1, proc_break1, 'syscall'))
                     else:
                         self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
@@ -620,7 +621,8 @@ class Syscall():
                     proc_break2 = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.compat_32_int128, 1, 0)
                     break_addrs.append(self.param.compat_32_int128)
                     break_list.append(proc_break2)
-                    self.proc_hap.append(self.context_manager.genHapRange("Core_Breakpoint_Memop", self.syscallHap, self.alt_syscall_info, proc_break1, proc_break2, 'syscall32'))
+                    self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.alt_syscall_info, proc_break1, 'syscall32'))
+                    self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.alt_syscall_info, proc_break2, 'syscall32'))
         
         else:
             ''' will stop within the kernel at the computed entry point '''
@@ -653,7 +655,7 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
-            #self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
+            self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -664,7 +666,7 @@ class Syscall():
                 if not arm64_app:
                     callname = '%s-arm32' % call
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, callname))
-                #self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
+                self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
             if background:
                 dc = self.context_manager.getDefaultContext()
                 self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -2423,8 +2425,10 @@ class Syscall():
         #if comm == 'tar':
         #    return
 
-
+        memory_address = memory.logical_address
         break_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
+        if memory_address != break_eip:
+            self.lgr.debug('syscallHap pc 0x%x does not match memory.logical address 0x%x' % (break_eip, memory_address))
         if self.syscall_info.cpu != cpu:
             self.lgr.error('syscallHap wrong cell, cur: %s, expected %s' % (cpu.name, self.syscall_info.cpu.name))
             return
@@ -2467,7 +2471,8 @@ class Syscall():
                arm64_app = self.mem_utils.arm64App(self.cpu)
            callnum = self.syscall_info.getCall(break_eip, arm64_app)
            if callnum is None:
-               self.lgr.error('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r' % (self.name, break_eip, arm64_app))
+               break_handle = self.context_manager.getBreakHandle(break_num)
+               self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
            self.lgr.debug('syscallHap callnum is %s name %s' % (callnum, callname))
@@ -2481,9 +2486,8 @@ class Syscall():
         if callnum == 0 and self.mem_utils.WORD_SIZE==4:
             self.lgr.debug('syscallHap callnum is zero')
             return
-        value = memory.logical_address
         #self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d (%s) expected %s compat32 set for the HAP? %r name: %s cycle: 0x%x' % (self.cell_name, str(context), 
-        #     tid, comm, break_eip, value, callnum, callname, str(self.syscall_info.callnum), self.syscall_info.compat32, self.name, self.cpu.cycles))
+        #     tid, comm, break_eip, memory_address, callnum, callname, str(self.syscall_info.callnum), self.syscall_info.compat32, self.name, self.cpu.cycles))
            
         if not self.swapper_ok and comm == 'swapper/0' and tid == 1:
             self.lgr.debug('syscallHap, skipping call from init/swapper')
@@ -2509,18 +2513,16 @@ class Syscall():
             return
 
         if tid == 0:
-            value = memory.logical_address
             ''' TBD debug simics?  seems broken '''
-            self.lgr.debug('syscallHap tid 0, break_ip 0x%x memory says 0x%x len of haps is %d' % (break_eip, value, len(self.proc_hap)))
+            self.lgr.debug('syscallHap tid 0, break_eip 0x%x memory says 0x%x len of haps is %d' % (break_eip, memory_address, len(self.proc_hap)))
             return
 
         #self.lgr.debug('syscallhap for %s at 0x%x' % (tid, break_eip))
             
         frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(break_eip, self.syscall_info)
         if frame is None:
-            value = memory.logical_address
             ''' TBD Simics broken???? occurs due to a mov dword ptr fs:[0xc149b454],ebx '''
-            self.lgr.debug('syscallHap tid:%s frame none break_ip 0x%x memory says 0x%x len of haps is %d' % (tid, break_eip, value, len(self.proc_hap)))
+            self.lgr.debug('syscallHap tid:%s frame none break_eip 0x%x memory says 0x%x len of haps is %d' % (tid, break_eip, memory_address, len(self.proc_hap)))
             #SIM_break_simulation('unexpected break eip 0x%x' % break_eip)
 
             return
