@@ -48,11 +48,11 @@ class DataWatchManager():
         self.lgr.debug('dataWatchManager created new data watch for comm %s' % comm)
 
 
-    def recordRead(self, comm, index, phys_addr, linear_addr, start, length, trans_size, cur_comm, cur_tid):
+    def recordRead(self, comm, index, phys_addr, linear_addr, start, length, trans_size, cur_comm, cur_tid, op_type):
         ''' comm is comm of dataWatch that sees the current comm is not its own'''
         if cur_comm not in self.dataWatch:
             self.lgr.error('dataWatchManager called with unknown comm %s' % cur_comm)
             return
         eip = self.top.getEIP(cpu=self.cpu)
         self.lgr.debug('dataWatchManager call dataWatch userSpaceRef')
-        self.dataWatch[cur_comm].userSpaceRef(eip, cur_tid, linear_addr, start, length, trans_size, Sim_Trans_Load)
+        self.dataWatch[cur_comm].userSpaceRef(eip, cur_tid, linear_addr, start, length, trans_size, op_type)
