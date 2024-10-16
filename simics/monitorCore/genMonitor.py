@@ -1505,7 +1505,7 @@ class GenMonitor():
                     if load_info is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                         #self.getIDAFuns(self.full_path, elf_info.address)
-                        self.fun_mgr = funMgr.FunMgr(self, cpu, self.mem_utils[self.target], self.lgr)
+                        self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.lgr)
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
                             offset = load_info.addr - image_base
@@ -2424,6 +2424,12 @@ class GenMonitor():
             target = self.target
         cpu, comm, this_tid = self.task_utils[target].curThread() 
         return this_tid
+
+    def getComm(self, target=None):
+        if target is None:
+            target = self.target
+        cpu, comm, this_tid = self.task_utils[target].curThread() 
+        return comm
 
     def getCurrentProc(self, target_cpu=None):
         if target_cpu is None:
@@ -3676,6 +3682,7 @@ class GenMonitor():
                     #calls.remove('recv')
                     calls.remove('_llseek')
                     calls.remove('_newselect')
+                    calls.remove('select')
                     calls.append('lseek')
                     calls.remove('send')
                     calls.remove('recv')
@@ -4420,10 +4427,9 @@ class GenMonitor():
             return False
         ''' 
        
-
-    def v2p(self, addr, use_pid=None):
+    def v2p(self, addr, use_pid=None, force_cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid)
+        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid, force_cr3=force_cr3)
         if value is not None:
             print('0x%x' % value)
         else:
@@ -4904,6 +4910,12 @@ class GenMonitor():
         with open(fname, 'wb') as fh:
             fh.write(byte_array)
         self.lgr.debug('saveMemory wrote %d bytes from 0x%x to file %s' % (size, addr, fname))
+
+    def pinfo(self, addr, force_cr3=None):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=force_cr3)
+        if ptable_info is not None:
+            print(ptable_info.valueString())
 
     def pageInfo(self, addr, quiet=False, cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
