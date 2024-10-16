@@ -93,28 +93,18 @@ class TargetFS():
                 flist = glob.glob(full+'*')
                 if len(flist) > 0:
                     retval = flist[0]
-                else:
+                elif not '/' in full:
+                    # TBD, avoid finding a program that would fail execve
                     if lgr is not None:
                         lgr.debug('TargetFS getFull, not relative no glob at %s' % (full+'*'))
                     ''' try basename '''
-                    base = os.path.basename(path)
-                    #fun_file = base+'.funs'
-                    #if lgr is not None:
-                    #    lgr.debug('TargetFS getFull not relative , fun_file %s' % fun_file)
-                    #full_fun = self.find(fun_file)
-                    #if full_fun is not None:              
-                    #    retval = os.path.join(os.path.dirname(full_fun), base)
-                    #    #if lgr is not None:
-                    #    #    lgr.debug('getFull found file %s' % retval)
-                    #else:
-                    #    retval = self.find(base)
-                    #    if lgr is not None:
-                    #        lgr.debug('getFull used find found file %s' % retval)
                     retval = self.find(base)
                     if path == base and retval is not None and path not in self.file_cache:
                         self.file_cache[path] = retval
                     if lgr is not None:
                          lgr.debug('getFull used find found file %s' % retval)
+                else:
+                    self.lgr.debug('TargetFS, did not find program %s' % full)
 
             else:
                 retval = full
