@@ -972,8 +972,9 @@ class Syscall():
                 #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
                 if base.startswith(cp.match_param):
                     ''' is program file we are looking for.  do we care if it is a binary? '''
-                    self.lgr.debug('checkExecve matches base')
+                    self.lgr.debug('syscall checkExecve matches base')
                     wrong_type = False
+                    missing_file = False
                     if self.traceProcs is not None:
                         ftype = self.traceProcs.getFileType(tid)
                         if ftype is None:
@@ -981,19 +982,24 @@ class Syscall():
                             if full_path is not None and os.path.isfile(full_path):
                                 ftype = magic.from_file(full_path)
                                 if ftype is None:
-                                    self.lgr.error('checkExecve failed to find file type for %s tid:%s' % (prog_string, tid))
+                                    self.lgr.error('syscall checkExecve failed to find file type for %s tid:%s' % (prog_string, tid))
                                     return
+                            else:
+                                self.lgr.debug('syscall checkExecve failed to find file for %s, assume target will fail execve' % prog_string)
+                                missing_file = True
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
-                    if not wrong_type:
+                    if not wrong_type and not missing_file:
                         self.recordExecve(prog_string, arg_string, tid, comm)
                         if not self.top.trackingThreads():
                             self.lgr.debug('checkExecve not tracking threads, remove the syscall param')
                             self.top.rmSyscall(cp.name)
                         self.lgr.debug('checkExecve execve of %s now stop alone ' % prog_string)
                         SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
-                    else:
+                    elif wrong_type:
                         self.lgr.debug('checkExecve, got %s when looking for binary %s, skip' % (ftype, prog_string))
+                    else:
+                        pass
                 elif base == 'sh' and cp.match_param.startswith('sh '):
                     # TBD add bash, etc.
                     base = os.path.basename(arg0)
