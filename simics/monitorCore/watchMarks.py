@@ -582,6 +582,16 @@ class ToStringMark():
     def getMsg(self):
         return self.msg
 
+class OptMark():
+    def __init__(self, fun, read_addr, token, argc, argv, optstring):
+        self.fun = fun
+        if read_addr is not None:
+            self.msg = '%s got token %s from addr 0x%x argc: %d argv: 0x%x optstring: %s' % (fun, token, read_addr, argc, argv, optstring)
+        else:
+            self.msg = '%s failed to return token argc: %d argv: 0x%x optstring: %s' % (fun, argc, argv, optstring)
+    def getMsg(self):
+        return self.msg
+
 class MscMark():
     def __init__(self, fun, addr, msg_append):
         self.addr = addr
@@ -1334,6 +1344,11 @@ class WatchMarks():
         sm = StrtokMark(fun, cur_ptr, delim, the_string, retaddr, buf_start)
         wm = self.addWatchMark(sm)
         return wm
+
+    def getopt(self, fun, read_addr, token, argc, argv, optstring): 
+        om = OptMark(fun, read_addr, token, argc, argv, optstring)
+        self.addWatchMark(om)
+        self.lgr.debug(om.getMsg())
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)

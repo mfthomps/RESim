@@ -51,7 +51,7 @@ import dataWatchManager
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
             'strcasecmp', 'strncpy', 'strlcpy', 'strtoul', 'string_strncmp', 'string_strnicmp', 'string_strlen',
-            'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim',
+            'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim', 'getopt',
             'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
@@ -895,8 +895,8 @@ class DataWatch():
                 self.lgr.debug('dataWatch resetIndexHap setOneBreak')
                 self.setOneBreak(index, replace=True)
             else:
-                self.lgr.debug('wtf, over?')
-                SIM_break_simulation('eh')
+                self.lgr.debug('remove this?')
+                SIM_break_simulation('remove this')
                
     def stopWatch(self, break_simulation=None, immediate=False, leave_fun_entries=False, leave_backstop=False): 
         ''' stop data watches, e.g., in prep for reverse execution or to run free from a memsomething call to its return'''
@@ -1653,7 +1653,7 @@ class DataWatch():
 
         elif self.mem_something.fun == 'realloc':
             new_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-            if new_addr > 0:
+            if not memUtils.isNull(new_addr):
                 # assume full source buffer moved
                 buf_index = self.findRangeIndex(self.mem_something.src)
                 count = self.length[buf_index] 
@@ -1664,6 +1664,17 @@ class DataWatch():
             else:
                 self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, new_addr))
             
+        elif self.mem_something.fun == 'getopt':
+            ret_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            if not memUtils.isNull(ret_addr):
+                token = self.mem_utils.readString(self.cpu, ret_addr, 40)
+                self.lgr.debug('%s returned addr 0x%x token is %s' % (self.mem_something.fun, ret_addr, token))
+                wm = self.watchMarks.getopt(self.mem_something.fun, ret_addr, token, self.mem_something.count, self.mem_something.src, self.mem_something.the_string)
+                self.setRange(ret_addr, len(token), watch_mark=wm)
+            else:
+                self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, ret_addr))
+                wm = self.watchMarks.getopt(self.mem_something.fun, None, None, self.mem_something.count, self.mem_something.src, self.mem_something.the_string)
+                
             
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -2005,7 +2016,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch getMemParams, back from restore debug')
 
             #self.context_manager.restoreDefaultContext()
-            if not data_hit and not skip_fun and self.mem_something.fun not in ['getenv']:
+            if not data_hit and not skip_fun and self.mem_something.fun not in ['getenv', 'getopt']:
                 self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
                 buf_start = None
@@ -2414,6 +2425,14 @@ class DataWatch():
         elif self.mem_something.fun == 'realloc':
             self.mem_something.dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
             self.lgr.debug('dataWatch getMemParams %s src 0x%x' % (self.mem_something.fun, self.mem_something.src))
+        elif self.mem_something.fun == 'getopt':
+            self.mem_something.count, self.mem_something.src, optstring_addr = self.getCallParams(sp, word_size)
+            if optstring_addr is not None:
+                self.mem_something.the_string = self.mem_utils.readString(self.cpu, optstring_addr, 100)
+                self.lgr.debug('dataWatch getMemParams %s argc %d, argv 0x%x optstring: 0x%x %s' % (self.mem_something.fun, self.mem_something.count, self.mem_something.src, 
+                     optstring_addr, self.mem_something.the_string))
+            else:
+                self.lgr.debug('dataWatch getMemParams %s argc %d, argv 0x%x no optstring' % (self.mem_something.count, self.mem_something.src))
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
