@@ -69,6 +69,7 @@ def getText(path, lgr):
     plt_size = None
     iself = False
     is_dyn = False
+    is_aarch64 = False
     interp = None
     for line in out[0].decode("utf-8").splitlines():
         if line.startswith('ELF Header'):
@@ -77,11 +78,14 @@ def getText(path, lgr):
         if line.strip().startswith('Type:') and 'DYN' in line:
             is_dyn = True
             continue
-        if is_dyn and line.strip().startswith('Entry point'):
+        if line.strip().startswith('Machine:') and 'AArch64' in line:
+            is_aarch64 = True
+            continue
+        if (is_dyn or is_aarch64) and line.strip().startswith('Entry point'):
             parts = line.strip().split()
             offset = int(parts[3], 16)
             continue
-        if is_dyn and line.strip().startswith('[ 0]'):
+        if (is_dyn or is_aarch64) and line.strip().startswith('[ 0]'):
             hack = line[7:]
             parts = hack.strip().split()
             size_s = parts[1][:-1]
@@ -117,7 +121,7 @@ def getText(path, lgr):
             else:
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
-    if addr is not None or is_dyn:
+    if addr is not None or is_dyn or is_aarch64:
         retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp)
    
     return retval
