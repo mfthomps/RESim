@@ -93,11 +93,12 @@ class StackFrameManager():
             else:
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
-                    if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in expected tid:%s, current is %s' % (tid, cur_tid))
-                        return None
-                    else:
+                    if fun_mgr.hasIDAFuns():
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
                         tid = cur_tid
+                    else:
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
+                        return None
             if tid not in self.stack_base:
                 stack_base = None
             else:
@@ -125,11 +126,12 @@ class StackFrameManager():
             else:
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
-                    if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('stackFrameManager getSTackTrace not expected tid %s, current is %s  -- not a thread?' % (tid, cur_tid))
-                        return "{}"
-                    else:
+                    if fun_mgr.hasIDAFuns():
+                        self.lgr.debug('stackFrameManager getStackTrace not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
                         tid = cur_tid
+                    else:
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
+                        return "{}"
             self.lgr.debug('stackFrameManager getStackTrace tid %s' % tid)
             if tid not in self.stack_base:
                 stack_base = None
