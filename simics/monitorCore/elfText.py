@@ -121,6 +121,10 @@ def getText(path, lgr):
             else:
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
+    if addr is None and not is_dyn and is_aarch64:
+        addr = offset
+        if lgr is not None:
+            lgr.debug('elfText not dynamic is aarch64, set addr to zero')
     if addr is not None or is_dyn or is_aarch64:
         retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp)
    
