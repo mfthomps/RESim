@@ -869,7 +869,7 @@ class GenContextMgr():
                 self.lgr.debug('genContextManager, addTask got rec of None for tid %s, pending' % tid)
                 self.pending_watch_tids.append(tid)
             else:
-                self.lgr.debug('genContextManager, addTask tid %s add rec 0x%x' % (tid, rec))
+                self.lgr.debug('genContextManager, addTask tid %s add rec 0x%x watch_exit %r' % (tid, rec, watch_exit))
                 self.watch_rec_list[rec] = tid
                 if watch_exit:
                     self.watchExit(rec=rec, tid=tid)
@@ -1451,7 +1451,9 @@ class GenContextMgr():
         self.pageFaultGen = pageFaultGen
 
     def getWatchTids(self):
-        return self.task_rec_bp.keys()
+        self.lgr.debug('getWatchTids len of task_rec_bp is %d  watch_rec_list is %d' % (len(self.task_rec_bp.keys()), len(self.watch_rec_list)))
+        #return self.task_rec_bp.keys()
+        return self.watch_rec_list.keys()
 
     def noWatch(self, tid):
         self.no_watch.append(tid)
