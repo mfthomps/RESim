@@ -142,6 +142,14 @@ def getCR3(cpu):
         cr3 = cpu.iface.int_register.read(reg_num)
     return cr3
 
+def isNull(value):
+    if value == 0xffffffff:
+        return True
+    elif value == 0xffffffffffffffff:
+        return True
+    else:
+        return False
+
 param_map = {}
 param_map['arm'] = {}
 param_map['arm']['param1'] = 'r0'
@@ -222,6 +230,9 @@ class MemUtils():
         self.arm64_regs = []
         for i in range(31):
             r = 'x%d' % i
+            self.arm64_regs.append(r)
+        for i in range(31):
+            r = 'w%d' % i
             self.arm64_regs.append(r)
         self.arm64_regs.append('pc')
         self.arm64_regs.append('sp_el0')
@@ -810,6 +821,8 @@ class MemUtils():
                     reg_num = cpu.iface.int_register.get_number('pc')
                 elif reg == 'syscall_ret':
                     if cpu.in_aarch64:
+                        reg_num = cpu.iface.int_register.get_number('x0')
+                    elif arm64_app:
                         reg_num = cpu.iface.int_register.get_number('x0')
                     else:
                         reg_num = cpu.iface.int_register.get_number('r0')
