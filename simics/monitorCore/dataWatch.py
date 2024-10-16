@@ -5219,7 +5219,7 @@ class DataWatch():
         argptr = sp + self.mem_utils.wordSize(self.cpu)
         valptr = self.mem_utils.readAppPtr(self.cpu, argptr)
         if argc != 1:
-            self.ldr.error('dataWatch watchCGIArgs expected only one argv, got %d' % argc)
+            self.lgr.error('dataWatch watchCGIArgs expected only one argv, got %d' % argc)
         else:
             index = 0
             while True:
