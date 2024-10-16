@@ -1177,7 +1177,7 @@ class TaskUtils():
 
     def syscallName(self, callnum, compat32):
         if self.arm64:
-            self.lgr.debug('taskUtils syscallName for num %d' % callnum)
+            #self.lgr.debug('taskUtils syscallName for num %d' % callnum)
             if self.mem_utils.arm64App(self.cpu):
                 if callnum in self.syscall_numbers.syscalls:
                     return self.syscall_numbers.syscalls[callnum]
