@@ -36,6 +36,8 @@ class TrackThreads():
         self.clone_hap = None
         self.child_stacks = {}
         self.so_track = None
+        self.cur_comm = None
+        self.last_call_cycle = None
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -70,7 +72,7 @@ class TrackThreads():
             execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
             self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
             self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-            self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+            self.lgr.debug('TrackThreads setExecveBreaks break at 0x%x startTrack' % (execve_entry))
         else:
             self.lgr.error('TrackThreads setExecveBreaks callnum is None')
 
@@ -106,6 +108,11 @@ class TrackThreads():
         if self.execve_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
+        if cpu.cycles == self.last_call_cycle:
+            # seems to hit the breakpoint many times
+            return
+        self.last_call_cycle = self.cpu.cycles
+        self.lgr.debug('TrackThreads execveHap tid:%s comm:%s cycle: 0x%x' % (tid, comm, self.cpu.cycles))
         if tid == '0':
             return
         if not self.context_manager.amWatching(tid):
@@ -117,6 +124,7 @@ class TrackThreads():
             return
         self.lgr.debug('TrackThreads execveHap remove tid:%s from context manager watch' % tid)
         self.context_manager.rmTask(tid)
+        self.soMap.rmTask(tid)
         self.parseExecve()
 
 
@@ -133,6 +141,7 @@ class TrackThreads():
         self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
         self.traceProcs.setName(tid, prog_string, None)
         param = (prog_string, tid)
+        self.cur_comm = comm
         doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
         #self.addSO(prog_string, tid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
@@ -141,6 +150,11 @@ class TrackThreads():
         del self.finish_break[tid]
 
     def addSO(self, param_tuple):
+        cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('trackThreads, addSO, back from execve via doInUser callback.  comm now %s was %s' % (comm, self.cur_comm))
+        if comm == self.cur_comm:
+            self.lgr.debug('trackThreads, addSO, execve must have failed comm is still %s' % comm)
+            return
         prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         if full_path is not None:
@@ -162,9 +176,19 @@ class TrackThreads():
                             count = loader_load_info.addr 
                             breakAndCall.BreakAndCall(self.top, self.cpu, start, count, self.soMap.setProgStart, None, self.lgr)
                             self.lgr.debug('trackThreads addSO use breakAndDo to set prog start when text entered.')
+                        else:
+                            self.lgr.debug('trackThreads addSO failed to get loader_load_info')
+                    else:
+                        self.lgr.debug('trackThreads addSO no interpreter in load_info')
+                else:
+                    self.lgr.debug('trackThreads addSO load_info addr is 0x%x' % load_info.addr)
+        
+        else:
+            self.lgr.debug('trackThreads addSO failed to get fullPath for %s' % prog_name)
 
     def parseExecve(self):
         cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('trackThreads parseExecve tid:%s comm:%s' % (tid, comm))
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, False, cpu)
         
@@ -182,6 +206,7 @@ class TrackThreads():
         else:
             self.traceProcs.setName(tid, prog_string, None)
             param = (prog_string, tid)
+            self.cur_comm = comm
             doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
             #self.addSO(prog_string, tid)
 
