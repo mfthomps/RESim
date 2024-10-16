@@ -1043,10 +1043,10 @@ class TaskUtils():
                 val = self.param.syscall_jump + call_shifted
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
-            if entry is not None:
-                self.lgr.debug('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry: 0x%x' % (callnum, callnum, val, entry))
-            else:
-                self.lgr.error('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry is none' % (callnum, callnum, val))
+            #if entry is not None:
+            #    self.lgr.debug('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry: 0x%x' % (callnum, callnum, val, entry))
+            #else:
+            #    self.lgr.error('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry is none' % (callnum, callnum, val))
                  
             
         elif not compat32:
