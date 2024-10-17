@@ -3900,20 +3900,24 @@ class DataWatch():
         #    return
         dum_cpu, comm, tid = self.task_utils.curThread()
         if comm != self.comm:
-            #if op_type == Sim_Trans_Load:
-            if True:
+            if op_type == Sim_Trans_Load:
                 if index not in self.linear_breaks:
                     if self.data_watch_manager is None:
                         self.data_watch_manager = dataWatchManager.DataWatchManager(self.top, self, self.cpu, self.cell_name, self.page_size, 
                         self.context_manager, self.mem_utils, self.task_utils, self.rev_to_call, self.param, self.run_from_snap, self.back_stop, 
                         self.compat32, self.comp_dict, self.so_map, self.lgr)
-                    self.recordOtherProcRead(memory.physical_address, memory.size, addr, index, comm, tid, op_type)
-                    self.lgr.debug('readHap comm %s, but we are %s, bail' % (comm, self.comm))
+                    if self.data_watch_manager.failedCreate():
+                        self.data_watch_manager = None
+                        self.lgr.debug('readHap comm %s, but we are %s and create new data watch failed,, bail' % (comm, self.comm))
+                    else:     
+                        self.recordOtherProcRead(memory.physical_address, memory.size, addr, index, comm, tid, op_type)
+                        self.lgr.debug('readHap comm %s, but we are %s, bail' % (comm, self.comm))
                     return
                 else:
                     self.lgr.debug('readHap comm %s, but we are %s, TBD is a linear break????' % (comm, self.comm))
             else:
-                self.lgr.debug('readHap comm %s, but we are %s, TBD is a modify, bail' % (comm, self.comm))
+                self.lgr.debug('readHap comm %s, but we are %s, TBD is a modify, remove range start[%d]=0x%x and bail' % (comm, self.comm, index, self.start[index]))
+                self.rmRange(self.start[index])
                 return
         tid = self.task_utils.curTID()
         cpl = memUtils.getCPL(self.cpu)

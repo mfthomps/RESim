@@ -22,11 +22,19 @@ class DataWatchManager():
         self.run_from_snap = run_from_snap
         self.dataWatch = {}
         self.fun_mgr = self.top.getFunMgr()
+        self.failed = False
         self.createNewDataWatch()
-        
+       
+    def failedCreate(self):
+        return self.failed 
+
     def createNewDataWatch(self):
         dum_cpu, comm, tid = self.task_utils.curThread()
         full_path = self.top.getFullPath(fname=comm)
+        if full_path is None:
+            self.lgr.debug('dataWatchManager createNewDataWatch for comm %s but did not find any prog for it' % comm)
+            self.failed = True
+            return
         self.lgr.debug('dataWatchManager createNewDataWatch comm %s full path %s' % (comm, full_path))
         root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
 
