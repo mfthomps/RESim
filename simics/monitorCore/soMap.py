@@ -946,7 +946,7 @@ class SOMap():
     def fullProg(self, prog_in):
         # if the given prog_in is a basename, use a prog_base_map to return the full path
         prog = None
-        if '/' not in prog_in:
+        if prog_in is not None and '/' not in prog_in:
             if prog_in in self.prog_base_map:
                 prog = self.prog_base_map[prog_in] 
             
