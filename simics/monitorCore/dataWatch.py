@@ -3898,8 +3898,20 @@ class DataWatch():
         #    if not self.lookForMemStuff(addr, start, length, memory, op_type, eip, None):
         #        self.lgr.debug('dataWatch readHap in VxWorks but not memstuff.  TBD')
         #    return
+
         dum_cpu, comm, tid = self.task_utils.curThread()
         if comm != self.comm:
+          
+            if self.start[index] is None:
+                latest_index = self.findRangeIndexPhys(memory.physical_address)
+                if latest_index is None:
+                    self.lgr.debug('readHap comm %s, but we are %s, index %d is None bail phys was 0x%x, ' % (comm, self.comm, index, memory.physical_address))
+                    return
+                else:
+                    self.lgr.debug('readHap not our comm, switched index %d with latest %d' % (index, latest_index))
+                    index = latest_index
+                    if start[index] is None:
+                        self.lgr.debug('readHap %s is not our comm, start[%d] still none, bail' % (comm, index))
             if op_type == Sim_Trans_Load:
                 if index not in self.linear_breaks:
                     if self.data_watch_manager is None:
@@ -3919,8 +3931,6 @@ class DataWatch():
                 self.lgr.debug('readHap comm %s, but we are %s, TBD is a modify, remove range start[%d]=0x%x and bail' % (comm, self.comm, index, self.start[index]))
                 self.rmRange(self.start[index])
                 return
-        tid = self.task_utils.curTID()
-        cpl = memUtils.getCPL(self.cpu)
 
         # may be multiple overlapping buffer ranges, index is simply first reported by Simics.  Find
         # the most recently defined range
@@ -3929,6 +3939,9 @@ class DataWatch():
         if latest_index is not None and latest_index != index:
             self.lgr.debug('readHap altering index from %d to more recently defined buffer at index %d' % (index, latest_index))
             index = latest_index
+
+        tid = self.task_utils.curTID()
+        cpl = memUtils.getCPL(self.cpu)
 
         if cpl > 0:
             if addr == 0:
@@ -4587,6 +4600,15 @@ class DataWatch():
                 end = self.start[index] + (self.length[index]-1)
                 #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
                 if addr is not None and addr >= self.start[index] and addr <= end:
+                    return index
+        return None
+
+    def findRangeIndexPhys(self, addr):
+        for index in reversed(range(len(self.start))):
+            if self.start[index] is not None:
+                end = self.phys_start[index] + (self.length[index]-1)
+                #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
+                if addr is not None and addr >= self.phys_start[index] and addr <= end:
                     return index
         return None
 
