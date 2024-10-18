@@ -1,6 +1,5 @@
 import pickle
 import os
-from simics import *
 import resimUtils
 SOCKET      =1 
 BIND        =2
