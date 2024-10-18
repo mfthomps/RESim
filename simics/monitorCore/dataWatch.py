@@ -4388,7 +4388,7 @@ class DataWatch():
         #if index == 52:
         #    self.lgr.debug('setOneBreak NOW CALL v2p')
         self.lgr.debug('setOneBreak index %d' % index)
-        phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=True)
+        phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=False)
         #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
         #if index == 52:
         #    self.lgr.debug('setOneBreak index self.start[%d] = 0x%x phys: 0x%x cr3 0x%x' % (index, self.start[index], phys, self.range_cr3[index]))
