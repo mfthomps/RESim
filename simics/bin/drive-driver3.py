@@ -17,8 +17,6 @@ resim_dir = os.getenv('RESIM_DIR')
 user_name = os.getenv('USER')
 core_path=os.path.join(resim_dir,'simics', 'monitorCore')
 sys.path.append(core_path)
-import runAFL
-import resimUtils
 def expandValue(value): 
     if value.startswith('$'):
         if os.path.sep in value:
