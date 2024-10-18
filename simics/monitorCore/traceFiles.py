@@ -25,6 +25,8 @@
 '''
 Mirror reads or writes to files or file descriptors. 
 Use the raw option to avoid changes to the mirrored output.
+If the file descriptor is from a bind, subsequent accepts will
+tracke io to the new FD (assuming sharedSyscall calls our accept)
 '''
 class TraceFiles():
     class FileWatch():
@@ -45,6 +47,7 @@ class TraceFiles():
         ''' for including file traces in watch marks '''
         self.dataWatch = None
         self.raw = False
+        self.binders = {}
 
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
@@ -56,9 +59,11 @@ class TraceFiles():
                 fh.write('start of RESim copy of %s\n' % outfile) 
             self.watched_files.append(path)
 
+
     def watchFD(self, fd, outfile, raw=False):
         if fd in self.open_files:
             print('FD %d already being watched' % fd)
+            self.lgr.debug('traceFiles watchFD FD %d already being watched' % fd)
             return
         self.raw = raw
         self.open_files[fd] = self.FileWatch(None, outfile)
@@ -75,7 +80,11 @@ class TraceFiles():
                 pass
         self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
         self.tracing_fd.append(fd)
-        
+
+    def accept(self, tid, fd, new_fd):
+        if fd in self.open_files:
+            self.binders[new_fd] = fd
+            self.lgr.debug('TraceFiles accept new fd %d for open_files %d' % (new_fd, fd))
 
     def open(self, path, fd):
         if path in self.path_list:
@@ -110,11 +119,19 @@ class TraceFiles():
                 index += 1
         return retval 
 
-    def read(self, tid, fd, the_bytes):
+    def read(self, tid, fd_in, the_bytes):
+        if fd_in in self.binders:
+            fd = self.binders[fd_in]
+        else:
+            fd = fd_in 
         self.lgr.debug('traceFiles read')
         self.io(tid, fd, the_bytes, read=True)
 
-    def write(self, tid, fd, the_bytes):
+    def write(self, tid, fd_in, the_bytes):
+        if fd_in in self.binders:
+            fd = self.binders[fd_in]
+        else:
+            fd = fd_in 
         self.lgr.debug('traceFiles write')
         self.io(tid, fd, the_bytes, read=False)
 

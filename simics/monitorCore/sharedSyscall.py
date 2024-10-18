@@ -393,6 +393,8 @@ class SharedSyscall():
                     binders = socket_syscall.getBinders()
                     if binders is not None:
                         binders.accept(tid, exit_info.old_fd, new_fd)
+                if self.traceFiles is not None:
+                    self.traceFiles.accept(tid, exit_info.old_fd, new_fd)
             elif exit_info.old_fd is not None:
                 trace_msg = trace_msg+('sock_fd: %d  new_fd: %d NULL addr\n' % (exit_info.old_fd, new_fd))
             else:
