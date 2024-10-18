@@ -3666,9 +3666,9 @@ class GenMonitor():
                 cpu, comm, tid = self.task_utils[target].curThread() 
     
             if not just_input:
-                accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
                 # add open to catch Dmods for open_replace
                 calls = ['open', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+                accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
@@ -3705,6 +3705,9 @@ class GenMonitor():
                     calls.remove('recv')
                 else: 
                     calls = ['read', 'close', 'socketcall', 'ioctl', 'select', 'pselect6', '_newselect']
+                accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
+                for c in accept_call:
+                    calls.append(c)
 
             calls.append('clone')
             if self.mem_utils[target].WORD_SIZE == 8:
