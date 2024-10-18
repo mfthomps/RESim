@@ -252,7 +252,7 @@ class EPollWaitInfo():
         self.maxevents = maxevents
         self.timeout = timeout
     def toString(self):
-        retval = 'epfd: %d events: 0x%x maxevents: %d  timeout: %d' % (self.epfd, self.events, self.maxevents, self.timeout)
+        retval = 'epfd: %d events: 0x%x maxevents: %d  timeout: 0x%x' % (self.epfd, self.events, self.maxevents, self.timeout)
         return retval
 class EPollInfo():
     EPOLL_CTL_ADD = 1
@@ -609,7 +609,7 @@ class Syscall():
                         break_list.append(proc_break1)
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break1, 'syscall'))
                 else:
-                    self.lgr.debug('SysCall no call list, no breaks set.  parms: %s' % self.param.getParamString())
+                    self.lgr.debug('SysCall no call list, no breaks set.  params: %s' % self.param.getParamString())
                 if self.param.compat_32_entry is not None and self.param.compat_32_entry != 0:
                     ''' support 32 bit compatability '''
                     self.alt_syscall_info = copy.copy(self.syscall_info)
@@ -752,8 +752,9 @@ class Syscall():
         #        #return None, None, None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         if callname == 'openat':
-            ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s  dirfd: %d  tid:%s (%s)' % (callname, flags, 
-                oct(mode), fname_addr, fname, frame['param1'], tid, comm)
+            fd = resimUtils.fdString(frame['param1'])
+            ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s  dirfd: %s  tid:%s (%s)' % (callname, flags, 
+                oct(mode), fname_addr, fname, fd, tid, comm)
         else:
             ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, oct(mode), fname_addr, fname, tid, comm)
 
@@ -1618,7 +1619,7 @@ class Syscall():
                         
                 #SIM_break_simulation('fname is none...')
             elif exit_info.fname is not None:
-                self.lgr.debug('syscallParse got fname %s' % exit_info.fname)
+                self.lgr.debug('syscallParse got fname %s ida_msg is %s' % (exit_info.fname, ida_msg))
                 for call_param in self.call_params:
                     self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
@@ -1646,7 +1647,7 @@ class Syscall():
                 self.lgr.debug('syscallParse did not get fname')
                          
 
-        if callname == 'mkdir':        
+        elif callname == 'mkdir':        
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None and not quiet:
                 ''' filename not yet present in ram, do the two step '''
@@ -1656,7 +1657,7 @@ class Syscall():
                 self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                 self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
 
-        if callname == 'creat':        
+        elif callname == 'creat':        
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if exit_info.fname is None and not quiet:
                 ''' filename not yet present in ram, do the two step '''
@@ -1702,7 +1703,7 @@ class Syscall():
         elif callname == 'dup':        
             exit_info.old_fd = frame['param1']
             ida_msg = '%s tid:%s (%s) fid:%d' % (callname, tid, comm, frame['param1'])
-        elif callname == 'dup2':        
+        elif callname in ['dup2', 'dup3']:        
             exit_info.old_fd = frame['param1']
             exit_info.new_fd = frame['param2']
             ida_msg = '%s tid:%s (%s) fid:%d newfid:%d' % (callname, comm, tid, frame['param1'], frame['param2'])
@@ -1987,6 +1988,15 @@ class Syscall():
             exit_info.count = frame['param3']
             ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
             self.lgr.debug(ida_msg)
+
+        elif callname == 'readv':
+            exit_info.old_fd = frame['param1']
+            # iovec addr
+            exit_info.retval_addr = frame['param2']
+            # iovcnt
+            exit_info.count = frame['param3']
+            ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
+            self.lgr.debug(ida_msg)
  
         elif callname == 'mmap' or callname == 'mmap2':        
             #self.lgr.debug('syscall mmap')
@@ -2091,7 +2101,7 @@ class Syscall():
                 self.epolls[tid][epfd] = EPollInfo(epfd)
                 self.epolls[tid][epfd].add(fd, events_ptr)
 
-            ida_msg = '%s tid:%s (%s) epfd: %d op: %s FD: %d\n' % (callname, comm, tid, epfd, EPollInfo.EPOLL_OPER[op], fd)
+            ida_msg = '%s tid:%s (%s) epfd: %d op: %s FD: %d\n' % (callname, tid, comm, epfd, EPollInfo.EPOLL_OPER[op], fd)
             #SIM_break_simulation('events_ptr 0x%x' % events_ptr)
             ida_msg = ida_msg+epoll.getEvent(self.cpu, self.mem_utils, events_ptr, self.lgr)
 
@@ -2153,21 +2163,21 @@ class Syscall():
             #SIM_break_simulation(ida_msg)
             #return
         elif callname.startswith('newfstatat'):
-            fd = frame['param1']
+            exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
             fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
             retval_addr = frame['param2']
             exit_info.retval_addr = retval_addr
-            exit_info.old_fd = fd
-            ida_msg = '%s tid:%s (%s) FD: %d file: %s return buffer: 0x%x' % (callname, tid, comm, fd, fname, retval_addr)
+            fd = resimUtils.fdString(exit_info.old_fd)
+            ida_msg = '%s tid:%s (%s) FD: %s file: %s return buffer: 0x%x' % (callname, tid, comm, fd, fname, retval_addr)
         elif callname.startswith('faccessat'):
-            fd = frame['param1']
+            exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
             fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
-            exit_info.old_fd = fd
+            fd = resimUtils.fdString(exit_info.old_fd)
             mode = frame['param3']
             flags = frame['param4']
-            ida_msg = '%s tid:%s (%s) FD: %d file: %s mode: 0x%x flags: 0x%x' % (callname, tid, comm, fd, fname, mode, flags)
+            ida_msg = '%s tid:%s (%s) FD: %s file: %s mode: 0x%x flags: 0x%x' % (callname, tid, comm, fd, fname, mode, flags)
             #SIM_break_simulation(ida_msg)
             #return
         elif callname == 'prctl':
@@ -2215,6 +2225,20 @@ class Syscall():
         elif callname in ['setuid', 'setgid']:
             uid = frame['param1']
             ida_msg = '%s id: %d tid:%s (%s) cycle:0x%x' % (callname, uid, tid, comm, self.cpu.cycles)
+        elif callname == 'link':
+            oldpath_addr = frame['param1']
+            oldpath = self.mem_utils.readString(self.cpu, oldpath_addr, 256)
+            newpath_addr = frame['param2']
+            newpath = self.mem_utils.readString(self.cpu, newpath_addr, 256)
+            ida_msg = '%s tid:%s (%s) oldpath: %s newpath: %s cycle:0x%x' % (callname, tid, comm, oldpath, newpath, self.cpu.cycles)
+        elif callname == 'linkat':
+            olddirfd= resimUtils.fdString(frame['param1'])
+            oldpath_addr = frame['param2']
+            oldpath = self.mem_utils.readString(self.cpu, oldpath_addr, 256)
+            newdirfd = resimUtils.fdString(frame['param3'])
+            newpath_addr = frame['param4']
+            newpath = self.mem_utils.readString(self.cpu, newpath_addr, 256)
+            ida_msg = '%s tid:%s (%s) olddirfd: %s oldpath: %s newdirfd: %s newpath: %s cycle:0x%x' % (callname, tid, comm, olddirfd, oldpath, newdirfd, newpath, self.cpu.cycles)
         elif callname in ['unlink']:
             exit_info.fname_addr = frame['param1']
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
@@ -2247,6 +2271,7 @@ class Syscall():
             #if ida_msg is not None and self.traceMgr is not None and (len(self.call_params) == 0 or exit_info.call_params is not None):
             if ida_msg is not None and self.traceMgr is not None:
                 if len(ida_msg.strip()) > 0:
+                    #self.lgr.debug('syscall call traceMgr with %s' % (ida_msg))
                     self.traceMgr.write(ida_msg+'\n')
 
         if do_stop_from_call:
@@ -2908,7 +2933,7 @@ class Syscall():
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
-            self.lgr.debug('setExits set count to parm3 now 0x%x' % exit_info.count)
+            self.lgr.debug('setExits set count to param3 now 0x%x' % exit_info.count)
 
             the_callname = callname
             if callname == 'socketcall' or callname.upper() in net.callname:
@@ -3081,7 +3106,7 @@ class Syscall():
     def checkSendParams(self, syscall_info, exit_info, ss, dest_ss, s):
             for call_param in self.call_params:
                 self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
-                if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == ss.fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params.append(call_param)
                     break
