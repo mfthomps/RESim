@@ -4,6 +4,15 @@ import json
 import binascii
 import argparse
 
+def doWeb(packet, pack_list):
+    delim = b"\r\n\r\n"
+    parts = packet.split(delim)
+    for item in parts:
+        data = item+delim
+        pack_list.append(str(binascii.hexlify(data)))
+
+    print('num parts is %d' % len(parts))
+
 def doJson(args):
     if args.output:
         outfile = args.output
@@ -16,8 +25,11 @@ def doJson(args):
     for f in flist:
         with open(f, 'rb') as fh:
             packet = fh.read()
-            #pack_list.append(bytes.decode(packet, encoding='unicode-escape'))
-            pack_list.append(str(binascii.hexlify(packet)))
+            if args.web:
+                doWeb(packet, pack_list)
+            else:
+                #pack_list.append(bytes.decode(packet, encoding='unicode-escape'))
+                pack_list.append(str(binascii.hexlify(packet)))
 
     if args.host is None:
         # JSON will only contain data, e.g., for use by drive driver
@@ -44,6 +56,7 @@ def main():
     parser.add_argument('-i', '--host', action='store', help='IP of host.')
     parser.add_argument('-p', '--port', action='store', help='TCP Port.')
     parser.add_argument('-g', '--hang', action='store_true', help='Leave connection open.')
+    parser.add_argument('-w', '--web', action='store_true', help='Parse each input file for 0x0d0a sequences and break those into individual json entries, intended for consuming data captured from web sessions.')
     args = parser.parse_args()
     doJson(args)
 
