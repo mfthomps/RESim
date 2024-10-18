@@ -984,13 +984,13 @@ class SharedSyscall():
                 trace_msg = trace_msg+('FD: %d exception %d\n' % (exit_info.old_fd, eax))
                 exit_info.matched_param = None
 
-        elif callname == 'writev':
+        elif callname == 'writev' or callname == 'readv':
             if eax >= 0:
                 limit = min(10, exit_info.count)
                 iov_size = 2*self.mem_utils.WORD_SIZE
                 iov_addr = exit_info.retval_addr
                 remain = eax 
-                self.lgr.debug('sharedSyscall writev return count %d iov_addr 0x%x' % (eax, iov_addr))
+                self.lgr.debug('sharedSyscall %s return count %d iov_addr 0x%x' % (callname, eax, iov_addr))
                 trace_msg = trace_msg+('FD: %d count: %d' % (exit_info.old_fd, eax))
                 for i in range(limit):
                     base = self.mem_utils.readPtr(self.cpu, iov_addr)
@@ -1012,7 +1012,7 @@ class SharedSyscall():
                     else:
                         s = '<<NOT MAPPED>>'
 
-                    self.lgr.debug('sharedSyscall writev base: 0x%x length: %d data: %s' % (base, length, s))
+                    self.lgr.debug('sharedSyscall %s base: 0x%x length: %d data: %s' % (callname, base, length, s))
                     trace_msg = trace_msg+' buffer: 0x%x len: %d data: %s' % (base, length, s)
                     remain = remain - data_len 
                     iov_addr = iov_addr+iov_size
@@ -1131,7 +1131,7 @@ class SharedSyscall():
                 if tid in self.trace_procs:
                     self.traceProcs.dup(tid, exit_info.old_fd, eax)
                 trace_msg = trace_msg+('old_fd: %d new: %d\n' % (exit_info.old_fd, eax))
-        elif callname == 'dup2':
+        elif callname in ['dup2', 'dup3']:
             #self.lgr.debug('return from dup2 tid:%s eax %x, old_fd is %d new_fd %d' % (tid, eax, exit_info.old_fd, exit_info.new_fd))
             if eax >= 0:
                 if exit_info.old_fd != exit_info.new_fd:
