@@ -316,7 +316,7 @@ The {\tt trackIO} command (see \ref{tracking}) can be directed to include traced
 time line of watch marks.
 
 \item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in ./logs/output-fd-[FD].log   Assumes traceAll is set.  Use {\tt raw=True} to capture 
-raw binary output.
+raw binary output.  If the given FD is for a bind, then subsequent calls to accept will cause I/O to the new FD to be captured.
 
 \item {\tt buffer tracing} – Use the {\tt TRACE\_BUFFERS} environment variable to report on use of debug buffers.  Syntax of each line is:
 \label{buffer-tracing}
@@ -410,6 +410,12 @@ detect and report mem operations, e.g., memcpy -- and then refresh the IDA Data 
 If you prefix the given process name with {\tt sh }, (sh followed by a space), RESim will look for a shell invocation of the script name that follows the sh.
 The {\tt trace\_threads} flag controls whether shared libraries of other processes will be tracked while looking for the given process.  The {\tt new} flag ignores any currently 
 running process and looks for a new creation.  This is useful for processes that start, die, and start again for whatever reason.
+
+Note that the initial execution of a target process may not be the ideal state for a snapshot from which to interact with it, i.e., 
+you may want to let the rest of the system initialize and settle out.  To achieve that, use noReverse() to disable reversing and then run forward until the
+Simics \textit{ptime} command reflects that the system is not bogged down with initialization.  Then create your snapshot.  The state of the snapshot may not 
+have the target process scheduled,  but when you subsequently run debugSnap (see below), it will run forward to your process.  If your process is blocked in
+the kernel waiting for input, you may need to provide that input to see your process scheduled so that you can issue commands.
 
 \item {\tt debugTidGroup(tid)} -- Initiate the debugger server for a given TID.  Intended for use after starting a session from a checkpoint created using
 {\tt writeConfig}.  This assumes process information had been generated in a previous session that was saved.  
@@ -3459,7 +3465,7 @@ The following Simics command provides real-network access to this sample driver:
 \end{verbatim}
 Once the driver is booted, you can then ssh to it using:
 \begin{verbatim}
-  ssh -p 4022 localhost
+  ssh -p 4022 mike@localhost
 \end{verbatim}
 You should first put Simics in real-time mode ({\tt enable-real-time-mode} to avoid timeouts.  You may also need to clear out the
 ssh keys used by localhost, e.g.,:
@@ -3481,7 +3487,8 @@ during the simulation.  Take care to reset the reversing origin after you are do
 
 Setting up a proxy from your local host through the driver to the target can be done using ssh tunneling.  For example, to proxy to a web server:
 \begin{verbatim}
-ssh -p 4022 -AfN -L 8081:10.0.0.10:80 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null -o "ServerAliveInterval 60" localhost
+ssh -p 4022 -AfN -L 8081:10.0.0.10:80 -oStrictHostKeyChecking=no -oUserKnownHostsFile=/dev/null \
+         -o "ServerAliveInterval 60" mike@localhost
 \end{verbatim}
 
 \subsection{Notes on updating the driver}
