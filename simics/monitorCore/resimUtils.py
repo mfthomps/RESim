@@ -4,6 +4,8 @@ import time
 import logging
 import subprocess
 import elfText
+import net
+import memUtils
 import json
 import re
 import fnmatch
@@ -640,3 +642,13 @@ def getLoadOffsetFromSO(so_json, prog, lgr=None):
     if not wrong_file:
         retval = offset
     return retval 
+
+def fdString(fd):
+    if memUtils.isNull(fd):
+        return 'NULL'
+    elif fd == 0xffffff9c:
+        return 'AT_FD_CWD'
+    elif fd == 0xffffffffffffff9c:
+        return 'AT_FD_CWD'
+    else:
+        return '%d' % fd
