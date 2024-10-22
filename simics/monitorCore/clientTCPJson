@@ -64,15 +64,30 @@ def sendTCP(lgr):
             except(socket.error) as e:
                 lgr.debug('connect fail %s' % e)
                 time.sleep(1)
-            
+        #TBD REMOVE/FIX
+        delim = b"\r\n\r\n"
         for item in data:
             item_hex = eval(item)
             item_bytes = binascii.unhexlify(item_hex)
             sock.sendall(item_bytes) 
             lgr.debug('sent %d bytes' % len(item_bytes))
-            #got = sock.recv(1024)
-            #lgr.debug('got %s' % got)
-            time.sleep(1)
+            done = False
+            count = 0
+            while not done:
+                got = sock.recv(1024)
+                lgr.debug('got len %d %s' % (len(got), got))
+                #if got.endswith(delim): 
+                if len(got) == 1024:
+                    # dangerous assumption
+                    pass
+                elif len(got) > 1:
+                    done = True
+                    time.sleep(1)
+                else:
+                    time.sleep(1)
+                    count = count+1
+                    if count > 10:
+                        break
         if hang:
                 lgr.debug('hanging as directed')
                 time.sleep(1000000)
