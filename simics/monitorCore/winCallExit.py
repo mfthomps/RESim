@@ -31,7 +31,6 @@ import ipc
 import allWrite
 import syscall
 import resimUtils
-import epoll
 from resimHaps import *
 import winNTSTATUS
 '''
