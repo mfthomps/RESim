@@ -886,7 +886,7 @@ class GenMonitor():
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
-            self.traceFiles[cell_name] = traceFiles.TraceFiles(self.traceProcs[cell_name], self.lgr)
+            self.traceFiles[cell_name] = traceFiles.TraceFiles(self, self.traceProcs[cell_name], self.lgr, cpu)
             self.sharedSyscall[cell_name] = sharedSyscall.SharedSyscall(self, cpu, cell, cell_name, self.param[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.traceProcs[cell_name], self.traceFiles[cell_name], 
@@ -2798,11 +2798,11 @@ class GenMonitor():
         if self.target not in self.trace_all:
             self.traceAll()
 
-    def traceFD(self, fd, raw=False):
+    def traceFD(self, fd, raw=False, web=False):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
         self.lgr.debug('traceFD %d target is %s' % (fd, self.target))
         outfile = 'logs/output-fd-%d.log' % fd
-        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw)
+        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web)
 
     def exceptHap(self, cpu, one, exception_number):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
