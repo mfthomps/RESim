@@ -10,7 +10,6 @@ import stopFunction
 import pageUtils
 import elfText
 import dmod
-import epoll
 import resimUtils
 import sys
 import copy
@@ -234,26 +233,44 @@ class SelectInfo():
         return retval
 
 class EPollEvent():
-    def __init__(self, events, data):
-        self.events = events
-        self.data = data
-
-class EPollData():
-    def __init__(self, ptr, fd, u32, u64):
-        self.ptr = ptr
-        self.fd = fd
-        self.u32 = u32
-        self.u64 = u64
+    def __init__(self, events_ptr, cpu, mem_utils, lgr=None):
+        self.events = mem_utils.readWord32(cpu, events_ptr)
+        if lgr is not None:
+            if self.events is not None:
+                lgr.debug('EPollEvent events_ptr 0x%x got events 0x%x' % (events_ptr, self.events))
+            else:
+                lgr.debug('EPollEvent events_ptr 0x%x got None' % events_ptr)
+        data_ptr = events_ptr + 4
+        self.data = mem_utils.readWord(cpu, data_ptr)
+        if lgr is not None:
+            if self.data is not None:
+                lgr.debug('EPollEvent data_ptr 0x%x got data 0x%x' % (data_ptr, self.data))
+            else:
+                lgr.debug('EPollEvent data_ptr 0x%x got None' % data_ptr)
+    def toString(self):
+        if self.events is not None:
+            if self.data is not None:
+                retval = 'events: 0x%x data 0x%x' % (self.events, self.data)
+            else:
+                retval = 'events: 0x%x data is NONE?' % (self.events)
+        else:
+            retval = 'Events is None?'
+        return retval
 
 class EPollWaitInfo():
-    def __init__(self, epfd, events, maxevents, timeout):
+    def __init__(self, epfd, events, maxevents, timeout, epoll_info):
         self.epfd = epfd
         self.events = events
         self.maxevents = maxevents
         self.timeout = timeout
+        self.epoll_info = epoll_info
     def toString(self):
-        retval = 'epfd: %d events: 0x%x maxevents: %d  timeout: 0x%x' % (self.epfd, self.events, self.maxevents, self.timeout)
+        if self.epoll_info is not None:
+            retval = 'epfd: %d events: 0x%x maxevents: %d  timeout: 0x%x %s' % (self.epfd, self.events, self.maxevents, self.timeout, self.epoll_info.toString())
+        else:
+            retval = 'epfd: %d events: 0x%x maxevents: %d  timeout: 0x%x (no epoll_info)' % (self.epfd, self.events, self.maxevents, self.timeout)
         return retval
+
 class EPollInfo():
     EPOLL_CTL_ADD = 1
     EPOLL_CTL_DEL = 2
@@ -264,8 +281,11 @@ class EPollInfo():
         def __init__(self, fd, events):
             self.fd = fd
             self.events = events
-    def __init__(self, epfd):
+    def __init__(self, epfd, cpu, mem_utils, lgr):
         self.epfd = epfd
+        self.cpu = cpu
+        self.mem_utils = mem_utils
+        self.lgr = lgr
         self.fd_set = []
     def add(self, fd, events):
         entry = self.FDS(fd, events)
@@ -275,6 +295,20 @@ class EPollInfo():
             if entry.fd == fd:
                 return True
         return False
+    def findFD(self, event):
+        retval = None
+        for entry in self.fd_set:
+            if entry.events.data == event.data:
+                retval = entry.fd
+        return retval
+ 
+    def toString(self):
+        retval = ''
+        for entry in self.fd_set:
+            event_string = entry.events.toString()
+            retval = ' FD: %d events: %s' % (entry.fd, event_string)
+        return retval
+
 
 class PollInfo():
     class FDS():
@@ -1683,7 +1717,7 @@ class Syscall():
             self.sockwatch.close(tid, fd)
 
             for call_param in self.call_params:
-                self.lgr.debug('syscall close call_param match_param %s' % str(call_param.match_param))
+                self.lgr.debug('syscall close FD: %d call_param match_param %s call_param.proc %s' % (fd, str(call_param.match_param), str(call_param.proc)))
                 if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     ida_msg = 'Closed FD %d' % fd
                     self.lgr.debug(ida_msg)
@@ -2091,26 +2125,38 @@ class Syscall():
                     exit_info.call_params.append(call_param)
 
         elif callname == 'epoll_ctl':
-            epfd = frame['param1']
+            epfd = resimUtils.fdString(frame['param1'])
             op = frame['param2']
             fd = frame['param3']
             events_ptr = frame['param4']
             if tid not in self.epolls:
                 self.epolls[tid] = {}
-            if epfd not in self.epolls[tid]:
-                self.epolls[tid][epfd] = EPollInfo(epfd)
-                self.epolls[tid][epfd].add(fd, events_ptr)
+            # read events struct from events_ptr)
+            if events_ptr != 0 and epfd != 'NULL':
+                if frame['param1'] not in self.epolls[tid]:
+                    self.epolls[tid][frame['param1']] = EPollInfo(frame['param1'], self.cpu, self.mem_utils, self.lgr)
+                events = EPollEvent(events_ptr, self.cpu, self.mem_utils, lgr=self.lgr) 
+                self.epolls[tid][frame['param1']].add(fd, events)
 
-            ida_msg = '%s tid:%s (%s) epfd: %d op: %s FD: %d\n' % (callname, tid, comm, epfd, EPollInfo.EPOLL_OPER[op], fd)
-            #SIM_break_simulation('events_ptr 0x%x' % events_ptr)
-            ida_msg = ida_msg+epoll.getEvent(self.cpu, self.mem_utils, events_ptr, self.lgr)
+                ida_msg = '%s tid:%s (%s) epfd: %s op: %s FD: %d events_ptr: 0x%x\n' % (callname, tid, comm, epfd, EPollInfo.EPOLL_OPER[op], fd, events_ptr)
+                ida_msg = ida_msg+events.toString()
+            else:
+                ida_msg = '%s tid:%s (%s) epfd: %s \n' % (callname, tid, comm, epfd)
 
             self.lgr.debug(ida_msg)
 
         elif callname == 'epoll_wait' or callname == 'epoll_pwait':
-            exit_info.epoll_wait = EPollWaitInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'])
-            exit_info.old_fd = frame['param1']
-            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.epoll_wait.toString())
+            epfd = frame['param1']
+            if tid in self.epolls and epfd in self.epolls[tid]:
+                epoll_info = self.epolls[tid][epfd]
+                exit_info.epoll_wait = EPollWaitInfo(epfd, frame['param2'], frame['param3'], frame['param4'], epoll_info)
+                exit_info.old_fd = frame['param1']
+                ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.epoll_wait.toString())
+            else:
+                exit_info.epoll_wait = EPollWaitInfo(epfd, frame['param2'], frame['param3'], frame['param4'], None)
+                exit_info.old_fd = frame['param1']
+                ida_msg = '%s tid:%s (%s) Did not find epoll_ctl for this epfd for this tid %s\n' % (callname, tid, comm, exit_info.epoll_wait.toString())
+               
             self.lgr.debug(ida_msg)
 
         elif callname == 'timerfd_settime':
