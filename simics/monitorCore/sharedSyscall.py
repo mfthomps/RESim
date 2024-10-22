@@ -30,7 +30,6 @@ import ipc
 import allWrite
 import syscall
 import resimUtils
-import epoll
 import winCallExit
 from resimHaps import *
 '''
@@ -769,6 +768,8 @@ class SharedSyscall():
                 ''' must be repeated hap or trackThreads already added the clone '''
                 self.lgr.debug('exitHap clone repeated call? tid: %s eax %d' % (tid, eax))
                 trace_msg = trace_msg+('new tid:%s\n' % (eax))
+            if self.traceFiles is not None:
+                self.traceFiles.clone(tid, str(eax))
                 
             if exit_info.matched_param is not None:
                 if exit_info.matched_param.nth is not None:
@@ -1133,6 +1134,8 @@ class SharedSyscall():
                 if tid in self.trace_procs:
                     self.traceProcs.dup(tid, exit_info.old_fd, eax)
                 trace_msg = trace_msg+('old_fd: %d new: %d\n' % (exit_info.old_fd, eax))
+                if self.traceFiles is not None:
+                    self.traceFiles.dup(exit_info.old_fd, eax)
         elif callname in ['dup2', 'dup3']:
             #self.lgr.debug('return from dup2 tid:%s eax %x, old_fd is %d new_fd %d' % (tid, eax, exit_info.old_fd, exit_info.new_fd))
             if eax >= 0:
@@ -1142,6 +1145,7 @@ class SharedSyscall():
                     trace_msg = trace_msg+('old_fd: %d new: %d\n' % (exit_info.old_fd, eax))
                 else:
                     trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (eax))
+                self.traceFiles.dup(exit_info.old_fd, exit_info.new_fd)
         elif callname == 'mmap2' or callname == 'mmap':
                 self.lgr.debug('sharedSyscall exitHap for %s' % callname)
                 # TBD still need error detection/handline
@@ -1251,12 +1255,20 @@ class SharedSyscall():
         elif callname == 'socketcall' or callname.upper() in net.callname:
             trace_msg = self.doSockets(exit_info, eax, tid, comm)
         elif callname == 'epoll_wait' or callname == 'epoll_pwait':
+             # epoll_wait.events is the epoll_event ptr
              cur_ptr = exit_info.epoll_wait.events
              trace_msg = trace_msg+('epfd: %d eax %d maxevents: %d cur_ptr: 0x%x\n' % (exit_info.old_fd, eax, exit_info.epoll_wait.maxevents, cur_ptr))
              self.lgr.debug(trace_msg)
+             epoll_info = exit_info.epoll_wait.epoll_info
              for i in range(eax):
-                 trace_msg = trace_msg+epoll.getEvent(self.cpu, self.mem_utils, cur_ptr, self.lgr)
+                 events = syscall.EPollEvent(cur_ptr, self.cpu, self.mem_utils)
+                 trace_msg = trace_msg+' '+events.toString()
+                 if epoll_info is not None:
+                     match_fd = epoll_info.findFD(events)
+                     if match_fd is not None:
+                         trace_msg = trace_msg + 'FD: %d' % match_fd 
                  cur_ptr = cur_ptr+4+self.mem_utils.WORD_SIZE+12
+             trace_msg = trace_msg+'\n'
         elif callname == 'eventfd' or callname == 'eventfd2':
              trace_msg = trace_msg+('FD: %d\n' % (eax))
         elif callname == 'timerfd_create':
