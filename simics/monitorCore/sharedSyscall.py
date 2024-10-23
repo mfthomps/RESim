@@ -625,7 +625,7 @@ class SharedSyscall():
         if cpu is None:
             self.lgr.error('sharedSyscall exitHap got nothing from curThread')
             return
-        #self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
+        self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
         if tid == '1' and self.hack_exit_tid != '1':
             self.lgr.debug('sharedSyscall exitHap tid 1 bail')
             return
@@ -807,6 +807,9 @@ class SharedSyscall():
             #fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
             if exit_info.fname is None:
                 #ptable_info = pageUtils.findPageTableIA32E(self.cpu, exit_info.fname_addr, self.lgr)
+                if exit_info.fname_addr is None:
+                    self.lgr.debug('sharedSyscall %s no fname_addr, debug starting in kernel???' % callname)
+                    return
                 if tid != '1':
                     self.lgr.error('fname is None? in exit from open tid:%s fname addr was 0x%x' % (tid, exit_info.fname_addr))
                     SIM_break_simulation('fname is none on exit of open')
@@ -921,7 +924,17 @@ class SharedSyscall():
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
                     for call_param in exit_info.call_params:
-                        if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+
+                        if type(call_param.match_param) is str:
+                            self.lgr.debug('syscall read match param for tid:%s is string, check match' % tid)
+                            if byte_array is not None:
+                                if resimUtils.isPrintable(byte_array):
+                                    s = ''.join(map(chr,byte_array))
+                                    if call_param.match_param in s:
+                                       exit_info.matched_param = call_param 
+                                       self.lgr.debug('syscall read match param for tid:%s is matching string' % tid)
+
+                        elif call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
                             self.lgr.debug('sharedSyscall %s read check dmod %s count %d' % (self.cell_name, dmod.getPath(), eax))
                             if dmod is not None and dmod.getComm() is not None and dmod.getComm() != comm:
@@ -951,7 +964,6 @@ class SharedSyscall():
                                     print('%s performed' % dmod.getPath())
                                 if call_param.break_simulation:
                                     SIM_break_simulation('dmod break simulation')
-
                 
 
             elif exit_info.old_fd is not None:
