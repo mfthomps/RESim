@@ -5,11 +5,10 @@ import binascii
 import argparse
 
 def doWeb(packet, pack_list):
-    delim = b"\r\n\r\n"
+    delim = b"RESIM_WEB_DELIM"
     parts = packet.split(delim)
     for item in parts:
-        data = item+delim
-        pack_list.append(str(binascii.hexlify(data)))
+        pack_list.append(str(binascii.hexlify(item)))
 
     print('num parts is %d' % len(parts))
 
