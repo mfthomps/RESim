@@ -1100,7 +1100,8 @@ class StackTrace():
                                 first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
                                 #self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
                                 cur_fun = self.fun_mgr.getFun(call_ip)
-                                cur_fun_name = self.fun_mgr.funFromAddr(cur_fun)
+                                if cur_fun is not None:
+                                    cur_fun_name = self.fun_mgr.funFromAddr(cur_fun)
                                 if self.cpu.architecture in ['arm', 'arm64'] and first_instruct[1].lower().startswith('b '):
                                     skip_this = self.checkArmDirect(first_instruct, call_to, prev_ip, ptr, fname, call_ip)
                                 elif self.top.isVxDKM(cpu=self.cpu):
