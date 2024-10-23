@@ -313,6 +313,7 @@ class SOMap():
                 self.prog_base_map[prog_basename] = prog
         eip = None
         interp = None 
+        skip_this = False
         if prog not in self.prog_info:
             elf_info = elfText.getText(path, self.lgr)
             if elf_info is not None:
@@ -338,33 +339,36 @@ class SOMap():
                      
             else:
                 self.lgr.debug('soMap addText no elf info for %s' % path)
-                pass
+                skip_this = True
         else:
             self.lgr.debug('soMap addText prog already in prog_info: %s' % prog)
-        if tid not in self.so_addr_map:    
-            self.so_addr_map[tid] = {}
-            self.so_file_map[tid] = {}
-            self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
-        else:
-            self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
-        if tid in self.prog_start:
-            self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
-        
-        if prog in self.prog_info:    
-            if self.prog_info[prog].dynamic:
-                load_addr = None
-                self.prog_end[tid] = None
+        if not skip_this:
+            if tid not in self.so_addr_map:    
+                self.so_addr_map[tid] = {}
+                self.so_file_map[tid] = {}
+                self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
             else:
-                load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
-                self.prog_end[tid] = self.prog_info[prog].text_end
-            self.prog_start[tid] = load_addr
-            self.text_prog[tid] = prog
-            self.checkSOWatch(load_addr, prog)
-            #size = self.prog_info[prog].text_end - self.prog_start[tid]
-            size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
-            retval = LoadInfo(load_addr, size, interp=interp)
+                self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
+            if tid in self.prog_start:
+                self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
+            
+            if prog in self.prog_info:    
+                if self.prog_info[prog].dynamic:
+                    load_addr = None
+                    self.prog_end[tid] = None
+                else:
+                    load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                    self.prog_end[tid] = self.prog_info[prog].text_end
+                self.prog_start[tid] = load_addr
+                self.text_prog[tid] = prog
+                self.checkSOWatch(load_addr, prog)
+                #size = self.prog_info[prog].text_end - self.prog_start[tid]
+                size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+                retval = LoadInfo(load_addr, size, interp=interp)
+            else:
+                self.lgr.debug('soMap addText prog %s not in prog_info' % prog)
         else:
-            self.lgr.debug('soMap addText prog %s not in prog_info' % prog)
+            self.lgr.debug('soMap addText told to skip %s, maybe not an elf' % prog) 
         return retval
 
     def noText(self, prog, tid):
@@ -641,7 +645,7 @@ class SOMap():
             return None
         retval = tid
         if tid not in self.so_file_map:
-            self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
+            #self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)
@@ -997,9 +1001,10 @@ class SOMap():
         if tid in self.so_file_map:
             del self.so_file_map[tid]
             self.lgr.debug('soMap rmTask so_file_map for tid %s' % tid)
+            self.so_file_map[tid] = {}
 
         if tid in self.so_addr_map:
             del self.so_addr_map[tid]
-            self.lgr.debug('soMap rmTask ao_addr_map for tid %s' % tid)
+            self.lgr.debug('soMap rmTask so_addr_map for tid %s' % tid)
             self.so_addr_map[tid] = {}
         self.cheesy_tid = 0
