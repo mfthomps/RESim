@@ -116,12 +116,13 @@ class FunMgr():
     def funFromAddr(self, addr):
         comm = self.top.getComm(target=self.cell_name)
         fun = None
-        if comm in self.relocate_funs and addr in self.relocate_funs[comm]:
-            self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
-            fun = self.relocate_funs[comm][addr]
-        elif comm in self.ida_funs:
-            self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
-            fun = self.ida_funs[comm].getFunName(addr)
+        if addr is not None:
+            if comm in self.relocate_funs and addr in self.relocate_funs[comm]:
+                self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+                fun = self.relocate_funs[comm][addr]
+            elif comm in self.ida_funs:
+                self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+                fun = self.ida_funs[comm].getFunName(addr)
         return fun
 
     def getFunName(self, addr):
