@@ -317,6 +317,7 @@ time line of watch marks.
 
 \item {\tt traceFD(FD)} – Copy all writes that occur to a given FD, e.g., stdout.  Output is in ./logs/output-fd-[FD].log   Assumes traceAll is set.  Use {\tt raw=True} to capture 
 raw binary output.  If the given FD is for a bind, then subsequent calls to accept will cause I/O to the new FD to be captured.
+Use {\tt web=True} to insert delimiters between the data from each read.  The resulting file can then be provided to genJson.py with the {\tt -w} option go generate a json file to provide drive-driver.
 
 \item {\tt buffer tracing} – Use the {\tt TRACE\_BUFFERS} environment variable to report on use of debug buffers.  Syntax of each line is:
 \label{buffer-tracing}
@@ -1720,8 +1721,9 @@ including multiple IO files on separate lines.
 \item Set SESSION to UDP\_JSON to send a set of UDP packets from a json file generated using the genJson.py utility.
 
 \item Set SESSION to TCP\_JSON to send TCP data from a json file generated using the genJson.py utility.  Each json entry is sent by 
-the client, which then does a recv before sending the next entry.  If you have captured traffic to a web server, e.g., via traceFD,
-provide that file name to genJson.py along with the {\tt --web} option to generate json entries per the {\tt <cr><lf><cr><lf>} delimeters.
+the client, which then sleeps for 1 second before sending the next entry.  If you have captured traffic to a web server via traceFD with
+the {\tt web=True} option,
+provide that file name to genJson.py along with the {\tt --web} option to generate json entries per the delimeters inserted by RESim.
 
 \item The driver can run a TCP server by setting SESSION to {\tt TCP\_SERVER}.  In this case, the server will listen on the IP and port named in the directive.
 When the server accepts a connection, it will send the IO file content and then preform a receive.  
@@ -2839,6 +2841,7 @@ to the driver.  There are several ways to send data to a target computer. The dr
 \item wmMerge.py -- Merge a watch marks report (from saveWatchMarks) into a named system call trace output (from traceAll).
 \item ckptMerge.py -- Use the Simics {\tt checkpoint-merge -c} command to create a sharable checkpoint.  The script first removes all RESim pickle files and
 then restores them and copies them to the merged directory.
+\item genJson.py -- Package input data into a json file to provide to drive-driver, e.g., for a TCP\_JSON session.
 
 \end{itemize}
 
