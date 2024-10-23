@@ -1958,6 +1958,8 @@ class Syscall():
                         #self.lgr.debug('syscall read, is dmod, but comm does not match,  match') 
                         continue
                     exit_info.call_params.append(call_param)
+                if type(call_param.match_param) is str:
+                    exit_info.call_params.append(call_param)
 
         elif callname == 'write':        
             exit_info.old_fd = frame['param1']
