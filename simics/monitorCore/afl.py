@@ -154,11 +154,14 @@ class AFL():
 
         self.resim_ctl = None
         #if resimUtils.isParallel():
-        if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
-            self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
-            self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
-            self.lgr.debug('afl back from open')
-        else: 
+        try:
+            if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
+                self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
+                self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
+                self.lgr.debug('afl back from open')
+            else: 
+                self.lgr.debug('AFL did NOT find resim_ctl.fifo')
+        except FileNotFoundError:
             self.lgr.debug('AFL did NOT find resim_ctl.fifo')
          
         self.starting_cycle = self.target_cpu.cycles 
