@@ -4436,7 +4436,7 @@ class GenMonitor():
        
     def v2p(self, addr, use_pid=None, force_cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid, force_cr3=force_cr3)
+        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid, force_cr3=force_cr3, do_log=True)
         if value is not None:
             print('0x%x' % value)
         else:
@@ -4933,7 +4933,7 @@ class GenMonitor():
             use_cr3 = self.mem_utils[self.target].getKernelSavedCR3()
         else:
             use_cr3 = cr3
-        task_cr3 = self.mem_utils[self.target].readCR3(cpu)
+        task_cr3 = memUtils.getCR3(cpu)
         print('current task cr3 0x%x' % (task_cr3))
         if use_cr3 is not None:
             print('Using cr3 0x%x' % (use_cr3))
