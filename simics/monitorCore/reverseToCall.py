@@ -117,6 +117,7 @@ class reverseToCall():
             self.recent_cycle = {}
             self.jump_stop_hap = None
             self.sysenter_hap = None
+            self.sysenter64_hap = None
             self.page_faults = None
             self.frame_ips = []
             self.uncall_hap = None
@@ -147,6 +148,10 @@ class reverseToCall():
             self.sysenter_hap = None
         else:
            self.lgr.debug('noWatchSysenter, NO ENTER BREAK')
+        if self.sysenter64_hap is not None:
+            self.lgr.debug('reverseToCall noWatchSystenter, remove sysenter64 breaks and hap handle %d' % self.sysenter64_hap)
+            self.context_manager.genDeleteHap(self.sysenter64_hap, immediate=True)
+            self.sysenter64_hap = None
 
     def v2p(self, cpu, v):
         try:
@@ -187,7 +192,7 @@ class reverseToCall():
                 if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
                     self.lgr.debug('watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
                     enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
-                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
+                    self.sysenter64_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
             else:
                 if self.param.sysenter is not None and self.param.sys_entry is not None:
                     self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))

@@ -295,7 +295,7 @@ class StackTrace():
                         else:
                             self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun 0x%x instruct %s' % (fun_hex, cur_fun, instruct[1]))
                     else:
-                        self.lgr.isCallToMe('not a call %s' % (instruct[1]))
+                        self.lgr.debug('not a call %s' % (instruct[1]))
                 elif cur_fun is None:
                     self.lgr.debug('isCallToMe cur_fun is None')
                 else:

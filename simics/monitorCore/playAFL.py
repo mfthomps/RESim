@@ -37,7 +37,7 @@ import os
 import glob
 import pickle
 import json
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,

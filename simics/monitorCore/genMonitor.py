@@ -44,7 +44,8 @@ import sys
 import errno
 import struct
 import resimUtils
-from resimUtils import rprint
+import resimSimicsUtils
+from resimSimicsUtils import rprint
 import memUtils
 import taskUtils
 import genContextMgr
@@ -1169,7 +1170,7 @@ class GenMonitor():
         self.lgr.debug('revToSyscal got cycles 0x%x' % cycles)
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         prev = cycles-1
-        resimUtils.skipToTest(cpu, prev, self.lgr)
+        resimSimicsUtils.skipToTest(cpu, prev, self.lgr)
         print('Reversed to previous syscall:') 
         self.lgr.debug('Reversed to previous syscall:') 
         call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
@@ -1554,7 +1555,7 @@ class GenMonitor():
             rprint('Now debugging %s' % prog_name)
             if self.fun_mgr is None:
                 self.lgr.debug('Warning no fun_mgr is defined.  Do not know what we are debugging?')
-            elif not self.fun_mgr.hasIDAFuns():
+            elif not self.fun_mgr.hasIDAFuns(comm=comm):
                 self.lgr.debug('Warning program functions not found.  Dump functions from IDA or Ghidra')
                 rprint('Warning program functions not found.  Dump functions from IDA or Ghidra')
             if self.debug_callback is not None:
@@ -4313,9 +4314,12 @@ class GenMonitor():
                 print ('cpu cycles 0x%x -- bookmarks return nothing.' % (cpu.cycles))
         
     def continueForward(self):
-        self.lgr.debug('continueForward')
-        self.is_monitor_running.setRunning(True)
-        SIM_continue(0)
+        if not self.isRunning():
+            self.lgr.debug('continueForward')
+            self.is_monitor_running.setRunning(True)
+            SIM_continue(0)
+        else:
+            self.lgr.debug('continueForward, already running')
 
     def showNets(self):
         net_commands = self.netInfo[self.target].getCommands()
@@ -4519,7 +4523,10 @@ class GenMonitor():
         if self.fun_mgr is None:
             print('No funManager loaded, debugging?')
             return
-        if not self.fun_mgr.hasIDAFuns():
+
+        debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
+        comm = self.task_utils[self.target].getCommFromTid(debug_tid)
+        if not self.fun_mgr.hasIDAFuns(comm=comm):
             print('No functions defined, needs IDA or Ghidar analysis.')
             return
            
@@ -6335,11 +6342,12 @@ class GenMonitor():
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
         self.context_manager[self.target].setReverseContext()
-        resimUtils.skipToTest(cpu, cycle, self.lgr)
+        retval = resimSimicsUtils.skipToTest(cpu, cycle, self.lgr)
         self.context_manager[self.target].clearReverseContext()
+        return retval
 
     def cutRealWorld(self):
-        resimUtils.cutRealWorld()
+        resimSimicsUtils.cutRealWorld()
 
     def runTo32(self):
         self.run_to[self.target].runTo32()
@@ -6651,6 +6659,7 @@ class GenMonitor():
     def stackAdjust(self, fun_name):
         adjust = self.fun_mgr.stackAdjust(fun_name)
         print('adjust 0x%x' % adjust)
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

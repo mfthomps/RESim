@@ -149,11 +149,15 @@ class FunMgr():
         if comm in self.user_iterators:
             self.user_iterators[comm].add(fun)
 
-    def hasIDAFuns(self):
-        comm = self.top.getComm(target=self.cell_name)
+    def hasIDAFuns(self, comm=None):
+        if comm is None:
+            comm = self.top.getComm(target=self.cell_name)
         if comm in self.ida_funs: 
             return True
         else:
+            self.lgr.debug('funMgr hasIDAFuns, no funs for comm %s list is:' % (com))
+            for c in self.ida_funs:
+                self.lgr.debug('\t %s' % c)
             return False
 
 

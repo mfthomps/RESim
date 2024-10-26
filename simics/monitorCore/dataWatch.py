@@ -426,7 +426,7 @@ class DataWatch():
             self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
     def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, 
-                 watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False, data_stream=False):
+                 watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False, data_stream=False, kbuffer=None):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
         if self.disabled:
@@ -438,6 +438,7 @@ class DataWatch():
         if length == 0:
             self.lgr.error('dataWatch setRange called with length of zero')
             return
+        self.lgr.debug('dataWatch setRange commence with %s ignore: %r' % (self.commence_with, ignore_commence))
         if self.commence_with is not None and not ignore_commence:
             match = True
             addr = start
@@ -445,13 +446,18 @@ class DataWatch():
                 v = self.mem_utils.readByte(self.cpu, addr)
                 if v is None or c != chr(v):
                     match = False
-                    #self.lgr.debug('dataWatch setRange failed commence. %x does not match %x' % (ord(c), v))
+                    self.lgr.debug('dataWatch setRange failed commence. %x does not match %x' % (ord(c), v))
                     break
                 else:
                     addr = addr + 1
             if match:
                 self.commence_with = None
-                #self.lgr.debug('dataWatch setRange commence matched.')
+                if kbuffer is not None:
+                    self.lgr.debug('dataWatch setRange commence matched, call kbuf and return.  kbuffer will skip back before call and do again.')
+                    kbuffer.gotCommence()
+                    return
+                else:
+                    self.lgr.debug('dataWatch setRange commence matched but no kbuffer')
             else:
                 return
 
@@ -1960,7 +1966,7 @@ class DataWatch():
                 next_instruct = self.cpu.cycles+1
                 status = SIM_simics_is_running() 
                 self.lgr.debug('dataWatch getMemParams, try skipToTest to get to 0x%x simics running? %r' % (next_instruct, status)) 
-                if not resimUtils.skipToTest(self.cpu, next_instruct, self.lgr):
+                if not self.top.skipToCycle(next_instruct, cpu=self.cpu):
                     self.lgr.error('getMemParams, tried going forward, failed')
                     return
                 eip = self.top.getEIP(self.cpu)
@@ -2489,7 +2495,7 @@ class DataWatch():
             #oneless = self.save_cycle -1
             oneless = self.save_cycle 
             self.lgr.debug('undoAlone skip back to 0x%x' % oneless)
-            if not resimUtils.skipToTest(self.cpu, oneless, self.lgr):
+            if not self.top.skipToCycle(oneless, cpu=self.cpu):
                 self.lgr.error('undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
                 return
             eip = self.top.getEIP(self.cpu)
@@ -4663,7 +4669,7 @@ class DataWatch():
         #self.lgr.debug('dataWatch goToMark cycle would be 0x%x' % cycle)
         #return
         if cycle is not None:
-            resimUtils.skipToTest(self.cpu, cycle, self.lgr)
+            self.top.skipToCycle(cycle, cpu=self.cpu)
             retval = cycle
             if cycle != self.cpu.cycles:
                 self.lgr.error('dataWatch goToMark got wrong cycle, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
@@ -4677,7 +4683,7 @@ class DataWatch():
                 cli.quiet_run_command('rev 1')
                 eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
-                    resimUtils.skipToTest(self.cpu, cycle, self.lgr, disable_vmp=True)
+                    self.top.skipToCycle(cycle, cpu=self.cpu)
                     eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
                     self.lgr.error('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x mark cycle: 0x%x Second attempt' % (index, eip, mark_ip, cycle))
@@ -4685,7 +4691,7 @@ class DataWatch():
             else:
                 if self.watchMarks.isCall(index):
                     cycle = self.cpu.cycles+1
-                    if not resimUtils.skipToTest(self.cpu, cycle, self.lgr):
+                    if not self.top.skipToCycle(cycle, cpu=self.cpu):
                         self.lgr.error('dataWatch goToMark got wrong cycle after adjust for call, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
                         retval = None
                     else:
@@ -5327,7 +5333,7 @@ class DataWatch():
     def recordObscureMemcpyEntry(self, rcx):
             ''' we are at the call.  we need to record the function entry, so step 1 '''
             next_cycle = self.cpu.cycles+1
-            if not resimUtils.skipToTest(self.cpu, next_cycle, self.lgr):
+            if not self.top.skipToCycle(next_cycle, cpu=self.cpu):
                 self.lgr.error('recordObscureEntry, tried going forward, failed')
                 return
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
@@ -5357,7 +5363,7 @@ class DataWatch():
             src_ptr, dest_ptr, count = src_dest_count
             ''' we are at the call to a memcpyis whose parameters are on the stack.  we need to record the function entry '''
             next_cycle = self.cpu.cycles+1
-            if not resimUtils.skipToTest(self.cpu, next_cycle, self.lgr):
+            if not self.top.skipToCycle(next_cycle, cpu=self.cpu):
                 self.lgr.error('recordObscureEntry, tried going forward, failed')
                 return
             self.lgr.debug('dataWatch recordObscureMemcpyEntry2')
@@ -5464,6 +5470,12 @@ class DataWatch():
 
     def commenceWith(self, commence_with):
         self.commence_with = commence_with
+ 
+    def hasCommenceWith(self):
+        if self.commence_with is not None:
+            return True
+        else:
+            return False
 
     def loadRingChars(self):
         self.lgr.debug('dataWatch loadRingChars')

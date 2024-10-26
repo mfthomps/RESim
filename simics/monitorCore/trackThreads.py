@@ -27,8 +27,7 @@ class TrackThreads():
         self.exit_hap = {}
         self.call_break = None
         self.call_hap = None
-        self.execve_break = None
-        self.execve_hap = None
+        self.execve_hap = []
         self.finish_hap = {}
         self.finish_break = {}
         self.first_mmap_hap = {}
@@ -48,6 +47,10 @@ class TrackThreads():
             self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
         #self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
+    
+        if len(self.execve_hap) > 0:
+            self.lgr.debug('TrackThreads startTrack called, but already has an execve hap???')
+            return
 
         if not self.top.isWindows(): 
             # TBD move execve hap to syscall and use callback?  not good to duplicate computed entry point handling
@@ -70,8 +73,9 @@ class TrackThreads():
         execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
         if execve_callnum is not None:
             execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
-            self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
-            self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
+            execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+            hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', execve_break, 'trackThreads execve')
+            self.execve_hap.append(hap)
             self.lgr.debug('TrackThreads setExecveBreaks break at 0x%x startTrack' % (execve_entry))
         else:
             self.lgr.error('TrackThreads setExecveBreaks callnum is None')
@@ -84,9 +88,9 @@ class TrackThreads():
         self.lgr.debug('TrackThreads, stop tracking for %s immediate: %r' % (self.cell_name, immediate))
         self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
         self.call_hap = None
-        if self.execve_hap is not None:
-            self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
-            self.execve_hap = None
+        for hap in self.execve_hap:
+            self.context_manager.genDeleteHap(hap, immediate=immediate)
+        self.execve_hap = []
         for tid in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[tid], immediate=immediate)
         self.stopSOTrack(immediate)
@@ -105,7 +109,7 @@ class TrackThreads():
 
     def execveHap(self, dumb, third, forth, memory):
         ''' One of the threads we are tracking is going its own way via an execve, stop watching it '''
-        if self.execve_hap is None:
+        if len(self.execve_hap) == 0: 
             return
         cpu, comm, tid = self.task_utils.curThread() 
         if cpu.cycles == self.last_call_cycle:

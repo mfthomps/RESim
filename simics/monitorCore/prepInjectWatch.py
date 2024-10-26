@@ -53,17 +53,19 @@ class PrepInjectWatch():
         self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
         self.snap_name = snap_name
         self.dataWatch.stopWatch(immediate=True)
-        self.dataWatch.goToMark(watch_mark)
-        mark = self.dataWatch.getMarkFromIndex(watch_mark)
         is_ioctl = False
-        if isinstance(mark.mark, watchMarks.CallMark):
-            msg = mark.mark.getMsg()
-            self.lgr.debug('prepInjectWatch given mark is %s' % msg)
-            if 'ioctl' in msg:
-                is_ioctl = True
-        else:
-            self.lgr.error('prepInjectWatch given mark not a call mark, is %s' % mark.mark.getMsg())
-            self.top.quit()
+        mark = None
+        if watch_mark != 0:
+            self.dataWatch.goToMark(watch_mark)
+            mark = self.dataWatch.getMarkFromIndex(watch_mark)
+            if isinstance(mark.mark, watchMarks.CallMark):
+                msg = mark.mark.getMsg()
+                self.lgr.debug('prepInjectWatch given mark is %s' % msg)
+                if 'ioctl' in msg:
+                    is_ioctl = True
+            else:
+                self.lgr.error('prepInjectWatch given mark not a call mark, is %s' % mark.mark.getMsg())
+                self.top.quit()
         if self.kbuffer is None:
             self.kbuffer = kbuffer.Kbuffer(self.top, self.cpu, self.context_manager, self.mem_utils, self.dataWatch, self.lgr, stop_when_done=True)
             next_call = self.dataWatch.nextCallMark()
@@ -73,7 +75,7 @@ class PrepInjectWatch():
             call_mark = self.dataWatch.getMarkFromIndex(next_call)
             self.dataWatch.goToMark(next_call)
             frame, recent_entry = self.top.getPreviousEnterCycle()
-            if not resimUtils.skipToTest(self.cpu, recent_entry, self.lgr):
+            if not self.top.skipToCycle(recent_entry, self.cpu):
                 self.lgr.error('prepInjectWatch doInject failed skipping to recent_entry 0x%x' % recent_entry)
                 self.top.quit()
                 return
@@ -103,13 +105,16 @@ class PrepInjectWatch():
             if not is_ioctl:
                 ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
                 kcycle = self.kbuffer.getKernelCycleOfWrite() 
-                if not resimUtils.skipToTest(self.cpu, kcycle, self.lgr):
-                    self.lgr.error('prepInjectWatch doInject failed skipping to kcyle 0x%x' % kcycle)
-                    self.top.quit()
-                    return
-                self.lgr.debug('prepInjectWatch doInject jumped to kcycle just before buffer copy 0x%x' % kcycle)
+                if kcycle != self.cpu.cycles:
+                    if not self.top.skipToCycle(kcycle, self.cpu):
+                        self.lgr.error('prepInjectWatch doInject failed skipping to kcycle 0x%x' % kcycle)
+                        #self.top.quit()
+                        return
+                    self.lgr.debug('prepInjectWatch doInject jumped to kcycle just before buffer copy 0x%x' % kcycle)
+                else:
+                    self.lgr.debug('prepInjectWatch doInject was already at kcycle just before buffer copy 0x%x' % kcycle)
             else:
-                if not resimUtils.skipToTest(self.cpu, cycle_was, self.lgr):
+                if not self.top.skipToCycle(cycle_was, self.cpu):
                     self.lgr.error('prepInjectWatch doInject failed skipping to cycle_was 0x%x' % cycle_was)
                     self.top.quit()
                     return
@@ -117,7 +122,11 @@ class PrepInjectWatch():
                 self.read_count_addr = mark.mark.recv_addr
                 self.lgr.debug('prepInjectWatch doInject read_count_addr found 0x%x' % self.read_count_addr)
             kbufs = self.kbuffer.getKbuffers()
-            self.fd = mark.mark.fd
+            if mark is not None:
+                # TBD will the ever be different?
+                self.fd = mark.mark.fd
+            else:
+                self.fd = self.kbuffer.getFD()
 
             ''' Get the read count address, e.g., if windows.  TBD linux?'''
             next_mark = watch_mark+1

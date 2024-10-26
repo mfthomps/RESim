@@ -14,7 +14,7 @@ import resimUtils
 import sys
 import copy
 from resimHaps import *
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 '''
 how does simics not have this in its python sys.path?
 '''
@@ -689,7 +689,7 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
-            self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
+            #self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -700,7 +700,7 @@ class Syscall():
                 if not arm64_app:
                     callname = '%s-arm32' % call
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, callname))
-                self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
+                #self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
             if background:
                 dc = self.context_manager.getDefaultContext()
                 self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -736,7 +736,7 @@ class Syscall():
         self.lgr.debug('syscall stopTrace syscall name %s call_list %s immediat: %r' % (self.name, str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
-            self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
+            #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
 
@@ -745,7 +745,7 @@ class Syscall():
             self.sharedSyscall.stopTrace()
 
         for tid in self.first_mmap_hap:
-            self.lgr.debug('syscall stopTrace, delete mmap hap tid %s' % tid)
+            #self.lgr.debug('syscall stopTrace, delete mmap hap tid %s' % tid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[tid], immediate=immediate)
         self.first_mmap_hap = {}
 
@@ -786,7 +786,7 @@ class Syscall():
         #        #return None, None, None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         if callname == 'openat':
-            fd = resimUtils.fdString(frame['param1'])
+            fd = resimSimicsUtils.fdString(frame['param1'])
             ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s  dirfd: %s  tid:%s (%s)' % (callname, flags, 
                 oct(mode), fname_addr, fname, fd, tid, comm)
         else:
@@ -1425,13 +1425,13 @@ class Syscall():
                             addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                     else:
                         self.lgr.debug('call_param.nth is none, call it matched')
                         addParam(exit_info, call_param)
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                     # keep kernel from triggering data watch mods if just reading more data into buffer
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
@@ -1941,13 +1941,13 @@ class Syscall():
                                 addParam(exit_info, call_param)
                                 if self.kbuffer is not None:
                                     self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
                             self.lgr.debug('syscall read, call_param.nth is none, call it matched')
                             addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
                     #self.lgr.debug('syscall read, is dmod: %s' % call_param.match_param.toString())
@@ -2127,7 +2127,7 @@ class Syscall():
                     exit_info.call_params.append(call_param)
 
         elif callname == 'epoll_ctl':
-            epfd = resimUtils.fdString(frame['param1'])
+            epfd = resimSimicsUtils.fdString(frame['param1'])
             op = frame['param2']
             fd = frame['param3']
             events_ptr = frame['param4']
@@ -2216,13 +2216,13 @@ class Syscall():
             fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
             retval_addr = frame['param2']
             exit_info.retval_addr = retval_addr
-            fd = resimUtils.fdString(exit_info.old_fd)
+            fd = resimSimicsUtils.fdString(exit_info.old_fd)
             ida_msg = '%s tid:%s (%s) FD: %s file: %s return buffer: 0x%x' % (callname, tid, comm, fd, fname, retval_addr)
         elif callname.startswith('faccessat'):
             exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
             fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
-            fd = resimUtils.fdString(exit_info.old_fd)
+            fd = resimSimicsUtils.fdString(exit_info.old_fd)
             mode = frame['param3']
             flags = frame['param4']
             ida_msg = '%s tid:%s (%s) FD: %s file: %s mode: 0x%x flags: 0x%x' % (callname, tid, comm, fd, fname, mode, flags)
@@ -2280,10 +2280,10 @@ class Syscall():
             newpath = self.mem_utils.readString(self.cpu, newpath_addr, 256)
             ida_msg = '%s tid:%s (%s) oldpath: %s newpath: %s cycle:0x%x' % (callname, tid, comm, oldpath, newpath, self.cpu.cycles)
         elif callname == 'linkat':
-            olddirfd= resimUtils.fdString(frame['param1'])
+            olddirfd= resimSimicsUtils.fdString(frame['param1'])
             oldpath_addr = frame['param2']
             oldpath = self.mem_utils.readString(self.cpu, oldpath_addr, 256)
-            newdirfd = resimUtils.fdString(frame['param3'])
+            newdirfd = resimSimicsUtils.fdString(frame['param3'])
             newpath_addr = frame['param4']
             newpath = self.mem_utils.readString(self.cpu, newpath_addr, 256)
             ida_msg = '%s tid:%s (%s) olddirfd: %s oldpath: %s newdirfd: %s newpath: %s cycle:0x%x' % (callname, tid, comm, olddirfd, oldpath, newdirfd, newpath, self.cpu.cycles)
@@ -2470,6 +2470,7 @@ class Syscall():
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
+        #self.lgr.debug('syscallHap addr 0x%x break 0x%x cycle: 0x%x' % (memory.logical_address, break_num, self.cpu.cycles))
         if self.context_manager.isReverseContext():
             return
         if self.cpu.architecture == 'arm64':
@@ -2932,7 +2933,7 @@ class Syscall():
                                 self.lgr.debug('syscall handleReadOrSocket found fd %d, this tid:%s' % (exit_info.old_fd, this_tid))
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall handleReadOrSocket recv kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                             break
        
         else:
@@ -3135,7 +3136,9 @@ class Syscall():
         return retval 
 
     def resetHackCycle(self):
+        self.lgr.debug('syscall resetHackCycle')
         self.hack_cycle= 0
+        self.linger_cycles = []
 
     #def stopOnExit(self):
     #    self.stop_on_exit=True

@@ -147,9 +147,9 @@ class findKernelWrite():
         # TBD does this nonsense mask a simics bug in which the reverse never returns?
         now = self.cpu.cycles
         prev = now - 1
-        if not resimUtils.skipToTest(self.cpu, prev, self.lgr):
+        if not self.top.skipToCycle(prev, cpu=self.cpu):
             self.top.quit()
-        if not resimUtils.skipToTest(self.cpu, now, self.lgr):
+        if not self.top.skipToCycle(now, cpu=self.cpu):
             self.top.quit()
         #SIM_run_alone(SIM_run_command, 'reverse')
         SIM_run_command('reverse')
@@ -715,14 +715,14 @@ class findKernelWrite():
                 self.lgr.error('findKernelWrite backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
             orig_eip = eip
-            resimUtils.skipToTest(self.cpu, previous, self.lgr)
+            self.top.skipToCycle(previous, cpu=self.cpu)
             eip = self.top.getEIP(self.cpu)
             eip = self.top.getEIP(self.cpu)
             if eip == orig_eip:
                 self.lgr.warning('Simics 2 step fu, go forward then reskip...')
                 cli.quiet_run_command('rev 1')
                 eip = self.top.getEIP(self.cpu)
-                resimUtils.skipToTest(self.cpu, previous, self.lgr)
+                self.top.skipToCycle(previous, cpu=self.cpu)
                 eip = self.top.getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('after skip back one, eip 0x%x' % eip)

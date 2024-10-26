@@ -6,7 +6,7 @@ import taskUtils
 import winDelay
 import winSocket
 import net
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 from resimHaps import *
 import syscall
 class WriteData():

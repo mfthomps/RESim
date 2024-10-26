@@ -63,7 +63,7 @@ class reverseToAddr():
         backone = self.cpu.cycles - 1 
         #cmd = 'skip-to cycle = %d ' % backone
         #SIM_run_command(cmd)
-        if not resimUtils.skipToTest(self.cpu, backone, self.lgr):
+        if not self.top.skipToCycle(backone, cpu=self.cpu):
             first = self.top.getFirstCycle()
             self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
         else:

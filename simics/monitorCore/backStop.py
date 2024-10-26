@@ -24,7 +24,7 @@
 '''
 
 from simics import *
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 import logging
 '''
 Manage cycle events to limit how far a session can run without some intervening event.

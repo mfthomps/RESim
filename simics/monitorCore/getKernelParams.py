@@ -33,6 +33,7 @@ import simics
 import memUtils
 import taskUtils
 import resimUtils
+import resimSimicsUtils
 import kParams
 import cellConfig
 import pickle
@@ -416,7 +417,7 @@ class GetKernelParams():
         self.lgr.debug('fsFindAlone, fs_cycles is %d' % self.fs_cycles)
         gotit = False
         for i in range(1,self.fs_cycles):
-            resimUtils.skipToTest(self.cpu, self.fs_start_cycle+i, self.lgr)
+            resimSimicsUtils.skipToTest(self.cpu, self.fs_start_cycle+i, self.lgr)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'fs:' in instruct[1]:
@@ -443,7 +444,7 @@ class GetKernelParams():
         self.lgr.debug('gsFindAlone, gs_cycles is %d' % self.gs_cycles)
         did_offset = []
         for i in range(1,self.gs_cycles):
-            resimUtils.skipToTest(self.cpu, self.gs_start_cycle+i, self.lgr)
+            resimSimicsUtils.skipToTest(self.cpu, self.gs_start_cycle+i, self.lgr)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'gs:' in instruct[1]:
@@ -1515,7 +1516,7 @@ class GetKernelParams():
             self.ignore_mode = True
             here = self.cpu.cycles 
             prev = self.cpu.cycles - 1
-            resimUtils.skipToTest(self.cpu, prev, self.lgr)
+            resimSimicsUtils.skipToTest(self.cpu, prev, self.lgr)
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             self.lgr.debug('entryStopHapARM went back one eip now 0x%x caller %s' % (eip, caller))
             prev_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -1526,7 +1527,7 @@ class GetKernelParams():
                 return
             else:
                 self.lgr.debug('etnryStopHapARM prev_instruct is %s' % prev_instruct[1])
-                resimUtils.skipToTest(self.cpu, here, self.lgr)
+                resimSimicsUtils.skipToTest(self.cpu, here, self.lgr)
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 if caller == 'aarch32':
                     self.param.arm_entry = eip 
@@ -2005,7 +2006,7 @@ class GetKernelParams():
                 print('never found sp_el0 ref')
                 return
             prev = self.cpu.cycles - 1
-            resimUtils.skipToTest(self.cpu, prev, self.lgr)
+            resimSimicsUtils.skipToTest(self.cpu, prev, self.lgr)
             pc = self.mem_utils.getRegValue(self.cpu, 'pc')
             instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             if isinstance(instruct, tuple):

@@ -22,7 +22,7 @@ import winNTSTATUS
 import net
 import winDelay
 from resimHaps import *
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 PROC_CREATE_INFO_OFFSET=0x58
 PROG_NAME_OFFSET=0x18
 def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):

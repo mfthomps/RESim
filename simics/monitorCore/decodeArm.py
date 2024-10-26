@@ -42,6 +42,24 @@ def getOperands(instruct):
     else:
         return None, None
 
+def getOperands3(instruct):
+    op2, op1 = getOperands(instruct)
+    if '[' in op2:
+        parts = op2.split('[')
+        op3 = '['+parts[-1]
+        op2 = parts[0].strip()[:-1]
+    elif ',' in op2:
+        parts = op2.split(',')
+        op2 = parts[0].strip()
+        op3 = parts[1].strip()
+    else:
+        op2 = op2.strip()
+        op3 = None
+    return op3, op2, op1
+       
+    return op3, op2, op1
+
+
 def isIndirect(reg):
     return False    
 

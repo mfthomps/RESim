@@ -97,7 +97,7 @@ class SyscallInstance():
             if param.name in self.param_call_list:
                 # don't error if the param was queued up to be removed from the syscall
                 if not self.syscall.rmRmParam(param.name):
-                    self.lgr.error('syscallManager SyscallInstance addCallParams, %s already in list' % param.name)
+                    self.lgr.error('syscallManager SyscallInstance instance %s addCallParams, %s already in list' % (self.name, param.name))
             else:
                 self.param_call_list[param.name] = call_names
                 self.lgr.debug('syscallManager SyscallInstance %s addCallParams set self.param_call_list[%s] to %s' % (self.name, param.name, call_names))
@@ -246,8 +246,8 @@ class SyscallManager():
             if 'fopen' not in call_list:
                 call_list.append('fopen')
 
-        call_instance = self.findCalls(call_list, context)
-        if call_instance is None:
+        instance_list = self.findCalls(call_list, context)
+        if len(instance_list) == 0:
             if context in self.trace_all:
                 retval = self.trace_all[context] 
                 self.lgr.debug('syscallManager watchSyscall found traceAll, add params to that.')
@@ -272,56 +272,70 @@ class SyscallManager():
                                    stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
                 ''' will have at least one call parameter, perhaps the dummy. '''
                 self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s' % (context, name))
-                call_instance = SyscallInstance(name, call_list, retval, call_params_list, self.lgr)
+                new_instance = SyscallInstance(name, call_list, retval, call_params_list, self.lgr)
                 if context not in self.syscall_dict:
                     self.lgr.debug('syscalManager added context %s to syscall_dict' % context)
                     self.syscall_dict[context] = {}
-                self.syscall_dict[context][name] = call_instance
+                self.syscall_dict[context][name] = new_instance
         else:
-            if call_instance.callsMatch(call_list) or call_instance.hasAllCalls(call_list):
-                call_instance.addCallParams(call_params_list, call_list)
-                self.lgr.debug('syscallManager watchSyscall, did not create new instance for %s, added params to %s' % (name, call_instance.name))
-                retval = call_instance.syscall
+            if len(instance_list) == 1 and (instance_list[0].callsMatch(call_list) or instance_list[0].hasAllCalls(call_list)):
+                instance_list[0].addCallParams(call_params_list, call_list)
+                self.lgr.debug('syscallManager watchSyscall, did not create new instance for %s, added params to %s' % (name, instance_list[0].name))
+                retval = instance_list[0].syscall
                 retval.addCallParams(call_params_list)
                 params_now = retval.getCallParams()
                 self.lgr.debug('syscallManager after added params now:')
                 for p in params_now:
                     self.lgr.debug('\t\t%s' % p.name)
             else:
-                self.lgr.debug('syscallManager watchSyscall given call list has some calls that are and some that are not present in existing calls.  Delete and recreate. given %s' % str(call_list))
+                self.lgr.debug('syscallManager watchSyscall given call list has some calls that are and some that are not present in existing calls.  Delete and recreate. The given requested list is %s' % str(call_list))
 
                 ''' Existing call params to pass to the new syscall AFTER it is constructed.  Will be constructed with just the new params
                     but with the expanded call list
                 '''
-                old_call_params = list(call_instance.syscall.getCallParams())
-
-                existing_call_list = call_instance.call_names
-                ''' Call list to pass to new syscall constructor '''
+                old_call_params = []
                 new_call_list = list(call_list)
-                for call in existing_call_list:
-                    if call not in new_call_list:
-                        new_call_list.append(call)
+                existing_param_call_list = {}
 
-                if kbuffer is None:
-                    kbuffer = call_instance.syscall.kbuffer
-                if callback is not None and call_instance.syscall.callback is not None and callback != call_instance.syscall.callback:
-                    self.lgr.error('syscallManager watchSyscall conflicting callbacks')
-                if callback is None:
-                    callback = call_instance.syscall.callback
-
-                ''' Map of calls for each parameter from previous instance 
-                    Must maintain so we can manage parameter (syscall) deletion
-                '''
-                existing_param_call_list = call_instance.param_call_list 
-               
-                ''' Remove the old system call HAPS and the instance'''
-                call_instance.syscall.stopTrace(immediate=True)
-                del self.syscall_dict[context][call_instance.name]
-                self.lgr.debug('syscallManager deleted syscall instance for syscall name %s, will replace with %s.  The syscall_dict[context] now has %d items' % (call_instance.syscall.name, name, len(self.syscall_dict[context])))
-                for dict_name in self.syscall_dict[context]:
-                    self.lgr.debug('\t dict item: syscallManager dict name %s syscall name %s' % (dict_name, self.syscall_dict[context][dict_name].syscall.name))
+                for call_instance in instance_list:
+    
+                    existing_call_list = list(call_instance.call_names)
+                    self.lgr.debug('syscallManager watchSyscall recreate from existing_call_list: %s' % existing_call_list)
+                    ''' Call list to pass to new syscall constructor '''
+                    for call in existing_call_list:
+                        if call not in new_call_list:
+                            new_call_list.append(call)
+                    for param in call_instance.syscall.getCallParams():
+                        self.lgr.debug('syscallManager watchSyscall consolodate, record param %s as old_call_params' % param.name)
+                        for old_param in old_call_params:
+                            if old_param.name == param.name:
+                                self.lgr.debug('syscallManager watchSyscall consolodate, param %s already in old_call_params' % param.name)
+                            else:
+                                old_call_params.add(param)
+    
+                    if kbuffer is None:
+                        kbuffer = call_instance.syscall.kbuffer
+                    if callback is not None and call_instance.syscall.callback is not None and callback != call_instance.syscall.callback:
+                        self.lgr.error('syscallManager watchSyscall conflicting callbacks')
+                    if callback is None:
+                        callback = call_instance.syscall.callback
+    
+                    ''' Map of calls for each parameter from previous instance 
+                        Must maintain so we can manage parameter (syscall) deletion
+                    '''
+                    for param_name in call_instance.param_call_list:
+                        if param_name in existing_param_call_list:
+                            self.lgr.error('syscallManager merging param_call list got duplicate param_name %s' % param_name)
+                        else:
+                            existing_param_call_list[param_name] = call_instance.param_call_list[param_name]
+                   
+                    ''' Remove the old system call HAPS and the instance'''
+                    call_instance.syscall.stopTrace(immediate=True)
+                    del self.syscall_dict[context][call_instance.name]
+                    self.lgr.debug('syscallManager deleted syscall instance for syscall name %s, will replace with %s.  The syscall_dict[context] now has %d items' % (call_instance.syscall.name, name, len(self.syscall_dict[context])))
 
                 ''' TBD what about flist and stop action?'''
+                self.lgr.debug('syscallManager did consolidate, new_call_list is %s' % str(new_call_list))
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
@@ -455,13 +469,11 @@ class SyscallManager():
         return retval 
 
     def findCalls(self, call_list, context):
-        ''' Return the Syscallinstance that contains at least one call in the given call list if any.
-            Favor the the one with the most matches.
+        ''' Return the Syscallinstances that contain at least one call in the given call list.
         '''
         # TBD does not handle case where on in one and another in another
         self.lgr.debug('syscallManager findCalls for given context %s search for call list: %s' % (context, str(call_list)))   
-        retval = None
-        best_count = 0
+        retval = []
         if context in self.syscall_dict:
             for instance_name in self.syscall_dict[context]:
                 call_instance = self.syscall_dict[context][instance_name]
@@ -469,10 +481,9 @@ class SyscallManager():
                 match_count = 0
                 for call in call_list:
                     if call_instance.hasCall(call):
-                        match_count = match_count + 1
+                        retval.append(call_instance)
                         self.lgr.debug('\tsyscallManager instance %s had call %s' % (call_instance.name, call))
-                if match_count > best_count:
-                    retval = call_instance
+                        break
         else:
             self.lgr.debug('syscallManager findCalls context %s not in syscall_dict' % context)
         return retval 
@@ -543,8 +554,8 @@ class SyscallManager():
         else:
             if context in self.syscall_dict:
                 if len(self.syscall_dict[context]) == 1:
-                    instance = self.findCalls([exception], context)
-                    if instance is None:
+                    instance_list = self.findCalls([exception], context)
+                    if len(instance_list) == 0:
                         ''' only one, but not the exception '''
                         retval = True
                 elif len(self.syscall_dict[context]) > 1:
@@ -639,3 +650,8 @@ class SyscallManager():
 
     def getSharedSyscall(self):
         return self.sharedSyscall
+
+    def clearSyscallCycles(self):
+        for context in self.syscall_dict:
+            for instance in self.syscall_dict[context]:
+                self.syscall_dict[context][instance].syscall.resetHackCycle()

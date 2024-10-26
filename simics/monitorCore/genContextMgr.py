@@ -1453,7 +1453,7 @@ class GenContextMgr():
     def getWatchTids(self):
         self.lgr.debug('getWatchTids len of task_rec_bp is %d  watch_rec_list is %d' % (len(self.task_rec_bp.keys()), len(self.watch_rec_list)))
         #return self.task_rec_bp.keys()
-        return self.watch_rec_list.keys()
+        return self.watch_rec_list.values()
 
     def noWatch(self, tid):
         self.no_watch.append(tid)

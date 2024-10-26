@@ -129,7 +129,7 @@ class PageFaultGen():
         if self.pdir_break is not None:
             #self.lgr.debug('pageFaultGen watchPdir already a break. wanted to set one one 0x%x' % pdir_addr)
             return
-        if self.pdir_addr is None:
+        if pdir_addr is None:
             self.lgr.error('pageFaultGen called with pdir_addr of None')
         
         pcell = self.cpu.physical_memory
@@ -261,7 +261,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
                 fault_addr = self.cpu.iface.int_register.read(reg_num)
-                #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
+                self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
             else:
                 self.lgr.debug('pageFaultHap cr2 reg is NONE????? set to faulting addr to eip 0x%x' % eip)
                 fault_addr = eip
@@ -561,19 +561,19 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             print('skipping back to user space, please wait.')
-            if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+            if not self.top.skipToCycle(target_cycles, self.cpu):
                 return
             print('Completed skip.')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if eip != prec.eip:
-                if not resimUtils.skipToTest(self.cpu, target_cycles-1, self.lgr):
+                if not self.top.skipToCycle(target_cycles-1, self.cpu):
                     return
                 cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 self.lgr.warning('pageFaultGen skipAlone, wrong eip is 0x%x wanted 0x%x, skipped again, now eip is 0x%x' % (eip, prec.eip, cur_eip))
                 eip = cur_eip
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
-                if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                if not self.top.skipToCycle(target_cycles, self.cpu):
                     return
                 else:
                     cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -581,14 +581,14 @@ class PageFaultGen():
                     if cur_eip == eip: 
                         self.lgr.debug('pageFaultGen skipAlone same eip, back up more')
                         target_cycles = self.cpu.cycles - 1
-                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                        if not self.top.skipToCycle(target_cycles, self.cpu):
                             return
                         
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen skipAlone after another backup, eip is 0x%x' % (cur_eip))
                     elif self.mem_utils.isKernel(cur_eip):
                         target_cycles = self.cpu.cycles - 1
-                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                        if not self.top.skipToCycle(target_cycles, self.cpu):
                             return
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen still in kernel after back one, after another backup, eip is 0x%x' % (cur_eip))
@@ -747,6 +747,8 @@ class PageFaultGen():
                 retval = True
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))
+        else:
+            self.lgr.debug('pageFaultGen hasPendingFault NO pending fault for tid:%s' % tid)
         return retval
 
     def getPendingFault(self, tid):

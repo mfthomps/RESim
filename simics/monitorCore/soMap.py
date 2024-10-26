@@ -408,31 +408,35 @@ class SOMap():
                 self.fun_mgr.add(full_path, locate)
     
     def addLoader(self, tid_in, prog, addr):
-        tid = self.getSOTid(tid_in)
-        if tid is None:
-            tid = tid_in
-        if tid not in self.so_addr_map:
-            self.so_addr_map[tid] = {}
-            self.so_file_map[tid] = {}
+        load_info = None
 
+        tid = self.getSOTid(tid_in)
         self.lgr.debug('soMap addLoader tid:%s prog %s addr 0x%x' % (tid, prog, addr))
         full_path = self.targetFS.getFull(prog, lgr=self.lgr)
-        elf_info = elfText.getText(full_path, self.lgr)
-        if elf_info is not None:
-            self.lgr.debug('soMap addLoader tid:%s prog %s  text_offset 0x%x' % (tid, prog, elf_info.text_offset))
-            self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                 elf_info.plt_offset, elf_info.plt_size, prog)
-        else:
-            self.lgr.error('soMap addLoader no elf info from %s' % prog)
-            return
-        load_addr = addr -  elf_info.text_offset
-        self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
-        load_size = elf_info.text_size + elf_info.text_offset
-        load_info = LoadInfo(load_addr, load_size)
+        if full_path is not None:
+            if tid is None:
+                tid = tid_in
+            if tid not in self.so_addr_map:
+                self.so_addr_map[tid] = {}
+                self.so_file_map[tid] = {}
 
-        self.so_addr_map[tid][prog] = load_info
-        self.so_file_map[tid][load_info] = prog
-        self.lgr.debug('soMap addLoader tid: %s prog %s addr: 0x%x' % (tid, prog, addr))
+            elf_info = elfText.getText(full_path, self.lgr)
+            if elf_info is not None:
+                self.lgr.debug('soMap addLoader tid:%s prog %s  text_offset 0x%x' % (tid, prog, elf_info.text_offset))
+                self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
+                     elf_info.plt_offset, elf_info.plt_size, prog)
+            else:
+                self.lgr.error('soMap addLoader no elf info from %s' % prog)
+                return
+            load_addr = addr -  elf_info.text_offset
+            self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
+            load_size = elf_info.text_size + elf_info.text_offset
+            load_info = LoadInfo(load_addr, load_size)
+
+            self.so_addr_map[tid][prog] = load_info
+            self.so_file_map[tid][load_info] = prog
+            self.lgr.debug('soMap addLoader tid: %s prog %s addr: 0x%x' % (tid, prog, addr))
+        
         return load_info
         
     def addSO(self, tid_in, prog, addr, count):
