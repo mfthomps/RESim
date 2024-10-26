@@ -137,7 +137,7 @@ class FunMgr():
 
     def isIterator(self, addr):
         comm = self.top.getComm(target=self.cell_name)
-        if comm in self.user_iterators:
+        if comm in self.user_iterators and self.user_iterators[comm] is not None:
             return self.user_iterators[comm].isIterator(addr)
 
     def setUserIterators(self, iterators):
