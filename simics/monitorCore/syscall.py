@@ -2908,7 +2908,7 @@ class Syscall():
                 else:
                     src_addr_len = self.mem_utils.readWord32(self.cpu, frame['param2']+20)
                     exit_info.fname_addr = src_addr
-                    exit_info.count = src_addr_len
+                    exit_info.src_addr_len = src_addr_len
 
         else:
             self.lgr.debug('syscall handleReadOrSocket setExits socket no ss struct, set old_fd to %d' % frame['param1'])
