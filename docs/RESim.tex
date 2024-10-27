@@ -1950,13 +1950,14 @@ manner as injecting data into a target application.  The {\tt drive-driver} util
 JSON file.  
 
 Your ini file must first be adjusted to make the driver the target.  Get the driver.param file from the RESIM\_DIR/simics/workspace directory and
-refer to that driver.ini file for driver component parameters.
-Use that utility to tee up the reading of the JSON on the driver, after first using {\tt debugProc('clientudpJson')} to catch its execution.
+refer to that driver.ini file for driver component parameters.  Create a json file as large as any you expect to inject, e.g., using genJson.py.
+Use the drive-driver utility to tee up reading of the JSON on the driver, after first using {\tt debugProc('/tmp/clientudpJson')} to catch its execution. (Provide the full path
+to direct RESim to debug the program even though it does not find the program file in the root prefix directory.)
 Then use {\tt runToOpen} to catch the opening of the JSON file (provide the full path, e.g., /tmp/foo.json), to see its FD.  You can then use prepInject on that FD
-to create a snapshot for use with injecting json data into the driver.  TBD: modify so that json file includes all parameters, including target address and
-port so the same snapshot can be used to drive multiple services. (Done for TCP, describe)
+to create a snapshot for use with injecting json data into the driver.  
 
-There is also a {\tt TCP\_JSON} option that runs a clientTCPJson program.  This is intended for protocols that use ioctl to determine how much data to
+There is also a {\tt TCP\_JSON} option that runs a clientTCPJson program.  This is intended for TCP conversations that cannot be easily injected into the kernel buffer.
+It is also intended for protocols that use ioctl to determine how much data to
 read from the socket on each recieve.  In particular, some applications will call ioctl for a zero result prior to completing processing of input.  
 That would reset the origin if data were injected into the target and RESim had to alter the ioctl return value.  Injecting into the driver avoids the
 origin reset.  
