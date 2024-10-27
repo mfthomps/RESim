@@ -261,7 +261,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
                 fault_addr = self.cpu.iface.int_register.read(reg_num)
-                self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
+                #self.lgr.debug('pageFaultHap cr2 read is 0x%x' % fault_addr)
             else:
                 self.lgr.debug('pageFaultHap cr2 reg is NONE????? set to faulting addr to eip 0x%x' % eip)
                 fault_addr = eip
