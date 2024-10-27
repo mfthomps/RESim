@@ -478,7 +478,7 @@ class GenMonitor():
                     self.param[cell_name].current_task_gs = False
                 if not hasattr(self.param[cell_name], 'gs_base'):
                     self.param[cell_name].gs_base = None
-                if comp_dict[cell_name]['OS_TYPE'].startswith('WIN'):
+                if 'OS_TYPE' in comp_dict[cell_name] and comp_dict[cell_name]['OS_TYPE'].startswith('WIN'):
                     if not hasattr(self.param[cell_name], 'page_table'):
                         # TBD remove hack after old snapshots cycle out
                         self.param[cell_name].page_table = 0x28
@@ -953,6 +953,10 @@ class GenMonitor():
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 self.snap_start_cycle[cpu] = cpu.cycles
                 if self.os_type[cell_name].startswith('LINUX'):
+                    if cell_name not in self.unistd:
+                        self.lgr.error('Component %s missing unistd path' % cell_name)
+                        self.quit()
+                        return
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
@@ -1551,7 +1555,8 @@ class GenMonitor():
                     if self.coverage is None:
                         self.lgr.debug('Coverage is None!')
                 else:
-                    self.lgr.error('Failed to get full path for %s' % prog_name)
+                    print('Warning, no program file for %s relative to root prefix.' % prog_name)
+                    self.lgr.debug('debug Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s' % prog_name)
             if self.fun_mgr is None:
                 self.lgr.debug('Warning no fun_mgr is defined.  Do not know what we are debugging?')
@@ -6409,6 +6414,9 @@ class GenMonitor():
         this_cpu, comm, tid = self.task_utils[self.target].curThread() 
         if target_cell != self.target:
             target_cpu = self.cell_config.cpuFromCell(target_cell)
+            if target_cpu is None:
+                self.lgr.error('Component %s not found' % target_cell)
+                self.quit()
         else:
             target_cpu = this_cpu
 
