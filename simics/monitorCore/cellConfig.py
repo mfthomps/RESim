@@ -38,7 +38,10 @@ class CellConfig():
 
     def cpuFromCell(self, cell_name):
         ''' simplification for single-core sims '''
-        return self.cell_cpu[cell_name]
+        if cell_name in self.cell_cpu:
+            return self.cell_cpu[cell_name]
+        else:
+            return None
 
     def getCells(self):
         return self.cells
