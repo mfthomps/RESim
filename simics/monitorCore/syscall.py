@@ -14,6 +14,7 @@ import resimUtils
 import sys
 import copy
 from resimHaps import *
+import resimSimicsUtils
 from resimSimicsUtils import rprint
 '''
 how does simics not have this in its python sys.path?
@@ -1023,6 +1024,7 @@ class Syscall():
                                     return
                             else:
                                 self.lgr.debug('syscall checkExecve failed to find file for %s, assume target will fail execve' % prog_string)
+                                print('Warning, program file for %s not found relative to Root Prefix.' % prog_string)
                                 missing_file = True
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
@@ -1033,6 +1035,16 @@ class Syscall():
                             self.top.rmSyscall(cp.name)
                         self.lgr.debug('checkExecve execve of %s now stop alone ' % prog_string)
                         SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
+                    elif missing_file:
+                        self.lgr.debug('syscall checkExecve missing file.  prog %s  param %s' % (prog_string, cp.match_param))
+                        if prog_string == cp.match_param:
+                            if not self.top.trackingThreads():
+                                self.lgr.debug('checkExecve missing file not tracking threads, remove the syscall param')
+                                self.top.rmSyscall(cp.name)
+                            self.lgr.debug('checkExecve missing file execve of %s now stop alone ' % prog_string)
+                            SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
+                        else:
+                            print('Did not find a file relative to the Root Prefix, and the program string of %s does not match %s, maybe try an absolute path' % (prog_string, cp.match_param)) 
                     elif wrong_type:
                         self.lgr.debug('checkExecve, got %s when looking for binary %s, skip' % (ftype, prog_string))
                     else:
