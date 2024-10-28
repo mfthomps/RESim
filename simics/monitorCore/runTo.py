@@ -88,7 +88,7 @@ class RunTo():
             	     self.stopHap, None)
         SIM_break_simulation('soMap')
 
-    def knownHap(self, tid, third, forth, memory):
+    def knownHap(self, tid, the_obj, break_num, memory):
         if len(self.hap_list) > 0:
             cpu, comm, cur_tid = self.task_utils.curThread() 
             right_tid = False
@@ -180,7 +180,7 @@ class RunTo():
            self.lgr.debug('runTo breakOnSkip tid: %s breakOnSkip set break on main skip dll addr 0x%x current_context %s' % (tid, self.skip_dll_section.addr,
                str(self.cpu.current_context)))
         
-    def skipHap(self, tid, third, forth, memory):
+    def skipHap(self, tid, the_obj, break_num, memory):
         ''' Hit the DLL whose syscalls are to be skipped '''
         if len(self.hap_list) > 0:
             cur_tid = self.task_utils.curTID()
@@ -222,7 +222,7 @@ class RunTo():
                self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.skipBreakoutHap, tid, proc_break, 'runToKnown'))
                self.lgr.debug('runTo setSkiplist set break on 0x%x size 0x%x context %s' % (section.addr, section.size, str(context)))
 
-    def skipBreakoutHap(self, tid, third, forth, memory):
+    def skipBreakoutHap(self, tid, the_obj, break_num, memory):
         ''' We hit a DLL whose syscalls are not to be skipped.  Restore debug context.  TBD modify to handle non-debug case as well
             perhaps using the ignore context?'''
         if len(self.hap_list) > 0:
@@ -306,7 +306,7 @@ class RunTo():
         SIM_run_alone(self.cleanToProcHaps, None)
         SIM_break_simulation('runTo stopAlone')
 
-    def runToProc(self, prec, third, forth, memory):
+    def runToProc(self, prec, the_obj, break_num, memory):
         ''' callback when current_task is updated.  new value is in memory parameter '''
         if self.cur_task_hap is None:
             return
@@ -320,11 +320,28 @@ class RunTo():
             if (prec.tid is not None and tid in prec.tid) or (prec.tid is None and comm == prec.proc):
                 self.lgr.debug('runTo runToProc got proc %s tid is %s  prec.tid is %s' % (comm, tid, prec.tid))
                 SIM_run_alone(self.cleanToProcHaps, None)
-                SIM_run_alone(self.toUserAlone, tid)
+                #SIM_run_alone(self.toUserAlone, tid)
+                SIM_run_alone(self.top.stopAndCall, self.doStopAction)
             else:
                 #self.proc_list[self.target][tid] = comm
                 #self.lgr.debug('runToProc tid: %d proc: %s' % (tid, comm))
                 pass
+
+    def doStopAction(self, dumb=None):
+        if self.stop_action is not None:
+            flist = self.stop_action.flist
+        if flist is not None: 
+            self.lgr.debug('runToProc doStopAction has flist')
+            for fun_item in flist:
+                if len(fun_item.args) ==  0:
+                    fun_item.fun()
+                else:
+                    fun_item.fun(fun_item.args)
+        else:
+            self.lgr.debug('runToProc doStopAction NO flist, just run to user?')
+            tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
+            self.top.toUser(flist=None, want_tid=tid)
+
 
     def toUserAlone(self, tid):
         flist = None
@@ -435,7 +452,7 @@ class RunTo():
        self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, cur_tid, proc_break, 'runToWrite')
        self.lgr.debug('runTo runToWriteNotZero set break on 0x%x' % addr)
 
-    def writeHap(self, tid, third, forth, memory):
+    def writeHap(self, tid, the_obj, break_num, memory):
         if self.write_hap is not None:
             cpu, comm, cur_tid = self.task_utils.curThread() 
             if tid == cur_tid: 
