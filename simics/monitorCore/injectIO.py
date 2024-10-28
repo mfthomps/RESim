@@ -443,8 +443,8 @@ class InjectIO():
                 self.lgr.debug('injectIO trace all without debugging')
                 self.injectCallback()
             else:
-                self.lgr.debug('injectIO trace all with debugging')
-                self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
+                self.lgr.debug('injectIO trace all with debugging, or not trace_all')
+                self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False, not_to_user=True)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
 
     def injectCallback(self):

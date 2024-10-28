@@ -1115,6 +1115,7 @@ class GenMonitor():
             If debugging, get all debug threads.  If not debugging, get whatever is recorded.
             NOT this will only get frames that were recorded.
         '''
+        self.lgr.debug('getDbgFrames') 
         retval = {}
         if self.isWindows():
             retval = self.winMonitor[self.target].getDbgFrames()
@@ -1794,7 +1795,7 @@ class GenMonitor():
                 self.toExecve(prog=proc, flist=[], binary=binary)
 
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False, not_to_user=False):
         if not track_threads:
             # TBD fix this hack.  confusing since track_threads is a dict
             self.lgr.debug('genMonitor debugProc track_threads set to None')
@@ -1830,14 +1831,16 @@ class GenMonitor():
                     self.lgr.debug('debugProc %s add to soMap' % proc)
 
             self.lgr.debug('debugProc process %s found, run until some instance is scheduled' % proc)
+            flist = []
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
-            f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
-            f2 = stopFunction.StopFunction(self.debugExitHap, [], nest=False)
-            f3 = stopFunction.StopFunction(self.debug, [True], nest=False)
-            flist = [f1, f3, f2]
+            if not not_to_user: 
+                flist.append(stopFunction.StopFunction(self.toUser, [], nest=True))
+            else:
+                self.lgr.debug('debugProc will run to %s scheduled, but not to user' % proc)
+            flist.append(stopFunction.StopFunction(self.debugExitHap, [], nest=False))
+            flist.append(stopFunction.StopFunction(self.debug, [True], nest=False))
             if final_fun is not None:
-                f4 = stopFunction.StopFunction(final_fun, [], nest=False)
-                flist.append(f4)
+                flist.append(stopFunction.StopFunction(final_fun, [], nest=False))
             if pre_fun is not None:
                 fp = stopFunction.StopFunction(pre_fun, [], nest=False)
                 flist.insert(0, fp)
@@ -2897,6 +2900,7 @@ class GenMonitor():
                 self.trace_all[target] = self.syscallManager[self.target].watchAllSyscalls(None, 'traceAll', trace=True, binders=self.binders, connectors=self.connectors,
                                           record_fd=record_fd, linger=True, netInfo=self.netInfo[self.target], swapper_ok=swapper_ok, call_params_list=call_params_list)
     
+                frames = self.getDbgFrames()
                 if self.run_from_snap is not None and self.snap_start_cycle[cpu] == cpu.cycles:
                     ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
                     self.lgr.debug('traceAll running from snap, starting cycle')
@@ -2908,9 +2912,9 @@ class GenMonitor():
                         else:
                             self.lgr.debug('traceAll got sharedSyscall pickle len of exit_info %d' % len(exit_info_list))
                             ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
-                            self.trace_all[target].setExits(exit_info_list, context_override = context)
+                            #self.trace_all[target].setExits(exit_info_list, context_override = context)
+                            self.trace_all[target].setExits(frames, context_override = context)
     
-                frames = self.getDbgFrames()
                 self.lgr.debug('traceAll, call to setExits %d frames context %s' % (len(frames), context))
                 self.trace_all[target].setExits(frames, context_override=context)
 
