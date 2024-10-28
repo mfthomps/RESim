@@ -204,8 +204,8 @@ class PageFaultGen():
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
         self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
         if self.user_eip is None:
-            SIM_break_simulation('remove this')
-            self.lgr.error('nothing read from user_ip_addr 0x%x' % user_ip_addr)
+            #SIM_break_simulation('remove this')
+            self.lgr.warning('nothing read from user_ip_addr 0x%x' % user_ip_addr)
             return
         if self.user_eip in self.ignore_probes:
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
