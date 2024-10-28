@@ -130,7 +130,7 @@ class FunMgr():
         ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
         if comm not in self.ida_funs:
-            self.lgr.error('funMgr getFunName, ida_funs is not defined for comm %s' % comm)
+            self.lgr.debug('funMgr getFunName, ida_funs is not defined for comm %s' % comm)
         else: 
             retval = self.ida_funs[comm].getFunName(addr)
         return retval
@@ -155,7 +155,7 @@ class FunMgr():
         if comm in self.ida_funs: 
             return True
         else:
-            self.lgr.debug('funMgr hasIDAFuns, no funs for comm %s list is:' % (com))
+            self.lgr.debug('funMgr hasIDAFuns, no funs for comm %s list is:' % (comm))
             for c in self.ida_funs:
                 self.lgr.debug('\t %s' % c)
             return False
