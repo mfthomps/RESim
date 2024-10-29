@@ -240,17 +240,17 @@ class StackTrace():
             lr = self.reg_frame['lr']
             ''' TBD also for 64-bit? '''
             call_instr = lr-4
-            #self.lgr.debug("isCallToMe lr was 0x%x call_instr 0x%x  eip 0x%x" % (lr, call_instr, eip))
+            self.lgr.debug("isCallToMe lr was 0x%x call_instr 0x%x  eip 0x%x" % (lr, call_instr, eip))
             if self.fun_mgr is not None:
                 cur_fun = self.fun_mgr.getFun(eip)
                 if cur_fun is not None:
                     fun_name = self.fun_mgr.getFunName(cur_fun)
-                    #self.lgr.debug('isCallToMe eip: 0x%x is in cur fun %s 0x%x' % (eip, fun_name, cur_fun))
+                    self.lgr.debug('isCallToMe eip: 0x%x is in cur fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.fun_mgr.getFun(lr)
                 if ret_to is None:
                     self.lgr.debug('isCallToMe lr of 0x%x is not a fun?' % lr)
                 if cur_fun is not None and ret_to is not None:
-                    #self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
+                    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
                     pass
                 if cur_fun != ret_to:
                     try:
@@ -261,10 +261,10 @@ class StackTrace():
                     if instruct[1].startswith(self.callmn):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr)
                         if fun_hex is None:
-                            #self.lgr.debug('stackTrace isCallToMe fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
+                            self.lgr.debug('stackTrace isCallToMe fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
                             pass
                         elif cur_fun is not None:
-                            #self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
+                            self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
                             pass
                         if fun_hex is not None and fun_hex == cur_fun:
                             if fun is not None:
@@ -274,17 +274,17 @@ class StackTrace():
                                 new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
                             frame = self.FrameEntry(call_instr, fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun, lr_return=True)
                             adjust_sp = self.addFrame(frame) + self.word_size
-                            #self.lgr.debug('isCallToMe added frame %s' % frame.dumpString())
+                            self.lgr.debug('isCallToMe added frame %s' % frame.dumpString())
                             retval = (lr, adjust_sp)
                         elif cur_fun is not None and fun_hex is None and instruct[1].startswith('blr'):
-                            #self.lgr.debug('stackTrace isCallToMe is a blr assumig call to cur fun 0x%x (name %s)' % (cur_fun, fun_name)) 
+                            self.lgr.debug('stackTrace isCallToMe is a blr assumig call to cur fun 0x%x (name %s)' % (cur_fun, fun_name)) 
                             call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
                             frame = self.FrameEntry(call_instr, call_fname, instruct[1], 0, ret_addr=lr, fun_addr=cur_fun, fun_name=fun_name, lr_return=True)
                             adjust_sp = self.addFrame(frame) + self.word_size
                             retval = (lr, adjust_sp)
                         elif fun_hex is not None and fun is not None and fun != 'None':
                             ''' LR does not suggest call to current function. Is current a different library then LR? '''
-                            #self.lgr.debug('try got with eip: 0x%x fun_hex 0x%x' % (eip, fun_hex))
+                            self.lgr.debug('try got with eip: 0x%x fun_hex 0x%x' % (eip, fun_hex))
                             if self.tryGot(lr, eip, fun_hex):
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
@@ -292,6 +292,31 @@ class StackTrace():
                                 adjust_sp = self.addFrame(frame) + self.word_size
                                 #self.lgr.debug('isCallToMe got added frame %s' % frame.dumpString())
                                 retval = (lr, adjust_sp)
+                            else:
+                                # see if fun_hex is a direct branch 
+                                first_instruct = SIM_disassemble_address(self.cpu, fun_hex, 1, 0)
+                                if first_instruct[1].startswith('b '):
+                                    self.lgr.debug('isCallToMe may be direct branch cur_fun 0x%x  instruct %s' % (cur_fun, first_instruct[1]))
+                                    parts = first_instruct[1].split()
+                                    if len(parts) == 2:
+                                        dest = None
+                                        try:
+                                            dest = int(parts[1].strip(), 16)
+                                        except:
+                                            self.lgr.debug('isCallToMe failed to get dest from %s' % parts[1])
+                                            pass
+                                        if dest == cur_fun:
+                                            new_instruct = '%s   %s' % (self.callmn, fun)
+                                            call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
+                                            frame = self.FrameEntry(call_instr, call_fname, new_instruct, 0, ret_addr=lr, fun_addr=fun_hex, fun_name = fun, lr_return=True)
+                                            adjust_sp = self.addFrame(frame) + self.word_size
+                                            self.lgr.debug('isCallToMe call to direct branch added frame %s' % frame.dumpString())
+                                            retval = (lr, adjust_sp)
+                                            frame = self.FrameEntry(fun_hex, call_fname, first_instruct[1], 0, ret_addr=lr, fun_addr=cur_fun, fun_name = fun, lr_return=True)
+                                            adjust_sp = self.addFrame(frame) + self.word_size
+                                            self.lgr.debug('isCallToMe direct branch added frame %s' % frame.dumpString())
+                                        else:
+                                            self.lgr.debug('isCallToMe direct branch to 0x%x not to cur_fun 0x%x' % (dest, cur_fun))
                         else:
                             self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun 0x%x instruct %s' % (fun_hex, cur_fun, instruct[1]))
                     else:
@@ -1380,15 +1405,15 @@ class StackTrace():
         vx_boundary = False
         if self.top.isVxDKM(cpu=self.cpu) and self.soMap.inVxWorks(prev_ip) and not self.soMap.inVxWorks(fun_hex):
             vx_boundary = True
-        self.lgr.debug('stackTrace direct branch 0x%x %s' % (fun_hex, fun))
+        self.lgr.debug('stackTrace checkArmDirect direct branch 0x%x %s' % (fun_hex, fun))
         if not (self.fun_mgr.isFun(fun_hex) and self.fun_mgr.inFun(prev_ip, fun_hex)) and not vx_boundary:
             skip_this = True
-            self.lgr.debug('stackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
+            self.lgr.debug('stackTrace checkArmDirect addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
         else:
             ''' record the direct branch, e.g., B fuFun '''
             frame = self.FrameEntry(call_to, fname, first_instruct[1], ptr, fun_addr=fun_hex, fun_name=fun, ret_to_addr=ptr)
             frame.ret_addr = call_ip + first_instruct[0] 
-            self.lgr.debug('stackTrace direct branch fname: %s added frame %s' % (fname, frame.dumpString()))
+            self.lgr.debug('stackTrace checkArmDirect direct branch fname: %s added frame %s' % (fname, frame.dumpString()))
             self.addFrame(frame)
         return skip_this
 
