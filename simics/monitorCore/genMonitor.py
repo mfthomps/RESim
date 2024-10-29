@@ -1822,9 +1822,10 @@ class GenMonitor():
             self.stopDebug()
             self.stopTracking()
         if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
-            self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid()))
+            self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s proc: %s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid(), proc))
             if proc.startswith('/') and self.target in self.soMap:
                 prog_name = self.soMap[self.target].getProg(plist[0])
+                self.lgr.debug('debugProc prog_name %s' % prog_name)
                 if prog_name is None:
                     local_path = self.getFullPath(fname=proc)
                     self.soMap[self.target].addText(local_path, proc, plist[0])
