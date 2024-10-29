@@ -1,7 +1,7 @@
 import armCond
 import re
 import sys
-modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla']
+modsOp0 = ['ldr', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla', 'sxt']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
 for i in range(1,31):
     xreg = 'x%d' % i
@@ -63,8 +63,28 @@ def getOperands3(instruct):
 def isIndirect(reg):
     return False    
 
-def regIsPart(op, reg):
-    return op.lower() == reg.lower()
+def regIsPart(op, reg, lgr=None):
+    retval = False
+    if op.lower() == reg.lower():
+        if lgr is not None:
+            lgr.debug('regisPart op matches %s' % op)
+        retval = True
+    else:
+        reg_prefixes = ['r', 'x', 'w']
+        op_reg_prefix = op[0]
+        reg_reg_prefix = reg[0]
+        if op_reg_prefix in reg_prefixes and reg_reg_prefix in reg_prefixes:
+            op_num = op[1:]
+            reg_num = reg[1:]
+            if lgr is not None:
+                lgr.debug('regisPart are reg prefixes op_num %s reg_num %s' % (op_num, reg_num))
+            if op_num == reg_num:
+                retval = True
+    if not retval:
+        if lgr is not None:
+            lgr.debug('regisPart op %s does not match reg %s' % (op, reg))
+    return retval
+    #return op.lower() == reg.lower()
 
 def regIsPartList(reg1, reg2_list):
     for reg2 in reg2_list:
