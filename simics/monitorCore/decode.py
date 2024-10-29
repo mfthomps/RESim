@@ -38,7 +38,7 @@ def modifiesOp0(op):
 
 #2016-11-19 09:35:43,567 - DEBUG - cycleRegisterMod mn: mov op0: eax  op1: dword ptr [ebp+0x8]
 
-def regIsPart(reg1, reg2):
+def regIsPart(reg1, reg2, lgr=None):
     if reg1 is None or reg2 is None:
         return False
     if reg1 == reg2:
