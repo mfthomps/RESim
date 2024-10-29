@@ -227,12 +227,12 @@ class reverseToCall():
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.context_manager.changeDebugTid(tid) 
             self.lgr.debug('reverseToCall setup')
-            if cpu.architecture == 'arm':
+            if cpu.architecture.startswith('arm'):
                 self.decode = decodeArm
                 self.lgr.debug('setup using arm decoder')
             else:
                 self.decode = decode
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 self.callmn = 'bl'
             else:
                 self.callmn = 'call'
@@ -249,12 +249,12 @@ class reverseToCall():
             call_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 command = 'set-prefix %d "bl"' % call_break_num
             else:
                 command = 'set-prefix %d "call"' % call_break_num
             SIM_run_alone(SIM_run_command, command)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                    Sim_Access_Execute, range_start, size, 0)
                 self.the_breaks.append(ret_break_num)
@@ -278,7 +278,7 @@ class reverseToCall():
             self.the_breaks.append(break_num)
 
     def thinkExecuted(self, page_info):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             nx = memUtils.testBit(page_info.entry, 0)
             accessed = memUtils.testBit(page_info.entry, 4)
             if nx or not accessed: 
@@ -415,7 +415,7 @@ class reverseToCall():
         return retval
     
     def isExit(self, instruct, eip):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             lr = self.top.getReg('lr', self.cpu)
             #if eip == self.param.arm_ret or (instruct.startswith('mov') and instruct.endswith('lr') and lr < self.param.kernel_base):
             if eip == self.param.arm_ret:
@@ -428,7 +428,7 @@ class reverseToCall():
         return False
 
     def isRet(self, instruct, eip):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             parts = instruct.split()
             if parts[0].strip().startswith('ld') and parts[1].startswith('pc'):
                 op2, op1 = self.decode.getOperands(instruct)
@@ -649,7 +649,7 @@ class reverseToCall():
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''
             rev_to = None
-            if self.cpu.architecture == 'arm' and (instruct[1].startswith('bx lr') or (instruct[1].startswith('mov') and instruct[1].endswith('lr'))): 
+            if self.cpu.architecture.startswith('arm') and (instruct[1].startswith('bx lr') or (instruct[1].startswith('mov') and instruct[1].endswith('lr'))): 
                 rev_to = self.top.getReg('lr', self.cpu)
                 self.lgr.debug('jumpOverKernel ARM got lr value 0x%x' % rev_to)
          
@@ -681,7 +681,7 @@ class reverseToCall():
                     retval = False
                     self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
                        rval))
-            elif self.cpu.architecture == 'arm' and self.tryShortCall():
+            elif self.cpu.architecture.startswith('arm') and self.tryShortCall():
                 retval = True
             elif self.tryRecentCycle(page_faults, tid):
                 self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
@@ -908,7 +908,7 @@ class reverseToCall():
         self.the_breaks = []
 
     def conditionalMet(self, mn):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             return armCond.condMet(self.cpu, mn)
         else:
             if mn.startswith('cmov'):
@@ -977,8 +977,8 @@ class reverseToCall():
                         self.lgr.debug('get operands from %s' % instruct[1])
                         op1, op0 = self.decode.getOperands(instruct[1])
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
-                        #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
-                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
+                        self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
+                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg, lgr=self.lgr) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
                             self.lgr.debug('cycleRegisterMod at eip %x, we may be done, type is unknown' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
@@ -1005,7 +1005,7 @@ class reverseToCall():
                                 else:
                                     retval = RegisterModType(op1, RegisterModType.REG)
 
-                            elif mn.startswith('mov') and self.decode.isReg(op1):
+                            elif (mn.startswith('mov') or mn.startswith('sxt')) and self.decode.isReg(op1):
                                 self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
                             elif mn.startswith('add') or mn.startswith('sub') or mn.startswith('rsb'):
@@ -1037,7 +1037,7 @@ class reverseToCall():
                                                    self.context_manager.setIdaMessage('As far as we can go back.  TBD look for user input on add or sub.')
                                                    self.top.skipAndMail()
                                 
-                    elif self.cpu.architecture == 'arm': 
+                    elif self.cpu.architecture.startswith('arm'):
                         if ']!' in instruct[1]:
                             ''' Look for write-back register mod '''
                             ''' for now just look for [myreg, xxx]! '''
@@ -1178,7 +1178,7 @@ class reverseToCall():
                 self.cleanup(None)
                  
     def followTaint(self, reg_mod_type):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             self.followTaintArm(reg_mod_type)
         else:
             self.followTaintX86(reg_mod_type)
@@ -1344,7 +1344,7 @@ class reverseToCall():
         self.lgr.debug('cleanup complete')
 
     def isSyscall(self, instruct):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             if instruct.startswith('svc 0'):
                 return True
         else:
@@ -1434,13 +1434,13 @@ class reverseToCall():
                     call_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     self.the_breaks.append(call_break_num)
-                    if cpu.architecture == 'arm':
+                    if self.cpu.architecture.startswith('arm'):
                         command = 'set-prefix %d "bl"' % call_break_num
                     else:
                         command = 'set-prefix %d "call"' % call_break_num
                     SIM_run_alone(SIM_run_command, command)
                  
-                    if cpu.architecture == 'arm':
+                    if self.cpu.architecture.startswith('arm'):
                         ''' TBD much too ugly'''
                         ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
@@ -1733,7 +1733,7 @@ class reverseToCall():
     def findCallBehind(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('findCallBehind instruct is %s' % instruct[1])
