@@ -120,6 +120,8 @@ class InjectIO():
         self.fname = fname
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
@@ -248,6 +250,8 @@ class InjectIO():
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
             #lenreg2 = 'r7'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         if self.orig_buffer is not None and not self.mem_utils.isKernel(self.addr):
@@ -391,6 +395,8 @@ class InjectIO():
                     self.lgr.debug('injectIO call traceAll')
                     call_params = syscall.CallParams('injectIO', None, self.fd)
                     self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
+                    trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
+                    self.top.traceWrite(trace_msg)
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
