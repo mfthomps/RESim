@@ -67,7 +67,7 @@ class PageAddrInfo():
 
 class PageEntryInfo():
     def __init__(self, entry, arch):
-        if arch != 'arm':
+        if not arch.startswith('arm'):
             self.writable = memUtils.testBit(entry, 1)
             self.accessed = memUtils.testBit(entry, 5)
         else:
@@ -129,7 +129,7 @@ def pageStart(start, page_size):
     return page_start
 
 def getPageBases(cpu, lgr, kernel_base):
-    if cpu.architecture == 'arm':
+    if cpu.architecture.startswith('arm'):
         return getPageBasesArm(cpu, lgr, kernel_base)
 
     ENTRIES_PER_TABLE = 1024

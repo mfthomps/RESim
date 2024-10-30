@@ -1508,7 +1508,7 @@ class GenMonitor():
                         load_info = self.soMap[self.target].getModuleInfo(prog_name)
                     else:
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
-                    if load_info is not None:
+                    if load_info is not None and load_info.addr is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                         #self.getIDAFuns(self.full_path, elf_info.address)
                         self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.lgr)
@@ -1536,6 +1536,9 @@ class GenMonitor():
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell_name, self.context_manager[self.target],  self.mem_utils[self.target],
                              load_info.addr, load_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
+                    elif load_info is not None:
+                        self.lgr.error('debug, text segment missing load address for %s.  Perhaps program was running before being debugged?' % self.full_path)
+                  
                     else:
                         self.lgr.error('debug, text segment None for %s' % self.full_path)
                     self.lgr.debug('create coverage module')
@@ -1827,6 +1830,7 @@ class GenMonitor():
                 prog_name = self.soMap[self.target].getProg(plist[0])
                 self.lgr.debug('debugProc prog_name %s' % prog_name)
                 if prog_name is None:
+                    print('\n*** Warning *** Requested debug of %s, which is already running, but it has no SO Map entries\n')
                     local_path = self.getFullPath(fname=proc)
                     self.soMap[self.target].addText(local_path, proc, plist[0])
                     self.lgr.debug('debugProc %s add to soMap' % proc)
@@ -3377,7 +3381,7 @@ class GenMonitor():
     def runTo(self, call_list, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
               ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
         retval = None
-        self.lgr.debug('runTo')
+        self.lgr.debug('runTo call_list %s' % str(call_list))
         if not ignore_running and self.checkOnlyIgnore():
             self.rmDebugWarnHap()
 
@@ -3449,8 +3453,10 @@ class GenMonitor():
                 eip = self.getEIP(cpu=cpu)
                 self.lgr.debug('runTo, %d frames eip 0x%x' % (len(frames), eip))
                 if not self.mem_utils[self.target].isKernel(eip):
-                    self.lgr.debug('runTo, not in kernel')
-                    if self.reverseEnabled():
+                    first_cycle  = self.getFirstCycle() 
+                    current_cycle = cpu.cycles
+                    self.lgr.debug('runTo, not in kernel first_cycle: 0x%x current: 0x%x' % (first_cycle, current_cycle))
+                    if self.reverseEnabled() and self.getFirstCycle() != cpu.cycles:
                         self.lgr.debug('runTo, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
                         prev_cycle = cpu.cycles - 2
                         self.skipToCycle(prev_cycle, cpu=cpu)
@@ -3595,6 +3601,7 @@ class GenMonitor():
         self.runTo(call, call_params, name='sendport')
 
     def runToReceive(self, substring):
+        # socketCallName returns a list
         call = self.task_utils[self.target].socketCallName('recvmsg', self.is_compat32)
         call_params = syscall.CallParams('runToReceive', 'recvmsg', substring, break_simulation=True)        
         self.lgr.debug('runToReceive to %s' % substring)
@@ -3603,7 +3610,7 @@ class GenMonitor():
     def runToRead(self, substring, ignore_running=False):
         call_params = syscall.CallParams('runToRead', 'read', substring, break_simulation=True)        
         self.lgr.debug('runToRead to %s' % str(substring))
-        self.runTo(['read'], call_params, name='read', ignore_running=ignore_running)
+        self.runTo(['read', 'clone', 'execve'], call_params, name='read', ignore_running=ignore_running)
 
     def runToAccept(self, fd, flist=None, proc=None, run=True, linger=False):
         if not self.isWindows():
@@ -3767,7 +3774,7 @@ class GenMonitor():
         input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
         call_param_list = []
         for call in input_calls:
-            call_param = syscall.CallParams('runToIO', call, fd, break_simulation=break_simulation)        
+            call_param = syscall.CallParams('runToInput', call, fd, break_simulation=break_simulation)        
             call_param.nth = count
             call_param_list.append(call_param)
 
@@ -3781,11 +3788,13 @@ class GenMonitor():
         if self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('recv')
             calls.remove('_newselect')
+            calls.remove('select')
         skip_and_mail = True
         if flist_in is not None:
             ''' Given callback functions, use those instead of skip_and_mail '''
             skip_and_mail = False
 
+        # TBD Name of call syscall is checked elsewhere for runToIO ?
         the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToIO', linger=linger, flist=flist_in, 
                                  skip_and_mail=skip_and_mail)
         for call in calls:
@@ -3794,31 +3803,33 @@ class GenMonitor():
         if not ignore_waiting:
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
-            self.lgr.debug('runToIO found %d frames in kernel' % len(frames))
+            self.lgr.debug('runToInput found %d frames in kernel' % len(frames))
             for tid in list(frames):
                 if frames[tid] is None:
                     self.lgr.error('frame for tid %s is none?' % tid)
                     continue
                 call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
-                self.lgr.debug('runToIO found %s in kernel for tid:%s ' % (call, tid))
+                self.lgr.debug('runToInput found %s in kernel for tid:%s ' % (call, tid))
                 if call not in calls:
                     del frames[tid]
                    
             if len(frames) > 0:
                 eip = self.getEIP(cpu=cpu)
-                self.lgr.debug('runToIO, %d frames eip 0x%x' % (len(frames), eip))
+                self.lgr.debug('runToInput, %d frames eip 0x%x' % (len(frames), eip))
                 if not self.mem_utils[self.target].isKernel(eip):
-                    self.lgr.debug('runToIO, not in kernel')
-                    if self.reverseEnabled():
-                        self.lgr.debug('runToIO, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
+                    first_cycle  = self.getFirstCycle() 
+                    current_cycle = cpu.cycles
+                    self.lgr.debug('runToInput, not in kernel first_cycle: 0x%x current: 0x%x' % (first_cycle, current_cycle))
+                    if self.reverseEnabled() and self.getFirstCycle() != cpu.cycles:
+                        self.lgr.debug('runToInput, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
                         prev_cycle = cpu.cycles - 2
                         self.skipToCycle(prev_cycle, cpu=cpu)
                     
-                self.lgr.debug('runToIO, call to setExits')
+                self.lgr.debug('runToInput, call to setExits')
                 the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
             elif cpu in self.snap_start_cycle and self.snap_start_cycle[cpu] == cpu.cycles:
-                self.lgr.warning('runToIO, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
-                print('WARNING: runToIO found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+                self.lgr.warning('runToInput, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
+                print('WARNING: runToInput found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
         
         SIM_continue(0)
 

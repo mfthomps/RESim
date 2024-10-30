@@ -1,6 +1,7 @@
 import memUtils
 import cli
 from simics import *
+import time
 def fdString(fd):
     if memUtils.isNull(fd):
         return 'NULL'

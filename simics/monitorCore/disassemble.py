@@ -45,6 +45,8 @@ class Disassemble():
         try:
             if cpu.architecture == 'arm':
                 self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+            elif cpu.architecture == 'arm64':
+                self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
             else:
                 self.md = Cs(CS_ARCH_X86, CS_MODE_64)
         except:

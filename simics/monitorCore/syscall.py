@@ -2529,7 +2529,9 @@ class Syscall():
         else:
             ''' for example, rec calls rec_from '''
             if self.hack_cycle+20 >= cpu.cycles:
-                self.lgr.debug('syscallHap tid:%s skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match cycles now 0x%x?.' % (tid, cpu.cycles))
+                callnum = self.mem_utils.getCallNum(cpu)
+                callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
+                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, callnum, callname, cpu.cycles))
                 return
             else:
                 self.hack_cycle = cpu.cycles
@@ -2984,10 +2986,10 @@ class Syscall():
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[tid])
             if tid == cur_tid:
                 if memUtils.getCPL(cpu) != 0:
-                    self.lgr.debug('sharedSyscall setExits is current thread which is not in kernel, skip it')
+                    self.lgr.debug('sharedSyscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
                     continue   
                 if eip in [exit_eip1, exit_eip2, exit_eip3]:
-                    self.lgr.debug('sharedSyscall setExits is current thread about to exit, skip this one')
+                    self.lgr.debug('sharedSyscall  % tid setExits is current thread about to exit, skip this one' % tid)
                     continue   
 
             exit_info = ExitInfo(self, self.cpu, tid, callnum, callname, False, frame)

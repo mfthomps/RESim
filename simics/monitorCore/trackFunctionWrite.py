@@ -89,7 +89,7 @@ class TrackFunctionWrite():
         self.blanketWrites()
         self.context_manager.genDeleteHap(self.fun_entry_hap)
         self.fun_entry_hap = None 
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             self.ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp') 

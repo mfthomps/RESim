@@ -202,6 +202,8 @@ class PlayAFL():
         self.exit_list = []
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)

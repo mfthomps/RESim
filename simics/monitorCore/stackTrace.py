@@ -318,7 +318,12 @@ class StackTrace():
                                         else:
                                             self.lgr.debug('isCallToMe direct branch to 0x%x not to cur_fun 0x%x' % (dest, cur_fun))
                         else:
-                            self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun 0x%x instruct %s' % (fun_hex, cur_fun, instruct[1]))
+                            if cur_fun is not None and fun_hex is not None:
+                                self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun 0x%x instruct %s' % (fun_hex, cur_fun, instruct[1]))
+                            elif fun_hex is not None:
+                                self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun is None instruct %s' % (fun_hex, instruct[1]))
+                            else:
+                                self.lgr.debug('stackTrace isCallToMe confused. fun_hex None cur_fun is None instruct %s' % (instruct[1]))
                     else:
                         self.lgr.debug('not a call %s' % (instruct[1]))
                 elif cur_fun is None:

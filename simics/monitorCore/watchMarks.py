@@ -1029,7 +1029,7 @@ class WatchMarks():
     def getStackBase(self, dest):
         base = None
         sp = None
-        if self.cpu.architecture != 'arm':
+        if not self.cpu.architecture.startswith('arm'):
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             base = self.mem_utils.getRegValue(self.cpu, 'ebp')
             if dest is not None and dest > sp and dest <= base:

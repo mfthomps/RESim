@@ -147,6 +147,8 @@ class AFL():
         self.restart = 0
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
@@ -680,7 +682,7 @@ class AFL():
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
 
     def fixFaults(self):
-        if self.target_cpu.architecture == 'arm':
+        if self.target_cpu.architecture.startswith('arm'):
             self.fault_hap = SIM_hap_add_callback_obj_index("Core_Exception", self.target_cpu, 0,
                  self.faultCallback, self.target_cpu, 1)
 

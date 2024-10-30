@@ -83,7 +83,7 @@ class Coverage():
         self.addr_map = {}
         ''' offset due to relocation, e.g., of so file '''
         self.offset = 0
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             pcreg = 'pc'
         else:
             pcreg = 'eip'

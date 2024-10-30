@@ -480,8 +480,11 @@ class InjectIO():
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
                 self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
-            else:
+            elif self.targetFD is not None:
                 self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs)
+            else:
+                # just want to debug the target
+                pass
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:

@@ -718,7 +718,7 @@ class GenContextMgr():
                if parent in self.watch_rec_list:
                    parent_pid = self.mem_utils.readWord32(cpu, parent + self.param.ts_pid)
                    parent_tid = str(parent_pid)
-                   self.lgr.debug('contextManager new clone %s is its own leader, but parent %s is in cache.  Call the parent the leader.' % (tid, parent_tid))
+                   self.lgr.debug('contextManager new clone %s comm: %s is its own leader, but parent %s is in cache.  Call the parent the leader.' % (tid, comm, parent_tid))
                    add_task = True
                    leader_tid = parent_tid
                else:

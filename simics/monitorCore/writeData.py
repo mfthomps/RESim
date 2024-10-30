@@ -81,6 +81,9 @@ class WriteData():
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
             pcreg = 'pc'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
+            pcreg = 'pc'
         else:
             lenreg = 'eax'
             pcreg = 'eip'
@@ -232,6 +235,8 @@ class WriteData():
           
     
     def write(self, record=False):
+        ''' Write data into an application buffer or the kernel buffer, depending on information 
+            recorded during the prepInject '''
         #self.lgr.debug('writeData write, addr is 0x%x filter: %s' % (self.addr, str(self.filter)))
         if self.k_start_ptr is not None:
             ''' we have buffer start/end info from tracing ioctl '''
@@ -306,6 +311,7 @@ class WriteData():
             self.call_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.callHap, None, self.call_break)
 
     def setCountValue(self, count):
+        ''' Modify the count value seen by the application on its return from a read/recv '''
         if self.top.isWindows():
             word_size = self.top.getWordSize()
             if word_size == 4:
@@ -317,8 +323,10 @@ class WriteData():
             self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
+            self.lgr.debug('writeData wrote count value %d to reg num  %d' % (count, self.len_reg_num))
 
     def userBufWrite(self, record=False):
+        ''' inject data into the application buffer and set the return count value seen by the application '''
         retval = None
         if self.current_packet > 1 and self.no_reset:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
@@ -334,8 +342,8 @@ class WriteData():
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
-                #self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
-                #self.lgr.debug('%s' % next_data)
+                self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
+                self.lgr.debug('%s' % next_data)
                 self.setCountValue(len(next_data))
                 retval = len(next_data)
                 if self.max_len == 1:
@@ -353,13 +361,13 @@ class WriteData():
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 eip = self.top.getEIP(self.cpu)
-                #self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
+                self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
                     next_addr = self.addr + len(self.in_data)
                     self.mem_utils.writeString(self.cpu, next_addr, b) 
-                    #self.lgr.debug('writeData TCP last packet, padded %d bytes' % pad_count)
+                    self.lgr.debug('writeData TCP last packet, padded %d bytes' % pad_count)
                     tot_len = tot_len + pad_count
                 self.setCountValue(tot_len)
                 self.in_data = ''
@@ -981,7 +989,7 @@ class WriteData():
                 self.call_ip = so_pickle['call_ip']
                 self.return_ip = so_pickle['return_ip']
             if self.call_ip is None and self.return_ip is not None:
-                if self.cpu.architecture == 'arm':
+                if self.cpu.architecture.startswith('arm'):
                     self.call_ip = self.return_ip - 4
                     self.lgr.debug('writeData pickle, no call_ip, hack to 4 before ret, 0x%x' % self.call_ip)
                 else:
@@ -991,7 +999,7 @@ class WriteData():
                 self.select_return_ip = so_pickle['select_return_ip']
                 #self.lgr.debug('writeData pickle got select call_ip 0x%x' % self.select_call_ip)
             if self.select_call_ip is None and self.select_return_ip is not None:
-                if self.cpu.architecture == 'arm':
+                if self.cpu.architecture.startswith('arm'):
                     self.select_call_ip = self.select_return_ip - 4
                     self.lgr.debug('writeData pickle, no select_call_ip, hack to 4 before ret, 0x%x' % self.select_call_ip)
                 else:

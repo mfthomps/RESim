@@ -360,7 +360,8 @@ class WinTaskUtils():
 
     def frameFromRegs(self, compat32=None, swap_r10=True):
         frame = {}
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
+            # TBD not suppored yet
             for p in memUtils.param_map['arm']:
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
             cpl = memUtils.getCPL(self.cpu)
@@ -433,7 +434,7 @@ class WinTaskUtils():
 
     def getExecMode(self):
         mode = None
-        if self.cpu.iface != 'arm':
+        if not self.cpu.architecture.startswith('arm'):
             mode = self.cpu.iface.x86_reg_access.get_exec_mode()
         return mode
 

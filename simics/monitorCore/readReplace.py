@@ -73,7 +73,7 @@ class ReadReplace():
         self.so_map = so_map
         self.mem_utils = mem_utils
         self.lgr = lgr
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
         else:
             self.decode = decode

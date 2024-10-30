@@ -203,7 +203,7 @@ class WinSyscall():
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = syscall.SyscallInfo(self.cpu, None, None, None, self.trace)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
                 #self.lgr.debug('winSyscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
@@ -1401,7 +1401,7 @@ class WinSyscall():
         elif break_eip == syscall_info.calculated:
             ''' Note EIP in stack frame is unknown '''
             #frame['eax'] = syscall_info.callnum
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 if frame is None:
                     frame = self.task_utils.frameFromRegsComputed()
                 exit_eip1 = self.param.arm_ret
@@ -1700,7 +1700,7 @@ class WinSyscall():
             
 
     def checkTimeLoop(self, callname, tid):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             return
         limit = 800
         delta_limit = 0x12a05f200

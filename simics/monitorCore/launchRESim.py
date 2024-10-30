@@ -220,7 +220,11 @@ class LaunchRESim():
         if not os.path.isfile(ini_file):
             print('File not found: %s' % ini_file)
             exit(1)
-        self.config.read(cfg_file)
+        try:
+            self.config.read(cfg_file)
+        except Exception as e:
+            print(e)
+            run_command('quit')
         SIMICS_BASE = os.getenv('SIMICS')
         parent = os.path.dirname(SIMICS_BASE)
         print('SIMICS dir is %s' % parent) 

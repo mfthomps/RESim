@@ -44,7 +44,7 @@ class FunMgr():
         self.so_checked = {}
         self.fun_break = {}
         self.user_iterators = {}
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             self.callmn = 'bl'
             self.jmpmn = 'bx'
             self.decode = decodeArm

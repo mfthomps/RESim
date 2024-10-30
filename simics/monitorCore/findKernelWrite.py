@@ -87,7 +87,7 @@ class findKernelWrite():
         if not self.kernel and self.checkInitialBuffer(addr):
             self.top.skipAndMail()
             return
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
         else:
@@ -580,7 +580,7 @@ class findKernelWrite():
             self.lgr.debug('thinkWeWrote in kernel, forward_hap is %d  on write to 0x%x. Set breaks on exit to user' % (self.forward_hap, self.kernel_write_break))
             '''
             self.lgr.debug('thinkWeWrote in kernel. go forward to exit')
-            if self.cpu.architecture == 'arm':
+            if cpu.architecture.startswith('arm'):
                 self.kernel_exit_break1 = self.context_manager.genBreakpoint(None, 
                                                         Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
                 self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
@@ -828,14 +828,14 @@ class findKernelWrite():
                 self.lgr.debug('findKernelWrite backOneAlone is push addr 0x%x', new_address)
                 self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
 
-        elif self.cpu.architecture == 'arm' and mn.startswith('stm'):
+        elif self.cpu.architecture.startswith('arm') and mn.startswith('stm'):
             reg = self.decode.armSTM(self.cpu, instruct[1], self.addr, self.lgr)
             self.lgr.debug('back from armSTM reg: %s cycle 0x%x' % (reg, self.cpu.cycles))
             if reg is not None:
                 rval = self.mem_utils.getRegValue(self.cpu, reg)
                 self.lgr.debug('findKernelWrite backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
-        elif self.cpu.architecture == 'arm' and mn.startswith('str'):
+        elif self.cpu.architecture.startswith('arm') and mn.startswith('str'):
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
             if reg is not None:
                 self.lgr.debug('findKernelWrite backOneAlone is str... reg %s, find mod', reg)

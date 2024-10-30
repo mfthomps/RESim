@@ -139,7 +139,7 @@ class TrackThreads():
         if tid not in self.finish_hap:
             return
         prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.tid, call_info.cpu)
-        if cpu.architecture == 'arm' and prog_string is None:
+        if cpu.architecture.startswith('arm') and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
         self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
@@ -233,7 +233,7 @@ class TrackThreads():
         if self.clone_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             frame = self.task_utils.frameFromRegs()
         else:
             frame = self.task_utils.frameFromStackSyscall()
