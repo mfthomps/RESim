@@ -6684,6 +6684,10 @@ class GenMonitor():
         adjust = self.fun_mgr.stackAdjust(fun_name)
         print('adjust 0x%x' % adjust)
 
+    def traceWrite(self, msg):
+        if self.target in self.traceMgr:
+            self.traceMgr[self.target].write(msg)
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
