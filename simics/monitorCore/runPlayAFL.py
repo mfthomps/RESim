@@ -92,10 +92,10 @@ def runPlay(args, lgr, prog_path):
     glist = glob.glob('resim_*/')
     if len(glist) == 0:
         glist = ['./']
-    if args.tcp:
-        os.environ['ONE_DONE_PARAM']='tcp'
-    else:
-        os.environ['ONE_DONE_PARAM']='udp'
+    #if args.tcp:
+    #    os.environ['ONE_DONE_PARAM']='tcp'
+    #else:
+    #    os.environ['ONE_DONE_PARAM']='udp'
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
     os.environ['ONE_DONE_PARAM3']=args.program
@@ -173,7 +173,7 @@ def main():
     parser = argparse.ArgumentParser(prog='runPlay', description='Run AFL sessions in parallel to collect coverage data.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
-    parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    #parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
     parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')

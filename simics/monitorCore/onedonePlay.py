@@ -4,7 +4,7 @@ been initialized.  This one calls playAFL
 '''
 import os
 def onedone(top):
-    protocol=os.getenv('ONE_DONE_PARAM')
+    #protocol=os.getenv('ONE_DONE_PARAM')
     only_thread_s=os.getenv('ONE_DONE_PARAM2')
     program=os.getenv('ONE_DONE_PARAM3')
     target=os.getenv('ONE_DONE_PARAM4')
@@ -36,9 +36,9 @@ def onedone(top):
         base = os.path.basename(os.path.dirname(here))
     with open('logs/onedonePlay.log', 'w') as fh:
         fh.write('in onedone of onedonePlay\n') 
-        if protocol == 'tcp': 
-            fh.write('call playAFLTCP target %s only_thread %r\n' % (base, only_thread))
-            top.playAFLTCP(base, parallel=True, only_thread=only_thread, target=program)
-        else:
-            fh.write('call playAFL target %s only_thread %r\n' % (base, only_thread))
-            top.playAFL(base, parallel=True, only_thread=only_thread, fname=program, target=target, targetFD=targetFD, count=count, no_page_faults=no_page_faults)
+        #if protocol == 'tcp': 
+        #    fh.write('call playAFLTCP target %s only_thread %r\n' % (base, only_thread))
+        #    top.playAFLTCP(base, parallel=True, only_thread=only_thread, target=program)
+        #else:
+        fh.write('call playAFL target %s only_thread %r\n' % (base, only_thread))
+        top.playAFL(base, parallel=True, only_thread=only_thread, fname=program, target=target, targetFD=targetFD, count=count, no_page_faults=no_page_faults)
