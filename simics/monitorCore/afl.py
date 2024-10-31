@@ -282,7 +282,7 @@ class AFL():
 
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('afl aflInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
+        self.lgr.debug('afl aflInitCallback. target tid: %s finish init to set coverage and such' % self.target_tid)
         if self.targetFD is not None and self.count > 0:
             ''' run to IO before finishing init '''
             self.lgr.debug('afl aflInitCallback targetFD 0x%x' % self.targetFD)
@@ -302,7 +302,7 @@ class AFL():
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()
-        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
+        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
         self.goN(0)
 
     def disableReverse(self):
