@@ -1,12 +1,9 @@
+#!/usr/bin/env python3
 import os
 import sys
 import shlex
 import subprocess
-sys.path.append('/usr/local/lib/python2.7/dist-packages')
-sys.path.append('/usr/lib/python2.7/dist-packages')
-sys.path.append('/usr/local/lib/python3.6/dist-packages')
-sys.path.append('/usr/lib/python3/dist-packages')
-import magic
+import resimUtils
 class Text():
     def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp):
         self.text_start = address
@@ -16,6 +13,13 @@ class Text():
         self.plt_offset = plt_offset
         self.plt_size = plt_size
         self.interp = interp
+
+    def toString(self):
+        if self.text_start is not None:
+            retval = 'addr: 0x%x offset 0x%x size 0x%x' % (self.text_start, self.text_offset, self.text_size)
+        else:
+            retval = 'addr: is None offset 0x%x size 0x%x' % (self.text_offset, self.text_size)
+        return retval
 
 def getRelocate(path, lgr, ida_funs):
     cmd = 'readelf -r %s -W' % path
@@ -71,7 +75,11 @@ def getText(path, lgr):
     is_dyn = False
     is_aarch64 = False
     interp = None
-    for line in out[0].decode("utf-8").splitlines():
+ 
+    line_list = out[0].decode("utf-8").splitlines()
+    line_iterator = iter(line_list) 
+    for line in line_iterator:
+        lgr.debug(line)
         if line.startswith('ELF Header'):
             iself = True
             continue
@@ -81,19 +89,30 @@ def getText(path, lgr):
         if line.strip().startswith('Machine:') and 'AArch64' in line:
             is_aarch64 = True
             continue
-        if (is_dyn or is_aarch64) and line.strip().startswith('Entry point'):
+        if line.strip().startswith('Entry point'):
             parts = line.strip().split()
-            offset = int(parts[3], 16)
-            continue
-        if (is_dyn or is_aarch64) and line.strip().startswith('[ 0]'):
-            hack = line[7:]
-            parts = hack.strip().split()
-            size_s = parts[1][:-1]
-            size = int(size_s, 16)
+            if is_dyn:
+                offset = int(parts[3], 16)
+            elif is_aarch64:
+                addr = int(parts[3], 16)
             continue
         if '[Requesting program interpreter' in line:
             parts = line.strip().split()
             interp = parts[-1][:-1] 
+        if 'LOAD' in line and not is_dyn and is_aarch64 and offset is None:
+            parts = line.strip().split()
+            offset = int(parts[2], 16)
+            if lgr is not None:
+                lgr.debug('readelf got LOAD offset 0x%x' % offset)
+            next_line = next(line_iterator)
+            parts = next_line.strip().split()
+            size = int(parts[0], 16)
+        elif 'LOAD' in line and is_dyn and is_aarch64 and size is None:
+            next_line = next(line_iterator)
+            parts = next_line.strip().split()
+            size = int(parts[0], 16)
+            
+            
         ''' section numbering has whitespace '''
         hack = line[7:]
         #if lgr is not None:
@@ -101,13 +120,6 @@ def getText(path, lgr):
         
         parts = hack.split()
         if len(parts) < 5:
-            #ftype = magic.from_file(path)
-            #if lgr is not None:
-            #    if 'elf' in ftype.lower():
-            #        lgr.debug('elfText getText, no sections return none')
-            #    else:
-            #        lgr.debug('elfText getText not elf at %s' % path)
-            #break
             pass
         else: 
             if parts[0].strip() == '.text':
@@ -121,11 +133,19 @@ def getText(path, lgr):
             else:
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
-    if addr is None and not is_dyn and is_aarch64:
-        addr = offset
-        if lgr is not None:
-            lgr.debug('elfText not dynamic is aarch64, set addr to zero')
     if addr is not None or is_dyn or is_aarch64:
         retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp)
    
     return retval
+
+if __name__ == '__main__':
+    logname = 'elfText'
+    logdir = '/tmp/'
+    lgr = resimUtils.getLogger(logname, logdir)
+    elf = getText(sys.argv[1], lgr=lgr)
+    if elf is not None:
+        print(elf.toString())
+    else:
+        print('Failed to find elf in %s' % sys.argv[1])
+
+    sys.exit(0)
