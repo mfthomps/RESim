@@ -230,7 +230,7 @@ class PlayAFL():
             self.lgr.debug('playAFL target_proc %s reset origin and set target to %s' % (target_proc, target_cell))
             self.top.resetOrigin()
             self.top.setTarget(target_cell)
-            self.top.debugProc(target_proc, self.playInitCallback)
+            self.top.debugProc(target_proc, self.playInitCallback, not_to_user=True)
         self.did_exit = False
 
     def ranToIO(self, dumb):
@@ -267,7 +267,7 @@ class PlayAFL():
             return
         tid = self.top.getTID(target=self.target_cell)
         if tid != self.target_tid:
-            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %d cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
+            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %s cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
             return
         self.exit_counter = self.exit_counter+1
         self.lgr.debug('playAFL counterHap, count now %d' % self.exit_counter)
@@ -286,7 +286,7 @@ class PlayAFL():
     def playInitCallback(self):
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('playAFL playInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
+        self.lgr.debug('playAFL playInitCallback. target tid: %s finish init to set coverage and such' % self.target_tid)
         self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
         self.initial_context = self.target_cpu.current_context
         if self.trace_all:
@@ -310,7 +310,7 @@ class PlayAFL():
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()
-        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
+        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
         self.go()
 
     def disableReverse(self):
