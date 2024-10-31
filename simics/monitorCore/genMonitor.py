@@ -5246,7 +5246,8 @@ class GenMonitor():
         return retval
 
     def aflTCP(self, sor=False, fname=None, linear=False, port=8765, dead=False):
-        ''' not hack of n = -1 to indicate tcp '''
+        # TBD not used.  remove?
+        ''' note hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, one_done=False, test_file=None):
