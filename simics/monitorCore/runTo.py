@@ -330,13 +330,18 @@ class RunTo():
     def doStopAction(self, dumb=None):
         if self.stop_action is not None:
             flist = self.stop_action.flist
-        if flist is not None: 
+        if flist is not None and len(flist) > 0: 
             self.lgr.debug('runToProc doStopAction has flist')
-            for fun_item in flist:
-                if len(fun_item.args) ==  0:
-                    fun_item.fun()
-                else:
-                    fun_item.fun(fun_item.args)
+            first_item = flist[0]
+            if first_item.fun == self.top.toUser:
+                self.top.toUser(flist = flist[1:])
+            else: 
+                for fun_item in flist:
+                    self.lgr.debug('runToProc doStopAction fun %s' % fun_item.fun)
+                    if len(fun_item.args) ==  0:
+                        fun_item.fun()
+                    else:
+                        fun_item.fun(fun_item.args)
         else:
             self.lgr.debug('runToProc doStopAction NO flist, just run to user?')
             tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
