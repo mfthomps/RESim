@@ -20,6 +20,8 @@ from resimSimicsUtils import rprint
 how does simics not have this in its python sys.path?
 '''
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
+sys.path.append('/usr/local/lib/python3.6/dist-packages')
+sys.path.append('/usr/lib/python3/dist-packages')
 import magic
 '''
     Trace syscalls.  Used for process tracing and debug, e.g., runToConnect.
