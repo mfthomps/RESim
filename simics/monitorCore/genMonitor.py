@@ -3734,6 +3734,7 @@ class GenMonitor():
                     calls.append(c)
 
             calls.append('clone')
+            calls.append('execve')
             if self.mem_utils[target].WORD_SIZE == 8:
                 calls.append('dup3')
             else:
