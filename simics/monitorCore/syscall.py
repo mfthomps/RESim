@@ -1935,9 +1935,7 @@ class Syscall():
         elif callname == 'read':        
             exit_info.old_fd = frame['param1']
             ida_msg = 'read tid:%s (%s) FD: %s buf: 0x%x count: %s' % (str(tid), comm, str(frame['param1']), frame['param2'], str(frame['param3']))
-            self.lgr.debug(ida_msg)
-            #ida_msg = 'read tid:%s (%s) FD: %d buf: 0x%x count: %d' % (tid, comm, frame['param1'], frame['param2'], frame['param3'])
-            self.lgr.debug('read tid:%s (%s) FD: %d buf: 0x%x count: %d' % (tid, comm, frame['param1'], frame['param2'], frame['param3']))
+            #self.lgr.debug(ida_msg)
             exit_info.retval_addr = frame['param2']
             exit_info.count = frame['param3']
             ''' check runToIO '''
