@@ -517,7 +517,8 @@ might interfere with your subsequent analysis.
 Also see \ref{tracking}
 \begin{itemize}
 
-\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True, commence=None, max\_marks=None)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+\item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True, \
+             commence=None, max\_marks=None)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -1950,7 +1951,10 @@ manner as injecting data into a target application.  The {\tt drive-driver} util
 JSON file.  
 
 Your ini file must first be adjusted to make the driver the target.  Get the driver.param file from the RESIM\_DIR/simics/workspace directory and
-refer to that driver.ini file for driver component parameters.  Create a json file as large as any you expect to inject, e.g., using genJson.py.
+refer to that driver.ini file for driver component parameters.  Add those parmeters to your ini file.   The snapshot should be whatever snapshot you were using.
+Do not boot your simulation from scratch with the driver as the target, or it may not stop before the target processes have been created.
+
+Create a json file as large as any you expect to inject using genJson.py.
 Use the drive-driver utility to tee up reading of the JSON on the driver, after first using {\tt debugProc('/tmp/clientudpJson')} to catch its execution. (Provide the full path
 to direct RESim to debug the program even though it does not find the program file in the root prefix directory.)
 Then use {\tt runToOpen} to catch the opening of the JSON file (provide the full path, e.g., /tmp/foo.json), to see its FD.  You can then use prepInject on that FD
@@ -1965,6 +1969,8 @@ origin reset.
 The genJson.py utility will combine multiple input data files into a json file for use with drive-driver.  For TCP connectins, if 
 you provide host and port options to that utlity the resulting JSON will include those parameters and will be suitable for direct injection.
 This allows the same driver snapshot to be used for multile target processes.
+
+Another potential advantage of injecting into the driver is the ability to generate multiple traces from the same starting cycle.  
 
 NOTE:  You may end up working from two checkpoints, one for injecting JSON data into the driver and another for injecting data into the target application.
 The former is useful when analyzing watch marks because it is not subject to origin resets.  The latter is may be more efficient for TCP connections.
