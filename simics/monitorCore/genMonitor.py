@@ -615,6 +615,7 @@ class GenMonitor():
                 callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32)
                 call_info = 'callnum %d (%s)  compat32: %r' % (callnum, callname, self.is_compat32)
             self.lgr.debug('\tstopModeChanged entered kernel, eip 0x%x %s reason: %s %s' % (eip, instruct[1], reason, call_info))
+        self.lgr.debug('stopModeChanged, continue')
         SIM_run_alone(SIM_continue, 0)
 
     def modeChangeReport(self, want_tid, one, old, new):
@@ -828,7 +829,11 @@ class GenMonitor():
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             simics_status = SIM_simics_is_running()
             if not simics_status:
-                SIM_run_alone(SIM_continue, 0)
+                self.lgr.debug('run2User continue')
+                #SIM_run_alone(SIM_continue, 0)
+                SIM_run_alone(self.continueForward, None)
+            else:
+                self.lgr.debug('run2User would continue, but already running?')
         else:
             self.lgr.debug('run2User, already in user')
             if flist is not None: 
@@ -2719,6 +2724,7 @@ class GenMonitor():
             self.lgr.debug('runToSyscall for any system call')
             self.trace_all[self.target] = self.syscallManager[self.target].watchAllSyscalls(None, 'runToSyscall', stop_on_call=True)
      
+        self.lgr.debug('runToSyscall now continue')
         SIM_continue(0)
 
     def traceSyscall(self, callname=None, soMap=None, call_params=[], trace_procs = False, swapper_ok=False):
@@ -3766,7 +3772,8 @@ class GenMonitor():
                 SIM_run_alone(run_fun, None) 
             if run:
                 self.lgr.debug('runToIO now run, context is %s' % str(cpu.current_context))
-                SIM_continue(0)
+                self.continueForward()
+                #SIM_continue(0)
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, ignore_waiting=False):
         ''' Track syscalls that consume inputs.  Intended for use by prepInject functions '''
@@ -3831,7 +3838,8 @@ class GenMonitor():
                 self.lgr.warning('runToInput, NO FRAMES found for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
                 print('WARNING: runToInput found NO FRAMES for threads waiting in the kernel.  May miss returns, e.g., from select or read.')
         
-        SIM_continue(0)
+        self.continueForward()
+        #SIM_continue(0)
 
     def getCurrentSO(self):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -4106,7 +4114,8 @@ class GenMonitor():
             self.dataWatch[self.target].setRange(start, length, msg) 
         self.is_monitor_running.setRunning(True)
         if self.dataWatch[self.target].watch(show_cmp):
-            SIM_continue(0)
+            self.continueForward()
+            #SIM_continue(0)
         else: 
             print('no data being watched')
             self.lgr.debug('genMonitor watchData no data being watched')
@@ -4334,7 +4343,7 @@ class GenMonitor():
             else:
                 print ('cpu cycles 0x%x -- bookmarks return nothing.' % (cpu.cycles))
         
-    def continueForward(self):
+    def continueForward(self, dumb=None):
         if not self.isRunning():
             self.lgr.debug('continueForward')
             self.is_monitor_running.setRunning(True)
@@ -5712,8 +5721,8 @@ class GenMonitor():
         SIM_break_simulation('stopAndCall')
 
     def stopAndCallHap(self, callback, one, exception, error_string):
-        self.lgr.debug('stopAndCallHap')
         if self.stop_hap is not None:
+            self.lgr.debug('stopAndCallHap callback is %s' % str(callback))
             hap = self.stop_hap
             SIM_run_alone(self.rmStopHapAlone, hap)
             self.stop_hap = None
