@@ -593,7 +593,10 @@ class DataWatch():
                 ''' TBD awkward method for deciding to watch function results going to memory'''
                 index = len(self.start)-1
                 self.lgr.debug('dataWatch setRange is it a stack buffer? start 0x%x check ret addr' % (start))
-                ret_to = self.getReturnAddr()
+                ret_to = None
+                cpl = memUtils.getCPL(self.cpu)
+                if cpl > 0:
+                    ret_to = self.getReturnAddr()
                 if ret_to is None:
                     if not self.cpu.architecture.startswith('arm'):
                         bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
