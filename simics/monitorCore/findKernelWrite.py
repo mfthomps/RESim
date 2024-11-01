@@ -87,7 +87,7 @@ class findKernelWrite():
         if not self.kernel and self.checkInitialBuffer(addr):
             self.top.skipAndMail()
             return
-        if cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
         else:
@@ -580,7 +580,7 @@ class findKernelWrite():
             self.lgr.debug('thinkWeWrote in kernel, forward_hap is %d  on write to 0x%x. Set breaks on exit to user' % (self.forward_hap, self.kernel_write_break))
             '''
             self.lgr.debug('thinkWeWrote in kernel. go forward to exit')
-            if cpu.architecture.startswith('arm'):
+            if self.cpu.architecture.startswith('arm'):
                 self.kernel_exit_break1 = self.context_manager.genBreakpoint(None, 
                                                         Sim_Break_Linear, Sim_Access_Execute, self.param.arm_ret, 1, 0)
                 self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, 
