@@ -31,6 +31,7 @@ import time
 from simics import *
 import pageUtils
 import resimUtils
+import memUtils
 from resimHaps import *
 '''
 Manage code coverage tracking, maintaining two hits files per coverage unit.
@@ -125,6 +126,8 @@ class Coverage():
         self.suspend_start_end = {}
         self.suspendCoverage()
         self.suspend_callback = None
+
+        self.target_cr3 = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -177,19 +180,19 @@ class Coverage():
             if bb_rel not in self.dead_map:
                 bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         else: 
-            phys_addr = self.mem_utils.v2p(self.cpu, bb_rel)
+            phys_addr = self.mem_utils.v2p(self.cpu, bb_rel, force_cr3=self.target_cr3)
             #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
             #if phys_block.address not in self.dead_map:
             if phys_addr not in self.dead_map:
             
                 if phys_addr == 0 or phys_addr is None:
-                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     bp = self.setPhysBreak(phys_addr)
                     self.addr_map[bp] = bb_rel
             else:
-                #self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_block.address)
+                self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_block.address)
                 pass
         return bp
 
@@ -206,6 +209,7 @@ class Coverage():
         self.lgr.debug('coverage: cover physical: %r (afl overrides) linear: %r cpu: %s tid: %s' % (physical, self.linear, self.cpu.name, tid))
         self.offset = 0
         self.physical = physical
+        self.target_cr3 = memUtils.getCR3(self.cpu)
         block_file = self.analysis_path+'.blocks'
         if not os.path.isfile(block_file):
             if os.path.islink(self.analysis_path):
@@ -227,6 +231,10 @@ class Coverage():
         if self.blocks is None:
             self.lgr.error('Coverge: No basic blocks defined')
             return
+        self.setBlockBreaks()
+
+    def setBlockBreaks(self):
+        self.lgr.debug('setBlockBreaks')
         self.stopCover()
         tmp_list = []
         prev_bp = None
@@ -916,7 +924,7 @@ class Coverage():
     def doCoverage(self, no_merge=False, physical=False):
         '''
         Set coverage haps if not already set
-        AFL calls this each iteration
+        AFL calls this each iteration, though it only calls cover once below
         '''
         if not self.enabled:
             self.lgr.debug('cover NOT ENABLED')
