@@ -177,8 +177,8 @@ class StackFrameManager():
         #if new != Sim_CPU_Mode_Supervisor:
         ''' catch entry into kernel so that we can read SP without breaking simulation '''
         if new == Sim_CPU_Mode_Supervisor:
-            esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-            eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+            esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             self.lgr.debug('stackFrameManager modeChangedForStack, calling into  kernel mode eip: 0x%x esp: 0x%x' % (eip, esp))
             self.setStackBase()
 
