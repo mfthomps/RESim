@@ -1515,7 +1515,6 @@ class GenMonitor():
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
                     if load_info is not None and load_info.addr is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
-                        #self.getIDAFuns(self.full_path, elf_info.address)
                         self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.lgr)
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
@@ -4558,7 +4557,7 @@ class GenMonitor():
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
         comm = self.task_utils[self.target].getCommFromTid(debug_tid)
         if not self.fun_mgr.hasIDAFuns(comm=comm):
-            print('No functions defined, needs IDA or Ghidar analysis.')
+            print('No functions defined, needs IDA or Ghidra analysis.')
             return
            
         if commence is not None:
@@ -4803,7 +4802,7 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, fname=None, target=None, targetFD=None, trace_all=False, 
+            sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
             no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
@@ -4834,30 +4833,30 @@ class GenMonitor():
             self.goToOrigin()
 
         ''' See if the target cell or/and process differs from the current process into which data will be injected '''
-        target_cell, target_proc, target_cpu, this_cpu, tid = self.parseTarget(target)
+        target_cell, target_prog, target_cpu, this_cpu = self.parseTarget(target)
         if cpu is None:
             cpu = this_cpu
         ''' Record any debuggerish buffers that were specified in the ini file '''
         if trace_all:
             self.traceBufferTarget(target_cell, msg='injectIO traceAll')
 
-        self.lgr.debug('genMonitor injectIO tid:%s' % tid)
         cell_name = self.getTopComponentName(cpu)
         self.dataWatch[target_cell].resetWatch()
         if max_marks is not None:
             self.dataWatch[target_cell].setMaxMarks(max_marks) 
-        if target_proc is None:
+        if target_prog is None:
             self.page_faults[target_cell].stopWatchPageFaults()
+            tid = self.getTID()
             self.watchPageFaults(tid)
         if mark_logs or trace_fd is not None:
             self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
         self.lgr.debug('genMonitor injectIO create instance')
-        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, tid, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
+        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.soMap[self.target], self.lgr, 
-                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, fname=fname,
-                  target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, trace_all=trace_all, 
+                  self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, 
+                  target_cell=target_cell, target_prog=target_prog, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
                   no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc, trace_fd=trace_fd)
@@ -5256,7 +5255,7 @@ class GenMonitor():
             fname is to fuzz a library'''
         self.lgr.debug('genMonitor afl')
         self.rmDebugWarnHap()
-        target_cell, target_proc, target_cpu, this_cpu, tid = self.parseTarget(target)
+        target_cell, target_proc, target_cpu, this_cpu = self.parseTarget(target)
         cell_name = self.getTopComponentName(this_cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
@@ -5365,7 +5364,7 @@ class GenMonitor():
         '''
 
         ''' See if the target cell or/and process differs from the current process into which data will be injected '''
-        target_cell, target_proc, target_cpu, this_cpu, tid = self.parseTarget(target)
+        target_cell, target_proc, target_cpu, this_cpu = self.parseTarget(target)
         cell_name = self.getTopComponentName(this_cpu)
         #if not self.checkUserSpace(cpu):
         #    return
@@ -5739,11 +5738,11 @@ class GenMonitor():
     def log(self, string):
         rprint(string)
 
-    def injectToBB(self, bb, fname=None):
-        ibb = injectToBB.InjectToBB(self, bb, self.lgr, fname=fname)
+    def injectToBB(self, bb, target=None, targetFD=None):
+        ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target, targetFD=targetFD)
 
-    def injectToWM(self, addr, fname=None, max_marks=None, no_reset=False):
-        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, fname=fname, max_marks=max_marks, no_reset=no_reset)
+    def injectToWM(self, addr, target=None, targetFD=None, max_marks=None, no_reset=False):
+        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, target_prog=target, targetFD=targetFD, max_marks=max_marks, no_reset=no_reset)
 
     def getParam(self):
         return self.param[self.target]
@@ -6427,6 +6426,7 @@ class GenMonitor():
         self.run_to[self.target].toRunningProc(proc, plist, flist)
     
     def parseTarget(self, target):
+        self.lgr.debug('parseTarget %s' % target) 
         target_cell = self.target
         target_proc = None
         if target is not None:
@@ -6436,7 +6436,7 @@ class GenMonitor():
                 target_proc = parts[1]
             else:
                 target_proc = target
-            self.lgr.debug('target_cell %s target_proc %s' % (target_cell, target_proc))
+            self.lgr.debug('parseTarget target_cell %s target_proc %s' % (target_cell, target_proc))
 
         this_cpu, comm, tid = self.task_utils[self.target].curThread() 
         if target_cell != self.target:
@@ -6447,7 +6447,7 @@ class GenMonitor():
         else:
             target_cpu = this_cpu
 
-        return target_cell, target_proc, target_cpu, this_cpu, tid
+        return target_cell, target_proc, target_cpu, this_cpu
 
     def setTargetToDebugger(self):
         self.lgr.debug('setTargetToDebugger %s' % self.debugger_target)
