@@ -12,36 +12,6 @@ import logging.handlers
 import argparse
 import json
 
-def sendTCPxxx(host, port, infile, hang, lgr):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-    server_addr = (host, port)
-    #server_addr = ('localhost', port)
-    while True:
-        try:
-            sock.connect(server_addr)
-            lgr.debug('connect ok')
-            break
-        except(socket.error) as e:
-            lgr.debug('connect fail %s' % e)
-            time.sleep(1)
-            
-    with open (infile, 'r') as fh:
-        tcp_json = json.load(fh)
-        for item in tcp_json:
-            item_hex = eval(item)
-            item_bytes = binascii.unhexlify(item_hex)
-            sock.sendall(item_bytes) 
-            lgr.debug('sent %d bytes' % len(item_bytes))
-            #got = sock.recv(1024)
-            #lgr.debug('got %s' % got)
-            time.sleep(1)
-    if hang:
-        lgr.debug('hanging as directed')
-        time.sleep(1000000)
-    lgr.debug('closed connection')
-    sock.close()
-
 def sendTCP(lgr):
     with open('/tmp/catchme.json', 'r') as fh:
         jdict = json.load(fh)
@@ -82,9 +52,9 @@ def sendTCP(lgr):
                     pass
                 elif len(got) > 1:
                     done = True
-                    time.sleep(1)
+                    time.sleep(.01)
                 else:
-                    time.sleep(1)
+                    time.sleep(.01)
                     count = count+1
                     if count > 10:
                         break
