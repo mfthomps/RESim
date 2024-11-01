@@ -150,7 +150,10 @@ def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
             prog_elf = elfText.getText(prog_path, lgr)
         #print('prog addr 0x%x size %d' % (prog_elf.text_address, prog_elf.text_size))
         if lgr is not None:
-            lgr.debug('prog text_start 0x%x text_size %d' % (prog_elf.text_start, prog_elf.text_size))
+            if prog_elf.text_start is not None:
+                lgr.debug('prog text_start 0x%x text_size %d' % (prog_elf.text_start, prog_elf.text_size))
+            else:
+                lgr.debug('prog text_start is None for %s' % prog_path)
         block_file = analysis_path+'.blocks'
         #print('block file is %s' % block_file)
         if not os.path.isfile(block_file):
