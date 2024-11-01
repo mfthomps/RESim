@@ -37,7 +37,6 @@ import os
 import glob
 import pickle
 import json
-from resimSimicsUtils import rprint
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
@@ -216,10 +215,15 @@ class PlayAFL():
         self.no_page_faults = no_page_faults
         if not self.loadPickle(snap_name):
             print('No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
+            self.lgr.error('playAFL No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
+            self.top.quit()
             return None
+        self.lgr.debug('playAFL back from loadPickle')
 
         if target_proc is None:
+            self.lgr.debug('playAFL call debugTidGroup')
             self.top.debugTidGroup(tid, to_user=False)
+            self.lgr.debug('playAFL call finishInit')
             self.finishInit()
 
             if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
@@ -314,7 +318,7 @@ class PlayAFL():
         self.go()
 
     def disableReverse(self):
-        self.lgr.debug('playAFL disabling reverse execution')
+        self.lgr.debug('playAFL disabling reverse execution and enabling internals')
         cli.quiet_run_command('disable-reverse-execution')
         self.top.setDisableReverse()
         cli.quiet_run_command('enable-unsupported-feature internals')
@@ -367,7 +371,7 @@ class PlayAFL():
                 self.physical = False
                 self.lgr.debug('playAFL, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
-                self.context_manager.watchTasks()
+            #self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
             if self.commence_coverage is not None:
                 self.coverage.disableAll()
@@ -487,8 +491,10 @@ class PlayAFL():
                 self.setCounterHap()
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
+                    self.lgr.debug('playAfl goAlone call stoCover and doBlockBreaks')
                     self.coverage.stopCover() 
-                    self.coverage.doCoverage(no_merge=True, physical=self.physical) 
+                    self.coverage.setBlockBreaks()
+                    #self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
@@ -577,6 +583,7 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
+            self.context_manager.watchTasks()
             #if self.stop_hap is None:
             #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
@@ -804,6 +811,7 @@ class PlayAFL():
             else:
                 self.lgr.debug('playAFL stopHap, coverage not set and no search list')
             if self.repeat or self.dfile != 'oneplay':
+                self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
 
 
