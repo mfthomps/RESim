@@ -4396,7 +4396,7 @@ class DataWatch():
         # Use physical address for break.  TBD exceptions to this?
         #if index == 52:
         #    self.lgr.debug('setOneBreak NOW CALL v2p')
-        self.lgr.debug('setOneBreak index %d' % index)
+        #self.lgr.debug('setOneBreak index %d' % index)
         phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=False)
         #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
         #if index == 52:
@@ -4409,19 +4409,19 @@ class DataWatch():
             # update this, it may be shuffled
             self.phys_start[index] = phys
         else:
-            self.lgr.debug('dataWatch setOneBreak no phys addr for 0x%x, use linear' % self.start[index])
+            #self.lgr.debug('dataWatch setOneBreak no phys addr for 0x%x, use linear' % self.start[index])
             break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Read | Sim_Access_Write, self.start[index], self.length[index], 0)
             if index not in self.linear_breaks:
                 self.linear_breaks.append(index)
         end = self.start[index] + (self.length[index] - 1)
         eip = self.top.getEIP(self.cpu)
         hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
-        if phys is not None and phys != 0:
-            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
-                break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
-        else:
-            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
-                break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
+        #if phys is not None and phys != 0:
+        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
+        #        break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
+        #else:
+        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
+        #        break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
         if not replace:
             self.read_hap.append(hap)
         else:
@@ -4451,12 +4451,12 @@ class DataWatch():
             if self.start[index] is not None:
                 if index < len(self.read_hap):
                     if self.read_hap[index] is None:
-                        self.lgr.debug('remove this index %d of do replace' % index)
+                        #self.lgr.debug('remove this index %d of do replace' % index)
                         self.setOneBreak(index, replace=True)
                     #else:
                     #    self.lgr.debug('remove this index %d of readhap is none' % index)
                 elif index == len(self.read_hap):
-                    self.lgr.debug('remove this index %d of do append' % index)
+                    #self.lgr.debug('remove this index %d of do append' % index)
                     self.setOneBreak(index, replace=False)
                 else:
                     self.lgr.error('dataWatch setBreakRange start index, hap index mismatch')
