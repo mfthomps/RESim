@@ -34,8 +34,7 @@ import resimUtils
 import aflPath
 import findTrack
 class InjectToWM():
-    def __init__(self, top, addr, dataWatch, lgr, fname=None, max_marks=None, no_reset=False):
-        # TBD why optional fname?
+    def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=False):
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
         self.top = top
@@ -44,10 +43,13 @@ class InjectToWM():
         self.lgr = lgr
         self.max_marks = max_marks
         self.no_reset = no_reset
+        if target_prog is not None and targetFD is None:
+            self.lgr.error('injectToWM called with target_prog, but no target FD')
+            return
         here = os.getcwd()
-        self.target = os.path.basename(here)
-        print('target is %s' % self.target)
-        self.lgr.debug('InjectToWM addr: 0x%x target is %s fname %s max_marks %s' % (addr, self.target, fname, max_marks))
+        self.afl_target = os.path.basename(here)
+        #print('afl target is %s' % self.afl_target)
+        self.lgr.debug('InjectToWM addr: 0x%x target is %s target_prog %s max_marks %s' % (addr, self.afl_target, target_prog, max_marks))
         result = self.findOneTrack()
         if result is not None:
             self.mark_index = result.mark['index']
@@ -56,7 +58,7 @@ class InjectToWM():
             print('InjectToWM inject %d bytes (may be filtered or truncated) and %d packets from %s' % (result.size, result.mark['packet'], result.path))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, fname=fname, reset_debug=True, max_marks=max_marks,
+            self.inject_io = self.top.injectIO(result.path, callback=self.doStop, go=False, target=target_prog, targetFD=targetFD, reset_debug=True, max_marks=max_marks,
                                                no_reset=no_reset)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
@@ -114,7 +116,7 @@ class InjectToWM():
         best_result_marks = None
         without_resets = None
         best = None
-        expaths = aflPath.getAFLTrackList(self.target)
+        expaths = aflPath.getAFLTrackList(self.afl_target)
         self.lgr.debug('findOneTrack 0x%x found %d paths' % (self.addr, len(expaths)))
         for index in range(len(expaths)):
             # NOTE addr given to injectToWM are load addresses, so do not let findTrack apply offsets

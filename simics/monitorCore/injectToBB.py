@@ -32,25 +32,28 @@ import findBB
 import applyFilter
 import resimUtils
 class InjectToBB():
-    def __init__(self, top, bb, lgr, fname=None):
+    def __init__(self, top, bb, lgr, target_prog=None, targetFD=None):
         unfiltered = '/tmp/bb.io'
         filtered = '/tmp/bb_filtered.io'
         self.bb = bb
         self.top = top
         self.lgr = lgr
+        if target_prog is not None and targetFD is None:
+            self.lgr.error('injectToBB called with target_prog, but no target FD')
+            return
         here = os.getcwd()
-        target = os.path.basename(here)
-        print('target is %s' % target)
+        afl_target = os.path.basename(here)
+        print('afl_target is %s' % afl_target)
         os_type = top.getTargetEnv('OS_TYPE')
         root_prefix = top.getTargetEnv('RESIM_ROOT_PREFIX')
-        flist = findBB.findBB(target, bb, quiet=True, lgr=lgr)
-        self.lgr.debug('InjectToBB bb: 0x%x target is %s len of flist is %d' % (bb, target, len(flist)))
+        flist = findBB.findBB(afl_target, bb, quiet=True, lgr=lgr)
+        self.lgr.debug('InjectToBB bb: 0x%x afl_target is %s len of flist is %d' % (bb, afl_target, len(flist)))
         self.inject_io = None
-        self.top.debugSnap()
-        if fname is None:
+        #self.top.debugSnap()
+        if target_prog is None:
             prog = self.top.getFullPath()
         else: 
-            prog = fname
+            prog = target_prog
         basic_block = resimUtils.getOneBasicBlock(prog, bb, os_type, root_prefix, lgr=self.lgr)
         if basic_block is None:
             self.lgr.error('failed getting basic block for address 0x%x prog %s' % (bb, prog)) 
@@ -84,7 +87,7 @@ class InjectToBB():
             self.lgr.debug('InjectToBB inject %s' % qfile)
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
-            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, fname=fname, reset_debug=False)
+            self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, target=target_prog, targetFD=targetFD, reset_debug=False)
             afl_filter = self.inject_io.getFilter()
             if afl_filter is not None:
                 data = None
