@@ -79,7 +79,7 @@ def getText(path, lgr):
     line_list = out[0].decode("utf-8").splitlines()
     line_iterator = iter(line_list) 
     for line in line_iterator:
-        lgr.debug(line)
+        #lgr.debug(line)
         if line.startswith('ELF Header'):
             iself = True
             continue
