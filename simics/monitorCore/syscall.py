@@ -2319,6 +2319,13 @@ class Syscall():
             exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
             mode = oct(frame['param2'])
             ida_msg = '%s %s mode: %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, mode, tid, comm, self.cpu.cycles)
+        elif callname == 'readlinkat':
+            dirfd= resimSimicsUtils.fdString(frame['param1'])
+            exit_info.fname_addr = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            exit_info.retval_addr = frame['param3'] 
+            exit_info.count = frame['param4'] 
+            ida_msg = '%s tid:%s (%s) dirfd: %s fname: %s buf addr: 0x%x size: 0x%x cycle:0x%x' % (callname, tid, comm, dirfd, exit_info.fname, exit_info.retval_addr, exit_info.count, self.cpu.cycles)
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
