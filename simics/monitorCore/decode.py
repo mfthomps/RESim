@@ -38,7 +38,7 @@ def modifiesOp0(op):
 
 #2016-11-19 09:35:43,567 - DEBUG - cycleRegisterMod mn: mov op0: eax  op1: dword ptr [ebp+0x8]
 
-def regIsPart(reg1, reg2):
+def regIsPart(reg1, reg2, lgr=None):
     if reg1 is None or reg2 is None:
         return False
     if reg1 == reg2:
@@ -195,31 +195,60 @@ def isIndirect(reg):
     else:
         return False
 
-def getValue(s, cpu, lgr=None):
+def regMask(reg):
+    nb = regLen(reg)
+    if nb == 1:
+        mask = 0xff
+    elif nb == 2:
+        mask = 0xffff
+    elif nb == 4:
+        mask = 0xffffffff
+    else:
+        mask = 0xffffffffffffffff
+    return mask
+
+def getValue(s, cpu, lgr=None, reg_values={}):
     retval = None
-    #lgr.debug('getValue for %s' % s)
+    #if lgr is not None:
+    #    lgr.debug('getValue for %s' % s)
+    s = s.strip()
     if '+' in s:
         parts = s.split('+',1)
-        v1 = getValue(parts[0], cpu, lgr) 
-        v2 = getValue(parts[1], cpu, lgr)
+        reg_size = 4
+        if isReg(parts[0]):
+            reg_mask = regMask(parts[0])
+        else:
+            reg_mask = 0xffffffffffffffff
+ 
+        v1 = getValue(parts[0], cpu, lgr, reg_values=reg_values) 
+        v2 = getValue(parts[1], cpu, lgr, reg_values=reg_values)
         if v1 is not None and v2 is not None:
-            retval = getValue(parts[0], cpu, lgr) + getValue(parts[1], cpu, lgr)
+            retval = (v1+v2) & reg_mask
+            #if lgr is not None:
+            #    lgr.debug('getValue for %s is + p1 0x%x p2 0x%x' % (s, v1, v2))
         elif lgr is not None:
             lgr.debug('decode getValue failed getting values from %s' % s)
     elif '-' in s:
         parts = s.split('-',1)
-        retval = getValue(parts[0], cpu, lgr) - getValue(parts[1], cpu, lgr)
+        p1val = getValue(parts[0], cpu, lgr, reg_values=reg_values) 
+        p2val = getValue(parts[1], cpu, lgr, reg_values=reg_values)
+        retval = p1val - p2val
+        #if lgr is not None:
+        #    lgr.debug('getValue for %s is - p1 0x%x p2 0x%x' % (s, p1val, p2val))
         
     elif '*' in s:
         retval = 1
         parts = s.split('*')
         for p in parts:
-            retval = retval * getValue(p, cpu, lgr=lgr) 
+            retval = retval * getValue(p, cpu, lgr=lgr, reg_values=reg_values) 
     elif isReg(s):
-        reg_num = cpu.iface.int_register.get_number(s)
-        #if lgr is not None:
-        #    lgr.debug('getValue %s is reg, get its value' % s)
-        retval = cpu.iface.int_register.read(reg_num)
+        if s in reg_values:
+            retval = reg_values[s]
+        else:
+            reg_num = cpu.iface.int_register.get_number(s)
+            retval = cpu.iface.int_register.read(reg_num)
+            #if lgr is not None:
+            #    lgr.debug('getValue %s is reg, get its value 0x%x' % (s, retval))
     else:
         try:
             retval = int(s, 16)
@@ -230,12 +259,15 @@ def getValue(s, cpu, lgr=None):
                 #    lgr.debug('getValue returning 0x%x' % retval)
             except:
                 if lgr is not None:
-                    lgr.error('getValue could not parse %s' % s)
+                    lgr.error('getValue could not parse <%s>' % s)
                 pass
+        #if lgr is not None and retval is not None:
+        #    lgr.debug('getValue %s is scalar, get its value 0x%x' % (s, retval))
     return retval
 
         
 def addressFromExpression(cpu, exp, lgr, reg_values={}):
+    #TBD remove not used
     address = None
     if isReg(exp):
         keys = reg_values.keys()
@@ -267,10 +299,11 @@ def addressFromExpression(cpu, exp, lgr, reg_values={}):
 
 def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
-    #lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
+    lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
-        address = addressFromExpression(cpu, bracketed, lgr, reg_values=reg_values)
+        #address = addressFromExpression(cpu, bracketed, lgr, reg_values=reg_values)
+        address = getValue(bracketed, cpu, lgr, reg_values=reg_values)
         if address is not None:
             #lgr.debug('bracketed value was %x' % address)
             offset = 0
@@ -288,7 +321,7 @@ def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
                           #lgr.debug("adjusting by offset %d" % offset)
                           address = address + offset
                       except:
-                          #lgr.debug('did not parse offset %s' % prefix)
+                          lgr.debug('did not parse offset %s' % prefix)
                           pass
 
         else:

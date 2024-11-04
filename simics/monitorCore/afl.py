@@ -119,7 +119,18 @@ class AFL():
             else:
                 self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
                 self.backstop_cycles =   1000000
-                
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
+            self.lgr.debug('IOCTL_COUNT_MAX is %d' % self.ioctl_count_max)
+        else:
+            self.ioctl_count_max = None
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.settimeout(2)
         self.server_address = ('localhost', self.port)
@@ -136,6 +147,8 @@ class AFL():
         self.restart = 0
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
@@ -154,15 +167,13 @@ class AFL():
 
         self.resim_ctl = None
         #if resimUtils.isParallel():
-        try:
+        if test_file is None:
             if stat.S_ISFIFO(os.stat('resim_ctl.fifo').st_mode):
                 self.lgr.debug('afl found resim_ctl.fifo, open it for read %s' % os.path.abspath('resim_ctl.fifo'))
                 self.resim_ctl = os.open('resim_ctl.fifo', os.O_RDONLY | os.O_NONBLOCK)
                 self.lgr.debug('afl back from open')
             else: 
                 self.lgr.debug('AFL did NOT find resim_ctl.fifo')
-        except FileNotFoundError:
-            self.lgr.debug('AFL did NOT find resim_ctl.fifo')
          
         self.starting_cycle = self.target_cpu.cycles 
         self.total_cycles = 0
@@ -179,6 +190,7 @@ class AFL():
 
         self.exit_syscall = None
 
+        self.did_page_faults = False
         self.test_file = test_file
         if target_proc is None:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
@@ -192,6 +204,8 @@ class AFL():
             self.top.setTarget(self.target_cell) 
             self.top.debugProc(target_proc, self.aflInitCallback, track_threads=False)
         #self.coverage.watchExits()
+        self.function_backstop_hap = None
+        self.functionBackstop()
     
     def ranToIO(self, dumb):
         ''' callback after completing runToIO '''
@@ -268,7 +282,7 @@ class AFL():
 
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('afl aflInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
+        self.lgr.debug('afl aflInitCallback. target tid: %s finish init to set coverage and such' % self.target_tid)
         if self.targetFD is not None and self.count > 0:
             ''' run to IO before finishing init '''
             self.lgr.debug('afl aflInitCallback targetFD 0x%x' % self.targetFD)
@@ -288,7 +302,7 @@ class AFL():
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()
-        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
+        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
         self.goN(0)
 
     def disableReverse(self):
@@ -349,6 +363,7 @@ class AFL():
                     self.empty_trace_bits = trace_bits
             new_hits = self.coverage.getHitCount() 
             self.total_hits += new_hits
+            delta_cycles = self.target_cpu.cycles-self.starting_cycle
             self.total_cycles = self.total_cycles+(self.target_cpu.cycles-self.starting_cycle)
             if self.iteration % 100 == 0:
                 avg = self.total_hits/100
@@ -364,7 +379,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d' % (self.iteration, self.cpu.cycles, new_hits))
+            self.lgr.debug('afl stopHap bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -380,7 +395,8 @@ class AFL():
                         status = AFL_CRASH
                         break
             # why again and again?
-            self.page_faults.stopWatchPageFaults()
+            #self.page_faults.stopWatchPageFaults()
+            self.page_faults.clearPendingFaults()
             self.top.clearExitTid()
             if status == AFL_CRASH:
                 self.lgr.debug('afl finishUp status reflects crash %d iteration %d, data written to ./icrashed' %(status, self.iteration)) 
@@ -487,6 +503,7 @@ class AFL():
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 0
         self.bad_trick = False
+        #self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
             self.lgr.debug('afl goN first, context is %s' % str(self.target_cpu.current_context))
@@ -504,7 +521,7 @@ class AFL():
         if self.commence_coverage is not None:
             self.coverage.disableAll()
             #self.lgr.debug('afl goN disabled coverage breakpoints')
-        self.lgr.debug('afl goN restore snapshot')
+        #self.lgr.debug('afl goN restore snapshot')
         cli.quiet_run_command('restore-snapshot name=origin')
         if not self.linear and self.context_manager.isDebugContext():
             SIM_run_alone(self.context_manager.restoreDefaultContext, None)
@@ -547,17 +564,20 @@ class AFL():
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
-        self.write_data.write()
+        count = self.write_data.write()
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
-                self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
-        # TBD why again and again?
-        self.page_faults.watchPageFaults(afl=True)
+                #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                self.write_data.watchIOCtl()
+        if not self.did_page_faults: 
+            # TBD why again and again?
+            self.page_faults.watchPageFaults(afl=True)
+            self.did_page_faults = True
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()
@@ -662,7 +682,7 @@ class AFL():
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
 
     def fixFaults(self):
-        if self.target_cpu.architecture == 'arm':
+        if self.target_cpu.architecture.startswith('arm'):
             self.fault_hap = SIM_hap_add_callback_obj_index("Core_Exception", self.target_cpu, 0,
                  self.faultCallback, self.target_cpu, 1)
 
@@ -722,3 +742,25 @@ class AFL():
         if self.stop_hap_cycle is not None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
             self.stop_hap_cycle = None
+
+    def functionBackstop(self):
+        function_bs = os.getenv('FUNCTION_BACKSTOP')
+        self.lgr.debug('afl functionBackstop function_bs %s' % function_bs)
+        if function_bs is not None:
+            if os.path.isfile(function_bs):
+                with open(function_bs) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith('#'):
+                            continue
+                        addr = int(line, 16)
+                        function_break = SIM_breakpoint(self.target_cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                        self.function_backstop_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.functionBackstopHap, None, function_break)
+                        self.lgr.debug('afl functionBackstop set break at 0x%x' % addr)
+                        
+    def functionBackstopHap(self, dumb, third, break_num, memory):
+        if self.function_backstop_hap is None:
+            return
+        #self.lgr.debug('afl functionBackstopHap stop it')
+        SIM_break_simulation('afl function backstop')
+                

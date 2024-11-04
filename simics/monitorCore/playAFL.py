@@ -37,13 +37,13 @@ import os
 import glob
 import pickle
 import json
-from resimUtils import rprint
 
 class PlayAFL():
     def __init__(self, top, cpu, cell_name, backstop, no_cover, mem_utils, dfile,
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
-             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False):
+             fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
+             search_list=None):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -112,6 +112,16 @@ class PlayAFL():
                 return
         else: 
             self.pad_to_size = 0
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
+        else:
+            self.ioctl_count_max = None
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
         self.stop_on_read =   stop_on_read
         if not self.stop_on_read:
             sor = os.getenv('AFL_STOP_ON_READ')
@@ -146,8 +156,9 @@ class PlayAFL():
                     print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
+        self.search_list = search_list
         tid = self.top.getTID()
-        self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname))
+        self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s search_list:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname, search_list))
         self.initial_context = self.target_cpu.current_context
         self.index = -1
         self.stop_hap = None
@@ -172,6 +183,7 @@ class PlayAFL():
         self.afl_packet_count = None
         self.current_packet = 0
         self.hit_total = 0
+        self.diag_hits = diag_hits
 
         self.filter_module = None
         packet_filter = os.getenv('AFL_PACKET_FILTER')
@@ -189,21 +201,32 @@ class PlayAFL():
         self.exit_list = []
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
+ 
+        if self.search_list is not None:
+            self.no_cover = True
+        self.search_found_eip = None
         
         self.snap_name = snap_name
         self.no_page_faults = no_page_faults
         if not self.loadPickle(snap_name):
             print('No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
+            self.lgr.error('playAFL No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
+            self.top.quit()
             return None
+        self.lgr.debug('playAFL back from loadPickle')
 
         if target_proc is None:
+            self.lgr.debug('playAFL call debugTidGroup')
             self.top.debugTidGroup(tid, to_user=False)
+            self.lgr.debug('playAFL call finishInit')
             self.finishInit()
 
-            if self.dfile != 'oneplay':
+            if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
@@ -211,7 +234,7 @@ class PlayAFL():
             self.lgr.debug('playAFL target_proc %s reset origin and set target to %s' % (target_proc, target_cell))
             self.top.resetOrigin()
             self.top.setTarget(target_cell)
-            self.top.debugProc(target_proc, self.playInitCallback)
+            self.top.debugProc(target_proc, self.playInitCallback, not_to_user=True)
         self.did_exit = False
 
     def ranToIO(self, dumb):
@@ -228,7 +251,7 @@ class PlayAFL():
 
         SIM_run_alone(self.setCycleHap, None)
         SIM_run_alone(self.setCounterHap, None)
-        self.lgr.debug('ranToIO set counter hap and cycle hap now continue')
+        self.lgr.debug('ranToIO set counter hap and cycle hap now continue from cycle 0x%x' % self.cpu.cycles)
         SIM_run_alone(SIM_run_command, 'continue')
 
     def setCounterHap(self, dumb=None):
@@ -248,7 +271,7 @@ class PlayAFL():
             return
         tid = self.top.getTID(target=self.target_cell)
         if tid != self.target_tid:
-            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %d cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
+            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %s cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
             return
         self.exit_counter = self.exit_counter+1
         self.lgr.debug('playAFL counterHap, count now %d' % self.exit_counter)
@@ -267,7 +290,7 @@ class PlayAFL():
     def playInitCallback(self):
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
-        self.lgr.debug('playAFL playInitCallback. target tid: %d finish init to set coverage and such' % self.target_tid)
+        self.lgr.debug('playAFL playInitCallback. target tid: %s finish init to set coverage and such' % self.target_tid)
         self.trace_buffer = self.top.traceBufferTarget(self.target_cell, msg='playAFL')
         self.initial_context = self.target_cpu.current_context
         if self.trace_all:
@@ -291,11 +314,11 @@ class PlayAFL():
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()
-        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s tid: %d' % (self.cell_name, tid))
+        self.lgr.debug('playAFL finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
         self.go()
 
     def disableReverse(self):
-        self.lgr.debug('playAFL disabling reverse execution')
+        self.lgr.debug('playAFL disabling reverse execution and enabling internals')
         cli.quiet_run_command('disable-reverse-execution')
         self.top.setDisableReverse()
         cli.quiet_run_command('enable-unsupported-feature internals')
@@ -340,14 +363,15 @@ class PlayAFL():
                     prog_path = self.fname
             self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s' % (analysis_path, prog_path))
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, fname=analysis_path, prog_path=prog_path)
+               afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
+               fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
             self.lgr.debug('playAFL backfrom enableCoverage')
             self.physical = True
             if self.linear:
                 self.physical = False
                 self.lgr.debug('playAFL, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
-                self.context_manager.watchTasks()
+            #self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
             if self.commence_coverage is not None:
                 self.coverage.disableAll()
@@ -378,7 +402,11 @@ class PlayAFL():
                     pass
                     #print('full_path is %s,  wrote that to %s' % (full_path, hits_path))
             #self.backstop.setCallback(self.whenDone)
+        if self.search_list is not None:
+            self.lgr.debug('playAFL search_list at %s' % self.search_list)
+            self.setSearch() 
         self.backstop.setCallback(self.backstopCallback)
+        
 
     def go(self, findbb=None):
         if len(self.afl_list) == 0:
@@ -463,8 +491,10 @@ class PlayAFL():
                 self.setCounterHap()
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
+                    self.lgr.debug('playAfl goAlone call stoCover and doBlockBreaks')
                     self.coverage.stopCover() 
-                    self.coverage.doCoverage(no_merge=True, physical=self.physical) 
+                    self.coverage.setBlockBreaks()
+                    #self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
@@ -510,13 +540,14 @@ class PlayAFL():
                     force_default_context = False
                 self.lgr.debug('playAFL gen writeData')
                 write_callback = None
-                if self.stop_on_read:
+                if self.stop_on_read or self.ioctl_count_max is not None:
                     write_callback = self.stopOnRead
                 self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                          self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                          pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                          #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
-                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback)
+                         filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
+                         ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
             else:
                 self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
             eip = self.top.getEIP(self.cpu)
@@ -524,27 +555,35 @@ class PlayAFL():
             count = self.write_data.write()
             if self.mem_utils.isKernel(self.addr):
                 if self.addr_of_count is not None and not self.top.isWindows():
-                    self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
-            bp_count = self.coverage.bpCount()
-            self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
+                    self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
+                    self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                    self.write_data.watchIOCtl()
+            if self.trace_all:
+                self.write_data.tracingIO()
+            if self.coverage is not None:
+                bp_count = self.coverage.bpCount()
+                self.lgr.debug('playAFL goAlone tid:%s ip: 0x%x wrote %d bytes from file %s continue from cycle 0x%x %d cpu context: %s %d breakpoints set' % (self.tid, eip, count, self.afl_list[self.index], self.cpu.cycles, self.cpu.cycles, str(self.cpu.current_context), bp_count))
             # TBD just rely on coverage?
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             if self.trace_buffer is not None:
                 self.trace_buffer.msg('playAFL from '+self.afl_list[self.index])
+            if self.trace_all:
+                self.lgr.debug('playAFL goAlone call traceAll')
+                self.top.traceAll()
 
             if self.afl_mode: 
                 if self.coverage is not None:
                     if self.repeat is False or self.repeat_counter > 1:
-                        self.coverage.watchExits()
+                        self.coverage.watchExits(callback=self.reportExit, suspend_callback=self.reportSuspend, tid=self.target_tid)
                 else:
                     self.lgr.error('playAFL afl_mode but not coverage?')
                     return
             elif self.coverage is not None:
-                self.coverage.watchExits(callback=self.reportExit, tid=self.target_tid)
+                self.coverage.watchExits(callback=self.reportExit, suspend_callback=self.reportSuspend, tid=self.target_tid)
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
+            self.context_manager.watchTasks()
             #if self.stop_hap is None:
             #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
 
@@ -557,6 +596,9 @@ class PlayAFL():
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not calling resetOrigin')
                 #self.top.resetOrigin()
+
+            if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
+                self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
             self.lgr.debug('playAFL goAlone now continue')
             if self.repeat:
@@ -638,10 +680,16 @@ class PlayAFL():
         if index < len(self.afl_list):
             queue_dir = os.path.dirname(self.afl_list[index])
             queue_parent = os.path.dirname(queue_dir)
-            if os.path.basename(queue_dir) == 'manual_queue':
-                coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+            if self.search_list is None:
+                if os.path.basename(queue_dir) == 'manual_queue':
+                    coverage_dir = os.path.join(queue_parent, 'manual_coverage')
+                else:
+                    coverage_dir = os.path.join(queue_parent, 'coverage')
             else:
-                coverage_dir = os.path.join(queue_parent, 'coverage')
+                if os.path.basename(queue_dir) == 'manual_queue':
+                    coverage_dir = os.path.join(queue_parent, 'manual_search')
+                else:
+                    coverage_dir = os.path.join(queue_parent, 'search')
             try:
                 os.makedirs(coverage_dir)
             except:
@@ -758,9 +806,12 @@ class PlayAFL():
                 if self.top.hasPendingPageFault(self.tid):
                     print('TID %s has pending page fault' % self.tid)
                     self.lgr.debug('TID %s has pending page fault' % self.tid)
+            elif self.search_list is not None:
+                self.lgr.debug('playAFL stopHap Search completed.')
             else:
-                self.lgr.debug('playAFL stopHap')
+                self.lgr.debug('playAFL stopHap, coverage not set and no search list')
             if self.repeat or self.dfile != 'oneplay':
+                self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
 
 
@@ -794,6 +845,16 @@ class PlayAFL():
         if self.stop_hap is None:
                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
         SIM_break_simulation('process exit')
+ 
+    def reportSuspend(self):
+        self.did_suspend = True
+        SIM_run_alone(self.reportSuspendAlone, None)
+
+    def reportSuspendAlone(self, dumb):
+        print('Process suspend, bail. cycles 0x%x' % self.target_cpu.cycles)
+        if self.stop_hap is None:
+               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+        SIM_break_simulation('process suspend')
  
     def setCycleHap(self, dumb=None):
         if self.cycle_event is None:
@@ -844,3 +905,35 @@ class PlayAFL():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
             self.lgr.debug('playAFL stop_hap_cycle removed')
             self.stop_hap_cycle = None
+
+    def setSearch(self):
+        with open(self.search_list) as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                addr = int(line, 16)
+                context = self.target_cpu.current_context
+                search_bp = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+                self.search_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.searchHap, None, search_bp)
+                self.lgr.debug('playAFL set search break on 0x%x' % addr)
+
+    def searchHap(self, dumb, third, break_num, memory):
+        self.lgr.debug('searchHap hit mem 0x%x' % memory.logical_address)
+        print('searchHap hit mem 0x%x' % memory.logical_address)
+        eip = self.top.getEIP(cpu=self.target_cpu)
+        value = SIM_get_mem_op_value_le(memory)
+        self.recordSearchFind(memory.logical_address, eip, value)
+
+    def recordSearchFind(self, addr, eip, value):
+        ''' search finds will go in a "search" directory along side queue, etc. '''
+        self.lgr.debug('playAFL recordSearchFinds')
+        #hit_list = list(hit_bbs.keys())
+        fname = self.getHitsPath(self.index)
+        if fname is not None: 
+            basename = os.path.basename(fname)
+            self.lgr.debug('playAFL recordSearchFind record hit at eip 0x%x value 0x%x from %s' % (eip, value, basename))
+            if not os.path.isfile(fname):
+                self.lgr.debug('playAFL recordSearchFind, assume ad-hoc path')
+            with open(fname, 'w') as fh:
+                fh.write('addr:0x%x eip:0x%x value:0x%x' % (addr, eip, value))

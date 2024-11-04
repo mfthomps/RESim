@@ -117,6 +117,7 @@ class reverseToCall():
             self.recent_cycle = {}
             self.jump_stop_hap = None
             self.sysenter_hap = None
+            self.sysenter64_hap = None
             self.page_faults = None
             self.frame_ips = []
             self.uncall_hap = None
@@ -147,6 +148,10 @@ class reverseToCall():
             self.sysenter_hap = None
         else:
            self.lgr.debug('noWatchSysenter, NO ENTER BREAK')
+        if self.sysenter64_hap is not None:
+            self.lgr.debug('reverseToCall noWatchSystenter, remove sysenter64 breaks and hap handle %d' % self.sysenter64_hap)
+            self.context_manager.genDeleteHap(self.sysenter64_hap, immediate=True)
+            self.sysenter64_hap = None
 
     def v2p(self, cpu, v):
         try:
@@ -168,10 +173,26 @@ class reverseToCall():
             return
         cell = self.top.getCell()
         if self.sysenter_hap is None:
-            if self.cpu.architecture == 'arm':
-                self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
-                enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
-                self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
+            if self.top.isVxDKM(self.cell_name):
+                # TBD fix this
+                #return
+                bp_start = None
+                self.global_sym = self.task_utils.getGlobalSymDict()
+                for addr in self.global_sym:
+                    bp = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
+                    if bp_start is None:
+                        bp_start = bp
+                self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, bp_start, bp, 'reverseToCall sysenter')
+                self.lgr.debug('vxKSyscall setGlobal set bp range %d %d' % (bp_start, bp))
+            elif self.cpu.architecture.startswith('arm'):
+                if self.param.arm_entry is not None:
+                    self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
+                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
+                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
+                    self.lgr.debug('watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
+                    self.sysenter64_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
             else:
                 if self.param.sysenter is not None and self.param.sys_entry is not None:
                     self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
@@ -206,12 +227,12 @@ class reverseToCall():
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.context_manager.changeDebugTid(tid) 
             self.lgr.debug('reverseToCall setup')
-            if cpu.architecture == 'arm':
+            if cpu.architecture.startswith('arm'):
                 self.decode = decodeArm
                 self.lgr.debug('setup using arm decoder')
             else:
                 self.decode = decode
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 self.callmn = 'bl'
             else:
                 self.callmn = 'call'
@@ -228,12 +249,12 @@ class reverseToCall():
             call_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 command = 'set-prefix %d "bl"' % call_break_num
             else:
                 command = 'set-prefix %d "call"' % call_break_num
             SIM_run_alone(SIM_run_command, command)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
                    Sim_Access_Execute, range_start, size, 0)
                 self.the_breaks.append(ret_break_num)
@@ -257,7 +278,7 @@ class reverseToCall():
             self.the_breaks.append(break_num)
 
     def thinkExecuted(self, page_info):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             nx = memUtils.testBit(page_info.entry, 0)
             accessed = memUtils.testBit(page_info.entry, 4)
             if nx or not accessed: 
@@ -394,7 +415,7 @@ class reverseToCall():
         return retval
     
     def isExit(self, instruct, eip):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             lr = self.top.getReg('lr', self.cpu)
             #if eip == self.param.arm_ret or (instruct.startswith('mov') and instruct.endswith('lr') and lr < self.param.kernel_base):
             if eip == self.param.arm_ret:
@@ -407,7 +428,7 @@ class reverseToCall():
         return False
 
     def isRet(self, instruct, eip):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             parts = instruct.split()
             if parts[0].strip().startswith('ld') and parts[1].startswith('pc'):
                 op2, op1 = self.decode.getOperands(instruct)
@@ -628,7 +649,7 @@ class reverseToCall():
             ''' assume entered kernel due to interrupt? '''
             ''' cheesy.. go back to user space and then previous instruction? '''
             rev_to = None
-            if self.cpu.architecture == 'arm' and (instruct[1].startswith('bx lr') or (instruct[1].startswith('mov') and instruct[1].endswith('lr'))): 
+            if self.cpu.architecture.startswith('arm') and (instruct[1].startswith('bx lr') or (instruct[1].startswith('mov') and instruct[1].endswith('lr'))): 
                 rev_to = self.top.getReg('lr', self.cpu)
                 self.lgr.debug('jumpOverKernel ARM got lr value 0x%x' % rev_to)
          
@@ -660,7 +681,7 @@ class reverseToCall():
                     retval = False
                     self.lgr.debug('jumpOverKernel pagefault register changed value was 0x%x, but now 0x%x -- assume kernel did it, return to user space' % (self.reg_val,
                        rval))
-            elif self.cpu.architecture == 'arm' and self.tryShortCall():
+            elif self.cpu.architecture.startswith('arm') and self.tryShortCall():
                 retval = True
             elif self.tryRecentCycle(page_faults, tid):
                 self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
@@ -777,7 +798,7 @@ class reverseToCall():
         self.num_bytes = num_bytes
         self.kernel = kernel
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, taint, kernel))
+        self.lgr.debug('\ndoRevToModReg eip: 0x%x cycle 0x%x for register %s offset is %d num_bytes %s taint: %r kernel: %r' % (eip, self.cpu.cycles, reg, offset, num_bytes, taint, kernel))
         self.reg = reg
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
@@ -887,7 +908,7 @@ class reverseToCall():
         self.the_breaks = []
 
     def conditionalMet(self, mn):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             return armCond.condMet(self.cpu, mn)
         else:
             if mn.startswith('cmov'):
@@ -956,9 +977,9 @@ class reverseToCall():
                         self.lgr.debug('get operands from %s' % instruct[1])
                         op1, op0 = self.decode.getOperands(instruct[1])
                         self.lgr.debug('cycleRegisterMod mn: %s op0: %s  op1: %s' % (mn, op0, op1))
-                        #self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
-                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
-                            self.lgr.debug('cycleRegisterMod at %x, we be may done, type is unknown' % eip)
+                        self.lgr.debug('cycleRegisterMod compare <%s> to <%s>' % (op0.lower(), self.reg.lower()))
+                        if self.decode.isReg(op0) and self.decode.regIsPart(op0, self.reg, lgr=self.lgr) or (mn.startswith('xchg') and self.decode.regIsPart(op1, self.reg)):
+                            self.lgr.debug('cycleRegisterMod at eip %x, we may be done, type is unknown' % eip)
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
@@ -967,14 +988,16 @@ class reverseToCall():
                                 addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
-                                    self.lgr.debug('cycleRegisterMod, set as addr type for 0x%x' % addr)
+                                    addr = addr + self.offset
+                                    self.lgr.debug('cycleRegisterMod, set as addr type for addr 0x%x reflects offset %s' % (addr, self.offset))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('mov') and '[' in op1:
                                 self.lgr.debug('is mov op1 is %s' % op1)
                                 addr = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
-                                    self.lgr.debug('cycleRegisterMod, x86 set as addr type for 0x%x' % addr)
+                                    addr = addr + self.offset
+                                    self.lgr.debug('cycleRegisterMod, x86 set as addr type for addr 0x%x reflects offset %d' % (addr, self.offset))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                             elif mn.startswith('xchg'):
                                 if self.decode.regIsPart(op1, self.reg):
@@ -982,7 +1005,7 @@ class reverseToCall():
                                 else:
                                     retval = RegisterModType(op1, RegisterModType.REG)
 
-                            elif mn.startswith('mov') and self.decode.isReg(op1):
+                            elif (mn.startswith('mov') or mn.startswith('sxt')) and self.decode.isReg(op1):
                                 self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
                             elif mn.startswith('add') or mn.startswith('sub') or mn.startswith('rsb'):
@@ -1014,7 +1037,7 @@ class reverseToCall():
                                                    self.context_manager.setIdaMessage('As far as we can go back.  TBD look for user input on add or sub.')
                                                    self.top.skipAndMail()
                                 
-                    elif self.cpu.architecture == 'arm': 
+                    elif self.cpu.architecture.startswith('arm'):
                         if ']!' in instruct[1]:
                             ''' Look for write-back register mod '''
                             ''' for now just look for [myreg, xxx]! '''
@@ -1145,7 +1168,7 @@ class reverseToCall():
                 self.lgr.debug('followTaintArm address 0x%x value 0x%x' % (address, value))
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=4)
+                self.top.stopAtKernelWrite(address, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=4, track=True)
             elif reg_mod_type.mod_type == RegisterModType.REG:
                 self.lgr.debug('followTaintArm reg %s' % reg_mod_type.value)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
@@ -1155,7 +1178,7 @@ class reverseToCall():
                 self.cleanup(None)
                  
     def followTaint(self, reg_mod_type):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             self.followTaintArm(reg_mod_type)
         else:
             self.followTaintX86(reg_mod_type)
@@ -1201,7 +1224,7 @@ class reverseToCall():
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
             self.cleanup(None)
             word_size = self.top.getWordSize()
-            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size)
+            self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size, track=True)
 
         elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
             self.lgr.debug('followTaint, is reg, track %s' % op1)
@@ -1226,7 +1249,7 @@ class reverseToCall():
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
                 if newvalue is not None and value is not None: 
-                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x wrote to register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
+                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x loaded into register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
                     self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
@@ -1234,8 +1257,11 @@ class reverseToCall():
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                num_bytes = self.decode.regLen(op0)
-                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes)
+                if self.num_bytes is None:
+                    num_bytes = self.decode.regLen(op0)
+                else:
+                    num_bytes = self.num_bytes
+                self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes, track=True)
             else:
                 self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
@@ -1318,7 +1344,7 @@ class reverseToCall():
         self.lgr.debug('cleanup complete')
 
     def isSyscall(self, instruct):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             if instruct.startswith('svc 0'):
                 return True
         else:
@@ -1408,13 +1434,13 @@ class reverseToCall():
                     call_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     self.the_breaks.append(call_break_num)
-                    if cpu.architecture == 'arm':
+                    if self.cpu.architecture.startswith('arm'):
                         command = 'set-prefix %d "bl"' % call_break_num
                     else:
                         command = 'set-prefix %d "call"' % call_break_num
                     SIM_run_alone(SIM_run_command, command)
                  
-                    if cpu.architecture == 'arm':
+                    if self.cpu.architecture.startswith('arm'):
                         ''' TBD much too ugly'''
                         ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
@@ -1466,15 +1492,22 @@ class reverseToCall():
                 if cycles not in self.sysenter_cycles[tid]:
                     #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
                     frame = self.task_utils.frameFromRegs(compat32=self.compat32)
-                    call_num = self.mem_utils.getCallNum(self.cpu)
-                    frame['syscall_num'] = call_num
-                    #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
-                    #self.lgr.debug(taskUtils.stringFromFrame(frame))
-                    #SIM_break_simulation('debug me')
-                    callname = self.task_utils.syscallName(call_num, self.compat32)
-                    if callname is None:
-                        self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
-                        return
+                    if not self.top.isVxDKM(target=self.cell_name):
+                        call_num = self.mem_utils.getCallNum(self.cpu)
+                        frame['syscall_num'] = call_num
+                        #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
+                        #self.lgr.debug(taskUtils.stringFromFrame(frame))
+                        #SIM_break_simulation('debug me')
+                        callname = self.task_utils.syscallName(call_num, self.compat32)
+                        if callname is None:
+                            self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
+                            return
+                    else:
+                        pc = self.top.getEIP(self.cpu)
+                        callname = self.task_utils.getGlobalSym(pc)
+                        if callname is None:
+                            self.lgr.debug('sysenterHap pc 0x%x not a vxwork symbol' % pc)
+                            return
                     if callname == 'select' or callname == '_newselect':        
                         select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                              self.cpu, self.mem_utils, self.lgr)
@@ -1501,7 +1534,7 @@ class reverseToCall():
                         self.recent_cycle[tid] = [cycles, frame]
                         #self.lgr.debug('sysenterHap setting first recent cycle')
                 else:
-                    self.lgr.debug('sysenterHap, cycles already there for tid %s' % tid) 
+                    self.lgr.debug('sysenterHap, cycles already there for tid %s cycles: 0x%x' % (tid, cycles)) 
 
     def getEnterCycles(self, tid):
         retval = []
@@ -1529,6 +1562,8 @@ class reverseToCall():
                 ret_cycles, frame = self.recent_cycle[tid]
             else:
                 self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+        else:
+            self.lgr.debug('getRecentCycleFrame cpu was None')
         return frame, ret_cycles
 
     def getPreviousCycleFrame(self, tid, cpu=None):
@@ -1698,7 +1733,7 @@ class reverseToCall():
     def findCallBehind(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('findCallBehind instruct is %s' % instruct[1])

@@ -25,6 +25,7 @@
 '''
 Run forward until a ret instruction is hit (adjusted by any calls).
 NOTE: this is not reliable because compilers do not always have a return for every call.
+And it does not cover much of arm
 
 '''
 from simics import *
@@ -47,7 +48,7 @@ class RunToReturn():
 
     def setBreaks(self):
         self.lgr.debug('RunToReturn setBreaks eip 0x%x tid:%s' % (self.eip, self.tid))
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             prefix = "bl"
         else:
             prefix = "call"
@@ -75,7 +76,7 @@ class RunToReturn():
         tid = self.top.getTID()
         if tid != self.tid:
             return
-        sp = self.top.getReg('rsp', self.cpu)
+        sp = self.top.getReg('sp', self.cpu)
         eip = self.top.getEIP()
         self.lgr.debug('RunToReturn retHap calls:%d rets:%d  sp: 0x%x eip: 0x%x' % (self.call_count, self.ret_count, sp, eip))
         self.ret_count = self.ret_count+1

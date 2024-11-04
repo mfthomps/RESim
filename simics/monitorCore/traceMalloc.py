@@ -55,6 +55,9 @@ class TraceMalloc():
                 size = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc size %d' % size)
                 ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
+            elif cpu.architecture == 'arm64':
+                size = self.mem_utils.getRegValue(self.cpu, 'x0') 
+                #self.lgr.debug('malloc size %d' % size)
             else:
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp')
                 ret_addr = self.mem_utils.readPtr(self.cpu, sp)
@@ -75,6 +78,9 @@ class TraceMalloc():
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
                 #self.lgr.debug('free addr 0x%x' % addr)
+            elif cpu.architecture == 'arm64':
+                addr = self.mem_utils.getRegValue(self.cpu, 'x0') 
+                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
             else:
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp')
                 addr = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
@@ -91,6 +97,9 @@ class TraceMalloc():
             #self.lgr.debug('TraceMalloc mallocEndHap tid:%s cycle 0x%x' % (tid, self.cpu.cycles))
             if cpu.architecture == 'arm':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
+                #self.lgr.debug('malloc addr 0x%x' % addr)
+            elif cpu.architecture == 'arm':
+                addr = self.mem_utils.getRegValue(self.cpu, 'x0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
             else:
                 addr = self.mem_utils.getRegValue(self.cpu, 'eax') 

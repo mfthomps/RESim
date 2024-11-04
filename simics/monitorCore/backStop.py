@@ -24,7 +24,7 @@
 '''
 
 from simics import *
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 import logging
 '''
 Manage cycle events to limit how far a session can run without some intervening event.
@@ -88,7 +88,7 @@ class BackStop():
 
     def clearCycle(self):
         if self.cycle_event is not None:
-            self.lgr.debug('backStop clearCycle')
+            #self.lgr.debug('backStop clearCycle')
             #SIM_event_cancel_time(cpu, self.cycle_event, self.cpu, 0, None)
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.back_stop_cycle = None

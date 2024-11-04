@@ -73,7 +73,7 @@ class ReadReplace():
         self.so_map = so_map
         self.mem_utils = mem_utils
         self.lgr = lgr
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
         else:
             self.decode = decode
@@ -82,6 +82,7 @@ class ReadReplace():
         self.hap = {}
         self.breakmap = {}
         self.pending_libs = {}
+        self.pending_pages = {}
         self.done_list = []
         if not os.path.isfile(fname):
             self.lgr.error('readReplace: Could not find readReplace file %s' % fname)
@@ -180,7 +181,9 @@ class ReadReplace():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(trace_info.lib, trace_info.lib_addr)
         if phys_addr is None:
+            self.lgr.debug('readReplace getPhys got None, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=replace_entry.lib_addr, use_pid=pid)
+            self.pending_pages[replace_entry.lib_addr] = replace_entry
         else:
             replace_entry.linear_addr =  linear
         return phys_addr
@@ -310,7 +313,7 @@ class ReadReplace():
             return
         replace_entry = self.pending_pages[name]
         load_addr = self.so_map.getLoadAddr(replace_entry.lib)
-        self.lgr.debug('readReplace paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
+        self.lgr.debug('readReplace pagedIn load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
         phys = self.getPhys(replace_entry, load_addr, None)
         if phys is not None and phys != 0:
             self.setBreak(self.pending_pages[name], phys)

@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "HOSTNAME IS $HOSTNAME"
+export HOSTNAME=$HOSTNAME
+$RESIM_DIR/simics/monitorCore/runSpotFuzz.py $@

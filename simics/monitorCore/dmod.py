@@ -39,6 +39,8 @@ class Dmod():
         def __init__(self, match, was, becomes, cmds=[]):
             self.match = match
             self.was = was
+            if type(becomes) == bytes:
+                becomes = becomes.decode()
             if becomes is not None:
                 mod = becomes.replace('\\n', '\n')
                 self.becomes = mod
@@ -247,7 +249,7 @@ class Dmod():
             self.mem_utils.writeString(cpu, addr, self.fiddle.becomes, target_cpu=cpu)
             if self.operation == 'write':
                 esp = self.mem_utils.getRegValue(cpu, 'esp')
-                count_addr = esp + 3*self.mem_utils.WORD_SIZE
+                count_addr = esp + 3*self.mem_utils.wordSize(cpu)
                 self.top.writeWord(count_addr, count)
             else:
                 self.top.writeRegValue('syscall_ret', count)

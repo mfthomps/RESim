@@ -172,10 +172,13 @@ class TraceBuffer():
             return
         trace_info = self.pending_pages[name]
         load_addr = self.so_map.getLoadAddr(trace_info.lib)
-        self.lgr.debug('traceBuffer paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
-        phys = self.getPhys(trace_info, load_addr, None)
-        if phys is not None and phys != 0:
-            self.setBreak(self.pending_pages[name], phys)
+        if load_addr is not None:
+            self.lgr.debug('traceBuffer paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
+            phys = self.getPhys(trace_info, load_addr, None)
+            if phys is not None and phys != 0:
+                self.setBreak(self.pending_pages[name], phys)
+        else:
+            self.lgr.error('traceBuffer paged_in load_addr None name %s linear 0x%x' % (name, linear))
 
 
     def getPhys(self, trace_info, load_addr, pid):
@@ -187,6 +190,7 @@ class TraceBuffer():
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(trace_info.lib, trace_info.lib_addr)
         if phys_addr is None:
+            self.pending_pages[trace_info.lib_addr] = trace_info
             self.top.pageCallback(linear, self.pagedIn, name=trace_info.lib_addr, use_pid=pid)
         return phys_addr
 

@@ -93,11 +93,12 @@ class StackFrameManager():
             else:
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
-                    if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in expected tid:%s, current is %s' % (tid, cur_tid))
-                        return None
-                    else:
+                    if fun_mgr.hasIDAFuns():
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
                         tid = cur_tid
+                    else:
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
+                        return None
             if tid not in self.stack_base:
                 stack_base = None
             else:
@@ -125,11 +126,12 @@ class StackFrameManager():
             else:
                 cpu, comm, cur_tid = self.task_utils.curThread() 
                 if tid != cur_tid:
-                    if not self.context_manager.amWatching(cur_tid):
-                        self.lgr.debug('stackFrameManager getSTackTrace not expected tid %s, current is %s  -- not a thread?' % (tid, cur_tid))
-                        return "{}"
-                    else:
+                    if fun_mgr.hasIDAFuns():
+                        self.lgr.debug('stackFrameManager getStackTrace not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
                         tid = cur_tid
+                    else:
+                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
+                        return "{}"
             self.lgr.debug('stackFrameManager getStackTrace tid %s' % tid)
             if tid not in self.stack_base:
                 stack_base = None
@@ -158,8 +160,8 @@ class StackFrameManager():
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
-        esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+        esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         cpu, comm, tid  = self.task_utils.curThread()
         self.stack_base[tid] = esp
         self.lgr.debug('setStackBase tid:%s to 0x%x init eip is 0x%x' % (tid, esp, eip))
@@ -175,8 +177,8 @@ class StackFrameManager():
         #if new != Sim_CPU_Mode_Supervisor:
         ''' catch entry into kernel so that we can read SP without breaking simulation '''
         if new == Sim_CPU_Mode_Supervisor:
-            esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-            eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+            esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             self.lgr.debug('stackFrameManager modeChangedForStack, calling into  kernel mode eip: 0x%x esp: 0x%x' % (eip, esp))
             self.setStackBase()
 

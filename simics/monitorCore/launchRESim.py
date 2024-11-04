@@ -3,7 +3,7 @@ try:
     import ConfigParser
 except:
     import configparser as ConfigParser
-RESIM_REPO = os.getenv('RESIM')
+RESIM_REPO = os.getenv('RESIM_DIR')
 CORE = os.path.join(RESIM_REPO, 'simics/monitorCore')
 if CORE not in sys.path:
     #print("using CORE of %s" % CORE)
@@ -220,16 +220,33 @@ class LaunchRESim():
         if not os.path.isfile(ini_file):
             print('File not found: %s' % ini_file)
             exit(1)
-        self.config.read(cfg_file)
+        try:
+            self.config.read(cfg_file)
+        except Exception as e:
+            print(e)
+            run_command('quit')
         SIMICS_BASE = os.getenv('SIMICS')
         parent = os.path.dirname(SIMICS_BASE)
         print('SIMICS dir is %s' % parent) 
         lgr.debug('SIMICS dir is %s' % parent) 
         #run_command('add-directory -prepend %s/simics-qsp-arm-6.02' % parent)        
         #run_command('add-directory -prepend %s/simics-x86-x58-ich10-6.0.30/targets/x58-ich10/images' % parent)        
-        run_command('add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO)
+        #this does not work.  simics broken?
+        cmd = 'add-directory -prepend %s/simics/simicsScripts' % RESIM_REPO
+        run_command(cmd)
         run_command('add-directory -prepend %s/simics/monitorCore' % RESIM_REPO)
         run_command('add-directory -prepend %s' % SIMICS_WORKSPACE)
+
+        # hack around broken simics for armv8a
+        resim_targets = os.path.join(RESIM_REPO, 'simics', 'simicsScripts', 'targets')
+        cmd = '$resim_targets=%s' % resim_targets 
+        run_command(cmd)
+        #sys_include = os.path.join(resim_targets, 'armv8a', 'fvp-system.include')
+        #setup_include = os.path.join(resim_targets, 'armv8a', 'fvp-linux-setup.include')
+        #cmd = '$sys_include=%s' % sys_include 
+        #run_command(cmd)
+        #cmd = '$setup_include=%s' % setup_include 
+        #run_command(cmd)
         
         RESIM_TARGET = 'NONE'
         DRIVER_WAIT = False
@@ -245,14 +262,20 @@ class LaunchRESim():
                 DRIVER_WAIT = True
             elif name == 'CONFIG_COMMAND':
                 config_command = value
+            elif name == 'QUANTUM':
+                cmd = 'set-time-quantum %s' % value
+                lgr.debug('Run command %s' % cmd)
+                run_command(cmd)
             #print('assigned %s to %s' % (name, value))
 
+        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         ''' hack around simics bug generating rafts of x11 traffic '''
         resim_display = os.getenv('RESIM_DISPLAY')
         if resim_display is not None:
             os.environ['DISPLAY'] = resim_display
         
         RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
+        ADD_FROM_SNAP = os.getenv('ADD_FROM_SNAP')
         self.SIMICS_VER = os.getenv('SIMICS_VER')
         if self.SIMICS_VER is not None:
             cmd = "$simics_version=%s" % (self.SIMICS_VER)
@@ -263,10 +286,16 @@ class LaunchRESim():
         
         self.comp_dict = createDict(self.config, self.not_a_target, lgr)
         self.link_dict = {}
+        if ADD_FROM_SNAP is not None:
+            print('add from snapshot %s' % ADD_FROM_SNAP)
+            run_command('read-configuration %s' % ADD_FROM_SNAP)
 
         if RUN_FROM_SNAP is None:
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             checkVLAN(self.config)
+            if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
+                print('Will create RESim parameters')
+            # TBD check this
             run_command('set-min-latency min-latency = 0.01')
             interact = None
             if self.config.has_section('driver'):
@@ -317,7 +346,8 @@ class LaunchRESim():
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
             ''' NOTE RETURN ABOVE '''
             if not DRIVER_WAIT:
-                self.doSections() 
+                self.doSections(lgr) 
+            lgr.debug('check config_command %s' % config_command)
             if config_command is not None:
                 run_command(config_command)
         else:
@@ -335,7 +365,6 @@ class LaunchRESim():
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
-        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         MONITOR = os.getenv('MONITOR')
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
@@ -356,14 +385,19 @@ class LaunchRESim():
                 script = script.replace('genx86.simics', 'genx86_6.simics')
         return script
           
-    def doSections(self):
+    def doSections(self, lgr):
+        CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         for section in self.config.sections():
             if section in self.not_a_target:
                 continue
+            platform = None
+            if 'PLATFORM' in self.comp_dict[section]:
+                platform = self.comp_dict[section]['PLATFORM'] 
             #print('assign %s CLI variables' % section)
             ''' hack defaults, Simics CLI has no undefine operation '''
-            run_command('$eth_dev=i82543gc')
-            run_command('$mac_address_3=None')
+            if platform is None or not platform.startswith('arm'):
+                run_command('$eth_dev=i82543gc')
+                run_command('$mac_address_3=None')
             
             cmd = '$machine_name=%s' % section
             run_command (cmd)
@@ -371,7 +405,8 @@ class LaunchRESim():
             params=''
             script = self.getSimicsScript(section)
             did_net_create = False
-            if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
+            #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
+            if platform in ['arm', 'arm5']:
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
                 params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
@@ -385,26 +420,33 @@ class LaunchRESim():
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
-                        if 'create_network' in name:
-                            did_net_create = True
-                            cmd = 'create_network=TRUE eth_link=%s' % value
-                        else:     
-                            cmd = '%s=%s' % (name[1:], value)
-                        params = params + " "+cmd
-                        if self.SIMICS_VER.startswith('4'):
-                           run_command('$'+cmd)
+                        if platform is None or not platform.startswith('arm'):
+                            if 'create_network' in name:
+                                did_net_create = True
+                                cmd = 'create_network=TRUE eth_link=%s' % value
+                            else:     
+                                cmd = '%s=%s' % (name[1:], value)
+                            params = params + " "+cmd
+                            if self.SIMICS_VER.startswith('4'):
+                               run_command('$'+cmd)
+                        else:
+                            cmd = '%s=%s' % (name, value)
+                            run_command(cmd)
+                            #print('cmd is %s' % cmd)
                 if 'genx86' in script and not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
             if did_net_create:
                 self.comp_dict[section]['ETH0_SWITCH'] = 'NONE' 
-   
-            if self.SIMICS_VER.startswith('4'):
-                cmd='run-command-file "./targets/%s"' % (script)
-            else:
-                cmd='run-command-file "./targets/%s" %s' % (script, params)
-            #print('cmd is %s' % cmd)
-            run_command(cmd)
+                       
+            if script.lower() != 'none': 
+                if self.SIMICS_VER.startswith('4'):
+                    cmd='run-command-file "./targets/%s"' % (script)
+                else:
+                    cmd='run-command-file "targets/%s" %s' % (script, params)
+                #print('cmd is %s' % cmd)
+                lgr.debug('cmd is %s' % cmd)
+                run_command(cmd)
             #print('assign eth link names')
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
             #print('link the switches')
@@ -423,6 +465,12 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
+            PRE_INIT_SCRIPT = os.getenv('PRE_INIT_SCRIPT')
+            if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES' and PRE_INIT_SCRIPT is not None:
+                print('Will create resim params, run pre_init_script %s' % PRE_INIT_SCRIPT)
+                cmd = 'run-command-file %s' % PRE_INIT_SCRIPT
+                run_command(cmd)
+ 
     def doAlways(self):
         ''' scripts to run regardless of whether starting from a snapshot'''
         for section in self.config.sections():

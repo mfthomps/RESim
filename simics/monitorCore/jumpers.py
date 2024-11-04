@@ -97,14 +97,14 @@ class Jumpers():
                     if len(line.strip()) == 0:
                         continue
                     if ':' in line:
-                        if not self.handleJumperEntry(line):
+                        if not self.handleJumperEntry(line, fname):
                             self.lgr.error('Failed handling jumper entry %s' % line)
                             return
                     else:
                         self.lgr.error('jumpers loadJumper expected colon, e.g., lib:addr in %s' % line)
                         return
 
-    def handleJumperEntry(self, line):
+    def handleJumperEntry(self, line, fname):
         retval = True
         if line in self.did_lines:
             return retval
@@ -123,7 +123,7 @@ class Jumpers():
         try:
             prog, addr = lib_addr.split(':') 
         except:
-            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon" % (line, fname))
+            self.lgr.error("jumpers Error reading %s from %s, bad jumper, expected only one colon after prog" % (line, fname))
             raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
             return False
         
@@ -138,8 +138,14 @@ class Jumpers():
         comm = None
         break_at_dest = False
         break_at_load = False
+        patch = False
+        replace = False
         break_options = ['break', 'break_load']
-        if len(parts) == 3 and parts[2] in break_options:
+        if len(parts) == 3 and parts[2] == 'patch':
+            patch = True
+        elif len(parts) == 3 and parts[2] == 'replace':
+            replace = True
+        elif len(parts) == 3 and parts[2] in break_options:
             if parts[2] == 'break':
                 break_at_dest = True
             else:
@@ -152,13 +158,41 @@ class Jumpers():
             else:
                 break_at_load = True
 
-        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_load) 
+        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace) 
         image_base = self.so_map.getImageBase(prog)
-        if image_base is None:
+        if patch:
+            if self.top.isVxDKM(cpu=self.cpu):
+                delta = jump_rec.to_addr - jump_rec.from_addr
+                less_8 = delta - 8
+                by_4 = int(less_8 / 4)
+                instruct = 0xea000000 + by_4
+                load_addr = self.so_map.getLoadAddr(jump_rec.prog)
+                addr = jump_rec.from_addr + load_addr
+                self.lgr.debug('jumper handleJumperEntry delta %d by_4 %d addr 0x%x instruct 0x%x' % (delta, by_4, addr, instruct))
+                self.top.writeWord(addr, instruct, target_cpu=self.cpu)
+                print('patched address 0x%x with word 0x%x' % (addr, instruct))
+            else:
+                self.lgr.error('jumper handleJumperEntry, patch only supported on vxworks arm for now')
+                self.top.quit()
+                return 
+        elif replace:
+            load_addr = self.so_map.getLoadAddr(jump_rec.prog)
+            addr = jump_rec.from_addr + load_addr
+            self.lgr.debug('jumper handleJumperEntry replace instruct at 0x%x with 0x%x' % (addr, jump_rec.to_addr))
+            self.top.writeWord(addr, jump_rec.to_addr, target_cpu=self.cpu)
+            print('replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
+                        
+        elif image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
             self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
             self.so_map.addSOWatch(jump_rec.prog, self.libLoadCallback, name=lib_addr)
             self.pending_libs[lib_addr] = jump_rec
+        elif self.top.isVxDKM(cpu=self.cpu):
+            jump_rec.image_base = image_base
+            load_addr = self.so_map.getLoadAddr(jump_rec.prog)
+            addr = jump_rec.from_addr + load_addr
+            self.lgr.debug('jumper handleJumperEntry vxworks set break on 0x%x' % addr)
+            self.setBreak(jump_rec, addr)
         else:
             # Library loaded by someone.  Get list of pids
             jump_rec.image_base = image_base
@@ -292,12 +326,14 @@ class Jumpers():
             SIM_enable_breakpoint(self.breakpoints[lib_addr])
  
     class JumperRec():
-        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest, break_at_load):
+        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace):
             self.prog = prog
             self.from_addr = from_addr
             self.to_addr = to_addr
             self.comm = comm
             self.break_at_dest = break_at_dest
             self.break_at_load = break_at_load
+            self.patch = patch
+            self.replace = replace
             self.lib_addr = '%s:0x%x' % (prog, from_addr)
             self.image_base = None

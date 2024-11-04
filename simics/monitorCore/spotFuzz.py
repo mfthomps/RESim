@@ -1,6 +1,7 @@
 from simics import *
 import cli
 import os
+import binascii
 import random
 import writeData
 '''
@@ -28,21 +29,25 @@ import writeData
  * POSSIBILITY OF SUCH DAMAGE.
 '''
 class SpotFuzz():
-    def __init__(self, top, cpu, mem_utils, context_manager, backstop, fuzz_addr, break_at, reg, lgr):
+    def __init__(self, top, cpu, mem_utils, context_manager, backstop, fuzz_addr, break_at, lgr, reg=None, data_length=4, fail_break=[]):
         self.top = top
         self.cpu = cpu
         self.mem_utils = mem_utils
         self.context_manager = context_manager
         self.backstop = backstop
         self.fuzz_addr = fuzz_addr
+        self.data_length = data_length
         self.break_at = break_at
+        self.fail_break = fail_break
         self.reg = reg
         self.lgr = lgr
         self.count = 0
         self.break_hap = None
         self.breakpoint = None
         self.stop_hap = None
-        self.rand = None
+        self.fail_break_hap = None
+        self.fail_breakpoint = []
+        self.rand = []
         #if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
         #    self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
         #    self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
@@ -51,7 +56,10 @@ class SpotFuzz():
         #    self.backstop_cycles =   1000000
         self.backstop_cycles =   1000000
         self.top.debugSnap()
-        random.seed(12345)
+        here = os.getcwd()
+        seed = binascii.crc32(here.encode('utf8')) 
+        self.lgr.debug('spotFuzz run from %s, seed 0x%x' % (here, seed))
+        random.seed(seed)
         #self.inject(dfile, snapname)
         self.top.stopDebug()
         self.disableReverse()
@@ -92,22 +100,35 @@ class SpotFuzz():
         self.break_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.breakHap, None, self.breakpoint)
         self.lgr.debug('spotFuzz set break at 0x%x context %s' % (self.break_at, str(self.cpu.current_context)))
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, None)
+        #if self.fail_break is not None:
+        for fail_addr in self.fail_break:
+            bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, fail_addr, 1, 0)
+            self.fail_breakpoint.append(bp)
+        if len(self.fail_break) > 0:
+            self.fail_break_hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.breakHap, None, 
+                                       self.fail_breakpoint[0], self.fail_breakpoint[-1])
+            self.lgr.debug('spotFuzz set fail_break at %s context %s' % (str(self.fail_break), str(self.cpu.current_context)))
    
     def breakHap(self, dumb, the_object, break_num, memory):
         if self.break_hap is None:
             return
-        reg_val = self.mem_utils.getRegValue(self.cpu, self.reg)
-        #self.lgr.debug('spotFuzz breakHap value of %s is 0x%x from rand 0x%x count: %d' % (self.reg, reg_val, self.rand, self.count)) 
-        if reg_val > 0x1000:
-            print('GOT 0x%x' % regval)
+        if self.reg is not None:
+            reg_val = self.mem_utils.getRegValue(self.cpu, self.reg)
+            #self.lgr.debug('spotFuzz breakHap value of %s is 0x%x from rand 0x%x count: %d' % (self.reg, reg_val, self.rand, self.count)) 
+            if reg_val > 0x1000:
+                print('GOT 0x%x' % regval)
         SIM_break_simulation('breakHap')
 
     def doRand(self):
-        rand = random.randrange(0, 0xffffffff)
-        self.mem_utils.writeWord(self.cpu, self.fuzz_addr, rand) 
-        self.rand = rand
+        offset = 0
+        while offset < self.data_length:
+            rand = random.randrange(0, 0xffffffff)
+            addr = self.fuzz_addr + offset
+            self.mem_utils.writeWord(self.cpu, addr, rand) 
+            self.rand.append(rand)
+            offset = offset + 4
 
-    def stopHap(self, dumb, one, exception, error_string):
+    def stopHapXXXX(self, dumb, one, exception, error_string):
         #self.lgr.debug('spotFuzz stopHap')
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
@@ -123,6 +144,34 @@ class SpotFuzz():
                 else:
                     SIM_run_alone(self.go, None)
                 self.backstop.clearCycle()
+
+    def stopHap(self, dumb, one, exception, error_string):
+        #self.lgr.debug('spotFuzz stopHap')
+        if self.stop_hap is not None:
+            eip = self.top.getEIP(self.cpu)
+            if eip != self.break_at:
+                #self.lgr.debug('Stopped on eip that is not the break, assume backstop?')
+                #self.lgr.debug('rand was 0x%x' % self.rand)
+                if eip not in self.fail_break:
+                    print('why stop at 0x%x?' % eip)
+                self.count = self.count+1
+                if (self.count % 100) == 0:
+                    print('count now %d' % self.count)
+                    self.lgr.debug('count now %d' % self.count)
+                if self.count > 1000000:
+                    print('done a million')
+                    self.lgr.debug('done')
+                else:
+                    SIM_run_alone(self.go, None)
+                self.backstop.clearCycle()
+            else:
+                print('hit break?')
+                self.lgr.debug('hit break, random values below')
+                for rand in self.rand:
+                    self.lgr.debug('0x%x' % rand)
+                with open('/tmp/spot_fuzz_done', w) as fh:
+                    fh.write('done')
+                self.top.quit()
 
 
       

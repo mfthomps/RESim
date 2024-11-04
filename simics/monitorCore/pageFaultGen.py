@@ -129,6 +129,9 @@ class PageFaultGen():
         if self.pdir_break is not None:
             #self.lgr.debug('pageFaultGen watchPdir already a break. wanted to set one one 0x%x' % pdir_addr)
             return
+        if pdir_addr is None:
+            self.lgr.error('pageFaultGen called with pdir_addr of None')
+        
         pcell = self.cpu.physical_memory
         #self.pdir_break = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
         self.pdir_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, pdir_addr, self.page_entry_size, 0)
@@ -185,11 +188,25 @@ class PageFaultGen():
         #use_cell = self.cell
         #if self.debugging_tid is not None:
         #    use_cell = self.context_manager.getRESimContext()
+
+        if self.cpu.architecture == 'arm64':
+            # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
+            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+            reg_value = self.cpu.iface.int_register.read(reg_num)
+            reg_value = reg_value >> 26
+            #self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
+            if reg_value == 0x11 or reg_value == 0x15:
+                return
+
         cpu, comm, tid = self.task_utils.curThread() 
         sp = self.mem_utils.getRegValue(cpu, 'sp')
 
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
         self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
+        if self.user_eip is None:
+            #SIM_break_simulation('remove this')
+            self.lgr.warning('nothing read from user_ip_addr 0x%x' % user_ip_addr)
+            return
         if self.user_eip in self.ignore_probes:
             self.lgr.debug('pageFaultHap user eip: 0x%x in probes, ignore' % self.user_eip)
             return
@@ -233,7 +250,13 @@ class PageFaultGen():
                 i_access_type = memUtils.testBit(i_fault, 11)
                 fault_addr = self.user_eip
                 #self.lgr.debug('pageFaultGen **INSTRUCTION stuff reg %d fault 0x%x type %d, fault_addr 0x%x' % (i_fault_reg, i_fault, i_access_type, fault_addr))
-
+        elif self.cpu.architecture == 'arm64':
+            fault_reg = self.cpu.iface.int_register.get_number("far_el1")
+            fault_addr = self.cpu.iface.int_register.read(fault_reg)
+            #ret_reg = self.cpu.iface.int_register.get_number("elr_el1")
+            #ret_addr = self.cpu.iface.int_register.read(ret_reg)
+            #if fault_addr == ret_addr:
+            #    self.lgr.debug('pageFaultHap arm64 Instruction page fault addr 0x%x' % (fault_addr))
         else:
             reg_num = self.cpu.iface.int_register.get_number("cr2")
             if reg_num is not None:
@@ -255,10 +278,13 @@ class PageFaultGen():
             return
         self.faulted_pages[tid].append(fault_addr)
         #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
+
         #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
+        elif cpu.architecture == 'arm64':
+            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr)
         elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
@@ -306,7 +332,7 @@ class PageFaultGen():
                 phys_addr = self.mem_utils.v2p(self.cpu, prec.cr2)
                 if phys_addr is None:
                     #TBD remove this, seems redundant
-                    self.lgr.debug('pageFaultGen modeChanged v2p failed.')
+                    self.lgr.debug('pageFaultGen modeChanged v2p failed on prec.cr2 of 0x%x.' % prec.cr2)
                     phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
                     if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
                         #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
@@ -327,7 +353,7 @@ class PageFaultGen():
                         SIM_run_alone(self.rmPDirHap, hap)
                         self.pdir_hap = None
 
-                elif self.cpu.architecture != 'arm':
+                elif not self.cpu.architecture.startswith('arm'):
                     ''' TBD handle reflection of segv to user space for arm? '''
                     instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
                    
@@ -372,6 +398,9 @@ class PageFaultGen():
             # TBD fix for ability to watch full system for segv
             #self.context_manager.watchExit()
         if not page_info.page_exists:
+            if page_info.ptable_addr is None:
+                self.lgr.debug('pageFaultGen pageFaultHapAlone ptable_addr is None? %s' % page_info.valueString())
+                return
 
             if not page_info.ptable_exists:
                 if page_info.ptable_addr is not None:
@@ -417,6 +446,11 @@ class PageFaultGen():
             self.fault_hap1 = RES_hap_add_callback_obj_index("Core_Exception", self.cpu, 0,
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
+        if self.cpu.architecture == 'arm64':
+            self.lgr.debug('watchPageFaults set break at at arm entry 0x%x' % self.param.arm_entry)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
+            self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
+            self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
         else:
             #self.lgr.debug('watchPageFaults not arm set break at 0x%x tid %s current context %s' % (self.param.page_fault, tid, self.cpu.current_context))
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
@@ -527,19 +561,19 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             print('skipping back to user space, please wait.')
-            if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+            if not self.top.skipToCycle(target_cycles, self.cpu):
                 return
             print('Completed skip.')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if eip != prec.eip:
-                if not resimUtils.skipToTest(self.cpu, target_cycles-1, self.lgr):
+                if not self.top.skipToCycle(target_cycles-1, self.cpu):
                     return
                 cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 self.lgr.warning('pageFaultGen skipAlone, wrong eip is 0x%x wanted 0x%x, skipped again, now eip is 0x%x' % (eip, prec.eip, cur_eip))
                 eip = cur_eip
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
-                if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                if not self.top.skipToCycle(target_cycles, self.cpu):
                     return
                 else:
                     cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -547,14 +581,14 @@ class PageFaultGen():
                     if cur_eip == eip: 
                         self.lgr.debug('pageFaultGen skipAlone same eip, back up more')
                         target_cycles = self.cpu.cycles - 1
-                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                        if not self.top.skipToCycle(target_cycles, self.cpu):
                             return
                         
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen skipAlone after another backup, eip is 0x%x' % (cur_eip))
                     elif self.mem_utils.isKernel(cur_eip):
                         target_cycles = self.cpu.cycles - 1
-                        if not resimUtils.skipToTest(self.cpu, target_cycles, self.lgr):
+                        if not self.top.skipToCycle(target_cycles, self.cpu):
                             return
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen still in kernel after back one, after another backup, eip is 0x%x' % (cur_eip))
@@ -713,6 +747,8 @@ class PageFaultGen():
                 retval = True
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))
+        else:
+            self.lgr.debug('pageFaultGen hasPendingFault NO pending fault for tid:%s' % tid)
         return retval
 
     def getPendingFault(self, tid):
@@ -756,3 +792,8 @@ class PageFaultGen():
         else:
             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
             SIM_run_alone(self.rmModeHapAlone, None) 
+
+    def clearPendingFaults(self):
+        self.pending_faults.clear()
+        self.pending_sigill.clear()
+        self.pending_double_faults.clear()

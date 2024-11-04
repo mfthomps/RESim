@@ -1,0 +1,9 @@
+#
+#  Start the arm64 fvp platform
+#
+$bl1_image=/mnt/data/Armv8-A-images/foundation_files/after_build/components/fvp/tf-bl1.bin
+$kernel_image=/mnt/data/Armv8-A-images/foundation_files/after_build/components/linux/Image
+$fip_image=/mnt/data/Armv8-A-images/foundation_files/after_build/components/fvp/fip_new.bin
+$initrd_image=/mnt/data/Armv8-A-images/foundation_files/new_final_ramdisk.img
+$num_cores=1
+run-command-file targets/armv8a-fvp/fvp-foundation-linux.simics

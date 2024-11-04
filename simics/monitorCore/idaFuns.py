@@ -118,6 +118,8 @@ class IDAFuns():
                     fun_name = newfuns[f]['name']
                     fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
+                    if 'adjust_sp' in newfuns[f]:
+                        self.funs[fun]['adjust_sp'] = newfuns[f]['adjust_sp']
                     #if fun_name == 'memcpy':
                     #    self.lgr.debug('idaFuns memcpy fun 0x%x fun_int 0x%x offset 0x%x' % (fun, fun_int, offset))
                     fun_name = rmPrefix(fun_name)
@@ -263,10 +265,10 @@ class IDAFuns():
     def getFunWithin(self, fun_name, start, end):
         big = 0
         retval = None
-        self.lgr.debug('idaFuns getFunWithin %s start 0x%x end 0x%x' % (fun_name, start, end))
+        self.lgr.debug('idaFuns getFunWithin look for %s within start 0x%x end 0x%x' % (fun_name, start, end))
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
-                self.lgr.debug('idaFuns getFunWithin %s matches, start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
+                self.lgr.debug('idaFuns getFunWithin found match for %s, fun start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
                 if self.funs[fun]['start'] >= start and self.funs[fun]['end'] <= end:
                     size = self.funs[fun]['end'] - self.funs[fun]['start'] 
                     self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))
@@ -274,4 +276,14 @@ class IDAFuns():
                         big = size
                         retval = self.funs[fun]['start']
         return retval
-            
+           
+    def getFuns(self):
+        return self.funs 
+
+    def stackAdjust(self, fun_name):
+        retval = 0
+        for fun in self.funs:
+            if self.funs[fun]['name'] == fun_name:
+                if 'adjust_sp' in self.funs[fun]:
+                    retval = self.funs[fun]['adjust_sp']
+        return retval

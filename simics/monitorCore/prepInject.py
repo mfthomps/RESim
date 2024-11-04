@@ -69,11 +69,11 @@ class PrepInject():
             self.lgr.debug('prepInject instrumentSelect Entry into kernel is prior to first cycle, cannot record select_ip')
         else:
             previous = cycle - 1
-            resimUtils.skipToTest(self.cpu, previous, self.lgr)
+            self.top.skipToCycle(previous, cpu=self.cpu)
             self.select_call_ip = self.top.getEIP(self.cpu)
             self.lgr.debug('instrumentSelect skipped to call: 0x%x tid:%s cycle is 0x%x' % (self.select_call_ip, tid, self.cpu.cycles))
             ''' now back to return '''
-            resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
         self.top.restoreDebugBreaks()
         self.prepInject(ignore_waiting=True)
 
@@ -90,7 +90,7 @@ class PrepInject():
                     self.lgr.debug('prepInject instrumentAlone got orig buffer from phys memory len %d syscall len was %d' % (len(orig_buffer), length))
                 else:
                     self.lgr.error('prepInject instrumentAlone failed to get orig buffer from syscall') 
-                resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+                self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
         #else:
         #    self.lgr.error('prepInject finishNoCall falled to get syscall ?')
@@ -168,7 +168,7 @@ class PrepInject():
             previous = cycle - 1
             self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
 
-            if resimUtils.skipToTest(self.cpu, previous, self.lgr):
+            if self.top.skipToCycle(previous, cpu=self.cpu):
                 self.call_ip = self.top.getEIP(self.cpu)
                 ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
                 orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
@@ -177,7 +177,7 @@ class PrepInject():
                 self.lgr.error('prepInject instrument failed skip to syscall')
             ''' skip back to return so the snapshot is ready to inject input '''
             self.lgr.debug('prepInjectInstrument skip back to ret_cycle 0x%x' % self.ret_cycle)
-            resimUtils.skipToTest(self.cpu, self.ret_cycle, self.lgr)
+            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
             current_ip = self.top.getEIP(self.cpu)
             self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
@@ -214,15 +214,15 @@ class PrepInject():
         self.lgr.debug('prepInject pickleit save addr 0x%x size %d' % (pickDict['addr'], pickDict['size']))
         ''' Otherwise console has no indiation of when done. '''
 
-        if exit_info.fname_addr is not None:
-            if self.top.isWindows():
+        if self.top.isWindows():
+            if exit_info.fname_addr is not None:
                 pickDict['addr_addr'] = exit_info.sock_addr
                 pickDict['addr_size'] = 8
                 self.lgr.debug('prepInject pickleit addr_addr is 0x%x' % exit_info.sock_addr)
-            else:
-                count = self.mem_utils.readWord32(self.cpu, exit_info.count)
-                pickDict['addr_addr'] = exit_info.fname_addr
-                pickDict['addr_size'] = count
+        elif exit_info.src_addr is not None:
+            count = self.mem_utils.readWord32(self.cpu, exit_info.src_addr_len)
+            pickDict['addr_addr'] = exit_info.src_addr_len
+            pickDict['addr_size'] = count
 
         pickDict['orig_buffer'] = orig_buffer
         if self.top.isWindows():

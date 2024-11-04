@@ -27,6 +27,7 @@ import pageUtils
 import json
 import sys
 import struct
+import traceback
 from simics import *
 MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
@@ -66,6 +67,7 @@ def writePhysBytes(cpu, paddr, data):
 
 
 def getCPL(cpu):
+    # return RESim cpl value (0 = kernel)
     #print('arch %s' % cpu.architecture)
     if cpu.architecture == 'arm':
         ''' TBD FIX this! '''
@@ -76,6 +78,21 @@ def getCPL(cpu):
             return 0
         else:
             return 1
+    elif cpu.architecture == 'arm64':
+        # if in aarch32, then el found in cpsr, otherwise in CurrentEL
+        is64=cpu.in_aarch64
+        if is64:
+            reg_num = cpu.iface.int_register.get_number('CurrentEL')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            arm_level = bitRange(reg_value, 2,3)
+        else:
+            reg_num = cpu.iface.int_register.get_number('cpsr')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            arm_level = bitRange(reg_value, 0,3)
+        if arm_level == 0:
+            return 1
+        else:
+            return 0
     else:
         reg_num = cpu.iface.int_register.get_number("cs")
         cs = cpu.iface.int_register.read(reg_num)
@@ -104,6 +121,35 @@ def setBitRange(initial, value, start):
     retval = initial | shifted
     return retval
 
+def cpuWordSize(cpu):
+    if cpu.architecture == 'arm':
+        retval = 4
+    elif cpu.architecture == 'arm64':
+        retval = 8
+    else:
+        mode = cpu.iface.x86_reg_access.get_exec_mode()
+        if mode == 3:
+            retval = 4
+        else:
+            retval = 8
+    return retval
+
+def getCR3(cpu):
+    if cpu.architecture.startswith('arm'):
+        cr3 = cpu.translation_table_base0
+    else:
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        cr3 = cpu.iface.int_register.read(reg_num)
+    return cr3
+
+def isNull(value):
+    if value == 0xffffffff:
+        return True
+    elif value == 0xffffffffffffffff:
+        return True
+    else:
+        return False
+
 param_map = {}
 param_map['arm'] = {}
 param_map['arm']['param1'] = 'r0'
@@ -112,6 +158,13 @@ param_map['arm']['param3'] = 'r2'
 param_map['arm']['param4'] = 'r3'
 param_map['arm']['param5'] = 'r4'
 param_map['arm']['param6'] = 'r5'
+param_map['arm64'] = {}
+param_map['arm64']['param1'] = 'x0'
+param_map['arm64']['param2'] = 'x1'
+param_map['arm64']['param3'] = 'x2'
+param_map['arm64']['param4'] = 'x3'
+param_map['arm64']['param5'] = 'x4'
+param_map['arm64']['param6'] = 'x5'
 param_map['x86_64'] = {}
 param_map['x86_64']['param1'] = 'rdi'
 param_map['x86_64']['param2'] = 'rsi'
@@ -166,6 +219,25 @@ class MemUtils():
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
         self.ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
+        self.arm_regs = []
+        for i in range(13):
+            r = 'r%d' % i
+            self.arm_regs.append(r)
+        self.arm_regs.append('sp')
+        self.arm_regs.append('pc')
+        self.arm_regs.append('lr')
+
+        self.arm64_regs = []
+        for i in range(31):
+            r = 'x%d' % i
+            self.arm64_regs.append(r)
+        for i in range(31):
+            r = 'w%d' % i
+            self.arm64_regs.append(r)
+        self.arm64_regs.append('pc')
+        self.arm64_regs.append('sp_el0')
+        self.arm64_regs.append('sp_el1')
+
         self.regs = {}
         self.lgr.debug('memUtils init. cell %s word size %d  arch is %s' % (cell_name, word_size, arch))
         if arch == 'x86-64':
@@ -193,22 +265,18 @@ class MemUtils():
             self.regs['syscall_ret'] = 'r0'
             self.regs['eip'] = 'pc'
             self.regs['esp'] = 'sp'
+        elif arch == 'arm64':
+            # will use arm_regs
+            pass
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
        
-    def wordSize(self, cpu):
-        retval = self.WORD_SIZE
-        if cpu.architecture != 'arm':
-            ''' see api-help x86_exec_mode_t '''
-            mode = cpu.iface.x86_reg_access.get_exec_mode()
-            if mode == 3:
-                retval = 4
-        return retval
-
     def isReg(self, reg):
         if reg.upper() in self.regs:
             return True
         elif reg.lower() in self.regs:
+            return True
+        elif reg.lower() in self.arm64_regs:
             return True
         else:
             self.lgr.debug('reg not in %s' % self.regs)
@@ -245,16 +313,35 @@ class MemUtils():
         except AttributeError:
             self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
             return None
+        except TypeError:
+            self.lgr.debug('memUtils getLinuxTableBase no mm_struct defined')
+            return None
         table_base = self.readWord(cpu, mm_struct+self.param.mm_struct_offset)
         if cpu.architecture == 'arm':
             table_base = table_base | 0x164
         return table_base
 
-    def v2pKaddr(self, cpu, v, cpl, use_pid=None):
+    def v2pKaddr(self, cpu, v, use_pid=None):
         retval = None
         if cpu.architecture == 'arm':
             phys_addr = v - (self.param.kernel_base - self.param.ram_base)
             retval = self.getUnsigned(phys_addr)
+        elif cpu.architecture == 'arm64':
+            cpl = getCPL(cpu)
+            if cpl > 0:
+                #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, kernel=True)
+                if ptable_info is not None:
+                    retval = ptable_info.page_addr
+                else:
+                    retval = None
+            else:
+                #self.lgr.debug('memUtils v2pKaddr arm64 kernel space, use simics')
+                try:
+                    phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                    retval = phys_block.address
+                except:
+                    self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
             #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
@@ -299,18 +386,21 @@ class MemUtils():
                 self.lgr.debug('memUtils v2pKaddr logical_to_physical got none for 0x%x' % v)
         return retval
 
-    def v2pUserAddr(self, cpu, v, cpl, use_pid=None):
-        #self.lgr.debug('memUtils v2pUserAddr addr 0x%x cpl %d' % (v, cpl)) 
+    def v2pUserAddr(self, cpu, v, cpl, use_pid=None, force_cr3=None, do_log=False):
+        if do_log:
+            self.lgr.debug('memUtils v2pUserAddr addr 0x%x cpl %d' % (v, cpl)) 
         retval = None
-        if use_pid is None and (cpl > 0 or not self.top.hasUserPageTable(cpu)):
-            #self.lgr.debug('memUtils v2pUserAddr user address 0x%x from user space' % v)
+        if use_pid is None and force_cr3 is None and (cpl > 0 or not self.top.hasUserPageTable(cpu)):
+            if do_log:
+                self.lgr.debug('memUtils v2pUserAddr user address 0x%x from user space' % v)
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
             except:
                 self.lgr.debug('memUtils v2pUserAddr logical_to_physical failed on 0x%x' % v)
         elif cpl > 0  and not self.top.hasUserPageTable(cpu) and use_pid is not None:
-            #self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
+            if do_log:
+                self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
@@ -319,7 +409,8 @@ class MemUtils():
 
         elif cpl > 0  and self.top.hasUserPageTable(cpu) and use_pid is not None:
             # get phys address for a different process
-            #self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
+            if do_log:
+                self.lgr.debug('memUtils v2pUserAddr get phys for addr 0x%x pid %d has userPageTable' % (v, pid))
             if cpu.architecture != 'arm':
                 if self.top.isWindows(cpu=cpu):
                     table_base = self.getWindowsTableBase(cpu, use_pid)
@@ -332,8 +423,16 @@ class MemUtils():
                     retval = ptable_info.page_addr
             else:
                 self.lgr.warning('memUtils v2pUserAddr ADD for arm!!!')
+        elif force_cr3 is not None:
+            if do_log:
+                self.lgr.debug('memUtils v2pUserAddr force_cr3 0x%x' % force_cr3)
+            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=force_cr3, do_log=do_log)
+            if ptable_info.page_exists:
+                if do_log:
+                    self.lgr.debug('memUtils v2pUserAddr force_cr3 0x%x page table, got phys 0x%x' % (force_cr3, ptable_info.page_addr))
+                retval = ptable_info.page_addr
 
-        if cpl ==0 and retval is None:
+        elif cpl ==0 and retval is None:
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
@@ -362,10 +461,14 @@ class MemUtils():
             retval = None
         
         if cpl == 0 and (retval is None or retval == 0):
-            #self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x' % (cpl, v))
+            if do_log:
+                self.lgr.debug('memUtils v2pUserAddr ptable fu cpl %d phys addr for 0x%x arch: %s' % (cpl, v, cpu.architecture))
             if cpu.architecture == 'arm':
                 phys_addr = v - (self.param.kernel_base - self.param.ram_base)
                 retval = self.getUnsigned(phys_addr)
+            elif cpu.architecture == 'arm64':
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
+                return ptable_info.page_addr
             else:
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
                 # a mode of 3 is 32 bit mode
@@ -373,16 +476,19 @@ class MemUtils():
                 exec_mode_word_size = self.wordSize(cpu)
                 if exec_mode_word_size == 8 and cpl > 0:
                     phys_addr = v & ~self.param.kernel_base 
-                    #self.lgr.debug('memUtils v2pUserAddr memUtils ptable fu2 cpl %d get unsigned of 0x%x exec_mode_word_size %d' % (cpl, v, exec_mode_word_size))
+                    if do_log:
+                        self.lgr.debug('memUtils v2pUserAddr memUtils ptable fu2 cpl %d get unsigned of 0x%x exec_mode_word_size %d' % (cpl, v, exec_mode_word_size))
                     retval = self.getUnsigned(phys_addr)
                 else:
                     if self.WORD_SIZE == 8 and ptable_info.page_exists:
-                        #self.lgr.debug('memUtils v2pUserAddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.page_addr))
+                        if do_log:
+                            self.lgr.debug('memUtils v2pUserAddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.page_addr))
                         retval = ptable_info.page_addr
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
-                            #self.lgr.debug('memUtils v2pUserAddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
+                            if do_log:
+                                self.lgr.debug('memUtils v2pUserAddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
                             reg_num = cpu.iface.int_register.get_number("cr3")
                             current_cr3 = cpu.iface.int_register.read(reg_num)
                             #if current_cr3 is None:
@@ -393,11 +499,12 @@ class MemUtils():
                             #    self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
                         else:
                             retval = v & ~self.param.kernel_base 
-                            #self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
+                            if do_log:
+                                self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
     
         return retval
 
-    def v2p(self, cpu, v, use_pid=None):
+    def v2p(self, cpu, v, use_pid=None, force_cr3=None, do_log=False):
         ''' Get the physical address of a given virtual (linear) address 
             Method depends on architecture.  x86 kernel mode addresses will
             use page tables via stored kernel cr3.  User mode addresses can
@@ -408,11 +515,12 @@ class MemUtils():
         retval = None
         v = self.getUnsigned(v)
         cpl = getCPL(cpu)
-        #self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
+        if do_log:
+            self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
         if v < self.getUnsigned(self.param.kernel_base):
-            retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid)
+            retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
         else:
-            retval = self.v2pKaddr(cpu, v, cpl, use_pid=use_pid)
+            retval = self.v2pKaddr(cpu, v, use_pid=use_pid)
         return retval
 
     def readByte(self, cpu, vaddr):
@@ -581,7 +689,12 @@ class MemUtils():
             word_size = self.WORD_SIZE
         if cpu.architecture == 'arm':
             #self.lgr.debug('printRegJson is arm regs is %s' % (str(self.regs)))
-            regs = self.regs.keys()
+            regs = self.arm_regs
+        elif cpu.architecture == 'arm64':
+            if word_size == 8:
+                regs = self.arm64_regs
+            else:
+                regs = self.arm_regs
         elif word_size == 8:
             ''' check for 32-bit compatibility mode '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
@@ -601,7 +714,7 @@ class MemUtils():
                 #self.lgr.debug('except for %s' % reg)
                 ''' Hack, regs contaminated with aliases, e.g., syscall_num '''
                 continue
-            reg_values[reg] = reg_value
+            reg_values[reg] = self.getUnsigned(reg_value)
         
         s = json.dumps(reg_values)
         print(s)
@@ -669,7 +782,9 @@ class MemUtils():
             return None
 
     def getRegValue(self, cpu, reg):
+        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
         reg_value = None
+        reg_num = None
         if reg.startswith('xmm'):
             h_l = None
             if reg.endswith('L'):
@@ -683,13 +798,88 @@ class MemUtils():
                 reg_value = cpu.xmm[index][h_l]
                 self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
         else:     
-            if reg in self.regs:
-                reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-                #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
+            if cpu.architecture != 'arm64':
+                if reg in self.regs:
+                    reg_num = cpu.iface.int_register.get_number(self.regs[reg])
+                    #print('getRegValue self.regs[%s] is %s num %d' % (reg, self.regs[reg], reg_num))
+                else:
+                    reg_num = cpu.iface.int_register.get_number(reg)
             else:
-                reg_num = cpu.iface.int_register.get_number(reg)
-            reg_value = cpu.iface.int_register.read(reg_num)
+                arm64_app = self.arm64App(cpu)
+               
+                if reg == 'sp':
+                    reg = 'sp_el0'
+                #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
+                if not arm64_app and reg in self.arm_regs:
+                    # simply use name of register
+                    reg_num = cpu.iface.int_register.get_number(reg)
+                elif arm64_app and reg in self.arm64_regs:
+                    # simply use name of register
+                    reg_num = cpu.iface.int_register.get_number(reg)
+                    
+                elif reg in ['eip']:
+                    reg_num = cpu.iface.int_register.get_number('pc')
+                elif reg == 'syscall_ret':
+                    if cpu.in_aarch64:
+                        reg_num = cpu.iface.int_register.get_number('x0')
+                    elif arm64_app:
+                        reg_num = cpu.iface.int_register.get_number('x0')
+                    else:
+                        reg_num = cpu.iface.int_register.get_number('r0')
+                else:
+                    # depends.  may be syscall_num, param reg or such.   We don't know if app is 32 or 64 bits.
+                    # If in user space then just rely on cpu.in_aarch64.  Otherwise, assume we came in via a syscall
+                   # and the esr_el1 reg tells us whether app was 32 or 64.
+                    #self.lgr.debug('getRegValue look for reg %s, if in kernel, expecting via syscall' % reg)
+                    if reg == 'syscall_num':
+                        if arm64_app:
+                            reg_num = cpu.iface.int_register.get_number('x8')
+                        else:
+                            reg_num = cpu.iface.int_register.get_number('r7')
+                    elif reg.startswith('param'):
+                        if arm64_app:
+                            reg_num = cpu.iface.int_register.get_number(param_map['arm64'][reg])
+                        else:
+                            reg_num = cpu.iface.int_register.get_number(param_map['arm'][reg])
+                    if arm64_app:
+                        if reg == 'lr':
+                            reg_num = cpu.iface.int_register.get_number('x30')
+                    else:
+                        if reg == 'sp_usr':
+                            reg_num = cpu.iface.int_register.get_number('x15')
+                        elif reg == 'lr_usr':
+                            reg_num = cpu.iface.int_register.get_number('x14')
+            if reg_num is not None:
+                reg_value = cpu.iface.int_register.read(reg_num)
+            else:
+                self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
         return reg_value
+
+    def arm64App(self, cpu):
+        arm64_app = True
+        if getCPL(cpu) == 0:
+            reg_num = cpu.iface.int_register.get_number('esr_el1')
+            reg_value = cpu.iface.int_register.read(reg_num)
+            esr_el1_shifted = reg_value >> 26
+            #print('esr_el1_shifted is 0x%x' % esr_el1_shifted)
+            if esr_el1_shifted == 0x15:
+                # arm64 app
+                #self.lgr.debug('arm64App is arm64 call from 64')
+                pass
+            elif esr_el1_shifted == 0x11:
+                # arm32 app
+                #self.lgr.debug('arm64App is arm64 call from 32')
+                arm64_app = False
+            else:
+                #self.lgr.debug('arm64App in kernel but not via a syscall? esr_el1 is 0x%x  assume page fault on arm64 app' % esr_el1_shifted)
+                #traceback.print_stack()
+                #SIM_break_simulation('remove this')
+                arm64_app = True
+        else:
+            # in user space, rely on in_aarch64
+            if not cpu.in_aarch64:
+                arm64_app = False 
+        return arm64_app
 
     def kernelArch(self, cpu):
         if cpu == 'arm':
@@ -738,7 +928,7 @@ class MemUtils():
 
     def adjustParam(self, cpu):
 
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             return
 
         if self.WORD_SIZE == 4:
@@ -820,10 +1010,12 @@ class MemUtils():
         
 
     def getCurrentTask(self, cpu):
-        self.lgr.debug('memUtils getCurrentTask WORD_SIZE %d' % self.WORD_SIZE)
+        #self.lgr.debug('memUtils getCurrentTask WORD_SIZE %d cpu architecure %s' % (self.WORD_SIZE, cpu.architecture))
         retval = None 
         if self.WORD_SIZE == 4 and cpu.architecture == 'arm':
             retval = self.getCurrentTaskARM(self.param, cpu)
+        elif cpu.architecture == 'arm64':
+            retval = self.getCurrentTaskARM64(self.param, cpu)
         else:
             if self.WORD_SIZE == 4:
                 param_xs_base = self.param.fs_base
@@ -875,22 +1067,32 @@ class MemUtils():
 
         return retval
 
+    '''
     def kernel_v2p(self, param, cpu, vaddr):
         cpl = getCPL(cpu)
-        pc = self.getRegValue(cpu, 'pc')
-        try:
-            phys_block = cpu.iface.processor_info.logical_to_physical(vaddr, Sim_Access_Read)
-        except:
-            return None
+        if cpl == 0 or cpu.architecture != 'arm64':
+            pc = self.getRegValue(cpu, 'pc')
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(vaddr, Sim_Access_Read)
+            except:
+                return None
 
-        if phys_block.address != 0:
-            #self.lgr.debug('kernel_v2p, cpl: %d pc: 0x%x got phys block, get unsigned of of phys 0x%x' % (cpl, pc, phys_block.address))
-            return self.getUnsigned(phys_block.address)
+            if phys_block.address != 0:
+                #self.lgr.debug('kernel_v2p, cpl: %d pc: 0x%x got phys block, get unsigned of of phys 0x%x' % (cpl, pc, phys_block.address))
+                return self.getUnsigned(phys_block.address)
+            else:
+                retval =  vaddr - param.kernel_base + param.ram_base
+                #self.lgr.debug('kernel_v2p cpl: %d pc: 0x%x phys block zero, use kernel and ram base got 0x%x' % (cpl, pc, retval))
+                return retval
         else:
-            retval =  vaddr - param.kernel_base + param.ram_base
-            #self.lgr.debug('kernel_v2p cpl: %d pc: 0x%x phys block zero, use kernel and ram base got 0x%x' % (cpl, pc, retval))
-            return retval
+    '''
 
+    def getCurrentTaskARM64(self, param, cpu):
+        reg_num = cpu.iface.int_register.get_number("sp_el0")
+        retval = cpu.iface.int_register.read(reg_num)
+        #self.lgr.debug('getCurrentTaskARM64 reg_num %s retval %s' % (reg_num, retval))
+        return retval
+      
     def getCurrentTaskARM(self, param, cpu):
         reg_num = cpu.iface.int_register.get_number("sp")
         sup_sp = cpu.gprs[1][reg_num]
@@ -905,7 +1107,8 @@ class MemUtils():
             ts += param.kernel_base
             #self.lgr.debug('getCurrentTaskARM ts adjusted by base now 0x%x' % ts)
         task_struct = ts + 12
-        ct_addr = self.kernel_v2p(param, cpu, task_struct) 
+        #ct_addr = self.kernel_v2p(param, cpu, task_struct) 
+        ct_addr = self.v2pKaddr(cpu, task_struct)
         #self.lgr.debug('ts: 0x%x  task_struct: 0x%x  phys: 0x%x' % (ts, task_struct, ct_addr))
         try:
             ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
@@ -952,7 +1155,7 @@ class MemUtils():
         while not done and bytes_to_go > 0 and curr_addr is not None:
             bytes_to_read = bytes_to_go
             remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
-            #print 'remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x end of page would be 0x%x' % (remain_in_page, bytes_to_read, curr_addr, end)
+            self.lgr.debug('getBytes remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x' % (remain_in_page, bytes_to_read, curr_addr))
             if remain_in_page < bytes_to_read:
                 bytes_to_read = remain_in_page
             if bytes_to_read > 1024:
@@ -966,16 +1169,16 @@ class MemUtils():
                 #self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
-            #self.lgr.debug('read (bytes_to_read) 0x%x bytes from 0x%x ' % (bytes_to_read, curr_addr))
+            self.lgr.debug('getBytes read (bytes_to_read) 0x%x bytes from 0x%x phys 0x%x ' % (bytes_to_read, curr_addr, phys))
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
             except ValueError:
             #except:
                 #print 'trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys_block.address, bytes_to_read, phys_block.address + bytes_to_read - 1)
-                print('trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
+                print('readBytes trouble reading phys bytes, address %x, num bytes %d end would be %x' % (phys, bytes_to_read, phys + bytes_to_read - 1))
                 print('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
-                self.lgr.error('bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
+                self.lgr.error('readBytes bytes_to_go %x  bytes_to_read %d' % (bytes_to_go, bytes_to_read))
                 return retbytes
             holder = ''
             count = 0
@@ -987,7 +1190,7 @@ class MemUtils():
                 retbytes = retbytes+read_data
             del read_data
             bytes_to_go = bytes_to_go - bytes_to_read
-            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
+            self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
             curr_addr = curr_addr + bytes_to_read
         return retbytes
 
@@ -1167,11 +1370,17 @@ class MemUtils():
 
     def wordSize(self, cpu):
         retval = self.WORD_SIZE
-        if cpu.architecture != 'arm':
+        if not cpu.architecture.startswith('arm'):
             ''' see api-help x86_exec_mode_t '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             if mode == 3:
                 retval = 4
+        elif cpu.architecture == 'arm64':
+            # TBD still will break on returns from kernel
+            cpl = getCPL(cpu)
+            if not self.arm64App(cpu) and cpl != 0:
+                retval = 4
+            
         return retval
 
     def checkSavedCR3(self, cpu):
@@ -1185,3 +1394,20 @@ class MemUtils():
         reg_num = cpu.iface.int_register.get_number("cr3")
         current_cr3 = cpu.iface.int_register.read(reg_num)
         return current_cr3
+
+    def getCallRetReg(self, cpu):
+        if cpu.architecture == 'arm64':
+            if cpu.in_aarch64:
+                retval = 'x0'
+            else:
+                retval = 'r0'
+        else:
+            retval = self.regs['syscall_ret']
+        return retval
+
+    def getKReturnAddr(self, cpu):
+        retval = None
+        if cpu.architecture == 'arm64':
+            ret_reg = cpu.iface.int_register.get_number("elr_el1")
+            retval = cpu.iface.int_register.read(ret_reg)
+        return retval

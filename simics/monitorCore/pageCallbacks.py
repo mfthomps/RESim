@@ -64,7 +64,10 @@ class PageCallbacks():
                 table_base = self.mem_utils.getWindowsTableBase(self.cpu, use_pid)
             else: 
                 table_base = self.mem_utils.getLinuxTableBase(self.cpu, use_pid)
-            self.lgr.debug('pageCallbacks setTableHaps for pid %s table_base is 0x%x' % (use_pid, table_base))
+            if table_base is not None:
+                self.lgr.debug('pageCallbacks setTableHaps for pid %s table_base is 0x%x' % (use_pid, table_base))
+            else:
+                self.lgr.debug('pageCallbacks setTableHaps for pid %s failed to get table_base' % use_pid)
         pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
         if pt.page_addr is not None:
             if pt.page_addr not in self.missing_pages:

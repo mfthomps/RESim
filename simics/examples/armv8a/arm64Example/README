@@ -1,0 +1,25 @@
+Example of using the Simics API to learn about linux kernel attributes.
+Copy these files into a Simics workspace.
+use 
+   ./simics runit.simics
+to load the target arm64 fvp platform.  Run it forward until it boots 
+and you get the root prompt on the terminal.  Create a snapshot for 
+convenience:
+   write-configuration booted
+Then quit Simics and restart to test your snapshot:
+   ./simics -c booted
+
+Load the test program from the simics> prompt:
+    run-python-file currrentTaskArm64.py
+Then use "c" to continue.  Then click into the simics root terminal
+and hit a key to force a process to be scheduled so that a mode change
+occurs.
+
+Make a copy of the currentTaskArm64.py and modify it to explore other
+kernel traits.  What is the address of kernel entry code?  How do you
+know you entered via a syscall vs a page fault?  What does the task record
+look like?   Can you record each unique task record that is loaded?
+
+Consider using a write breakpoint to set a hap on updates to this pointer.
+Note you would use SIM_get_mem_op_value_le(memory) to get the new value
+that is about to be written into the memory address.

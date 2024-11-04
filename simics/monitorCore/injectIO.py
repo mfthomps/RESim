@@ -37,16 +37,18 @@ import pickle
 from resimHaps import *
 import resimUtils
 class InjectIO():
-    def __init__(self, top, cpu, cell_name, tid, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
+    def __init__(self, top, cpu, cell_name, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, fname=None, target_cell=None, target_proc=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
+           coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
+        if target_prog is not None and targetFD is None:
+            self.lgr.error('injectIO called with target_prog but not targetFD')
+            return
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
         self.cell_name = cell_name
-        self.tid = tid
         self.backstop = backstop
         self.dataWatch = dataWatch
         self.bookmarks = bookmarks
@@ -59,19 +61,7 @@ class InjectIO():
         self.top = top
         self.lgr = lgr
         self.count = count
-        self.lgr.debug('injectIO break_on given as %s fname as %s' % (str(break_on), fname))
-        if fname is not None:
-            offset = self.so_map.getLoadOffset(fname, tid=tid)
-        else:
-            offset = None
         self.break_on = break_on
-        if break_on is not None and fname is not None:
-            self.lgr.debug('injectIO break_on given as 0x%x' % break_on)
-            if offset is None:
-                self.lgr.error('injectIO break_on set, but no offset for %s' % fname)
-                return
-            self.break_on = self.break_on + offset
-            self.lgr.debug('injectIO adjusted break_on to be 0x%x' % self.break_on)
         self.in_data = None
         self.backstop_cycles =   9000000
         bsc = os.getenv('BACK_STOP_CYCLES')
@@ -85,6 +75,10 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
+        if target_prog is None:
+            if not self.checkBreakOn(target_prog, break_on):
+                self.lgr.error('injectIO unable to break on given block.')
+                return
         self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         if not self.top.hasAFL():
@@ -117,9 +111,10 @@ class InjectIO():
                 return
 
         self.coverage = coverage
-        self.fname = fname
         if self.cpu.architecture == 'arm':
             lenreg = 'r0'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
@@ -132,9 +127,10 @@ class InjectIO():
         self.udp_header = os.getenv('AFL_UDP_HEADER')
         self.write_data = None
         ''' process name and FD to track, i.e., if process differs from the one consuming injected data. '''
-        self.target_proc = target_proc
+        self.target_prog = target_prog
         self.target_cell = target_cell
         self.targetFD = targetFD
+        self.trace_fd = trace_fd
 
         # No data tracking, just trace all system calls
         self.trace_all = trace_all
@@ -149,11 +145,23 @@ class InjectIO():
         if sor is not None and sor.lower() in ['true', 'yes']:
             self.stop_on_read = True
             self.lgr.debug('injectIO stop_on_read is true')
+        sioctl = os.getenv('IOCTL_COUNT_MAX')
+        if sioctl is not None:
+            self.ioctl_count_max = int(sioctl)
+        else:
+            self.ioctl_count_max = None
+        select_s = os.getenv('SELECT_COUNT_MAX')
+        if select_s is not None:
+            self.select_count_max = int(select_s)
+        else:
+            self.select_count_max = None
         self.break_on_hap = None
         if not self.coverage and not self.trace_all:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
+        if trace_fd is not None:
+            self.mark_logs=True
         self.filter_module = None
         packet_filter = os.getenv('AFL_PACKET_FILTER')
         if packet_filter is not None:
@@ -225,7 +233,7 @@ class InjectIO():
         self.lgr.info('injectIO go, write data total size %d file %s' % (len(self.in_data), self.dfile))
 
         ''' Got to origin/recv location unless not yet debugging, or unless modifying kernel buffer '''
-        if self.target_proc is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
+        if self.target_prog is None and not no_go_receive and not self.mem_utils.isKernel(self.addr):
             self.dataWatch.goToRecvMark()
 
         lenreg = None
@@ -235,6 +243,8 @@ class InjectIO():
                 the invoker sees it.  So, we'll set both for alternate libc implementations? '''
             lenreg = 'r0'
             #lenreg2 = 'r7'
+        elif self.cpu.architecture == 'arm64':
+            lenreg = 'x0'
         else:
             lenreg = 'eax'
         if self.orig_buffer is not None and not self.mem_utils.isKernel(self.addr):
@@ -245,7 +255,8 @@ class InjectIO():
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        if self.target_proc is None and not self.trace_all and not self.instruct_trace and not self.no_track:
+        tid = self.top.getTID()
+        if self.target_prog is None and not self.trace_all and not self.instruct_trace and not self.no_track:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
             cpl = memUtils.getCPL(self.cpu)
@@ -261,7 +272,7 @@ class InjectIO():
             if self.reset_debug:
                 self.top.stopDebug()
                 self.lgr.debug('injectIO call debugTidGroup')
-                self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+                self.top.debugTidGroup(tid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             if not self.no_page_faults:
@@ -273,13 +284,13 @@ class InjectIO():
                 self.top.watchROP(watching=False, callback=self.callback)
             self.top.jumperStop()
             self.top.stopThreadTrack(immediate=True)
-        elif self.instruct_trace and self.target_proc is None:
+        elif self.instruct_trace and self.target_prog is None:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
-        elif self.trace_all and self.target_proc is None and not self.no_trace_dbg:
-            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+        elif self.trace_all and self.target_prog is None and not self.no_trace_dbg:
+            self.top.debugTidGroup(tid, to_user=False, track_threads=False) 
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
@@ -305,12 +316,13 @@ class InjectIO():
             write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
-                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, force_default_context=force_default_context,
-                 write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
+                 pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, 
+                 select_count_max=self.select_count_max,
+                 force_default_context=force_default_context, write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
                  shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
 
         #bytes_wrote = self.writeData()
-
+        self.write_data.tracingIO()
         if self.addr_addr is not None and self.src_addr is not None:
             self.lgr.debug('injectIO replace src addr with given 0x%x at 0x%x' % (self.src_addr, self.addr_addr))
             src_ip_addr = self.addr_addr + 4
@@ -320,38 +332,37 @@ class InjectIO():
         if bytes_wrote is None:
             self.lgr.error('got None for bytes_wrote in injectIO')
             return
+
+        if self.mem_utils.isKernel(self.addr):
+            if self.addr_of_count is not None and not self.top.isWindows():
+                self.lgr.debug('injectIO set ioctl wrote %d to 0x%x' % (bytes_wrote, self.addr_of_count))
+                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, bytes_wrote)
+
+        env_max_len = os.getenv('AFL_MAX_LEN')
+        if env_max_len is not None:
+            self.max_len = int(env_max_len)
+            self.lgr.debug('injectIO overrode max_len value from pickle with value %d from environment' % self.max_len)
+        if self.max_len is not None and self.max_len < bytes_wrote:
+            self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
+
         eip = self.top.getEIP(self.cpu)
         did_origin_reset = False
-        if self.target_proc is None:
-            self.dataWatch.clearWatchMarks(record_old=True)
-            self.dataWatch.clearWatches(immediate=True)
-            if self.coverage:
-                self.lgr.debug('injectIO enabled coverage')
-                analysis_path = self.top.getAnalysisPath(self.fname) 
-                self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
-            self.lgr.debug('injectIO ip: 0x%x did write %d bytes to addr 0x%x cycle: 0x%x  Now clear watches' % (eip, bytes_wrote, self.addr, self.cpu.cycles))
-            env_max_len = os.getenv('AFL_MAX_LEN')
-            if env_max_len is not None:
-                self.max_len = int(env_max_len)
-                self.lgr.debug('injectIO overrode max_len value from pickle with value %d from environment' % self.max_len)
-            if self.max_len is not None and self.max_len < bytes_wrote:
-                self.lgr.error('Max len is %d but %d bytes written.  May cause corruption' % (self.max_len, bytes_wrote))
-            if not self.stay:
-                if self.break_on is not None:
-                    self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
-                    proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
-                    self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
-                if self.mem_utils.isKernel(self.addr):
-                    if self.addr_of_count is not None and not self.top.isWindows():
-                        self.lgr.debug('injectIO set ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                        self.mem_utils.writeWord32(self.cpu, self.addr_of_count, len(self.in_data))
 
+        if self.trace_all or self.instruct_trace:
+            self.lgr.debug('injectIO call traceAll')
+            call_params = syscall.CallParams('injectIO', None, self.fd)
+            self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
+            trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
+            self.top.traceWrite(trace_msg)
+
+        if self.target_prog is None:
+            self.commonGo()
+            if not self.stay:
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
                     did_origin_reset = True
-                    eip = self.top.getEIP(self.cpu)
-                    self.lgr.debug('injectIO back from cmds eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
+                    self.lgr.debug('injectIO back from resetOrigin eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     if not self.mem_utils.isKernel(self.addr):
@@ -371,29 +382,27 @@ class InjectIO():
                             if self.dataWatch is not None:
                                 self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                                 self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
-                    if not self.no_rop:
-                        self.top.watchROP(callback=self.callback)
-                else:
-                    self.lgr.debug('injectIO call traceAll')
-                    call_params = syscall.CallParams('injectIO', None, self.fd)
-                    self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
+
+
+                if not self.trace_all and not self.instruct_trace and not self.no_track:
+                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
+                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
+
                 if self.malloc:
                     self.top.traceMalloc()
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
                         cli.quiet_run_command('c')
-                elif not self.mem_utils.isKernel(self.addr):
-                    print('retracking IO') 
+
+                if not self.mem_utils.isKernel(self.addr):
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
-                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
-                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
                     # TBD why?
                     #self.callback = None
                 else:
@@ -408,6 +417,8 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        if self.trace_fd is not None:
+                            self.top.traceFD(self.trace_fd)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
                     if not did_origin_reset:
@@ -415,7 +426,7 @@ class InjectIO():
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
-            self.lgr.debug('injectIO using target %s' % self.target_proc)
+            self.lgr.debug('injectIO using target %s' % self.target_prog)
             self.top.resetOrigin()
             ''' watch for death of this process as well '''
             self.top.stopWatchTasks(target=self.target_cell, immediate=True)
@@ -427,9 +438,26 @@ class InjectIO():
                 self.lgr.debug('injectIO trace all without debugging')
                 self.injectCallback()
             else:
-                self.lgr.debug('injectIO trace all with debugging')
-                self.top.debugProc(self.target_proc, final_fun=self.injectCallback, track_threads=False)
+                self.lgr.debug('injectIO trace all with debugging, or not trace_all')
+                self.top.debugProc(self.target_prog, final_fun=self.injectCallback, track_threads=False, not_to_user=True)
             #self.top.debugProc(self.target, final_fun=self.injectCallback, pre_fun=self.context_manager.resetWatchTasks)
+
+    def commonGo(self):
+        self.lgr.debug('injectIO commonGo')
+        self.dataWatch.clearWatchMarks(record_old=True)
+        self.dataWatch.clearWatches(immediate=True)
+        eip = self.top.getEIP(self.cpu)
+        if self.coverage:
+            self.lgr.debug('injectIO enabled coverage')
+            analysis_path = self.top.getAnalysisPath(self.target_prog) 
+            self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
+        if self.break_on is not None:
+            self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
+            self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
+        if not self.stay:
+            if not self.no_rop:
+                self.top.watchROP(callback=self.callback)
 
     def injectCallback(self):
         ''' called at the end of the debug hap chain, meaning we are in the target process. 
@@ -452,14 +480,27 @@ class InjectIO():
             self.top.instructTrace(trace_file, watch_threads=True)
         else:
             self.top.jumperStop()
+        if not self.checkBreakOn(self.target_prog, self.break_on):
+            self.lgr.error('injectIO injectCallback unable to break on given block.')
+            return
+        self.commonGo()
         self.bookmarks = self.top.getBookmarksInstance()
         if self.malloc:
             self.top.traceMalloc()
+        if self.mark_logs:
+            self.lgr.debug('injectIO call traceAll for mark_logs')
+            self.top.traceAll()
+            if self.trace_fd is not None:
+                self.top.traceFD(self.trace_fd)
+            self.top.traceBufferMarks(target=self.cell_name)
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
-                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count)
+                self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
+            elif self.targetFD is not None:
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs)
             else:
-                self.top.trackIO(self.targetFD, quiet=True, count=self.count)
+                # just want to debug the target
+                pass
 
     def delCallHap(self, dumb=None):
         if self.write_data is not None:
@@ -600,3 +641,23 @@ class InjectIO():
            
     def getFilter(self):
         return self.filter_module 
+
+    def checkBreakOn(self, fname, break_on):
+        # Determine if we are to break on a basic block, and if so, confirm the 
+        # have the necessary information.
+        retval = True
+        self.lgr.debug('injectIO checkBreakOn break_on given as %s fname as %s' % (str(break_on), fname))
+        if fname is not None:
+            offset = self.so_map.getLoadOffset(fname)
+        else:
+            offset = None
+        self.break_on = break_on
+        if break_on is not None and fname is not None:
+            self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x' % break_on)
+            if offset is None:
+                self.lgr.error('injectIO checkBreakOn break_on set, but no offset for %s' % fname)
+                retval = False
+            else:
+                self.break_on = self.break_on + offset
+                self.lgr.debug('injectIO checkBreakOn adjusted break_on to be 0x%x' % self.break_on)
+        return retval

@@ -51,7 +51,10 @@ class UserBreak():
 
     def stopBreak(self):
         if self.user_break_hap is not None:
-            self.context_manager.genDeleteHap(self.user_break_hap)
+            hap = self.user_break_hap
+            self.context_manager.genDeleteHap(hap)
+            eslf.user_break_hap = None
+     
 
     def doBreak(self):
         user_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.addr, 4, 0)

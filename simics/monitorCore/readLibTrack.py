@@ -110,7 +110,7 @@ class ReadLibTrack():
         #self.context_manager.genDeleteHap(self.fun_entry_hap)
         #self.fun_entry_hap = None 
         self.write_bytes = 0
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architectures.startswith('arm'):
             self.ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
             self.lgr.error('readLibTrack, no support for arm yet')
         else:

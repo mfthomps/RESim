@@ -17,8 +17,6 @@ resim_dir = os.getenv('RESIM_DIR')
 user_name = os.getenv('USER')
 core_path=os.path.join(resim_dir,'simics', 'monitorCore')
 sys.path.append(core_path)
-import runAFL
-import resimUtils
 def expandValue(value): 
     if value.startswith('$'):
         if os.path.sep in value:
@@ -119,10 +117,12 @@ class Directive():
         self.src_ip = None
         self.src_port = None
         self.session = None
+        self.client = None
         self.header = None
         self.iface = None
         self.file = []
         self.commands = []
+        self.hang = False
         self.load(fname)
 
     def load(self, fname):
@@ -146,6 +146,8 @@ class Directive():
                     self.src_port = value
                 elif key == 'SESSION':
                     self.session = value
+                elif key == 'CLIENT':
+                    self.client = value
                 elif key == 'HEADER':
                     self.header = value
                 elif key == 'FILE':
@@ -154,6 +156,9 @@ class Directive():
                     self.commands.append(value)
                 elif key == 'IFACE':
                     self.iface = value
+                elif key == 'HANG':
+                    if value.lower() in ['true', 'yes']:
+                        self.hang = True
     def getArgs(self):
         retval = ' --ip %s --port %s' % (self.ip, self.port)
         if self.src_ip is not None:
@@ -164,10 +169,12 @@ class Directive():
             retval = retval + ' --device %s' % self.device
         if self.header is not None:
             retval = retval + ' --header %s' % self.header
+        if self.hang:
+            retval = retval + ' --hang'
         farg = ''
         for f in self.file:
             farg = farg + ' /tmp/%s' % os.path.basename(f)
-        retval = retval+' --file "%s"' % farg
+        retval = retval+' --file "%s"' % farg.strip()
         return retval
 
 def main():
@@ -189,6 +196,7 @@ def main():
     PORT = 6459
     target = (host, PORT)
     client_cmd = None
+    # NOTE client_cmd defaults to clientudpMult3, unless replay
     if directive.session is not None:
         if directive.session.lower() == 'servertcp':
             client_cmd = 'serverTCP3'
@@ -199,11 +207,18 @@ def main():
                 client_cmd = 'clientudpJsonScapy'
             else:
                 client_cmd = 'clientudpJson'
-        else:
+        elif directive.session.lower() == 'tcp_json':
+            client_cmd = 'clientTCPJson'
+        elif directive.session.lower() == 'client':
+            client_cmd = directive.client
+        elif directive.session.lower() != 'replay':
             client_cmd = 'clientudpMult3'
         if client_cmd is not None:
-            client_mult_path = os.path.join(core_path, client_cmd)
-            sendFiles([client_mult_path], sock, target)
+            if directive.client is not None:
+                client_path = directive.client
+            else:
+                client_path = os.path.join(core_path, client_cmd)
+            sendFiles([client_path], sock, target)
             cmd='/bin/chmod a+x /tmp/%s' % client_cmd
             doCommand(cmd, sock, target)
     if args.disconnect:
@@ -222,6 +237,7 @@ def main():
     directives_script = '/tmp/directives.sh'
     driver_file = open(remote_directives_file, 'w')
     if args.disconnect:
+        driver_file.write('chmod a+x /tmp/simics-magic\n')
         driver_file.write('/tmp/simics-magic\n')
     file_list = []
     for file in directive.file:
@@ -246,12 +262,12 @@ def main():
         if client_cmd is not None:
             directive_line = 'sudo /tmp/%s  %s' % (client_cmd, direct_args)
             driver_file.write(directive_line+'\n')
-        elif directive.session == 'replay':
+        elif directive.session.lower() == 'replay':
             if directive.device is not None:
                 for pcap in directive.file:
                     pcap_base = os.path.basename(pcap)
-                    directive = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
-                    driver_file.write(directive+'\n')
+                    directive_line = 'sudo /usr/bin/tcpreplay -i %s /tmp/%s' % (directive.device, pcap_base)
+                    driver_file.write(directive_line+'\n')
             else:
                 print('The replay directive needs an DEVICE value as the source device for tcpreplay.')
                 exit(1)

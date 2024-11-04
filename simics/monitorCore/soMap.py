@@ -18,9 +18,12 @@ class CodeSection():
         self.fname = fname
 
 class ProgInfo():
-    def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path):
+    def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path, interp=None):
         self.text_start = text_start
         self.text_size = text_size
+        self.text_end = None
+        self.dynamic = False
+        self.interp = interp
         if self.text_start is not None and text_size is not None:
            self.text_end = text_start + text_size
         self.text_offset = text_offset
@@ -33,19 +36,26 @@ class ProgInfo():
             self.plt_offset = plt_offset
             self.plt_size = plt_size
         self.local_path = local_path
+    def setDynamic(self):
+        self.dynamic = True
+
     def toString(self):
-        if self.plt_size is not None:
+        if self.text_start is not None and self.plt_size is not None:
             return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
                 self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
+        elif self.text_offset is not None:
+            return('relocatable text_offset 0x%x size: 0x%x interp: %s' % (self.text_offset, self.text_size, self.interp))
         else:
             return('Not a binary')
 
 
 class LoadInfo():
-    def __init__(self, addr, size):
+    def __init__(self, addr, size, interp=None):
         self.addr = addr
         self.size = size
-        self.end = addr+size
+        self.interp = interp
+        if addr is not None:
+            self.end = addr+size
     
 class SOMap():
     def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, run_from_snap, lgr):
@@ -98,6 +108,14 @@ class SOMap():
             version = self.top.getSnapVersion() 
             if 'prog_base_map' in so_pickle:
                 self.prog_base_map = so_pickle['prog_base_map']
+                self.lgr.debug('SOMap loadPickle prog_base_map keys %s' % str(self.prog_base_map.keys()))
+                # TBD hack remove after snapshots cycle out.  was mapping path basename vice prog basename, symlinks!
+                base_name_list = list(self.prog_base_map.keys())
+                for base_name in base_name_list:
+                    prog_base = os.path.basename(self.prog_base_map[base_name])
+                    if prog_base not in self.prog_base_map:
+                        self.prog_base_map[prog_base] = self.prog_base_map[base_name]
+
             else:
                 for tid in self.text_prog:
                     base = os.path.basename(self.text_prog[tid])
@@ -119,7 +137,7 @@ class SOMap():
                          elf_info = elfText.getText(prog_path, self.lgr)
                          if elf_info is not None:
                              self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                                  elf_info.plt_offset, elf_info.plt_size, prog)
+                                  elf_info.plt_offset, elf_info.plt_size, prog, interp=elf_info.interp)
                              self.lgr.debug('soMap loadPickle prog %s info %s' % (prog, self.prog_info[prog].toString()))
                              prog_basename = os.path.basename(prog)
                              self.prog_base_map[prog_basename] = prog
@@ -215,7 +233,7 @@ class SOMap():
                 return True
         return False
 
-    def isAboveLibc(self, address):
+    def isFunNotLibc(self, address):
         retval = False
         if self.isMainText(address):
             retval = True
@@ -240,6 +258,7 @@ class SOMap():
             return False
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
+        #self.lgr.debug('soMap isMainText address 0x%x tid %s' % (address, tid))
         if tid is None:
             return False
         if tid in self.prog_start and self.prog_start[tid] is not None:
@@ -269,6 +288,7 @@ class SOMap():
         return retval
 
     def addText(self, path, prog, tid_in):
+        # Add information about a newly loaded program, returning load info
         if path is None:
             self.lgr.error('soMap addText called with path of None prog %s' % prog) 
             return
@@ -288,48 +308,76 @@ class SOMap():
         else:
             tid = tid_in
         self.lgr.debug('soMap addText tid_in %s path %s tid now %s' % (tid_in, path, tid))
-        # Add information about a newly loaded program, returning load info
         retval = None
-        prog_basename = os.path.basename(path)
+        prog_basename = os.path.basename(prog)
         #if prog_basename == 'busybox':
         #    self.lgr.debug('soMap ignore busybox')
         #    return None
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
+            self.lgr.debug('soMap addText prog_base_map for %s set to %s' % (prog_basename, prog))
         else:
             if self.prog_base_map[prog_basename] != prog:
                 self.lgr.warning('soMap addText collision on program base name %s adding %s, replace old with new' % (prog_basename, prog))
                 self.prog_base_map[prog_basename] = prog
+        eip = None
+        interp = None 
+        skip_this = False
         if prog not in self.prog_info:
             elf_info = elfText.getText(path, self.lgr)
             if elf_info is not None:
                 self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                       elf_info.plt_offset, elf_info.plt_size, path)
+                       elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp)
+                interp = elf_info.interp
                 self.lgr.debug('soMap addText prog info %s %s' % (prog, self.prog_info[prog].toString()))
+                if self.prog_info[prog].text_start is None:
+                    eip = self.top.getEIP(self.cpu)
+                    mem_utils = self.task_utils.getMemUtils()
+                    if mem_utils.isKernel(eip):
+                        eip = mem_utils.getKReturnAddr(self.cpu)
+                        if eip is None:
+                            self.lgr.error('soMap addText no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
+                            return
+                        self.lgr.debug('soMap addText no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                    else:
+                        self.lgr.debug('soMap addText no text start, assume dynamic eip is 0x%x' % eip)
+                    self.prog_info[prog].text_start = 0
+                    self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
+                    self.prog_info[prog].setDynamic()
+                    
+                     
             else:
                 self.lgr.debug('soMap addText no elf info for %s' % path)
-                pass
+                skip_this = True
         else:
             self.lgr.debug('soMap addText prog already in prog_info: %s' % prog)
-        if tid not in self.so_addr_map:    
-            self.so_addr_map[tid] = {}
-            self.so_file_map[tid] = {}
-            self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
+        if not skip_this:
+            if tid not in self.so_addr_map:    
+                self.so_addr_map[tid] = {}
+                self.so_file_map[tid] = {}
+                self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
+            else:
+                self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
+            if tid in self.prog_start:
+                self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
+            
+            if prog in self.prog_info:    
+                if self.prog_info[prog].dynamic:
+                    load_addr = None
+                    self.prog_end[tid] = None
+                else:
+                    load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                    self.prog_end[tid] = self.prog_info[prog].text_end
+                self.prog_start[tid] = load_addr
+                self.text_prog[tid] = prog
+                self.checkSOWatch(load_addr, prog)
+                #size = self.prog_info[prog].text_end - self.prog_start[tid]
+                size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+                retval = LoadInfo(load_addr, size, interp=interp)
+            else:
+                self.lgr.debug('soMap addText prog %s not in prog_info' % prog)
         else:
-            self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
-        if tid in self.prog_start:
-            self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
-        
-        if prog in self.prog_info:    
-            # TBD until we can get load address from process info, assume no ASLR
-            load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
-            self.prog_start[tid] = load_addr
-            self.prog_end[tid] = self.prog_info[prog].text_end
-            self.text_prog[tid] = prog
-            self.checkSOWatch(load_addr, prog)
-            #size = self.prog_info[prog].text_end - self.prog_start[tid]
-            size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
-            retval = LoadInfo(load_addr, size)
+            self.lgr.debug('soMap addText told to skip %s, maybe not an elf' % prog) 
         return retval
 
     def noText(self, prog, tid):
@@ -367,13 +415,47 @@ class SOMap():
             if full_path is not None:
                 full_path = full_path+'.funs'
                 self.fun_mgr.add(full_path, locate)
-            
+    
+    def addLoader(self, tid_in, prog, addr):
+        load_info = None
+
+        tid = self.getSOTid(tid_in)
+        self.lgr.debug('soMap addLoader tid:%s prog %s addr 0x%x' % (tid, prog, addr))
+        full_path = self.targetFS.getFull(prog, lgr=self.lgr)
+        if full_path is not None:
+            if tid is None:
+                tid = tid_in
+            if tid not in self.so_addr_map:
+                self.so_addr_map[tid] = {}
+                self.so_file_map[tid] = {}
+
+            elf_info = elfText.getText(full_path, self.lgr)
+            if elf_info is not None:
+                self.lgr.debug('soMap addLoader tid:%s prog %s  text_offset 0x%x' % (tid, prog, elf_info.text_offset))
+                self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
+                     elf_info.plt_offset, elf_info.plt_size, prog)
+            else:
+                self.lgr.error('soMap addLoader no elf info from %s' % prog)
+                return
+            load_addr = addr -  elf_info.text_offset
+            self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
+            load_size = elf_info.text_size + elf_info.text_offset
+            load_info = LoadInfo(load_addr, load_size)
+
+            self.so_addr_map[tid][prog] = load_info
+            self.so_file_map[tid][load_info] = prog
+            self.lgr.debug('soMap addLoader tid: %s prog %s addr: 0x%x' % (tid, prog, addr))
+        
+        return load_info
+        
     def addSO(self, tid_in, prog, addr, count):
+        self.lgr.debug('soMap addSO')
         if '..' in prog:
             prog = str(Path(prog).resolve())
         prog_basename = os.path.basename(prog)
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
+            self.lgr.debug('soMap addSO prog_base_map for %s set to %s' % (prog_basename, prog))
         else:
             if self.prog_base_map[prog_basename] != prog:
                 self.lgr.warning('soMap addeSO collision on program base name %s adding %s.  Replace old with new.' % (prog_basename, prog))
@@ -383,6 +465,7 @@ class SOMap():
         if tid is None:
             tid = tid_in
         if tid in self.so_addr_map and prog in self.so_addr_map[tid]:
+            self.lgr.debug('soMap addSO tid %s already in map' % tid)
             ''' multiple mmap calls for one so file.  assume continguous and adjust
                 address to lowest '''
             if self.so_addr_map[tid][prog].addr> addr:
@@ -396,11 +479,13 @@ class SOMap():
                 self.so_file_map[tid] = {}
 
             full_path = self.targetFS.getFull(prog, lgr=self.lgr)
+            self.lgr.debug('soMap addSO tid %s prog %s full %s' % (tid, prog, full_path))
             if full_path is not None and prog not in self.prog_info:
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                         elf_info.plt_offset, elf_info.plt_size, full_path)
+                         elf_info.plt_offset, elf_info.plt_size, full_path, interp=elf_info.interp)
+                    self.lgr.debug('soMap addSo added prog_info for prog %s' % prog)
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
 
@@ -443,7 +528,7 @@ class SOMap():
                 print('0x%x - 0x%x   %s' % (self.prog_start[tid], self.prog_end[tid], self.text_prog[tid]))
             else:
                 print('tid:%s not in text sections' % tid)
-                self.lgr.debug('tid:%s not in text sections' % tid)
+                self.lgr.debug('showSO tid:%s not in text sections' % tid)
             sort_map = {}
             for load_info in self.so_file_map[tid]:
                 prog = self.so_file_map[tid][load_info]
@@ -487,7 +572,7 @@ class SOMap():
                 else:
                     retval['prog_local_path'] = self.top.getFullPath()
             else:
-                self.lgr.debug('tid:%s not in text sections' % tid)
+                self.lgr.debug('getSO tid:%s not in text sections' % tid)
             sort_map = {}
             for load_info in self.so_file_map[tid]:
                 sort_map[load_info.addr] = load_info
@@ -578,7 +663,7 @@ class SOMap():
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)
-            #self.lgr.debug('SOMap getSOTid getCurrnetTaskLeader got %s for current tid:%s' % (ptid, tid))
+            #self.lgr.debug('SOMap getSOTid getCurrentTaskLeader got %s for current tid:%s' % (ptid, tid))
             if ptid != tid:
                 #self.lgr.debug('SOMap getSOTid use group leader')
                 retval = ptid
@@ -643,6 +728,8 @@ class SOMap():
         return retval
 
     def getSOInfo(self, addr_in):
+        # return file name, start and end for the binary file whose load range includes the given address.
+        # start and end are the load addresses
         retval = None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
@@ -755,32 +842,54 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
-        self.lgr.debug('mapSO loadAddr %s tid %s' % (in_fname, tid))
+        self.lgr.debug('soMap getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
         retval = None
         prog = self.fullProg(in_fname)
+        if prog is None:
+            self.lgr.error('soMap getLoadAddr got no prog for %s' % in_fname)
+            return None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         map_tid = self.getSOTid(tid)
         if map_tid not in self.so_file_map:
             self.lgr.debug('soMap getLoadAddr tid %s not in so_file_map, perhaps a prog' % map_tid)
         else:
+            self.lgr.debug('soMap getLoadAddr prog %s tid:%s file_map size %d' % (prog, tid, len(self.so_file_map[map_tid])))
             for load_info in self.so_file_map[map_tid]:
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
-                    self.lgr.debug('mapSO got match for %s address 0x%x tid:%s' % (prog, retval, tid))
+                    self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
         if retval is None and map_tid in self.text_prog:
             if os.path.basename(self.text_prog[map_tid]) == os.path.basename(prog):
-                self.lgr.debug('mapSO just using prog_start for map_tid %s' % (map_tid))
+                self.lgr.debug('soMap just using prog_start for map_tid %s' % (map_tid))
                 retval = self.prog_start[map_tid]
+        return retval
+
+    def isDynamic(self, in_fname):
+        retval = False
+        if in_fname in self.prog_info:
+            try:
+                retval = self.prog_info[in_fname].dynamic
+            except AttributeError:
+                pass
+        else:
+            prog = self.fullProg(in_fname)
+            if prog in self.prog_info:
+                retval = self.prog_info[prog].dynamic
+            else:
+                self.lgr.debug('soMap isDynamic in_fname %s not found in prog_info' % in_fname)
         return retval
 
     def getImageBase(self, in_fname):
         prog = self.fullProg(in_fname)
         retval = None
         if prog in self.prog_info:
-            retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+            if self.prog_info[prog].text_start == 0:
+                retval = 0
+            else:
+                retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
         else:
             self.lgr.debug('soMap getImageBase not in prog_info: %s' % prog)
 
@@ -824,6 +933,18 @@ class SOMap():
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (fpath, name))
                     self.so_watch_callback[fpath][name](load_addr, name)
 
+    def setProgStart(self, dumb=None):
+        cpu, comm, tid = self.task_utils.curThread() 
+        text_entry = self.top.getEIP()
+        if tid in self.prog_start and self.prog_start[tid] is not None:
+            self.lgr.debug('soMap setProgStart tid %s already in prog_start' % tid)
+        else:
+            prog = self.text_prog[tid]
+            text_start = text_entry - self.prog_info[prog].text_offset
+            self.prog_start[tid] = text_start
+            self.prog_end[tid] = self.prog_info[prog].text_end + text_start
+            self.lgr.debug('soMap setProgStart tid %s set prog_start 0x%x end 0x%x' % (tid, self.prog_start[tid], self.prog_end[tid]))
+
     def getLoadInfo(self, tid=None):
         # get load information for a tid program.
         # TBD assumes not ASLR
@@ -831,21 +952,28 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        if tid in self.prog_start:
+        #if tid in self.prog_start and self.prog_start[tid] is not None:
+        if tid in self.text_prog:
             prog = self.text_prog[tid]
-            size = self.prog_end[tid] - self.prog_start[tid] + 1 
-            load_info = LoadInfo(self.prog_start[tid], size)
+            if tid in self.prog_start and self.prog_start[tid] is not None:
+                size = self.prog_end[tid] - self.prog_start[tid] + 1 
+                load_info = LoadInfo(self.prog_start[tid], size, interp=self.prog_info[prog].interp)
+            elif prog in self.prog_info:
+                size = self.prog_info[prog].text_size
+                load_info = LoadInfo(None, size, interp=self.prog_info[prog].interp)
+           
         return load_info
 
     def fullProg(self, prog_in):
         # if the given prog_in is a basename, use a prog_base_map to return the full path
         prog = None
-        if '/' not in prog_in:
+        if prog_in is not None and '/' not in prog_in:
             if prog_in in self.prog_base_map:
                 prog = self.prog_base_map[prog_in] 
             
             else:
-                self.lgr.error('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
+                # may be call from readReplace or jumper
+                self.lgr.debug('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
         else:
             prog = prog_in
         return prog
@@ -853,16 +981,20 @@ class SOMap():
     def getLoadOffset(self, prog_in, tid=None):
         retval = None
         prog = self.fullProg(prog_in)
+        if prog is None:
+            self.lgr.error('soMap getLoadOffset got None from fullProg for %s' % prog_in)
+            return None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d' % (tid, len(self.prog_start)))
+        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s' % (tid, len(self.prog_start), prog_in, prog))
         if tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
                 image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                 retval = load_addr - image_base
-                self.lgr.debug('soMap getLoadOffset tid is return offset %d' % retval)
+                self.lgr.debug('soMap getLoadOffset return offset %d based on load_addr 0x%x image_base 0x%x text_start 0x%x textoffset 0x%x' % (retval, load_addr,
+                     image_base, self.prog_info[prog].text_start, self.prog_info[prog].text_offset))
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
@@ -876,8 +1008,8 @@ class SOMap():
         retval = []
         tid = self.getSOTid(tid)
         if tid in self.so_file_map: 
-            for load_info in self.so_file_map[map_tid]:
-                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[map_tid][load_info])
+            for load_info in self.so_file_map[tid]:
+                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
                 retval.append(code_section) 
         return retval
 
@@ -886,3 +1018,14 @@ class SOMap():
         if prog in self.prog_info:
             return self.prog_info[prog].text_size + self.prog_info[prog].text_offset
 
+    def rmTask(self, tid):
+        if tid in self.so_file_map:
+            del self.so_file_map[tid]
+            self.lgr.debug('soMap rmTask so_file_map for tid %s' % tid)
+            self.so_file_map[tid] = {}
+
+        if tid in self.so_addr_map:
+            del self.so_addr_map[tid]
+            self.lgr.debug('soMap rmTask so_addr_map for tid %s' % tid)
+            self.so_addr_map[tid] = {}
+        self.cheesy_tid = 0

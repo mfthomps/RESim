@@ -152,10 +152,10 @@ class TaskUtils():
             else:
                 #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.param.current_task, Sim_Access_Read)
                 #phys = phys_block.address
-                if cpu.architecture == 'arm':
-                    phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
-                else:
-                    phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                phys = self.mem_utils.v2p(self.cpu, self.param.current_task)
+                #if cpu.architecture.startswith('arm'):
+                #    phys = self.mem_utils.kernel_v2p(self.param, self.cpu, self.param.current_task)
+                #else:
                 if phys is not None:
                     pass
                     #self.lgr.debug('TaskUtils init phys of current_task 0x%x is 0x%x' % (self.param.current_task, phys))
@@ -182,6 +182,10 @@ class TaskUtils():
             self.syscall_numbers32 = syscallNumbers.SyscallNumbers(unistd32, self.lgr)
         else:
             self.syscall_numbers32 = None
+        if cpu.architecture == 'arm64':
+            self.arm64 = True
+        else:
+            self.arm64 = False
 
     def commSize(self):
         return COMM_SIZE
@@ -268,9 +272,9 @@ class TaskUtils():
         if pid is None or pid > self.mem_utils.getUnsigned(0xf0000000):
             self.lgr.error('taskUtils curThread cur_task_rec 0x%x got crazy pid %s, check saved' % (cur_task_rec, str(pid)))
             #traceback.print_stack()
-            self.mem_utils.checkSavedCR3(self.cpu)
+            #self.mem_utils.checkSavedCR3(self.cpu)
             SIM_break_simulation('remove this cur_task_rec 0x%x' % cur_task_rec)
-            self.mem_utils.checkSavedCR3(self.cpu)
+            #self.mem_utils.checkSavedCR3(self.cpu)
             #pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
@@ -294,7 +298,8 @@ class TaskUtils():
                     #self.lgr.debug('taskUtils findSwapper read comm task is 0x%x' % task)
                     comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, COMM_SIZE)
                     pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
-                    #self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
+                    #if pid is not None:
+                    #    self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                     ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
                     if ts_real_parent == task:
                         #print 'parent is same as task, done?'
@@ -802,7 +807,7 @@ class TaskUtils():
                 SIM_break_simulation('modified execve param')
      
     def readExecParamStrings(self, tid, cpu):
-        #self.lgr.debug('readExecParamStrings with tid %s' % tid)
+        self.lgr.debug('readExecParamStrings with tid %s' % tid)
         if tid is None:
             self.lgr.debug('readExecParamStrings called with tid of None')
             return None, None, None
@@ -813,7 +818,7 @@ class TaskUtils():
         prog_string = self.mem_utils.readString(cpu, self.exec_addrs[tid].prog_addr, 512)
         if prog_string is not None:
             prog_string = prog_string.strip()
-            #self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
+            self.lgr.debug('readExecParamStrings got prog_string of %s' % prog_string)
             for arg_addr in self.exec_addrs[tid].arg_addr_list:
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
@@ -832,9 +837,10 @@ class TaskUtils():
 
     def getProcArgsFromStack(self, tid, at_enter, cpu):
         ''' NOTE side effect of populating exec_addrs '''
+        # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
-        self.lgr.debug('getProgArgsFromStack')
+        #self.lgr.debug('getProcArgsFromStack tid:%s at_enter %r' % (tid, at_enter))
         mult = 0
         done = False
         arg_addr_list = []
@@ -842,10 +848,14 @@ class TaskUtils():
         i=0
         prog_addr = None
         if self.mem_utils.WORD_SIZE == 4:
-            self.lgr.debug('getProgArgsFromStack word size 4')
-            if cpu.architecture == 'arm':
-                prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
-                argv = self.mem_utils.getRegValue(cpu, 'r1')
+            #self.lgr.debug('getProcArgsFromStack word size 4')
+            if cpu.architecture.startswith('arm'):
+                if cpu.architecture == 'arm':
+                    prog_addr = self.mem_utils.getRegValue(cpu, 'r0')
+                    argv = self.mem_utils.getRegValue(cpu, 'r1')
+                else:
+                    prog_addr = self.mem_utils.getRegValue(cpu, 'x0')
+                    argv = self.mem_utils.getRegValue(cpu, 'x1')
                 while not done and i < limit:
                     xaddr = argv + mult*self.mem_utils.WORD_SIZE
                     arg_addr = self.mem_utils.readPtr(cpu, xaddr)
@@ -896,8 +906,43 @@ class TaskUtils():
                     
             if prog_addr == 0:
                 self.lgr.error('getProcArgsFromStack tid: %s esp: 0x%x argv 0x%x prog_addr 0x%x' % (tid, esp, argv, prog_addr))
+        elif self.cpu.architecture == 'arm64':
+            arm64_app = self.mem_utils.arm64App(self.cpu)
+            if at_enter:
+                if arm64_app:
+                    prog_reg = 'x0'
+                    arg_reg = 'x1'
+                    addr_size = 8
+                    #self.lgr.debug('getProcArgsFromStack is arm 64 bit app')
+                else:
+                    prog_reg = 'r0'
+                    arg_reg = 'r1'
+                    addr_size = 4
+                    #self.lgr.debug('getProcArgsFromStack is arm 32 bit app')
+                prog_addr = self.mem_utils.getRegValue(cpu, prog_reg)
+                argv = self.mem_utils.getRegValue(cpu, arg_reg)
+                #self.lgr.debug('getProcArgsFromStack prog_addr 0x%x  argv 0x%x' % (prog_addr, argv))
+
+            else:
+                x0 = self.mem_utils.getRegValue(self.cpu, 'x0')
+                prog_addr = self.mem_utils.readPtr(cpu, x0)
+                argv = self.mem_utils.readPtr(cpu, (x0+8))
+                addr_size = 8
+                #self.lgr.debug('getProcArgsFromStack ARM64 at computed, prog_addr 0x%x argv 0x%x' % (prog_addr, argv))
+                
+            while not done and i < limit:
+                #xaddr = argv + mult*self.mem_utils.WORD_SIZE
+                xaddr = argv + mult*addr_size
+                arg_addr = self.mem_utils.readAppPtr(cpu, xaddr, size=addr_size)
+                if arg_addr is not None and arg_addr != 0:
+                   #self.lgr.debug("getProcArgsFromStack ARM64 (%d byte app) adding arg addr %x read from 0x%x" % (addr_size, arg_addr, xaddr))
+                   arg_addr_list.append(arg_addr)
+                else:
+                   done = True
+                mult = mult + 1
+                i = i + 1
         else:
-            self.lgr.debug('getProgArgsFromStack word size 8')
+            #self.lgr.debug('getProcArgsFromStack word size 8')
             # if swap, use rdx
             if not at_enter and self.param.x86_reg_swap:
                 use_reg = 'rdx'
@@ -906,10 +951,10 @@ class TaskUtils():
             reg_num = cpu.iface.int_register.get_number(use_reg)
             reg_val = cpu.iface.int_register.read(reg_num)
             prog_addr = self.mem_utils.readPtr(cpu, reg_val)
-            if prog_addr is not None:
-                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
-            else:
-                self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
+            #if prog_addr is not None:
+            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
+            #else:
+            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
             i=0
             done = False
             while not done and i < 30:
@@ -929,6 +974,7 @@ class TaskUtils():
         #     argv, xaddr, saddr, arg2_string)
 
 
+        #self.lgr.debug('getProcArgsFromStack prog_addr 0x%x' % prog_addr)
         self.exec_addrs[tid] = osUtils.execStrings(cpu, tid, arg_addr_list, prog_addr, None)
         prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
         self.exec_addrs[tid].prog_name = prog_string
@@ -976,12 +1022,33 @@ class TaskUtils():
         else:
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
-    def getSyscallEntry(self, callnum, compat32):
+    def getSyscallEntry(self, callnum, compat32, arm64_app=None):
+        if callnum is None:
+            self.lgr.error('taskUtils getSyscallEntry called with callnum of None')
+            return None
         if self.cpu.architecture == 'arm':
             val = callnum * self.mem_utils.WORD_SIZE + self.param.syscall_jump
             val = self.mem_utils.getUnsigned(val)
             entry = self.mem_utils.readPtr(self.cpu, val)
             #self.lgr.debug('getSyscallEntry syscall_jump 0x%x callnum %d (0x%x), val 0x%x, entry: 0x%x' % (self.param.syscall_jump, callnum, callnum, val, entry))
+        elif self.cpu.architecture == 'arm64':
+            #         'ldr x1, [x22, x20, lsl #3]'
+            if arm64_app is None:
+                self.lgr.debug('taskUtils getSyscallEntry with arm64_app of None')
+                arm64_app = self.mem_utils.arm64App(self.cpu)
+            call_shifted = callnum << 3
+            if arm64_app:
+                val = self.param.syscall64_jump + call_shifted
+            else:
+                val = self.param.syscall_jump + call_shifted
+            val = self.mem_utils.getUnsigned(val)
+            entry = self.mem_utils.readPtr(self.cpu, val)
+            #if entry is not None:
+            #    self.lgr.debug('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry: 0x%x' % (callnum, callnum, val, entry))
+            #else:
+            #    self.lgr.error('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry is none' % (callnum, callnum, val))
+                 
+            
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
@@ -997,7 +1064,7 @@ class TaskUtils():
     def frameFromStackSyscall(self):
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             frame = self.frameFromRegs()
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
@@ -1039,9 +1106,19 @@ class TaskUtils():
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
         return retval
 
+    def frameArm64Computed(self):
+        frame = {}
+        addr = self.mem_utils.getRegValue(self.cpu, 'x0')
+        for p in memUtils.param_map['arm64']:
+            frame[p] = self.mem_utils.readWord(self.cpu, addr)
+            addr = addr + 8
+        frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
+        frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'x14')
+        return frame
+
     def frameFromRegs(self, compat32=False):
         frame = {}
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture == ('arm') or (self.cpu.architecture == 'arm64' and not self.mem_utils.arm64App(self.cpu)):
             for p in memUtils.param_map['arm']:
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
             cpl = memUtils.getCPL(self.cpu)
@@ -1053,6 +1130,15 @@ class TaskUtils():
                 frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
                 frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
                 frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+        elif self.cpu.architecture == ('arm64'):
+            # arm64 64 bit app
+            # only works on entry
+            for p in memUtils.param_map['arm64']:
+                frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm64'][p])
+            #frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+            frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+            frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
         else:
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
@@ -1082,7 +1168,7 @@ class TaskUtils():
         return frame
 
     def socketCallName(self, callname, compat32):
-        if self.cpu.architecture != 'arm' and (self.mem_utils.WORD_SIZE != 8 or compat32):
+        if not self.cpu.architecture.startswith('arm') and (self.mem_utils.WORD_SIZE != 8 or compat32):
             return ['socketcall']
         elif callname == 'accept':
             return ['accept', 'accept4']
@@ -1090,7 +1176,23 @@ class TaskUtils():
             return [callname]
 
     def syscallName(self, callnum, compat32):
-        if not compat32:
+        if self.arm64:
+            #self.lgr.debug('taskUtils syscallName for num %d' % callnum)
+            if self.mem_utils.arm64App(self.cpu):
+                if callnum in self.syscall_numbers.syscalls:
+                    return self.syscall_numbers.syscalls[callnum]
+                else:
+                    return 'not_mapped'
+            else:
+                if self.syscall_numbers32 is None:
+                    self.lgr.warning('taskUtils syscallName is 32bit app but no 32 bit call numbers defined in ini file')
+                    return 'not_mapped'
+                elif callnum in self.syscall_numbers32.syscalls:
+                    return self.syscall_numbers32.syscalls[callnum]
+                else:
+                    return 'not_mapped'
+                
+        elif not compat32:
             if callnum in self.syscall_numbers.syscalls:
                 return self.syscall_numbers.syscalls[callnum]
             else:
@@ -1102,9 +1204,26 @@ class TaskUtils():
                 return 'not_mapped'
         else:
             self.lgr.error('taskUtils syscallName, compat32 but no syscall_numbers32.  Was the unistd file loaded?')
+            return 'not_mapped'
+        return 'not_mapped'
 
-    def syscallNumber(self, callname, compat32):
-        if not compat32:
+    def syscallNumber(self, callname, compat32, arm64_app=None):
+        if self.arm64:
+            if arm64_app is None:
+                arm64_app = self.mem_utils.arm64App(self.cpu)
+            if arm64_app:
+               if callname in self.syscall_numbers.callnums:
+                   return self.syscall_numbers.callnums[callname]
+               else:
+                   self.lgr.debug('taskUtils syscallNumber %s not in callnums' % callname)
+                   return -1
+            else:
+                if callname in self.syscall_numbers32.callnums:
+                    return self.syscall_numbers32.callnums[callname]
+                else:
+                    self.lgr.debug('taskUtils syscallNumber %s not in callnums32' % callname)
+                    return -1
+        elif not compat32:
             if callname in self.syscall_numbers.callnums:
                 return self.syscall_numbers.callnums[callname]
             else:
@@ -1119,16 +1238,25 @@ class TaskUtils():
         mode = self.cpu.iface.x86_reg_access.get_exec_mode()
         return mode
 
-    def getIds(self, address):
+    def getIds(self, address, hack=False):
         #uid_addr = address + 16
         uid_addr = address 
         uid = self.mem_utils.readWord32(self.cpu, uid_addr)
-        #self.lgr.debug('getIDs address 0x%x uid_addr 0x%x read 0x%x' % (address, uid_addr, uid))
+        if uid is not None:
+            self.lgr.debug('getIDs address 0x%x uid_addr 0x%x read 0x%x' % (address, uid_addr, uid))
+        else:
+            self.lgr.debug('getIDs address 0x%x uid_addr 0x%x got None' % (address, uid_addr))
 
         #e_uid_addr = address + 32
-        e_uid_addr = address + 16
+        if not hack:
+            e_uid_addr = address + 16
+        else:
+            e_uid_addr = address + 8
         e_uid = self.mem_utils.readWord32(self.cpu, e_uid_addr)
-        #self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x read 0x%x' % (address, e_uid_addr, e_uid))
+        if e_uid is not None:
+            self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x read 0x%x' % (address, e_uid_addr, e_uid))
+        else:
+            self.lgr.debug('getIDs address 0x%x e_uid_addr 0x%x got None' % (address, e_uid_addr))
         return uid, e_uid
 
 
@@ -1137,10 +1265,26 @@ class TaskUtils():
             cur_addr = self.getCurThreadRec()
         else:
             cur_addr = task_addr
-        real_cred_addr = cur_addr + (self.param.ts_comm - 2*self.mem_utils.WORD_SIZE)
-        cred_addr = cur_addr + (self.param.ts_comm - self.mem_utils.WORD_SIZE)
-        real_cred_struct = self.mem_utils.readPtr(self.cpu, real_cred_addr) + self.mem_utils.WORD_SIZE
-        uid, eu_id = self.getIds(real_cred_struct)
+        cred_offset = self.param.ts_comm - 2*self.mem_utils.WORD_SIZE
+        real_cred_addr = cur_addr + cred_offset
+        #cred_addr = cur_addr + (self.param.ts_comm - self.mem_utils.WORD_SIZE)
+        read_value = self.mem_utils.readPtr(self.cpu, real_cred_addr) 
+        self.lgr.debug('getCred cur_addr 0x%x cred_offset 0x%x read_value 0x%x' % (cur_addr, cred_offset, read_value))
+        hack=False
+        if not self.mem_utils.isKernel(read_value):
+            # hack TBD.  Add logic to getKernelParams to sort out where the creds are
+            real_cred_addr = real_cred_addr - 2*self.mem_utils.WORD_SIZE - 0x10
+            read_value = self.mem_utils.readPtr(self.cpu, real_cred_addr) 
+            self.lgr.debug('getCred read value bad, try addr - 4 0x%x got value 0x%x' % (real_cred_addr, read_value))
+            if not self.mem_utils.isKernel(read_value):
+                self.lgr.warning('taskUtils, failed to find cred.')
+                return None, None
+            real_cred_struct = read_value + 5*self.mem_utils.WORD_SIZE
+            hack=True
+        else:
+            real_cred_struct = read_value + self.mem_utils.WORD_SIZE
+        self.lgr.debug('getCred cur_addr 0x%x cred_offset 0x%x real_cred_addr 0x%x, real_cred_struct 0x%x' % (cur_addr, cred_offset, real_cred_addr, real_cred_struct))
+        uid, eu_id = self.getIds(real_cred_struct, hack)
         return uid, eu_id
 
 

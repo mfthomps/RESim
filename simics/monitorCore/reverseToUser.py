@@ -70,8 +70,6 @@ class ReverseToUser():
             self.lgr.debug('reverseToUser will delete hap %s' % str(self.stop_hap))
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
             self.stop_hap = None
-            for bp in stop_action.breakpoints:
-                RES_delete_breakpoint(bp)
             ''' check functions in list '''
             if len(stop_action.flist) > 0:
                 fun = stop_action.flist.pop(0)

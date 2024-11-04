@@ -313,7 +313,7 @@ class bookmarkMgr():
         else:
             cycle = self.__bookmarks[mark].cycles
             self.lgr.debug("goToDebugBookmark, pslect then skip to 0x%x" % cycle)
-            if resimUtils.skipToTest(cpu, cycle, self.lgr):
+            if self.top.skipToCycle(cycle, cpu=cpu):
                 eip = self.top.getEIP(cpu)
                 current = SIM_cycle_count(cpu)
                 step = SIM_step_count(cpu)
@@ -323,7 +323,7 @@ class bookmarkMgr():
                     self.lgr.warning('goToDebugBookmark, simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
                     ''' try hack to fix broken simics'''
                     cli.quiet_run_command('rev 1')
-                    if resimUtils.skipToTest(cpu, cycle, self.lgr):
+                    if self.top.skipToCycle(cycle, cpu=cpu):
                         eip = self.top.getEIP(cpu)
                         current = SIM_cycle_count(cpu)
                         step = SIM_step_count(cpu)
@@ -397,6 +397,7 @@ class bookmarkMgr():
         entry['tid'] = tid
         self.mark_json[0] = []
         self.mark_json[0].append(entry)
+        self.__bookmarks['origin'] = CycleRecord(cpu.cycles, cpu.steps, eip)
 
     def mapOrigin(self, origin):
         for mark in self.__bookmarks:

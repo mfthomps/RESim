@@ -1,6 +1,5 @@
 import pickle
 import os
-from simics import *
 import resimUtils
 SOCKET      =1 
 BIND        =2
@@ -75,12 +74,23 @@ def fcntlCmdIs(cmd, s):
     if cmd in range(len(F_CNTL_CMDS)):
         if F_CNTL_CMDS[cmd] == s:
             retval = True
+    elif cmd == 0x406 and s == 'F_DUPFD':
+            retval = True
     return retval
 
 def fcntlCmd(cmd):
     retval =  str(cmd)
     if cmd in range(len(F_CNTL_CMDS)):
         retval = F_CNTL_CMDS[cmd] 
+    return retval
+
+def fcntlGetCmd(cmd):
+    if cmd in range(len(F_CNTL_CMDS)):
+        retval = F_CNTL_CMDS[cmd]
+    elif cmd == 0x406:
+        retval = 'F_DUPFD_CLO_EXEC'
+    else:  
+        retval = '0x%x' % cmd
     return retval
 
 class NetInfo():
@@ -120,7 +130,7 @@ class NetAddresses():
             self.lgr.debug('no net file %s for checkpoint load' % net_file)
 
 class SockStruct():
-    def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None):
+    def __init__(self, cpu, params, mem_utils, fd=None, length=0, sock_type=None, lgr=None):
         self.length = length
         self.flags = 0
         if fd is None:
@@ -141,11 +151,16 @@ class SockStruct():
         self.sock_type = sock_type
         self.domain = None
         self.protocol = None
+        self.lgr = lgr
         try:
             self.sa_family = mem_utils.readWord16(cpu, self.addr) 
         except:
-            #print('fail reading socket stuff')
+            #print('net sockStruct failed reading sa family from 0x%x' % self.addr)
+            if lgr is not None:
+                lgr.debug('net sockStruct failed reading sa family from 0x%x' % self.addr)
             return
+        if lgr is not None:
+            lgr.debug('net sockStruct sa_family read as 0x%x' % self.sa_family)
         if self.sa_family == 1:
             self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)
         elif self.sa_family == 2:
@@ -241,27 +256,27 @@ class Msghdr():
     '''
 
     def __init__(self, cpu, mem_utils, msghdr_address, lgr):
-        self.msg_name = mem_utils.readPtr(cpu, msghdr_address) 
-        self.msg_namelen = mem_utils.readPtr(cpu, msghdr_address+mem_utils.WORD_SIZE) 
-        self.msg_iov = mem_utils.readPtr(cpu, msghdr_address+2*mem_utils.WORD_SIZE) 
-        self.msg_iovlen = mem_utils.readPtr(cpu, msghdr_address+3*mem_utils.WORD_SIZE) 
+        self.msg_name = mem_utils.readAppPtr(cpu, msghdr_address) 
+        self.msg_namelen = mem_utils.readAppPtr(cpu, msghdr_address+mem_utils.wordSize(cpu)) 
+        self.msg_iov = mem_utils.readAppPtr(cpu, msghdr_address+2*mem_utils.wordSize(cpu)) 
+        self.msg_iovlen = mem_utils.readAppPtr(cpu, msghdr_address+3*mem_utils.wordSize(cpu)) 
         #print('msghdr_address is 0x%x' % msghdr_address)
-        self.msg_control = mem_utils.readPtr(cpu, msghdr_address+4*mem_utils.WORD_SIZE) 
-        self.msg_controllen = mem_utils.readPtr(cpu, msghdr_address+5*mem_utils.WORD_SIZE) 
-        self.flags = mem_utils.readPtr(cpu, msghdr_address+6*mem_utils.WORD_SIZE) 
+        self.msg_control = mem_utils.readAppPtr(cpu, msghdr_address+4*mem_utils.wordSize(cpu)) 
+        self.msg_controllen = mem_utils.readAppPtr(cpu, msghdr_address+5*mem_utils.wordSize(cpu)) 
+        self.flags = mem_utils.readAppPtr(cpu, msghdr_address+6*mem_utils.wordSize(cpu)) 
         self.cpu = cpu
         self.mem_utils = mem_utils
         self.lgr = lgr
 
     def getIovec(self):
         retval = []
-        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_size = 2*self.mem_utils.wordSize(self.cpu)
         if self.msg_iov is not None:
             iov_addr = self.msg_iov
             limit = max(10, self.msg_iovlen)
             for i in range(limit):
-                base = self.mem_utils.readPtr(self.cpu, iov_addr)
-                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
                 retval.append(Iovec(base, length)) 
                 iov_addr = iov_addr+iov_size
         return retval
@@ -272,14 +287,17 @@ class Msghdr():
         else:
             retval = 'msg_name 0x%x  msg_namelen: %d  msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
                  self.msg_namelen, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
-            iov_size = 2*self.mem_utils.WORD_SIZE
+            iov_size = 2*self.mem_utils.wordSize(self.cpu)
             iov_addr = self.msg_iov
             iov_string = ''
             #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
             limit = min(10, self.msg_iovlen)
             for i in range(limit):
-                base = self.mem_utils.readPtr(self.cpu, iov_addr)
-                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
+                if base is None:
+                    iov_string = ' failed to get base from 0x%x' % iov_addr
+                    break
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
                 iov_string = iov_string+'\n\tbase: 0x%x  length: %d' % (base, length) 
                 iov_addr = iov_addr+iov_size
             retval = retval + iov_string    
@@ -290,14 +308,14 @@ class Msghdr():
             retval = 'msg_name not initialized'
         else:
             retval = ''
-            iov_size = 2*self.mem_utils.WORD_SIZE
+            iov_size = 2*self.mem_utils.wordSize(self.cpu)
             iov_addr = self.msg_iov
             iov_string = ''
             #print('msg_iovlen is %d iov_addr 0x%x  iov_size %d' % (self.msg_iovlen, iov_addr, iov_size))
             limit = min(10, self.msg_iovlen)
             for i in range(limit):
-                base = self.mem_utils.readPtr(self.cpu, iov_addr)
-                length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+                base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
                 limit = min(length, 80)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
                 byte_array = self.mem_utils.getBytes(self.cpu, limit, base)

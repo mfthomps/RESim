@@ -22,7 +22,7 @@ import winNTSTATUS
 import net
 import winDelay
 from resimHaps import *
-from resimUtils import rprint
+from resimSimicsUtils import rprint
 PROC_CREATE_INFO_OFFSET=0x58
 PROG_NAME_OFFSET=0x18
 def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
@@ -143,7 +143,7 @@ class WinSyscall():
             #for ph in self.proc_hap:
             #    self.lgr.debug('winSyscall proc hap %s adding to hap cleander' % str(ph))
             #    hap_clean.add("GenContext", ph)
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist_in, break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist_in, break_addrs = break_addrs)
             self.lgr.debug('winSyscall cell %s stop action includes given flist_in.  stop_on_call is %r linger: %r name: %s' % (self.cell_name, stop_on_call, self.linger, name))
         elif (self.break_simulation or self.debugging) and not self.breakOnProg() and not trace and skip_and_mail:
             hap_clean = hapCleaner.HapCleaner(cpu)
@@ -152,13 +152,13 @@ class WinSyscall():
             #f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
             f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
             flist = [f1]
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, flist, break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist, break_addrs = break_addrs)
             self.lgr.debug('winSyscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         elif not self.linger:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
-            self.stop_action = hapCleaner.StopAction(hap_clean, break_list, [], break_addrs = break_addrs)
+            self.stop_action = hapCleaner.StopAction(hap_clean, break_addrs = break_addrs)
             self.lgr.debug('winSyscall cell %s stop action includes NO flist linger: %r name: %s' % (self.cell_name, self.linger, name))
         else:
             self.lgr.debug('winSyscall cell %s name: %s linger is true, and no flist or other reason to stop, so no stop action' % (name, self.cell_name))
@@ -203,7 +203,7 @@ class WinSyscall():
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = syscall.SyscallInfo(self.cpu, None, None, None, self.trace)
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 #phys = self.mem_utils.v2p(self.cpu, self.param.arm_entry)
                 #self.lgr.debug('winSyscall arm no callnum, set break at 0x%x ' % (self.param.arm_entry))
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
@@ -520,7 +520,7 @@ class WinSyscall():
         Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
         syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
         '''
-        exit_info = syscall.ExitInfo(self, cpu, tid, callnum, None, frame)
+        exit_info = syscall.ExitInfo(self, cpu, tid, callnum, callname, None, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         trace_msg = None
         frame_string = taskUtils.stringFromFrame(frame)
@@ -1401,7 +1401,7 @@ class WinSyscall():
         elif break_eip == syscall_info.calculated:
             ''' Note EIP in stack frame is unknown '''
             #frame['eax'] = syscall_info.callnum
-            if self.cpu.architecture == 'arm':
+            if self.cpu.architecture.startswith('arm'):
                 if frame is None:
                     frame = self.task_utils.frameFromRegsComputed()
                 exit_eip1 = self.param.arm_ret
@@ -1526,8 +1526,6 @@ class WinSyscall():
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
                 self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
-                for bp in self.stop_action.breakpoints:
-                    self.context_manager.genDeleteBreakpoint(bp)
                 ''' check functions in list '''
                 self.lgr.debug('winSyscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
@@ -1572,7 +1570,7 @@ class WinSyscall():
 
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames[tid])
 
-            exit_info = syscall.ExitInfo(self, self.cpu, tid, callnum, syscall_info.compat32, frame)
+            exit_info = syscall.ExitInfo(self, self.cpu, tid, callnum, callname, syscall_info.compat32, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
@@ -1702,7 +1700,7 @@ class WinSyscall():
             
 
     def checkTimeLoop(self, callname, tid):
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             return
         limit = 800
         delta_limit = 0x12a05f200
@@ -1759,7 +1757,7 @@ class WinSyscall():
                 f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
                 flist = [f1]
                 hap_clean = hapCleaner.HapCleaner(self.cpu)
-                self.stop_action = hapCleaner.StopAction(hap_clean, [], flist)
+                self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
             self.lgr.debug('syscall addCallParams added params')
         else:
             pass

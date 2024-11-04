@@ -1,6 +1,8 @@
 from simics import *
 import syscall
 import elfText
+import doInUser
+import breakAndCall
 from resimHaps import *
 ''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
@@ -25,8 +27,7 @@ class TrackThreads():
         self.exit_hap = {}
         self.call_break = None
         self.call_hap = None
-        self.execve_break = None
-        self.execve_hap = None
+        self.execve_hap = []
         self.finish_hap = {}
         self.finish_break = {}
         self.first_mmap_hap = {}
@@ -34,6 +35,8 @@ class TrackThreads():
         self.clone_hap = None
         self.child_stacks = {}
         self.so_track = None
+        self.cur_comm = None
+        self.last_call_cycle = None
 
 
         ''' NOTHING AFTER THIS CALL! '''
@@ -44,16 +47,38 @@ class TrackThreads():
             self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
         #self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
+    
+        if len(self.execve_hap) > 0:
+            self.lgr.debug('TrackThreads startTrack called, but already has an execve hap???')
+            return
 
         if not self.top.isWindows(): 
-            execve_callnum = self.task_utils.syscallNumber('execve', self.compat32)
-            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32)
-            self.execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
-            self.execve_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', self.execve_break, 'trackThreads execve')
-            self.lgr.debug('TrackThreads set execve break at 0x%x startTrack' % (execve_entry))
+            # TBD move execve hap to syscall and use callback?  not good to duplicate computed entry point handling
+            if self.cpu.architecture == 'arm64':
+                platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
+                if platform == 'armMixed':
+                    self.setExecveBreaks(arm64_app=True)
+                    self.setExecveBreaks(arm64_app=False)
+                elif platform == 'arm64':
+                    self.setExecveBreaks(arm64_app=True)
+                else:
+                    self.setExecveBreaks(arm64_app=False)
+            else:
+                self.setExecveBreaks()
 
         self.trackSO()
         #self.trackClone()
+
+    def setExecveBreaks(self, arm64_app=None):
+        execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
+        if execve_callnum is not None:
+            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
+            execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
+            hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', execve_break, 'trackThreads execve')
+            self.execve_hap.append(hap)
+            self.lgr.debug('TrackThreads setExecveBreaks break at 0x%x startTrack' % (execve_entry))
+        else:
+            self.lgr.error('TrackThreads setExecveBreaks callnum is None')
 
     def stopSOTrack(self, immediate=True):
         #self.lgr.debug('TrackThreads hap syscall is %s' % str(self.open_syscall))
@@ -63,9 +88,9 @@ class TrackThreads():
         self.lgr.debug('TrackThreads, stop tracking for %s immediate: %r' % (self.cell_name, immediate))
         self.context_manager.genDeleteHap(self.call_hap, immediate=immediate)
         self.call_hap = None
-        if self.execve_hap is not None:
-            self.context_manager.genDeleteHap(self.execve_hap, immediate=immediate)
-            self.execve_hap = None
+        for hap in self.execve_hap:
+            self.context_manager.genDeleteHap(hap, immediate=immediate)
+        self.execve_hap = []
         for tid in self.exit_hap:
             self.context_manager.genDeleteHap(self.exit_hap[tid], immediate=immediate)
         self.stopSOTrack(immediate)
@@ -84,10 +109,16 @@ class TrackThreads():
 
     def execveHap(self, dumb, third, forth, memory):
         ''' One of the threads we are tracking is going its own way via an execve, stop watching it '''
-        if self.execve_hap is None:
+        if len(self.execve_hap) == 0: 
             return
-        
         cpu, comm, tid = self.task_utils.curThread() 
+        if cpu.cycles == self.last_call_cycle:
+            # seems to hit the breakpoint many times
+            return
+        self.last_call_cycle = self.cpu.cycles
+        self.lgr.debug('TrackThreads execveHap tid:%s comm:%s cycle: 0x%x' % (tid, comm, self.cpu.cycles))
+        if tid == '0':
+            return
         if not self.context_manager.amWatching(tid):
             self.lgr.debug('TrackThreads  execveHap failed to find tid %s in context manager ' % (tid))
             self.parseExecve()
@@ -97,6 +128,7 @@ class TrackThreads():
             return
         self.lgr.debug('TrackThreads execveHap remove tid:%s from context manager watch' % tid)
         self.context_manager.rmTask(tid)
+        self.soMap.rmTask(tid)
         self.parseExecve()
 
 
@@ -107,35 +139,67 @@ class TrackThreads():
         if tid not in self.finish_hap:
             return
         prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.tid, call_info.cpu)
-        if cpu.architecture == 'arm' and prog_string is None:
+        if cpu.architecture.startswith('arm') and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
-        #self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
+        self.lgr.debug('trackThreads finishParseExecve progstring (%s)' % (prog_string))
         self.traceProcs.setName(tid, prog_string, None)
-        self.addSO(prog_string, tid)
+        param = (prog_string, tid)
+        self.cur_comm = comm
+        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+        #self.addSO(prog_string, tid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
         RES_delete_breakpoint(self.finish_break[tid])
         del self.finish_hap[tid]
         del self.finish_break[tid]
 
-    def addSO(self, prog_name, tid):
+    def addSO(self, param_tuple):
+        cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('trackThreads, addSO, back from execve via doInUser callback.  comm now %s was %s' % (comm, self.cur_comm))
+        if comm == self.cur_comm:
+            self.lgr.debug('trackThreads, addSO, execve must have failed comm is still %s' % comm)
+            return
+        prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         if full_path is not None:
-            #self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
+            self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
-            elf_info = self.soMap.addText(full_path, prog_name, tid)
-            if elf_info is None:
+            load_info = self.soMap.addText(full_path, prog_name, tid)
+            if load_info is None:
                 self.lgr.debug('trackThreads addSO, could not get elf info from %s' % full_path)
+            else:
+                if load_info.addr is None:
+                    self.lgr.debug('syscall addElf no addr, assume dynamic')
+                    loader_load_info = None
+                    if load_info.interp is not None:
+                        ip = self.top.getEIP() 
+                        loader_load_info = self.soMap.addLoader(tid, load_info.interp, ip)
+                        if loader_load_info is not None:
+                            # assume dynamic load.  Set break on zero to start of loader
+                            start = 0
+                            count = loader_load_info.addr 
+                            breakAndCall.BreakAndCall(self.top, self.cpu, start, count, self.soMap.setProgStart, None, self.lgr)
+                            self.lgr.debug('trackThreads addSO use breakAndDo to set prog start when text entered.')
+                        else:
+                            self.lgr.debug('trackThreads addSO failed to get loader_load_info')
+                    else:
+                        self.lgr.debug('trackThreads addSO no interpreter in load_info')
+                else:
+                    self.lgr.debug('trackThreads addSO load_info addr is 0x%x' % load_info.addr)
+        
+        else:
+            self.lgr.debug('trackThreads addSO failed to get fullPath for %s' % prog_name)
 
     def parseExecve(self):
         cpu, comm, tid = self.task_utils.curThread() 
+        self.lgr.debug('trackThreads parseExecve tid:%s comm:%s' % (tid, comm))
         ''' allows us to ignore internal kernel syscalls such as close socket on exec '''
         prog_string, arg_string_list = self.task_utils.getProcArgsFromStack(tid, False, cpu)
         
         if prog_string is None:
             ''' prog string not in ram, break on kernel read of the address and then read it '''
             prog_addr = self.task_utils.getExecProgAddr(tid, cpu)
-            call_info = syscall.SyscallInfo(cpu, tid, None, None, None)
+            call_info = syscall.SyscallInfo(cpu, tid, None, None)
             self.lgr.debug('trackThreads parseExecve prog string missing, set break on 0x%x' % prog_addr)
             if prog_addr == 0:
                 self.lgr.error('trackThreads parseExecve zero prog_addr tid:%s' % tid)
@@ -145,7 +209,10 @@ class TrackThreads():
             return
         else:
             self.traceProcs.setName(tid, prog_string, None)
-            self.addSO(prog_string, tid)
+            param = (prog_string, tid)
+            self.cur_comm = comm
+            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+            #self.addSO(prog_string, tid)
 
 
     def trackSO(self):
@@ -166,7 +233,7 @@ class TrackThreads():
         if self.clone_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             frame = self.task_utils.frameFromRegs()
         else:
             frame = self.task_utils.frameFromStackSyscall()

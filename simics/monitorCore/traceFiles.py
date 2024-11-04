@@ -25,6 +25,8 @@
 '''
 Mirror reads or writes to files or file descriptors. 
 Use the raw option to avoid changes to the mirrored output.
+If the file descriptor is from a bind, subsequent accepts will
+tracke io to the new FD (assuming sharedSyscall calls our accept)
 '''
 class TraceFiles():
     class FileWatch():
@@ -33,18 +35,22 @@ class TraceFiles():
             self.outfile = outfile
             self.fd = None
         
-    def __init__(self, traceProcs, lgr):
+    def __init__(self, top, traceProcs, lgr, cpu):
         self.path_list = {}
         ''' only used to delete content on first use '''
         self.watched_files = []
         self.lgr = lgr
+        self.cpu = cpu
+        self.top = top
+        self.cell_name = top.getTopComponentName(cpu)
         self.open_files = {}
         self.traceProcs = traceProcs
         ''' for tracing of only FD, e.g., to ignore close '''
-        self.tracing_fd = []
+        self.tracing_fd = {}
         ''' for including file traces in watch marks '''
         self.dataWatch = None
         self.raw = False
+        self.binders = {}
 
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
@@ -56,13 +62,21 @@ class TraceFiles():
                 fh.write('start of RESim copy of %s\n' % outfile) 
             self.watched_files.append(path)
 
-    def watchFD(self, fd, outfile, raw=False):
-        if fd in self.open_files:
-            print('FD %d already being watched' % fd)
+
+    def watchFD(self, fd, outfile, raw=False, web=False):
+        tid = self.top.getTID(target=self.cell_name)
+        if tid in self.open_files and fd in self.open_files[tid]:
+            print('FD %d already being watched for tid %s' % (fd, tid))
+            self.lgr.debug('traceFiles watchFD FD %d already being watched tid %s' % (fd, tid))
             return
+        self.web = web
         self.raw = raw
-        self.open_files[fd] = self.FileWatch(None, outfile)
-        self.open_files[fd].fd = fd
+        if self.web:
+            self.raw = True
+        if tid not in self.open_files:
+            self.open_files[tid] = {}
+        self.open_files[tid][fd] = self.FileWatch(None, outfile)
+        self.open_files[tid][fd].fd = fd
         if not self.raw:
             with open(outfile+'-read', 'w') as fh:
                     fh.write('start of RESim copy of FD %d\n' % fd) 
@@ -74,25 +88,43 @@ class TraceFiles():
             with open(outfile+'-write', 'wb') as fh:
                 pass
         self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
-        self.tracing_fd.append(fd)
-        
+        if tid not in self.tracing_fd:
+            self.tracing_fd[tid] = []
+        self.tracing_fd[tid].append(fd)
+
+    def accept(self, tid, fd, new_fd):
+        if tid in self.open_files and fd in self.open_files[tid]:
+            if tid not in self.binders:
+                self.binders[tid] = {}
+            self.binders[tid][new_fd] = fd
+            self.lgr.debug('TraceFiles accept tid:%s new fd %d for open_files %d' % (tid, new_fd, fd))
 
     def open(self, path, fd):
         if path in self.path_list:
             self.path_list[path].fd = fd
-            self.open_files[fd] = self.path_list[path]
+            tid = self.top.getTID(target=self.cell_name)
+            if tid not in self.open_file:
+                self.open_files[tid] = {}
+            self.open_files[tid][fd] = self.path_list[path]
 
     def close(self, fd):
-        if fd not in self.tracing_fd:
-            if fd in self.open_files and fd not in self.tracing_fd:
-                self.open_files[fd].fd = None
-                del self.open_files[fd]
-                self.lgr.debug('TraceFiles close %d num open files %d'  % (fd, len(self.open_files)))
+        
+        tid = self.top.getTID(target=self.cell_name)
+        self.lgr.debug('TraceFiles close tid:%s %d'  % (tid, fd))
+        if tid in self.binders and fd in self.binders[tid]:
+            del self.binders[tid][fd] 
+            self.lgr.debug('TraceFiles close removed binders %d for tid:%s'  % (fd, tid))
+        if tid not in self.tracing_fd or fd not in self.tracing_fd[tid]:
+            if tid in self.open_files and fd in self.open_files[tid] and (tid not in self.tracing_fd or fd not in self.tracing_fd[tid]):
+                self.open_files[tid][fd].fd = None
+                del self.open_files[tid][fd]
+                self.lgr.debug('TraceFiles close tid:%s FD: %d num open files %d'  % (tid, fd, len(self.open_files)))
         elif not self.raw:
-            with open(self.open_files[fd].outfile+'-read', 'a') as fh:
-                fh.write('\nFile closed.\n')
-            with open(self.open_files[fd].outfile+'-write', 'a') as fh:
-                fh.write('\nFile closed.\n')
+            if tid in self.open_files:
+                with open(self.open_files[tid][fd].outfile+'-read', 'a') as fh:
+                    fh.write('\nFile closed.\n')
+                with open(self.open_files[tid][fd].outfile+'-write', 'a') as fh:
+                    fh.write('\nFile closed.\n')
 
     def nonull(self, the_bytes):
         retval = []
@@ -110,25 +142,40 @@ class TraceFiles():
                 index += 1
         return retval 
 
-    def read(self, tid, fd, the_bytes):
-        self.lgr.debug('traceFiles read')
-        self.io(tid, fd, the_bytes, read=True)
+    def read(self, tid, fd_in, the_bytes):
+        if tid in self.binders and fd_in in self.binders[tid]:
+            fd = self.binders[tid][fd_in]
+            self.lgr.debug('traceFiles read tid:%s fd_in: %d fd: %d len %d' % (tid, fd_in, fd, len(the_bytes)))
+        else:
+            fd = fd_in 
+        self.io(tid, fd, the_bytes, read=True, fd_in=fd_in)
 
-    def write(self, tid, fd, the_bytes):
+    def write(self, tid, fd_in, the_bytes):
+        if tid in self.binders and fd_in in self.binders[tid]:
+            fd = self.binders[tid][fd_in]
+        else:
+            fd = fd_in 
         self.lgr.debug('traceFiles write')
-        self.io(tid, fd, the_bytes, read=False)
+        self.io(tid, fd, the_bytes, read=False, fd_in=fd_in)
 
-    def io(self, tid, fd, the_bytes, read=False):
+    def io(self, tid, fd, the_bytes, read=False, fd_in=None):
         suf = '-write'
         if read:
             suf = '-read'
         if the_bytes is None:
             return
         if self.raw:
-            if fd in self.open_files:
-                with open(self.open_files[fd].outfile+suf, 'ab') as fh:
-                    fh.write(bytearray(the_bytes))
-                    self.lgr.debug('traceFiles wrote raw %d bytes' % len(the_bytes))
+            if tid in self.open_files and fd in self.open_files[tid]:
+                with open(self.open_files[tid][fd].outfile+suf, 'ab') as fh:
+                    #cycles = b'cycle: 0x%x FD: %d --' % (self.cpu.cycles, fd_in)
+                    #fh.write(cycles+bytearray(the_bytes)+b'*DONE*')
+                    b_array = bytearray(the_bytes)
+                    if self.web:
+                            delim = b'RESIM_WEB_DELIM'
+                            self.lgr.debug('traceFiles is web, tacked on the delim')
+                            b_array = b_array+delim
+                    fh.write(b_array)
+                    self.lgr.debug('traceFiles wrote raw %d bytes' % len(b_array))
     
         else:
             stripped = self.nonull(the_bytes)
@@ -147,11 +194,11 @@ class TraceFiles():
                             self.dataWatch.markLog(s, fname)
                         did_write = True
             
-            if not did_write and fd in self.open_files:
+            if not did_write and tid in self.open_files and fd in self.open_files[tid]:
                 ''' tracing fd '''
-                with open(self.open_files[fd].outfile+suf, 'a') as fh:
+                with open(self.open_files[tid][fd].outfile+suf, 'a') as fh:
                     s = ''.join(map(chr,stripped))+'\n'
-                    self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[fd].outfile, s))
+                    self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
                     fh.write(s)
                     if self.dataWatch is not None:
                         prefix = 'FD:%d' % fd
@@ -161,3 +208,25 @@ class TraceFiles():
     def markLogs(self, dataWatch):
         self.dataWatch = dataWatch
         self.lgr.debug('TraceFiles markLogs')
+
+    def clone(self, old, new):
+        self.lgr.debug('TraceFiles clone old: %s new: %s' % (old, new))
+        if old in self.open_files:
+            self.open_files[new] = {}
+            for fd in self.open_files[old]:
+                self.open_files[new][fd] = self.open_files[old][fd]
+        if old in self.binders:
+            self.binders[new] = {}
+            for fd in self.binders[old]:
+                self.binders[new][fd] = self.binders[old][fd]
+
+    def dup(self, old, new):
+        self.lgr.debug('TraceFiles dup old: %s new: %s' % (old, new))
+        tid = self.top.getTID(target=self.cell_name)
+        if tid in self.open_files and old in self.open_files[tid]:
+            self.open_files[tid][new] = self.open_files[tid][old]
+        if tid in self.binders and old in self.binders[tid]:
+            self.binders[tid][new] = self.binders[tid][old]
+        
+
+        

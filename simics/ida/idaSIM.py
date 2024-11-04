@@ -95,8 +95,12 @@ class IdaSIM():
                 r = 'EFL'
             elif r == 'CPSR':
                 r = 'PSR'
+            elif r == 'SP_EL0':
+                r = 'SP'
+            elif r == 'SP_EL1':
+                continue
             #print('set %s to 0x%x' % (r, regs[reg]))
-            idaversion.set_reg_value(regs[reg], r)
+            idaversion.set_reg_value(r, regs[reg])
         idaversion.refresh_debugger_memory()
 
 
@@ -247,10 +251,10 @@ class IdaSIM():
         command = '@cgc.writeWord(0x%x, 0x%x)' % (addr, value)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
     
-    def wroteToAddressPrompt(self):
+    def wroteToAddressPrompt(self, num_bytes=None):
         addr = self.getUIAddress('Run backwards until this address is modified')
         print('Running backwards to find write to address 0x%x' % addr)
-        self.wroteToAddress(addr)
+        self.wroteToAddress(addr, num_bytes=num_bytes)
     
     def trackAddressPrompt(self, prompt=None, num_bytes=None):
         if prompt is None:
@@ -262,9 +266,9 @@ class IdaSIM():
             self.showSimicsMessage()
             bookmark_list = self.bookmark_view.updateBookmarkView()
     
-    def wroteToAddress(self, target_addr):
+    def wroteToAddress(self, target_addr, num_bytes=None):
         disabledSet = bpUtils.disableAllBpts(None)
-        command = '@cgc.stopAtKernelWrite(0x%x)' % target_addr
+        command = '@cgc.stopAtKernelWrite(0x%x)' % (target_addr)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
@@ -293,7 +297,9 @@ class IdaSIM():
         else:
             return
         bpUtils.enableBpts(disabledSet)
-        if eip >=  self.kernel_base:
+        if eip is None:
+            print('Failed to get eip from RESim.  ERROR')
+        elif eip >=  self.kernel_base:
             print('previous is as far back as we can trace content of address 0x%x' % target_addr)
         else:
             curAddr = idaversion.get_reg_value(self.PC)
@@ -706,6 +712,7 @@ class IdaSIM():
         idaversion.step_into()
         idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
+        #print('cur_addr is 0x%x kernel_base 0x%x' % (cur_addr, self.kernel_base))
         if cur_addr > self.kernel_base:
             print('doStepInto run to user space')
             self.runToUserSpace()
@@ -719,7 +726,7 @@ class IdaSIM():
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
         if cur_addr > self.kernel_base:
-            #print('doStepOver in kernel run to user space')
+            print('doStepOver in kernel run to user space')
             self.runToUserSpace()
         else:
             #print('doStepOver signal client')

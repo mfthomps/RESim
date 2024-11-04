@@ -5,7 +5,7 @@ been initialized.  This one calls AFL
 import os
 def onedone(top):
     port=int(os.getenv('ONE_DONE_PARAM'))
-    protocol=os.getenv('ONE_DONE_PARAM2')
+    #protocol=os.getenv('ONE_DONE_PARAM2')
     dead=os.getenv('ONE_DONE_PARAM3')
     fname=os.getenv('ONE_DONE_PARAM4')
     linear=os.getenv('ONE_DONE_PARAM5')
@@ -27,19 +27,19 @@ def onedone(top):
         fh.write('in onedone of oneDoneAFL\n') 
         if linear is not None and linear.lower()=='true':
             is_linear=True
-        if protocol == 'tcp': 
-            fh.write('call aflTCP\n')
-            top.aflTCP(port=port, dead=dead)
-            fh.write('back from call aflTCP')
+        #if protocol == 'tcp': 
+        #    fh.write('call aflTCP\n')
+        #    top.aflTCP(port=port, dead=dead)
+        #    fh.write('back from call aflTCP')
+        #else:
+        fh.write('call afl\n')
+        if targetFD is None:
+            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s)' % (port, fname, is_linear, dead, target)
         else:
-            fh.write('call afl\n')
-            if targetFD is None:
-                cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s)' % (port, fname, is_linear, dead, target)
-            else:
-                cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s, targetFD=0x%x, count=%d)' % (port, fname, is_linear, dead, target, targetFD, count)
-            fh.write(cmd+'\n')
-            fh.flush()
-            top.afl(port=port, fname=fname, linear=is_linear, dead=dead, target=target, targetFD=targetFD, count=count)
-            fh.write('back from afl\n')
-            fh.flush()
+            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s, targetFD=0x%x, count=%d)' % (port, fname, is_linear, dead, target, targetFD, count)
+        fh.write(cmd+'\n')
+        fh.flush()
+        top.afl(port=port, fname=fname, linear=is_linear, dead=dead, target=target, targetFD=targetFD, count=count)
+        fh.write('back from afl\n')
+        fh.flush()
 

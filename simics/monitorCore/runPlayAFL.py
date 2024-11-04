@@ -33,8 +33,8 @@ def ioHandler(read_array, stop, lgr):
                 lgr.debug('select error, must be closed.')
                 return
             for item in r:
-                file_num = item.fileno()
                 try:
+                    file_num = item.fileno()
                     data = os.read(file_num, 800)
                 except:
                     lgr.debug('read error, must be closed.')
@@ -68,7 +68,10 @@ def handleClose(resim_procs, read_array, remote, lgr):
 
 def runPlay(args, lgr, prog_path):
     here= os.path.dirname(os.path.realpath(__file__))
-    os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
+    if args.search_list is None:
+        os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
+    else:
+        os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedoneSearch.py')
     resim_dir = os.getenv('RESIM_DIR')
     if resim_dir is None:
         print('missing RESIM_DIR envrionment variable')
@@ -89,10 +92,10 @@ def runPlay(args, lgr, prog_path):
     glist = glob.glob('resim_*/')
     if len(glist) == 0:
         glist = ['./']
-    if args.tcp:
-        os.environ['ONE_DONE_PARAM']='tcp'
-    else:
-        os.environ['ONE_DONE_PARAM']='udp'
+    #if args.tcp:
+    #    os.environ['ONE_DONE_PARAM']='tcp'
+    #else:
+    #    os.environ['ONE_DONE_PARAM']='udp'
     if args.only_thread:
         os.environ['ONE_DONE_PARAM2']='True'
     os.environ['ONE_DONE_PARAM3']=args.program
@@ -102,6 +105,7 @@ def runPlay(args, lgr, prog_path):
         os.environ['ONE_DONE_PARAM5']=args.targetFD
     os.environ['ONE_DONE_PARAM6']=args.count
     os.environ['ONE_DONE_PARAM7']=str(args.no_page_faults)
+    os.environ['ONE_DONE_PARAM8']=str(args.search_list)
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     for cfile in cover_list:
@@ -130,33 +134,37 @@ def runPlay(args, lgr, prog_path):
             os.chdir(here)
 
         handleClose(resim_procs, read_array, args.remote, lgr)
-        cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
-        all_hits = []
-        for hit_file in cover_list:
-            if not os.path.isfile(hit_file):
-                print('did not find %s, old unique file?' % hit_file)
-                continue
-            try:
-                coverage = json.load(open(hit_file))
-            except:
-                with open(hit_file, 'w'):
-                    pass
-                continue 
-            print('do hit file %s' % hit_file)
-            for hit in coverage:
-                hit_i = int(hit)
-                if hit_i not in all_hits:
-                    all_hits.append(hit_i)
 
-        ida_data = os.getenv('RESIM_IDA_DATA')
-        hits_file = '%s.%s.hits' % (args.program, afl_name)
-        hits_path = os.path.join(prog_path, hits_file)
-        s = json.dumps(all_hits)
-        with open(hits_path, 'w') as fh:
-            fh.write(s)
-        print('Wrote hits to %s' % hits_path) 
-        lgr.debug('Wrote hits to %s' % hits_path) 
-        print('all hits total %d' % len(all_hits))
+        if args.search_list is None:
+            cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
+            all_hits = []
+            for hit_file in cover_list:
+                if not os.path.isfile(hit_file):
+                    print('did not find %s, old unique file?' % hit_file)
+                    continue
+                try:
+                    coverage = json.load(open(hit_file))
+                except:
+                    with open(hit_file, 'w'):
+                        pass
+                    continue 
+                print('do hit file %s' % hit_file)
+                for hit in coverage:
+                    hit_i = int(hit)
+                    if hit_i not in all_hits:
+                        all_hits.append(hit_i)
+    
+            ida_data = os.getenv('RESIM_IDA_DATA')
+            hits_file = '%s.%s.hits' % (args.program, afl_name)
+            hits_path = os.path.join(prog_path, hits_file)
+            s = json.dumps(all_hits)
+            with open(hits_path, 'w') as fh:
+                fh.write(s)
+            print('Wrote hits to %s' % hits_path) 
+            lgr.debug('Wrote hits to %s' % hits_path) 
+            print('all hits total %d' % len(all_hits))
+        else:
+            print('Was a search list')
     else:
         print('Nothing to do.')
 
@@ -165,13 +173,14 @@ def main():
     parser = argparse.ArgumentParser(prog='runPlay', description='Run AFL sessions in parallel to collect coverage data.')
     parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
     parser.add_argument('program', action='store', help='Name of the program that was fuzzed, TBD move to snapshot?')
-    parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
+    #parser.add_argument('-t', '--tcp', action='store_true', help='TCP sessions with potentially multiple packets.')
     parser.add_argument('-r', '--remote', action='store_true', help='Remote run, will wait for /tmp/resim_die.txt before exiting.')
     parser.add_argument('-o', '--only_thread', action='store_true', help='Only track coverage of single thread.')
     parser.add_argument('-T', '--target', action='store', help='Optional name of target process, with optional prefix of target cell followed by colon.')
     parser.add_argument('-F', '--targetFD', action='store', help='Optional file descriptor for moving target to selected recv based on count.')
     parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
+    parser.add_argument('-s', '--search_list', action='store', help='Name of file containing search criteria, e.g., to find writes to a range')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:

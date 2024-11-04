@@ -21,7 +21,7 @@ class RopCop():
         ''' hack to keep hap from invoking twice '''
         self.in_process = False
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
         else:
             self.decode = decode
@@ -40,7 +40,7 @@ class RopCop():
         if not self.watching:
             return
         self.in_process = False
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             prefix = 'ldm'
             self.callmn = 'bl'
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.text, self.size, 0, prefix)
@@ -87,7 +87,7 @@ class RopCop():
                 done = True
             else:
                 eip = eip+1
-        if not done and self.cpu.architecture != 'arm':
+        if not done and not self.cpu.architecture.startswith('arm'):
             ''' is the return to a signal handler? '''
             ''' hacky look for int 80 or sysenter '''
             dumb, comm, cur_tid  = self.task_utils.curThread()

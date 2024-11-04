@@ -3,6 +3,7 @@ import ida_nalt
 import idaversion
 import colorBlocks
 import os
+import ida_kernwin
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -74,6 +75,16 @@ class DoRevStepOverHandler(idaapi.action_handler_t):
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
 
+class DoStepIntoHandler(idaapi.action_handler_t):
+    def __init__(self, isim):
+        idaapi.action_handler_t.__init__(self)
+        self.isim = isim
+    def activate(self, ctx):
+        self.isim.doStepInto()
+        return 1
+    def update(self, ctx):
+        return idaapi.AST_ENABLE_ALWAYS
+
 class DoStepOverHandler(idaapi.action_handler_t):
     def __init__(self, isim):
         idaapi.action_handler_t.__init__(self)
@@ -83,6 +94,7 @@ class DoStepOverHandler(idaapi.action_handler_t):
         return 1
     def update(self, ctx):
         return idaapi.AST_ENABLE_ALWAYS
+
 
 class DoRevStepIntoHandler(idaapi.action_handler_t):
     def __init__(self, isim):
@@ -372,6 +384,12 @@ def register(isim):
         DoStepOverHandler(isim),
         'F8')
 
+    do_step_into_action = idaapi.action_desc_t(
+        'do_step_into:action',
+        'Step into (RESim)', 
+        DoStepIntoHandler(isim),
+        'F7')
+
     do_rev_step_into_action = idaapi.action_desc_t(
         'do_rev_step_into:action',
         '^ Rev step into', 
@@ -514,10 +532,12 @@ def register(isim):
         'F9', 'Continue', idaapi.load_custom_icon(file_name=play_icon, format="png"))
 
     idaapi.unregister_action("ThreadStepOver")
+    idaapi.unregister_action("ThreadStepInto")
     idaapi.register_action(do_show_cycle_action)
     idaapi.register_action(do_rebase_action)
     idaapi.register_action(do_reverse_action)
     idaapi.register_action(do_rev_step_over_action)
+    idaapi.register_action(do_step_into_action)
     idaapi.register_action(do_step_over_action)
     idaapi.register_action(do_rev_step_into_action)
     idaapi.register_action(do_rev_finish_action)
@@ -550,15 +570,20 @@ def attach():
     ''' Determines where entry appears in menu '''
     idaapi.attach_action_to_menu(
         'Debugger/Step into',
+        'do_step_into:action',
+        idaapi.SETMENU_APP) 
+
+    idaapi.attach_action_to_menu(
+        'Debugger/Step into (RESim)',
         'do_step_over:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Step over (RESim)',
-        'do_rev_step_over:action',
+        'do_rev_step_into:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
-        'Debugger/Step into',
-        'do_rev_step_into:action',
+        'Debugger/^Rev step into',
+        'do_rev_step_over:action',
         idaapi.SETMENU_APP) 
     idaapi.attach_action_to_menu(
         'Debugger/Run until return',

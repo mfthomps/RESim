@@ -74,6 +74,11 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
+                #print('try fun %s' % function_name)
+                adjust_sp = adjustStack(function_ea)
+                if adjust_sp is not None:
+                    print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
+                    funs[function_ea]['adjust_sp'] = adjust_sp
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
                 pass
@@ -213,3 +218,124 @@ def dumpImports(fname):
         idaapi.enum_import_names(i, import_names.imp_cb)
     import_names.printit()
     import_names.dumpit(fname)
+
+def getString(ea):
+    string_type = idc.get_str_type(idaapi.get_item_head(ea))
+
+    if string_type is None:
+        return None
+
+    string = idc.get_strlit_contents(ea, strtype=string_type)
+    if string is not None:
+        return string.decode()
+    else:
+        return None
+
+def findFunName(s):
+    retval = None 
+    if s is not None and ': START' in s:
+        retval = s.split(':')[0].strip()
+    elif s is not None and '::' in s:
+        parts = s.split()
+        for p in parts:
+            if '::' in p:
+                if p.endswith('()'):
+                    sig = p[:-2]
+                elif p.endswith('.') or p.endswith(':'):
+                    sig = p[:-1]
+                else:
+                    sig = p
+                if '(' in sig:
+                    sig = sig.split('(')[0]
+                if sig.startswith('<'):
+                    sig = sig[1:-1]
+                retval = sig
+    return retval
+
+def renameFromLogger():
+    for ea in idautils.Segments():
+        start = idaversion.get_segm_attr(ea, idc.SEGATTR_START)
+        end = idaversion.get_segm_attr(ea, idc.SEGATTR_END)
+        for function_ea in idautils.Functions(start,  end):
+            fun_name = idaversion.get_func_name(function_ea)
+            end = idc.get_func_attr(function_ea, idc.FUNCATTR_END)-1
+            done = False
+            for head in idautils.Heads(function_ea, end):
+                refs = idautils.DataRefsFrom(head)
+                for r in refs:
+                    s = getString(r)
+                    name = findFunName(s)
+                    if name is not None:
+                        print(name)
+                        idaapi.set_name(function_ea, name, idaapi.SN_FORCE)
+                        done = True
+                        break
+                if done:
+                    break
+                    
+def adjustStack(fun_ea):
+    info = idaapi.get_inf_structure()
+    ip_list = []
+    for item_ea in idautils.FuncItems(fun_ea):
+        ip_list.append(item_ea)
+    count=0
+    adjust = None
+    for item_ea in reversed(ip_list):
+        ins = idautils.DecodeInstruction(item_ea)
+        mn = ins.get_canon_mnem()
+        #print('ea 0x%x mn is %s' % (item_ea, mn))
+        if mn.lower() == 'add':
+            #print('is add') 
+            op0 = idc.print_operand(item_ea, 0)
+            if op0.lower() == 'sp':
+                if info.procname == 'ARM':
+                    op2 = idaversion.get_operand_value(item_ea, 2)
+                    #print('is SP, op2 value is 0x%x' % op2)
+                    adjust = op2
+                else:
+                    op1 = idaversion.get_operand_value(item_ea, 1)
+                    #print('is SP, op1 value is 0x%x' % op1)
+                    adjust = op1
+                break
+        elif info.procname == 'ARM' and mn.lower().startswith('l'):
+            op2 = idc.print_operand(item_ea, 2)
+            if op2.lower().startswith('[sp'):
+                #print('op2 is SP:  %s' % op2)
+                if '],' in op2:
+                    parts = op2.split('],')
+                    value = getValue(parts[-1])
+                    adjust = value
+                    #print('value got 0x%x' % value)
+                    break
+        count += 1
+        if count > 4:
+            break
+    #if adjust is not None:
+    #    print('adjust sp by 0x%x' % adjust)
+    return adjust
+
+def getValue(item):
+    item = item.strip()
+    value = None
+    if item.startswith('#'):
+        if item.startswith('#0x'):
+            try:
+                value = int(item[3:], 16)
+            except:
+                print('failed to get value from %s' % item)
+                return None
+        else:
+            try:
+                value = int(item[1:])
+            except:
+                print('failed to get value from %s' % item)
+                return None
+    else:
+        try:
+            value = int(item, 16)
+        except:
+            try:
+                value = int(item)
+            except:
+                print('failed to get value from %s' % item)
+    return value 

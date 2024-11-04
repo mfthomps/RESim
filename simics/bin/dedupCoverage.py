@@ -70,11 +70,14 @@ def getQFile(f):
                 
 
 def checkFileFirst(f, udp_header, hit_dict, args, prefix):
-    ''' get its corresponding queue file '''
+    ''' Populate the hit_dict with a json of hits for each file.  
+    get its corresponding queue file '''
     queue = getQFile(f)
     if queue is not None:
  
         queue_len = os.path.getsize(queue)
+        if args.max_size is not None and queue_len > args.max_size:
+            return
 
         ''' get the number of udp packets, if recorded '''
         udp_count = 0
@@ -195,6 +198,7 @@ def main():
     parser = argparse.ArgumentParser(prog='dedupCoverage', description='Create a deduped file of all unique coverage files.')
     parser.add_argument('ini', action='store', help='The name of the ini file.')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
+    parser.add_argument('-s', '--max_size', action='store', type=int, help='Eleminiate queue files larger than this value.')
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
@@ -210,7 +214,7 @@ def main():
     prefix = aflPath.getTargetPath(args.target)
     print('prefix is %s' % prefix)
 
-    ''' for each coverage file '''
+    ''' populate the hit_dict for each coverage file '''
     for f in flist:
         checkFileFirst(f, udp_header, hit_dict, args, prefix)
 
@@ -218,12 +222,23 @@ def main():
     ''' remove subsets '''
     remove_set = []
     all_hits = []
+    # hack to avoid duplicates of seeds
     for f in hit_dict:
         #print('remove subsets for %s' % f)
+        did_orig_basenames = []
         for this_f in hit_dict:
             if this_f == f:
                 continue
+            if this_f in remove_set:
+                continue
             if ',orig:' in this_f:
+                basename = os.path.basename(this_f)
+                if basename in did_orig_basenames:
+                    #print('removing orig %s' % this_f)
+                    remove_set.append(this_f)
+                else:
+                    #print('allowing orig %s' % this_f)
+                    did_orig_basenames.append(basename)
                 continue
             got_dif = False
             for hit in hit_dict[this_f]:
@@ -234,7 +249,13 @@ def main():
                     break
             if not got_dif:
                 ''' no hits in this_f that are not in f, remove this_f'''
-                if this_f not in remove_set:
+                f_size = len(hit_dict[f])
+                this_f_size = len(hit_dict[this_f])
+                delta = f_size - this_f_size
+                if delta > this_f_size:
+                    #print('no hits in %s (this_f) that are not in %s (f), however size diff %d is greater than size of this_f %d' % (this_f, f, delta, this_f_size))
+                    pass
+                else:
                     #print('no hits in %s (this_f) that are not in %s (f), remove this_f' % (this_f, f))
                     remove_set.append(this_f)
     for f in remove_set:

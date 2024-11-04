@@ -67,7 +67,7 @@ class PageAddrInfo():
 
 class PageEntryInfo():
     def __init__(self, entry, arch):
-        if arch != 'arm':
+        if not arch.startswith('arm'):
             self.writable = memUtils.testBit(entry, 1)
             self.accessed = memUtils.testBit(entry, 5)
         else:
@@ -129,7 +129,7 @@ def pageStart(start, page_size):
     return page_start
 
 def getPageBases(cpu, lgr, kernel_base):
-    if cpu.architecture == 'arm':
+    if cpu.architecture.startswith('arm'):
         return getPageBasesArm(cpu, lgr, kernel_base)
 
     ENTRIES_PER_TABLE = 1024
@@ -249,6 +249,8 @@ def getPageEntrySize(cpu):
     ''' TBD FIX THIS '''
     if cpu.architecture == 'arm':
         return 4
+    if cpu.architecture == 'arm64':
+        return 8
     reg_num = cpu.iface.int_register.get_number("cr3")
     cr3 = cpu.iface.int_register.read(reg_num)
     reg_num = cpu.iface.int_register.get_number("cr4")
@@ -261,29 +263,98 @@ def getPageEntrySize(cpu):
     else:
         return 8
 
-def findPageTableArm(cpu, va, lgr, use_sld=None):
-    ''' sld is 2nd level directory, which we may already know from previous failures '''
-    ''' TBD, seems off... if cannot read sld context may be wrong.  Why not always wait until
-        return to user space? '''
+def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False, do_log=False):
+    #reg_num = cpu.iface.int_register.get_number("tcr_el1")
+    #tcr_el1 = cpu.iface.int_register.read(reg_num)
+    #tg0 = memUtils.bitRange(tcr_el1, 14, 15)
+    #tg1 = memUtils.bitRange(tcr_el1, 30, 31)
+    #lgr.debug('findPageTableArmV8 tg0 (user) %d' % tg0)
+    #lgr.debug('findPageTableArmV8 tg1 (kernel) %d' % tg1)
+    if kernel:
+        #lgr.debug('findPageTableArm kernel space')
+        ttbr = cpu.translation_table_base1 & 0x0000ffffffffffff
+    elif force_cr3 is not None:
+        ttbr = force_cr3
+    else:
+        #lgr.debug('findPageTableArm user space')
+        ttbr = cpu.translation_table_base0
     ptable_info = PtableInfo()
-    ttbr = cpu.translation_table_base0
+    vaddr_off = va & 0xfff
+    ptable_info.ptable_exists = False
+    if do_log:
+        lgr.debug('vaddr_off 0x%x' % vaddr_off)
+    l1_index = memUtils.bitRange(va, 30, 38)
+    l1_off = 8 * l1_index
+    l1_base_addr = ttbr + l1_off
+    l1_base = readPhysMemory(cpu, l1_base_addr, 8, lgr)
+    if l1_base is None:
+        lgr.error('findPageTableArmV8 got None for l1_base_addr ttbr is 0x%x' % ttbr)
+        return None
+    if do_log: 
+        lgr.debug('findPageTableArm va 0x%x ttbr 0x%x l1_index 0x%x  l1_off 0x%x l1_base_addr 0x%x base is 0x%x' % (va, ttbr, l1_index, l1_off, l1_base_addr, l1_base))
+    l2_index = memUtils.bitRange(va, 21, 29)
+    l2_off = 8 * l2_index
+    l2_base_addr = (l1_base + l2_off) & 0xfffffffffffffff8
+    l2_base = readPhysMemory(cpu, l2_base_addr, 8, lgr)
+    l2_basex = l2_base & 0x0000fffffffff000 
+    if do_log: 
+        lgr.debug('l1_base: 0x%x l2_index 0x%x  l2_off 0x%x l2_base_addr 0x%x l2_base raw 0x%x masked: 0x%x' % (l1_base, l2_index, l2_off, l2_base_addr, l2_base, l2_basex))
+    if l2_base < 0x10000000000000:
+        l3_index = memUtils.bitRange(va, 12, 20)
+        l3_off = 8 * l3_index
+        l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
+        l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
+        if l3_base is not None:
+            if do_log: 
+                lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x' % (l2_basex, l3_index, l3_off, l3_base_addr, l3_base))
+            l3_basex = l3_base & 0x0000fffffffff000 
+            #lgr.debug('l3_base masked 0x%x' % l3_basex)
+            phys = l3_basex + vaddr_off
+        else:
+            phys = None
+        ptable_info.page_base_addr = l3_base_addr
+        ptable_info.ptable_exists = True
+    else:
+        if do_log: 
+            lgr.debug('l2_base base looks like last level, use it 0x%x' % l2_basex)
+        ptable_info.page_base_addr = l2_base_addr
+        phys = l2_basex + vaddr_off
+    if do_log: 
+        lgr.debug('got phys of 0x%x' % phys)
+    ptable_info.page_addr = phys
+    if phys is not None:
+        ptable_info.page_exists = True
+    return ptable_info
+
+def findPageTableArm(cpu, va, lgr, force_cr3=None, use_sld=None, do_log=False):
+    ptable_info = PtableInfo()
+    if force_cr3 is not None:
+        ttbr = force_cr3
+    else:
+        ttbr = cpu.translation_table_base0
     base = memUtils.bitRange(ttbr, 14,31)
     base_shifted = base << 14
+    if do_log:
+        lgr.debug('findPageTableArm ttbr0 0x%x base 0x%x shifed 0x%x cpu.translation_talble_base0: 0x%x' % (ttbr, base, base_shifted, cpu.translation_table_base0))
     
     first_index = memUtils.bitRange(va, 20, 31)
     first_shifted = first_index << 2
     first_addr = base_shifted | first_shifted
     ptable_info.pdir_addr = first_addr
-    #lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
+    if do_log:
+        lgr.debug('findPageTableArm first_index 0x%x  ndex_shifted 0x%x addr 0x%x' % (first_index, first_shifted, first_addr))
    
     fld = readPhysMemory(cpu, first_addr, 4, lgr)
     if fld == 0:
         return ptable_info
-    #ptable_info.ptable_protect = memUtils.testBit(fld, 2)
+    if do_log:
+        ptable_info.ptable_protect = memUtils.testBit(fld, 2)
     ptable_info.ptable_exists = True
     pta = memUtils.bitRange(fld, 10, 31)
     pta_shifted = pta << 10
     #print('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
+    if do_log:
+        lgr.debug('fld 0x%x  pta 0x%x pta_shift 0x%x' % (fld, pta, pta_shifted))
     
     second_index = memUtils.bitRange(va, 12, 19)
     second_shifted = second_index << 2
@@ -291,6 +362,8 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ptable_info.ptable_addr = second_addr
     sld = readPhysMemory(cpu, second_addr, 4, lgr)
     #print('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
+    if do_log:
+        lgr.debug('sld 0x%x  second_index 0x%x second_shifted 0x%x second_addr 0x%x' % (sld, second_index, second_shifted, second_addr))
     if use_sld is None:
         if sld == 0:
             return ptable_info
@@ -301,15 +374,20 @@ def findPageTableArm(cpu, va, lgr, use_sld=None):
     ptable_info.page_exists = True
     small_page_base = memUtils.bitRange(sld, 12, 31)
     s_shifted = small_page_base << 12
-    ptable_info.page_addr = s_shifted
+    offset = memUtils.bitRange(va, 0, 11)
+    ptable_info.page_addr = s_shifted + offset
     ptable_info.nx = memUtils.testBit(sld, 0)
     ptable_info.entry = sld
     return ptable_info 
 
-def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None):
+def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do_log=False):
+    ''' sld is 2nd level directory, which we may already know from previous failures '''
+    ''' TBD, seems off... if cannot read sld context may be wrong.  Why not always wait until
+        return to user space? '''
     if cpu.architecture == 'arm':
-        return findPageTableArm(cpu, addr, lgr, use_sld)
-
+        return findPageTableArm(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, do_log=do_log)
+    if cpu.architecture == 'arm64':
+        return findPageTableArmV8(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, kernel=kernel, do_log=do_log)
     elif isIA32E(cpu):
         #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr, force_cr3=force_cr3) 

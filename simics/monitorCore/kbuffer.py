@@ -33,7 +33,7 @@ Kernel buffer size is determined by looking for a fixed character (Z) following 
 of the first write to the application read buffer.
 '''
 class Kbuffer():
-    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr, commence=None):
+    def __init__(self, top, cpu, context_manager, mem_utils, data_watch, lgr, commence=None, stop_when_done=False):
         self.context_manager = context_manager
         self.mem_utils = mem_utils
         self.data_watch = data_watch
@@ -42,7 +42,8 @@ class Kbuffer():
         self.lgr = lgr
         self.watching_addr = None
         self.kbufs = []
-        self.kbuf_len = None
+        # in case buffer lengths vary, e.g., due to starting kbuf in mid-conversation.
+        self.kbuf_len = []
         self.write_hap = None
         self.read_count = None
         self.buf_remain = None
@@ -51,16 +52,28 @@ class Kbuffer():
         self.orig_buffer = None
         self.kernel_cycle_of_write = None
         self.hack_count = 0
+        self.tot_buf_size = 0
+        self.stop_when_done = stop_when_done
+        self.ass_backwards = False
+        # cycle at which writeHap was hit, return here after stopping, which may take a cycle
+        self.write_cycle = None
+     
+        self.fd = None
 
-    def read(self, addr, count):
+    def read(self, addr, count, fd):
         ''' syscall got a read call. '''
         self.lgr.debug('Kbuffer read addr 0x%x' % addr)
+        if self.data_watch.hasCommenceWith():
+            self.lgr.debug('Kbuffer read dataWatch still waiting on commence_with, do nothing')
+            return 
+        self.fd = fd
         if self.watching_addr is None:
+            # first buffer
             self.watching_addr = addr
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, count, 0)
             self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
             self.read_count = count
-            self.lgr.debug('Kbuffer read set write_hap count 0x%x' % count)
+            self.lgr.debug('Kbuffer first read set write_hap on 0x%x count 0x%x' % (addr, count))
 
             self.user_addr = addr
             self.user_count = count
@@ -85,11 +98,13 @@ class Kbuffer():
             self.lgr.debug('Kbuffer gotBufferCallback, src 0x%x' % src)
             self.updateBuffers(src)
 
-    def findArmBuf(self):
+    def findArmBuf(self, dumb=None):
+        # Find kernel buffers for arm processors.  First skip to the cycle that got us here, which is likely -1 from where we are
+        self.top.skipToCycle(self.write_cycle)
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('Kbuffer findArmBuf, is ARM, expect a str: %s' % instruct[1])
-        if instruct[1].startswith('str'):
+        self.lgr.debug('Kbuffer findArmBuf eip 0x%x  cycle: 0x%x, is ARM, expect a str: %s' % (eip, self.cpu.cycles, instruct[1]))
+        if instruct[1].startswith('str') or instruct[1].startswith('stp'):
             op2, op1 = decodeArm.getOperands(instruct[1])
             self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
             our_reg = op1
@@ -97,13 +112,17 @@ class Kbuffer():
             ''' Simulation is running.  So make hacky assumption about there being a recent ldm instruction to avoid stopping '''
             limit = 20
             gotone = False
-            skipped_list = []
             for i in range(limit):
-                eip = eip - self.mem_utils.WORD_SIZE
+                prev = self.cpu.cycles - 1 
+                self.top.skipToCycle(prev, cpu=self.cpu)
+                eip = self.top.getEIP()
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                self.lgr.debug('findArmBuf instruct: %s' % instruct[1])
-                if instruct[1].startswith('ldm') or instruct[1].startswith('ldr'):
-                    op2, op1 = decodeArm.getOperands(instruct[1])
+                self.lgr.debug('findArmBuf pc: 0x%x instruct: %s' % (eip, instruct[1]))
+                if instruct[1].startswith('ldm') or instruct[1].startswith('ldr') or instruct[1].startswith('ldp'):
+                    if instruct[1].startswith('ldp'):
+                        op3, op2, op1 = decodeArm.getOperands3(instruct[1])
+                    else:
+                        op2, op1 = decodeArm.getOperands(instruct[1])
                     writeback = False
                     if instruct[1].startswith('ldm'):
                         if op1.endswith('!'):
@@ -114,28 +133,24 @@ class Kbuffer():
                         if writeback:
                             num_regs = op2.count(',')+1
                             value = value - self.mem_utils.WORD_SIZE * num_regs
+                    elif instruct[1].startswith('ldp'):
+                        if op1 == our_reg:
+                            value = decodeArm.getAddressFromOperand(self.cpu, op3, self.lgr, after=True)
+                        else:
+                            self.lgr.debug('findARmBuf ldp not our reg, skip it')
+                            continue
                     else:
                         ''' assume ldr '''
                         if op1 == our_reg:
                             value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
-                            our_op2 = op2
-                            ''' adjust based on quantity of ldr instructions that adjusted the register value '''
-                            for skipped in skipped_list:
-                                op2, op1 = decodeArm.getOperands(skipped)
-                                if op2 == our_op2: 
-                                    self.lgr.debug('findArmBuf would adjust per %s' % op2)
-                                    if ',' in op2:
-                                        adjust = decodeArm.getValue(op2.split(',')[1], self.cpu)
-                                        value = value - adjust
                                 
                         else:
-                            self.lgr.debug('findARmBuf not our reg, skip it, but record so we can adjust register per arm side-effects')
-                            skipped_list.append(instruct[1])
+                            self.lgr.debug('findARmBuf not our reg, skip it')
                             continue
                     self.lgr.debug('findArmBuf buf found at 0x%x' % value)
                     if self.kernel_cycle_of_write is None:
                         # before kernel starts reading buffer
-                        self.kernel_cycle_of_write = self.cpu.cycles - (i+3)
+                        self.kernel_cycle_of_write = self.cpu.cycles - 1
                         self.lgr.debug('findArmBuf buf kernel_cycle_of_write is 0x%x' % self.kernel_cycle_of_write)
                     self.updateBuffers(value)
                     gotone = True
@@ -147,10 +162,10 @@ class Kbuffer():
             
 
     def updateBuffers(self, src):
-        if self.kbuf_len is not None and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len):
+        if len(self.kbuf_len) > 0 and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len[-1]):
             ''' The read is from the same kernel buffer used on the previous read.'''
             self.lgr.debug('Kbuffer updateBuffers read from previous kernel buffer 0x%x' % self.kbufs[-1])
-            kbuf_remaining = (self.kbufs[-1] + self.kbuf_len) - src + 1
+            kbuf_remaining = (self.kbufs[-1] + self.kbuf_len[-1]) - src + 1
             if self.read_count > kbuf_remaining:
                 ''' change break to write of first byte from next buffer '''
                 new_break = self.watching_addr + kbuf_remaining
@@ -160,10 +175,13 @@ class Kbuffer():
                 self.watching_addr = new_break
 
         else:  
-            self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, kbuf_len is %s' % (src, str(self.kbuf_len)))
+            if len(self.kbuf_len) > 0:
+                self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, previous kbuf_len is %s' % (src, str(self.kbuf_len[-1])))
+            else:
+                self.lgr.debug('Kbuffer updateBuffers adding kbuf of 0x%x, this is the first, so we have no length' % (src))
             self.kbufs.append(src)
             print('adding kbuf 0x%x' % src)
-            if self.kbuf_len is None or (self.buf_remain is None or self.buf_remain > 100):
+            if len(self.kbuf_len) == 0 or (self.buf_remain is None or self.buf_remain > 100):
                 # TBD this may need to be adjustable data files that require specific fields to force consumption of the entire kernel buffer.
                 # Better to parse the primer file  in writeData to identify the non-special characters and allow for them.
                 max_bad = 300
@@ -188,7 +206,7 @@ class Kbuffer():
                         bad_count = 0
                     cur_addr += 1
                 if last_good is None:
-                    if self.kbuf_len is None:
+                    if len(self.kbuf_len) == 0:
                         self.lgr.error('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('kbuffer search found no special character (currently Z) in the kernel buffers.')
                         print('The kbuf option requires a data stream that contains Zs')
@@ -197,41 +215,53 @@ class Kbuffer():
                     return
                 buf_size = (last_good - src) + 1 
                 self.lgr.debug('Kbuffer updateBuffers, last_good addr 0x%x, buf_size %d' % (last_good, buf_size))
-                if self.kbuf_len is None:
-                    self.kbuf_len = buf_size
+                #if self.kbuf_len is None:
+                #    self.kbuf_len = buf_size
+                self.kbuf_len.append(buf_size)
+                self.tot_buf_size = self.tot_buf_size + buf_size
         
-        
-                self.buf_remain = self.kbuf_len
-        
-                if self.read_count > self.kbuf_len:
-                    new_break = self.watching_addr + self.kbuf_len
-                    self.lgr.debug('Kbuffer updateBuffers, count given in read syscall %d greater than buf size %d, set next break at 0x%x' % (self.read_count, self.kbuf_len, new_break))
+                self.buf_remain = buf_size
+       
+                 
+                if self.read_count > self.tot_buf_size:
+                    new_break = self.watching_addr + buf_size
+                    self.lgr.debug('Kbuffer updateBuffers, count given in read syscall %d greater than cumulartive buf size %d, set next break at 0x%x' % (self.read_count, self.tot_buf_size, new_break))
                     SIM_run_alone(self.replaceHap, new_break)
                     self.watching_addr = new_break
-                #SIM_break_simulation('tmp')
+                elif self.stop_when_done:
+                    self.lgr.debug('Kbuffer updateBuffers got all bufs, and told to stop')
+                    SIM_break_simulation('Kbuffer updateBuffers got all bufs, and told to stop')
             else:
                 ''' Not enough remaining... just assume same length. '''
                 self.lgr.debug('Kbuffer not enough remaining buf_reamin is %s' % str(self.buf_remain))
                 self.buf_remain = 0
 
 
-    def writeHap(self, Dumb, third, forth, memory):
+    def writeHap(self, Dumb, the_object, break_num, memory):
         ''' callback when user space buffer address is written'''
         if self.write_hap is None:
             return
         value = SIM_get_mem_op_value_le(memory)
+        '''
         if self.data_watch is not None and self.data_watch.commence_with is not None:
             first = value & 0xff
             commence_1 = ord(self.data_watch.commence_with[0])
             self.lgr.debug('Kbuffer writeHap commence_1 0x%x value 0x%x first: 0x%x' % (commence_1, value, first))
             if commence_1 != first:
+                hap = self.write_hap
+                SIM_run_alone(self.removeHap, hap)
+                self.write_hap = None
+                self.watching_addr = None
                 return
             else:
                 # do not wait for 2nd write, this is the 2nd write most likely
                 self.hack_count = 2
-        self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x' % (memory.logical_address, value))
-        if self.cpu.architecture != 'arm':
-            eip = self.top.getEIP()
+        '''
+        eip = self.top.getEIP()
+        self.lgr.debug('Kbuffer writeHap addr 0x%x value 0x%x watching_addr: 0x%x eip: 0x%x cycle: 0x%x' % (memory.logical_address, 
+                    value, self.watching_addr, eip, self.cpu.cycles))
+        self.write_cycle = self.cpu.cycles
+        if not self.cpu.architecture.startswith('arm'):
             if self.top.isWindows() and self.hack_count < 1:
                 self.hack_count = self.hack_count + 1
                 self.lgr.debug('Kbuffer writeHap skip first write.  Windows fu. eip: 0x%x' % eip)
@@ -254,14 +284,19 @@ class Kbuffer():
                 else:
                     self.top.stopAndGo(self.findWinBuf)
         else:
+            # ARM
             hap = self.write_hap
             SIM_run_alone(self.removeHap, hap)
             self.write_hap = None
-    
+            
+            if memory.logical_address != self.watching_addr:
+                self.lgr.debug('Kbuffer writeHap seems ass backwards')
+                self.ass_backwards = True 
            
             #self.removeHap(None)
             #self.top.stopTrackIO()
-            src = self.findArmBuf()
+            #src = self.findArmBuf()
+            SIM_run_alone(self.top.stopAndCall, self.findArmBuf)
             #SIM_break_simulation('arm writeHap')
 
     def removeHap(self, hap, immediate=False):
@@ -275,6 +310,7 @@ class Kbuffer():
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
         self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
         self.lgr.debug('Kbuffer replaceHap set write hap on 0x%x' % addr) 
+        self.top.continueForward()
 
     def readReturn(self, length):
         if self.buf_remain is None:
@@ -318,7 +354,7 @@ class Kbuffer():
         self.lgr.debug('Kbuffer findWinBuf instruct %s' % instruct[1])
 
         prev = self.cpu.cycles - 1 
-        resimUtils.skipToTest(self.cpu, prev, self.lgr)
+        self.top.skipToCycle(prev, cpu=self.cpu)
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         op2, op1 = decode.getOperands(instruct[1])
@@ -328,7 +364,7 @@ class Kbuffer():
         gotit = False
         for i in range(limit):
             prev = self.cpu.cycles - 1 
-            resimUtils.skipToTest(self.cpu, prev, self.lgr)
+            self.top.skipToCycle(prev, cpu=self.cpu)
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('Kbuffer findWinBuf prev instruct %s  cycles: 0x%x' % (instruct[1], self.cpu.cycles))
@@ -344,7 +380,7 @@ class Kbuffer():
                 SIM_continue(0) 
                 break
         if not gotit:
-            self.lgr.error('kbuffer findWinBufAlone failed to find buffer')
+            self.lgr.error('Kbuffer findWinBufAlone failed to find buffer')
           
     def rmAllHaps(self, immediate=False):
         self.lgr.debug('kbuffer rmAllHaps')
@@ -355,3 +391,22 @@ class Kbuffer():
             else:
                 SIM_run_alone(self.removeHap, hap) 
             self.write_hap = None
+
+    def gotCommence(self):
+        # DataWatch got the commence string.  We need to back-up pre syscall and redo the read/recv 
+        self.lgr.debug('Kbuffer gotCommence, do stopAndCall')
+        SIM_run_alone(self.top.stopAndCall, self.restartRead)
+
+    def restartRead(self, dumb=None): 
+        frame, cycle = self.top.getPreviousEnterCycle() 
+        before_read = cycle - 1
+        self.lgr.debug('Kbuffer restartRead skip to cycle 0x%x' % before_read)
+        self.top.skipToCycle(before_read)
+        syscall_manager = self.top.getSyscallManager()
+        # allow syscalls to see entries they previously saw
+        syscall_manager.clearSyscallCycles()
+        self.lgr.debug('Kbuffer restartRead did skip to 0x%x , go' % self.cpu.cycles)
+        SIM_run_alone(SIM_continue, 0)        
+
+    def getFD(self):
+        return self.fd
