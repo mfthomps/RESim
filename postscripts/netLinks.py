@@ -84,6 +84,7 @@ class NetLinks():
                         self.sock_socks[tid_tok][fd_tok] = self.sock_start[tid_tok]
                     #print('saved %s' % self.sock_socks[tid_tok][fd_tok]) 
                 elif self.isBind(line):
+                    #print('is bind %s' % line)
                     tid_tok = getTokValue(line, 'tid')
                     pname = self.getPname(line)
                     fd_tok = getTokValue(line, 'FD')
@@ -91,10 +92,12 @@ class NetLinks():
                     if 'AF_LOCAL' in line:
                         sock_file = parts[-1]
                         self.file_sock_binders[sock_file] = pname
+                    elif 'AF_INET6' in line:
+                        continue
                     elif 'AF_INET' in line:
                         #addr_port = parts[-1]
                         addr_port = getTokValue(line, 'address')
-                        if ':' in addr_port:
+                        if addr_port is not None and ':' in addr_port:
                             addr, port = addr_port.split(':')
                         else:
                             print('failed to get address/port token %s from %s' % (addr_port, line))
@@ -150,9 +153,21 @@ class NetLinks():
                         
                         if pname not in self.file_sock_connectors[sock_file]:
                             self.file_sock_connectors[sock_file].append(pname)
+                    elif 'AF_INET6' in line:
+                            # TBD
+                            continue
                     elif 'AF_INET' in line:
-                        addr_port_index = parts.index('address:')
-                        addr_port = parts[addr_port_index+1]
+                        if 'address:' in parts: 
+                            addr_port_index = parts.index('address:')
+                        else: 
+                            print('no address string in %s' % str(parts))
+                            print('line was %s' % line)
+                            continue
+                        if len(parts) > addr_port_index:
+                            addr_port = parts[addr_port_index+1]
+                        else:
+                            print('addr_port_index %d but only %d parts in %s' % (addr_port_index, len(parts), line))
+                            continue
                         if ':' in addr_port:
                             addr, port = addr_port.split(':')
                         else:
@@ -193,8 +208,9 @@ class NetLinks():
 
     def isBind(self, line):
         sock_bind = 'return from socketcall bind'
+        bind = 'return from bind'
         win_bind = 'return from deviceiocontrolfile'
-        if sock_bind.lower() in line.lower() or (win_bind.lower() in line.lower() and 'bind' in line.lower()):
+        if bind.lower() in line or sock_bind.lower() in line.lower() or (win_bind.lower() in line.lower() and 'bind' in line.lower()):
             return True
         else:
             return False
