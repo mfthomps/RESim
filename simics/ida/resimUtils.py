@@ -74,9 +74,10 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
+                #print('try fun %s' % function_name)
                 adjust_sp = adjustStack(function_ea)
                 if adjust_sp is not None:
-                    print('function %s will adjust 0x%x' % (function_name, adjust_sp))
+                    print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
                     funs[function_ea]['adjust_sp'] = adjust_sp
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
