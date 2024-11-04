@@ -70,7 +70,8 @@ def getQFile(f):
                 
 
 def checkFileFirst(f, udp_header, hit_dict, args, prefix):
-    ''' get its corresponding queue file '''
+    ''' Populate the hit_dict with a json of hits for each file.  
+    get its corresponding queue file '''
     queue = getQFile(f)
     if queue is not None:
  
@@ -213,7 +214,7 @@ def main():
     prefix = aflPath.getTargetPath(args.target)
     print('prefix is %s' % prefix)
 
-    ''' for each coverage file '''
+    ''' populate the hit_dict for each coverage file '''
     for f in flist:
         checkFileFirst(f, udp_header, hit_dict, args, prefix)
 
@@ -221,14 +222,23 @@ def main():
     ''' remove subsets '''
     remove_set = []
     all_hits = []
+    # hack to avoid duplicates of seeds
     for f in hit_dict:
         #print('remove subsets for %s' % f)
+        did_orig_basenames = []
         for this_f in hit_dict:
             if this_f == f:
                 continue
             if this_f in remove_set:
                 continue
             if ',orig:' in this_f:
+                basename = os.path.basename(this_f)
+                if basename in did_orig_basenames:
+                    #print('removing orig %s' % this_f)
+                    remove_set.append(this_f)
+                else:
+                    #print('allowing orig %s' % this_f)
+                    did_orig_basenames.append(basename)
                 continue
             got_dif = False
             for hit in hit_dict[this_f]:
