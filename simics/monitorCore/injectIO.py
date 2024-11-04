@@ -42,8 +42,8 @@ class InjectIO():
            coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
            count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
-        if target_prog is not None and targetFD is None:
-            self.lgr.error('injectIO called with target_prog but not targetFD')
+        if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
+            lgr.error('injectIO called with target_prog but not targetFD')
             return
         self.dfile = dfile
         self.stay = stay
