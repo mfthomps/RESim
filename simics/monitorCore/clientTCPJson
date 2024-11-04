@@ -52,9 +52,9 @@ def sendTCP(lgr):
                     pass
                 elif len(got) > 1:
                     done = True
-                    time.sleep(.01)
+                    time.sleep(.1)
                 else:
-                    time.sleep(.01)
+                    time.sleep(.1)
                     count = count+1
                     if count > 10:
                         break
