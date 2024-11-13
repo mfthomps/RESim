@@ -607,6 +607,8 @@ class GenMonitor():
                 reason = "sysenter"
             elif eip == self.param[self.target].sys_entry:
                 reason = "sys_entry"
+            elif eip == self.param[self.target].arm64_entry:
+                reason = "sys_entry"
             elif eip == self.param[self.target].page_fault:
                 reason = "page_fault"
             call_info = ''
@@ -5185,7 +5187,7 @@ class GenMonitor():
 
     def showContext(self):
         cpu = self.cell_config.cpuFromCell(self.target)
-        print('context: %s' % (str(cpu.current_context)))
+        print('context for cell %s is  %s' % (self.target, str(cpu.current_context)))
 
     def traceMalloc(self):
         self.lgr.debug('genMonitor traceMalloc')
@@ -5376,7 +5378,7 @@ class GenMonitor():
         self.rmDebugWarnHap()
         if parallel:
             self.no_gdb = True
-        play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[self.target], no_cover,
+        play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[target_cell], no_cover,
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
@@ -6592,11 +6594,13 @@ class GenMonitor():
                 retval = self.soMap[self.target].getProg(leader_tid)
         return retval
 
-    def getProgPath(self, prog_in):
+    def getProgPath(self, prog_in, target=None):
         retval = None
-        self.lgr.debug('getProgPath for %s' % prog_in)
+        if target is None:
+            target = self.target
+        self.lgr.debug('getProgPath cell %s for %s' % (target, prog_in))
         if prog_in is not None:
-            retval = self.soMap[self.target].getFullPath(prog_in)
+            retval = self.soMap[target].getFullPath(prog_in)
         else:
             self.lgr.debug('getProgPath for None')
         return retval
