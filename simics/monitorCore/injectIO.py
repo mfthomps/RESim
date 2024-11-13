@@ -386,23 +386,21 @@ class InjectIO():
                 if self.stop_on_read:
                     use_backstop = False
 
-
-                if not self.trace_all and not self.instruct_trace and not self.no_track:
-                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
-                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
-
                 if self.malloc:
                     self.top.traceMalloc()
+
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
                         cli.quiet_run_command('c')
 
-                if not self.mem_utils.isKernel(self.addr):
+                elif not self.mem_utils.isKernel(self.addr):
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
+                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
+                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
                     # TBD why?
                     #self.callback = None
                 else:
