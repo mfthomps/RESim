@@ -366,6 +366,8 @@ class PlayAFL():
         self.physical=False
         if self.coverage is not None:
             full_path = None
+            analysis_path = None
+            prog_path = None
             if self.fname is None:
                 if self.target_proc is not None:
                     analysis_path = self.top.getAnalysisPath(self.target_proc)
@@ -978,6 +980,7 @@ class PlayAFL():
             if not os.path.isfile(fname):
                 self.lgr.debug('playAFL recordSearchFind, assume ad-hoc path')
             with open(fname, 'w') as fh:
+                fh.write('addr:0x%x eip:0x%x value:0x%x' % (addr, eip, value))
 
     def loadCommenceParams(self): 
         with open(self.commence_params) as fh:
@@ -985,4 +988,3 @@ class PlayAFL():
             self.exit_eip = int(fh.readline(), 16) 
             self.target_tid = fh.readline()
             self.lgr.debug('afl loadCommenceParams loaded from %s' % self.commence_params)
-                fh.write('addr:0x%x eip:0x%x value:0x%x' % (addr, eip, value))
