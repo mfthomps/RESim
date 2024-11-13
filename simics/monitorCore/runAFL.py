@@ -216,6 +216,8 @@ def runAFLTilRestart(args, lgr):
     #    os.environ['ONE_DONE_PARAM2']='tcp'
     #else:
     #    os.environ['ONE_DONE_PARAM2']='udp'
+    if args.commence_params is not None:
+        os.environ['ONE_DONE_PARAM2']=args.commence_params
 
     if args.dead:
         os.environ['ONE_DONE_PARAM3']='TRUE'
@@ -384,6 +386,7 @@ def main():
     parser.add_argument('-q', '--quiet', action='store_true', default=False, help='Redirect afl output to file in workspace directory')
     parser.add_argument('-b', '--background', action='store_true', default=False, help='Run locally in background.')
     parser.add_argument('-k', '--dirty', action='store_true', default=False, help='Run AFL with quick & dirty mode, skipping deterministic step.')
+    parser.add_argument('-p', '--commence_params', action='store', help='Name of file created with commence_params option to RESim afl command for use with target_proc and targetFD parameters.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:

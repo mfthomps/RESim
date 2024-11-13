@@ -5251,7 +5251,8 @@ class GenMonitor():
         ''' note hack of n = -1 to indicate tcp '''
         self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
-    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, one_done=False, test_file=None):
+    def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, 
+            one_done=False, test_file=None, commence_params=None):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
@@ -5284,7 +5285,7 @@ class GenMonitor():
         self.afl_instance = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
-            one_done=one_done, test_file=test_file)
+            one_done=one_done, test_file=test_file, commence_params=commence_params)
         if target is None:
             self.noWatchSysEnter()
             self.afl_instance.goN(0)
