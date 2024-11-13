@@ -987,14 +987,17 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s' % (tid, len(self.prog_start), prog_in, prog))
+        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
         if tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
-                image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
-                retval = load_addr - image_base
-                self.lgr.debug('soMap getLoadOffset return offset %d based on load_addr 0x%x image_base 0x%x text_start 0x%x textoffset 0x%x' % (retval, load_addr,
-                     image_base, self.prog_info[prog].text_start, self.prog_info[prog].text_offset))
+                if self.prog_info[prog].text_start > 0:
+                    image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                    retval = load_addr - image_base
+                    self.lgr.debug('soMap getLoadOffset return offset %d based on load_addr 0x%x image_base 0x%x text_start 0x%x textoffset 0x%x' % (retval, load_addr,
+                         image_base, self.prog_info[prog].text_start, self.prog_info[prog].text_offset))
+                else:
+                    retval = load_addr
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
