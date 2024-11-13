@@ -5618,6 +5618,9 @@ class DataWatch():
                 self.callback = None
 
     def mmap(self, addr):
+        if self.disabled:
+            self.lgr.debug('dataWatch mmap disabled')
+            return
         phys_of_addr = self.mem_utils.v2p(self.cpu, addr)
         if phys_of_addr is None:
             self.lgr.error('dataWatch mmap called with addr 0x%x, but not mapped' % addr)
