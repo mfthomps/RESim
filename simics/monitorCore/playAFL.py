@@ -43,7 +43,7 @@ class PlayAFL():
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
              fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
-             search_list=None):
+             search_list=None, commence_params=None):
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -87,6 +87,7 @@ class PlayAFL():
         self.counter_hap = None
         self.exit_counter = 0
         self.exit_eip = None
+        self.commence_params = commence_params
         self.stop_hap_cycle = None
         self.back_stop_cycle = None
         self.hang_cycles = 90000000
@@ -231,6 +232,8 @@ class PlayAFL():
             self.initial_context = self.target_cpu.current_context
         else:
             if self.count > 1:
+                if self.commence_params is not None and os.path.isfile(self.commence_params):
+                    self.loadCommenceParams()
                 # assumes process is ready to injest data, e.g., a driver ready to read a json
                 self.lgr.debug('playAFL will inject data so we can properly count exits prior to commence of coverage')
                 self.loadInData()
@@ -270,11 +273,6 @@ class PlayAFL():
     def setCounterHap(self, dumb=None):
         self.exit_counter = 0
 
-
-        if self.commence_after_exits is None or self.dfile != 'oneplay' or self.repeat:
-            context = self.target_cpu.current_context
-        else:
-            context = self.context_manager.getRESimContext()
         self.lgr.debug('playAFL setCounterHap currentContext %s will break on context %s eip: 0x%x' % (self.target_cpu.current_context, context, self.exit_eip))
         #self.counter_bp = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Execute, self.exit_eip, 1, 0)
         self.counter_bp = SIM_breakpoint(self.target_cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, self.exit_eip, 1, 0)
@@ -311,7 +309,7 @@ class PlayAFL():
         self.initial_context = self.target_cpu.current_context
         if self.trace_all:
             self.top.traceAll()
-        if self.targetFD is not None and self.count > 0:
+        if self.targetFD is not None and self.count > 1 and self.commence_after_exits is None:
             ''' run to IO before finishing init '''
             self.top.jumperDisable(target=self.cell_name)
             self.top.setCommandCallback(self.ranToIO)
@@ -369,12 +367,13 @@ class PlayAFL():
         if self.coverage is not None:
             full_path = None
             if self.fname is None:
-                analysis_path = self.top.getAnalysisPath(self.target_proc)
-                if '/' not in self.target_proc:
-                    prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
-                else:
-                    prog_path = self.target_proc
-                self.lgr.debug('playAFL finishInit fname is None, prog_path got %s' % prog_path)
+                if self.target_proc is not None:
+                    analysis_path = self.top.getAnalysisPath(self.target_proc)
+                    if '/' not in self.target_proc:
+                        prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
+                    else:
+                        prog_path = self.target_proc
+                    self.lgr.debug('playAFL finishInit fname is None, prog_path got %s' % prog_path)
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
@@ -395,7 +394,7 @@ class PlayAFL():
                 self.context_manager.restoreDebugContext()
             #self.context_manager.watchTasks()
             self.coverage.doCoverage(no_merge=True, physical=self.physical)
-            if self.commence_coverage is not None:
+            if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             else:
                 self.lgr.debug('playAFL, call setHangCallback %d cycles' % self.hang_cycles)
@@ -504,11 +503,11 @@ class PlayAFL():
                     self.index += 1
         if self.index < len(self.afl_list) or self.repeat:
             self.lgr.debug('playAFL goAlone index %d' % self.index)
-            if self.commence_coverage is not None:
+            if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             if self.dfile != 'oneplay' or self.repeat:
                 cli.quiet_run_command('restore-snapshot name = origin')
-            if self.commence_coverage is not None:
+            if self.commence_after_exits is not None:
                 self.lgr.debug('playAFL goAlone set counter hap')
                 self.setCounterHap()
             if self.coverage is not None:
@@ -910,6 +909,12 @@ class PlayAFL():
         self.lgr.debug('playAFL cycle_handler exit counter is %d cycle: 0x%x' % (self.exit_counter, self.target_cpu.cycles))
         self.write_data = None
         self.commence_after_exits = self.exit_counter
+        if self.commence_params is not None:
+            with open(self.commence_params, 'w') as fh:
+                fh.write('0x%x\n' % self.exit_counter) 
+                fh.write('0x%x\n' % self.exit_eip) 
+                fh.write('%s\n' % self.target_tid) 
+                self.lgr.debug('afl cycle_handler created commence params file %s' % self.commence_params)
         self.exit_counter = 0
         hap = self.counter_hap
         SIM_run_alone(self.rmCounterHap, hap)
@@ -973,4 +978,11 @@ class PlayAFL():
             if not os.path.isfile(fname):
                 self.lgr.debug('playAFL recordSearchFind, assume ad-hoc path')
             with open(fname, 'w') as fh:
+
+    def loadCommenceParams(self): 
+        with open(self.commence_params) as fh:
+            self.commence_after_exits = int(fh.readline(), 16) 
+            self.exit_eip = int(fh.readline(), 16) 
+            self.target_tid = fh.readline()
+            self.lgr.debug('afl loadCommenceParams loaded from %s' % self.commence_params)
                 fh.write('addr:0x%x eip:0x%x value:0x%x' % (addr, eip, value))
