@@ -987,8 +987,9 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
-        if tid in self.prog_start and self.text_prog[tid] == prog_in:
+        if tid in self.text_prog:
+            self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
+        if tid in self.text_prog and tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
                 if self.prog_info[prog].text_start > 0:
