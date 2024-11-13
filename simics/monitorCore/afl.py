@@ -449,6 +449,7 @@ class AFL():
                 #return
             if self.test_file is not None:
                 self.lgr.debug('afl test file, found %d unique hits, bail' % self.total_hits)
+                print('afl test file %s, found %d unique hits' % (self.test_file, self.total_hits))
                 return
 
             if self.one_done:
