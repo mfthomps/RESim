@@ -593,8 +593,11 @@ class SharedSyscall():
                             break
             
         elif socket_callname == "getpeername":
-            ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
-            trace_msg = trace_msg+('\treturn from socketcall GETPEERNAME tid:%s, %s  eax: 0x%x\n' % (tid, ss.getString(), eax))
+            if exit_info.sock_struct is not none:
+                ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
+                trace_msg = trace_msg+('\treturn from socketcall GETPEERNAME tid:%s, %s  eax: 0x%x\n' % (tid, ss.getString(), eax))
+            else:
+                trace_msg = trace_msg+('\treturn from socketcall GETPEERNAME tid:%s, sock_struct is None, eax: 0x%x\n' % (tid, eax))
         elif socket_callname == 'setsockopt':
             trace_msg = trace_msg+('\treturn from socketcall SETSOCKOPT tid:%s eax: 0x%x\n' % (tid, eax))
         elif socket_callname == 'getsockopt':
@@ -1268,18 +1271,21 @@ class SharedSyscall():
             trace_msg = self.doSockets(exit_info, eax, tid, comm)
         elif callname == 'epoll_wait' or callname == 'epoll_pwait':
              # epoll_wait.events is the epoll_event ptr
-             cur_ptr = exit_info.epoll_wait.events
-             trace_msg = trace_msg+('epfd: %d eax %d maxevents: %d cur_ptr: 0x%x\n' % (exit_info.old_fd, eax, exit_info.epoll_wait.maxevents, cur_ptr))
-             self.lgr.debug(trace_msg)
-             epoll_info = exit_info.epoll_wait.epoll_info
-             for i in range(eax):
-                 events = syscall.EPollEvent(cur_ptr, self.cpu, self.mem_utils)
-                 trace_msg = trace_msg+' '+events.toString()
-                 if epoll_info is not None:
-                     match_fd = epoll_info.findFD(events)
-                     if match_fd is not None:
-                         trace_msg = trace_msg + 'FD: %d' % match_fd 
-                 cur_ptr = cur_ptr+4+self.mem_utils.WORD_SIZE+12
+             if exit_info.epoll_wait  is not None:
+                 cur_ptr = exit_info.epoll_wait.events
+                 trace_msg = trace_msg+('epfd: %d eax %d maxevents: %d cur_ptr: 0x%x\n' % (exit_info.old_fd, eax, exit_info.epoll_wait.maxevents, cur_ptr))
+                 self.lgr.debug(trace_msg)
+                 epoll_info = exit_info.epoll_wait.epoll_info
+                 for i in range(eax):
+                     events = syscall.EPollEvent(cur_ptr, self.cpu, self.mem_utils)
+                     trace_msg = trace_msg+' '+events.toString()
+                     if epoll_info is not None:
+                         match_fd = epoll_info.findFD(events)
+                         if match_fd is not None:
+                             trace_msg = trace_msg + 'FD: %d' % match_fd 
+                     cur_ptr = cur_ptr+4+self.mem_utils.WORD_SIZE+12
+             else:
+                 trace_msg = trace_msg+' no epoll wait value\n'
              trace_msg = trace_msg+'\n'
         elif callname == 'eventfd' or callname == 'eventfd2':
              trace_msg = trace_msg+('FD: %d\n' % (eax))
