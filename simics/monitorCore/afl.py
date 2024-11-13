@@ -648,6 +648,7 @@ class AFL():
                 connected = True
             except socket.error:
                 print('Connect timeout, try again')
+                time.sleep(0.1)
             count = count + 1
         if connected:    
             self.lgr.debug('afl back from connect')
