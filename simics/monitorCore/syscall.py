@@ -1945,21 +1945,15 @@ class Syscall():
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
                     if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                        if call_param.nth is not None:
-                            call_param.count = call_param.count + 1
-                            self.lgr.debug('syscall read call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
-                            if call_param.count >= call_param.nth:
-                                self.lgr.debug('count >= param, set it')
-                                addParam(exit_info, call_param)
-                                if self.kbuffer is not None:
-                                    self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                        if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
+                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
                             self.lgr.debug('syscall read, call_param.nth is none, call it matched')
-                            addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                        addParam(exit_info, call_param)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
                     #self.lgr.debug('syscall read, is dmod: %s' % call_param.match_param.toString())

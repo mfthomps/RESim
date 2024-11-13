@@ -593,7 +593,7 @@ class SharedSyscall():
                             break
             
         elif socket_callname == "getpeername":
-            if exit_info.sock_struct is not none:
+            if exit_info.sock_struct is not None:
                 ss = net.SockStruct(self.cpu, exit_info.sock_struct.addr, self.mem_utils)
                 trace_msg = trace_msg+('\treturn from socketcall GETPEERNAME tid:%s, %s  eax: 0x%x\n' % (tid, ss.getString(), eax))
             else:
@@ -911,18 +911,27 @@ class SharedSyscall():
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None \
                    and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
                     ''' in case we want to break on a read of this data. NOTE break range is based on given count, not returned length '''
+                    wait_for_count = False
+                    if exit_info.matched_param.nth is not None:
+                        wait_for_count = True
+                        exit_info.matched_param.count = exit_info.matched_param.count + 1
+                        self.lgr.debug('sharedSyscall read call_param.nth not none, is %d, count is %d' % (exit_info.matched_param.nth, exit_info.matched_param.count))
+                        if exit_info.matched_param.count >= exit_info.matched_param.nth:
+                            wait_for_count = False
+
                     self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read length (eax) is %d' % eax)
                     # Set range over max length of read to catch coding error reference to previous reads or such
-                    if eax > 0:
-                        self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
-                    if my_syscall.linger: 
-                        self.dataWatch.stopWatch() 
-                        self.dataWatch.watch(break_simulation=False, i_am_alone=True)
-                    if exit_info.origin_reset:
-                        self.lgr.debug('sharedSyscall found origin reset, do it')
-                        SIM_run_alone(self.stopAlone, None)
-                    if self.kbuffer is not None:
-                        self.kbuffer.readReturn(eax)
+                    if not wait_for_count:
+                        if eax > 0:
+                            self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
+                        if my_syscall.linger: 
+                            self.dataWatch.stopWatch() 
+                            self.dataWatch.watch(break_simulation=False, i_am_alone=True)
+                        if exit_info.origin_reset:
+                            self.lgr.debug('sharedSyscall found origin reset, do it')
+                            SIM_run_alone(self.stopAlone, None)
+                        if self.kbuffer is not None:
+                            self.kbuffer.readReturn(eax)
 
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
