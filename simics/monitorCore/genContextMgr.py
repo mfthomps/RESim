@@ -290,6 +290,9 @@ class GenContextMgr():
         self.current_context = self.default_context
         self.reverse_context = False
 
+        ''' ad hoc scheme for detecting that a clone was execve'd, and thus we should not be watching any more. '''
+        self.my_clones = {}
+
     def getRealBreak(self, break_handle):
         for hap in self.haps:
             for bp in hap.breakpoint_list:
@@ -304,6 +307,15 @@ class GenContextMgr():
                 #self.lgr.debug('getBreakHandle look for %d got %d' % (real_bp, bp.break_num))
                 if bp.break_num == real_bp:
                     return bp.handle
+        return None
+
+    def getHapName(self, real_bp):
+        for hap in self.haps:
+            #self.lgr.debug('getBreakHandle hap %s' % (hap.name))
+            for bp in hap.breakpoint_list:
+                #self.lgr.debug('getBreakHandle look for %d got %d' % (real_bp, bp.break_num))
+                if bp.break_num == real_bp:
+                    return hap.name
         return None
 
     def showHaps(self):
@@ -730,11 +742,12 @@ class GenContextMgr():
                ''' add task, but do not try to watch exit since we do not have proper context yet.  Will watch below'''
                self.addTask(tid, new_addr, watch_exit=False)
                self.task_utils.didClone(leader_tid, tid)
+               self.my_clones[tid] = comm
            else:
                pass
                #self.lgr.debug('contextManager tid:%s (%s) not in cache, group leader 0x%x  leader tid %s' % (tid, comm, group_leader, leader_tid))
         elif not self.top.isWindows(target=self.cell_name) and tid in self.tid_cache and new_addr not in self.watch_rec_list:
-            self.lgr.debug('***********   pid in cache, but new_addr not in watch list? eh?')
+            self.lgr.debug('***********   tid %s in cache, but new_addr 0x%x not in watch list? eh?' % (tid, new_addr))
         elif self.top.isWindows(target=self.cell_name):
             if tid not in self.tid_cache  and tid != self.task_utils.recentExitTid():
                 pid = tid.split('-')[0]
@@ -892,20 +905,39 @@ class GenContextMgr():
             #self.lgr.debug('contextManager watchingThis not watching %s' % cur_tid)
             return False
 
+    def isCloneWrongComm(self, tid, cur_tid, cur_comm):
+        retval = False
+        if tid == cur_tid:
+            tid_comm = cur_comm
+        else:
+            tid_comm = self.task_utils.getCommFromTid(tid)
+        #if tid in self.my_clones:
+        #    self.lgr.debug('remove this tid:%s in my_clones as comm %s tid_comm is %s' % (tid, self.my_clones[tid], tid_comm))
+        #else:
+        #    self.lgr.debug('remove this tid:%s NOT in my_clones tid_comm is %s' % (tid, tid_comm))
+        if tid in self.my_clones and tid_comm != self.my_clones[tid]:
+            self.lgr.debug('contextManager isCloneWrongComm, tid:%s comm changed from %s to %s, assume execve and stop watching' % (tid, self.my_clones[tid], tid_comm))
+            del self.my_clones[tid]
+            self.stopWatchTid(tid, force=True) 
+            retval = True
+        return retval
+
     def amWatching(self, tid):
+        retval = False
         # Might imply debugging
         ctask = self.task_utils.getCurThreadRec()
-        cur_tid  = self.task_utils.curTID()
-      
-        # TBD point of checking watch_rec_list len of zero? 
-        if tid == cur_tid and (ctask in self.watch_rec_list or (self.debugging_tid is not None and len(self.watch_rec_list)==0)):
-            return True
-        elif tid in self.tid_cache:
-            return True
-        elif tid == self.task_utils.recentExitTid():
-            return True
-        else:
-            return False
+        cpu, cur_comm, cur_tid = self.task_utils.curThread()
+        if self.isCloneWrongComm(tid, cur_tid, cur_comm):
+            pass
+        else: 
+            # TBD point of checking watch_rec_list len of zero? 
+            if tid == cur_tid and (ctask in self.watch_rec_list or (self.debugging_tid is not None and len(self.watch_rec_list)==0)):
+                retval = True
+            elif tid in self.tid_cache:
+                retval = True
+            elif tid == self.task_utils.recentExitTid():
+                retval = True
+        return retval
 
     def restoreIgnoreContext(self, dumb=None):
         #self.lgr.debug('contextManager restoreIgnoreContext')
@@ -955,19 +987,18 @@ class GenContextMgr():
         # assuming already running alone
         self.restoreDebugContext()
 
-    def stopWatchTid(self, tid):
-        SIM_run_alone(self.stopWatchTidAlone, tid)
-
-    def stopWatchTidAlone(self, tid):
+    def stopWatchTid(self, tid, force=False):
+        self.lgr.debug('contextManager stopWatchTid for tid:%s' % tid)
         if tid in self.task_rec_bp:
             if self.task_rec_bp[tid] is not None:
                 self.lgr.debug('contextManager stopWatchTid delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
-                RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[tid])        
+                hap = self.task_rec_hap[tid]
+                SIM_run_alone(RES_delete_mem_hap, hap)
             del self.task_rec_bp[tid]
             del self.task_rec_hap[tid]
         cur_tid = self.task_utils.curTID()
-        if tid == cur_tid and self.debugging_tid is not None:
+        if force or (tid == cur_tid and self.debugging_tid is not None):
             ''' we are stopping due to a clone doing an exec or something similar.  in any event, remove haps and change context if needed '''
             ''' TBD, do this in some other function? '''
             self.watching_tasks = False
@@ -977,7 +1008,7 @@ class GenContextMgr():
             if ctask in self.watch_rec_list:
                 del self.watch_rec_list[ctask]
             SIM_run_alone(self.restoreDefaultContext, None)
-            self.lgr.debug('contextManager No longer watching tid:%s' % tid)
+            self.lgr.debug('contextManager stopWatchTid No longer watching tid:%s' % tid)
             if tid in self.tid_cache:
                 self.tid_cache.remove(tid)
         
@@ -986,7 +1017,7 @@ class GenContextMgr():
         #self.stopWatchTasksAlone(None)
         SIM_run_alone(self.stopWatchTasksAlone, None)
 
-    def stopWatchTasksAlone(self, dumb):
+    def stopWatchTasksAlone(self, dumb=None):
         if self.task_break is None:
             #self.lgr.debug('stopWatchTasks already stopped')
             return
@@ -1016,6 +1047,7 @@ class GenContextMgr():
         self.task_rec_bp = {}
         self.task_rec_hap = {}
         self.task_rec_watch = {}
+        self.my_clones = {}
         self.tid_cache = []
         self.debugging_tid = None
 
@@ -1241,36 +1273,40 @@ class GenContextMgr():
         self.lgr.debug('taskRecHap tid %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if tid not in self.task_rec_hap or tid in self.demise_cache:
             return
-        cur_tid  = self.task_utils.curTID()
-        self.lgr.debug('contextManager taskRecHap rec point to that of tid:%s altered by cur_tid %s?' % (tid, cur_tid))
-        dead_rec = self.task_utils.getRecAddrForTid(tid)
-        if self.top.isWindows(target=self.cell_name) and dead_rec is not None and cur_tid == 4:
-            #TBD could it be any other tid?
-            self.lgr.debug('contextManager System (tid 4) wrote to task rec that had pointed to %t' % tid)
-            list_addr = self.task_utils.getTaskListPtr(dead_rec)
-            if list_addr is not None:
-                self.lgr.debug('contextManager list_addr now 0x%x' % list_addr)
-
-        elif dead_rec is not None:
-            if tid != cur_tid:
-                self.lgr.debug('contextManager taskRecHap got record 0x%x for %s, call resetAlone' % (dead_rec, tid))
-                self.demise_cache.append(tid)
-                SIM_run_alone(self.resetAlone, tid)
-            else:
-                self.lgr.debug('tid %s messing with its own task rec?  Let it go.' % tid)
-
-        else: 
-            value = SIM_get_mem_op_value_le(memory)
-            self.lgr.debug('contextManager taskRecHap tid:%s wrote 0x%x to 0x%x watching for demise of %s' % (cur_tid, value, memory.logical_address, tid))
-            exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
-            if exit_syscall is not None and not self.watching_page_faults:
-                ida_msg = 'tid:%s exit via kill?' % tid
-                self.killGroup(tid, exit_syscall)
-            else:
-                self.rmTask(tid)
-            if self.exit_callback is not None:
-                self.exit_callback()
-            self.tidExit(tid)
+        cpu, cur_comm, cur_tid = self.task_utils.curThread()
+        if self.isCloneWrongComm(tid, cur_tid, cur_comm):
+            self.lgr.debug('contextManager taskRecHap found clone with changed comm, bail')
+            pass
+        else:
+            self.lgr.debug('contextManager taskRecHap rec point to that of tid:%s altered by cur_tid %s?' % (tid, cur_tid))
+            dead_rec = self.task_utils.getRecAddrForTid(tid)
+            if self.top.isWindows(target=self.cell_name) and dead_rec is not None and cur_tid == 4:
+                #TBD could it be any other tid?
+                self.lgr.debug('contextManager System (tid 4) wrote to task rec that had pointed to %t' % tid)
+                list_addr = self.task_utils.getTaskListPtr(dead_rec)
+                if list_addr is not None:
+                    self.lgr.debug('contextManager list_addr now 0x%x' % list_addr)
+    
+            elif dead_rec is not None:
+                if tid != cur_tid:
+                    self.lgr.debug('contextManager taskRecHap got record 0x%x for %s, call resetAlone' % (dead_rec, tid))
+                    self.demise_cache.append(tid)
+                    SIM_run_alone(self.resetAlone, tid)
+                else:
+                    self.lgr.debug('tid %s messing with its own task rec?  Let it go.' % tid)
+    
+            else: 
+                value = SIM_get_mem_op_value_le(memory)
+                self.lgr.debug('contextManager taskRecHap tid:%s wrote 0x%x to 0x%x watching for demise of %s' % (cur_tid, value, memory.logical_address, tid))
+                exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
+                if exit_syscall is not None and not self.watching_page_faults:
+                    ida_msg = 'tid:%s exit via kill?' % tid
+                    self.killGroup(tid, exit_syscall)
+                else:
+                    self.rmTask(tid)
+                if self.exit_callback is not None:
+                    self.exit_callback()
+                self.tidExit(tid)
 
     def setExitCallback(self, callback):
         ''' callback to be invoked when/if program exits.  intended for use recording exits that occur during playAFL'''
