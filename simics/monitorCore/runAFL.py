@@ -68,6 +68,7 @@ def handleClose(resim_procs, read_array, duration, background, fifo_list, lgr):
             print('any key to quit, or will exit in %d seconds' % duration)
     else:
         print('Running in background.  Use kill-afl.sh to stop it.')
+    lgr.debug('runAFL handleClose start while loop')
     while (duration is None or total_time < duration) and not os.path.isfile('/tmp/resimdie.txt'):
         if background:
             time.sleep(sleep_time)
@@ -85,27 +86,27 @@ def handleClose(resim_procs, read_array, duration, background, fifo_list, lgr):
             lgr.debug('found memory only at %d, must be leaking, restart simics' % free)
             do_restart = True
             break
-
+    lgr.debug('out of while loop')
     if not do_restart:
         print('did quit')
-        lgr.debug('handleClose must have gotten quit')
+        lgr.debug('runAFL handleClose must have gotten quit')
         for fifo in fifo_list:
             try:
                 os.write(fifo, bytes('quit\n', 'UTF-8'))
-                lgr.debug('wrote quit to fifo') 
+                lgr.debug('handleClose wrote quit to fifo') 
             except:
-                lgr.debug('fifo broken pipe')
+                lgr.debug('handleClose fifo broken pipe')
     else:
         for fifo in fifo_list:
             try:
                 os.write(fifo, bytes('restart\n', 'UTF-8'))
-                lgr.debug('wrote restart to fifo')
+                lgr.debug('handleClose wrote restart to fifo')
             except:
-                lgr.debug('fifo broken pipe')
+                lgr.debug('handleClose fifo broken pipe')
     for proc in resim_procs:
         proc.wait()
         lgr.debug('proc exited')
-    lgr.debug('set stop_threads')
+    lgr.debug('handleClose set stop_threads')
     stop_threads = True
     for fd in read_array:
         fd.close()
