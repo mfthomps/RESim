@@ -2484,26 +2484,43 @@ class Syscall():
         self.lgr.debug(ida_msg)
         #SIM_break_simulation(ida_msg)
 
+    def arm64BailCheck(self, break_num):
+        # return True if arm64 syscall that should be ignored due to shared entry points
+        retval = False
+        # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
+        reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+        reg_value = self.cpu.iface.int_register.read(reg_num)
+        reg_value = reg_value >> 26
+        if reg_value != 0x11 and reg_value != 0x15:
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            self.lgr.debug('syscallHap arm64 NOT a syscall, reg_value is 0x%x callnum 0x%x' % (reg_value, callnum))
+            #if callnum == 0xdc:
+            #    SIM_break_simulation('remove this')
+            retval = True
+        else:
+            hap_name = self.context_manager.getHapName(break_num)
+            arm64_app = self.mem_utils.arm64App(self.cpu)
+            #self.lgr.debug('syscallHap ENTER addr 0x%x break 0x%x hap_name %s cycle: 0x%x' % (memory.logical_address, break_num, hap_name, self.cpu.cycles))
+            if hap_name.endswith('arm32') and arm64_app:
+                #self.lgr.debug('sycallHap arm32 break hit for arm64 app, bail')
+                retval = True
+        return retval
+
     def syscallHap(self, dumb, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        #self.lgr.debug('syscallHap addr 0x%x break 0x%x cycle: 0x%x' % (memory.logical_address, break_num, self.cpu.cycles))
         if self.context_manager.isReverseContext():
             return
-        if self.cpu.architecture == 'arm64':
-            # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
-            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
-            reg_value = self.cpu.iface.int_register.read(reg_num)
-            reg_value = reg_value >> 26
-            if reg_value != 0x11 and reg_value != 0x15:
-                return
+        cpu, comm, tid = self.task_utils.curThread() 
+        if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
+            return
+ 
         if self.syscall_info.callnum is None and self.callback is not None:
             # only used syscall to set breaks, we'll take it from here.
             self.callback()
             return
-        cpu, comm, tid = self.task_utils.curThread() 
         if tid == '0':
             return
         # TBD remove this?
@@ -2538,7 +2555,7 @@ class Syscall():
             if self.hack_cycle+20 >= cpu.cycles:
                 callnum = self.mem_utils.getCallNum(cpu)
                 callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, callnum, callname, cpu.cycles))
+                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. name: %s TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, self.name, callnum, callname, cpu.cycles))
                 return
             else:
                 self.hack_cycle = cpu.cycles
@@ -2549,6 +2566,7 @@ class Syscall():
            tracing_all = True
            callnum = self.mem_utils.getCallNum(cpu)
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
+           self.lgr.debug('syscallHap tid:%s traceAll callnum 0x%x name %s' % (tid, callnum, callname))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                self.lgr.debug('syscallHap not in record_fd list: %s' % callname)
                return
@@ -2570,7 +2588,7 @@ class Syscall():
                self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-           self.lgr.debug('syscallHap callnum is %s name %s' % (callnum, callname))
+           self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                return
            if tid == 1 and callname in ['open', 'openat', 'mmap', 'mmap2']:
@@ -2695,8 +2713,7 @@ class Syscall():
         ''' Set exit breaks '''
         frame_string = taskUtils.stringFromFrame(frame)
         #self.lgr.debug('syscallHap in tid:%s (%s), callnum: 0x%x (%s)  EIP: 0x%x' % (tid, comm, callnum, callname, break_eip))
-        self.lgr.debug('syscallHap frame: %s syscall_info.callnum %s' % (frame_string, str(self.syscall_info.callnum)))
-
+        #self.lgr.debug('syscallHap frame: %s syscall_info.callnum %s' % (frame_string, str(self.syscall_info.callnum)))
 
         if not tracing_all:
             #self.lgr.debug('syscallHap cell %s callnum %d self.syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
@@ -2770,11 +2787,11 @@ class Syscall():
                 self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
                 self.stop_action.rmFun(self.top.skipAndMail)
         
-            self.lgr.debug('syscall handleExit retain_so %r ida_msg is %s' % (retain_so, ida_msg))
             if self.traceMgr is not None:
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
             am_watching = self.context_manager.amWatching(tid)
+            self.lgr.debug('syscall handleExit retain_so %r am_watching %r ida_msg is %s' % (retain_so, am_watching, ida_msg))
             if self.soMap is not None:
                 if not retain_so and not am_watching:
                     self.lgr.debug('syscall handleExit not watching, call soMap.handleExit')
@@ -2783,7 +2800,7 @@ class Syscall():
                 self.lgr.debug('syscall exit soMap is None, tid:%s' % (tid))
             last_one = self.context_manager.rmTask(tid, killed)
             debugging_tid, dumb = self.context_manager.getDebugTid()
-            self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
+            self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s killed %r am_watching %r' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid), killed, am_watching))
             #if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
             if (killed or last_one or (exit_group and am_watching)) and self.debugging:
                 if self.top.hasProcHap():
@@ -2803,16 +2820,16 @@ class Syscall():
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
                 print('exit tid:%s' % tid)
-                self.lgr.debug('syscall hangleExit call stopAlone and checkExitCallback')
+                self.lgr.debug('syscall handleExit call stopAlone and checkExitCallback')
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
-                    self.lgr.debug('syscall hangleExit killed or group exit %s HAD pending fault, do something!' % tid)
+                    self.lgr.debug('syscall handleExit killed or group exit %s HAD pending fault, do something!' % tid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
                 self.context_manager.checkExitCallback()
             else:
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
-                    self.lgr.debug('syscall hangleExit %s HAD pending fault, do something!' % tid)
+                    self.lgr.debug('syscall handleExit %s HAD pending fault, do something!' % tid)
 
 
     def getBinders(self):
@@ -2996,7 +3013,7 @@ class Syscall():
                     self.lgr.debug('sharedSyscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
                     continue   
                 if eip in [exit_eip1, exit_eip2, exit_eip3]:
-                    self.lgr.debug('sharedSyscall  % tid setExits is current thread about to exit, skip this one' % tid)
+                    self.lgr.debug('sharedSyscall  tid:%s setExits is current thread about to exit, skip this one' % tid)
                     continue   
 
             exit_info = ExitInfo(self, self.cpu, tid, callnum, callname, False, frame)
