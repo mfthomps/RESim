@@ -918,11 +918,13 @@ class SharedSyscall():
                         self.lgr.debug('sharedSyscall read call_param.nth not none, is %d, count is %d' % (exit_info.matched_param.nth, exit_info.matched_param.count))
                         if exit_info.matched_param.count >= exit_info.matched_param.nth:
                             wait_for_count = False
+                        else:
+                            exit_info.matched_param = None
 
-                    self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read length (eax) is %d' % eax)
-                    # Set range over max length of read to catch coding error reference to previous reads or such
                     if not wait_for_count:
                         if eax > 0:
+                            self.lgr.debug('sharedSyscall bout to call dataWatch.setRange for read length (eax) is %d' % eax)
+                            # Set range over max length of read to catch coding error reference to previous reads or such
                             self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                         if my_syscall.linger: 
                             self.dataWatch.stopWatch() 
