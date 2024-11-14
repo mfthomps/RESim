@@ -1431,21 +1431,16 @@ class Syscall():
                 if call_param.name == 'runToReceive':
                     exit_info.call_params.append(call_param)
                 elif (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    if call_param.nth is not None:
-                        call_param.count = call_param.count + 1
-                        self.lgr.debug('syscall parse socket recv call_param.nth not none, is %d, count incremented to  %d' % (call_param.nth, call_param.count))
-                        if call_param.count >= call_param.nth:
-                            self.lgr.debug('count >= param, set exit_info.call_params to catch return')
-                            addParam(exit_info, call_param)
-                            if self.kbuffer is not None:
-                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+
+                    if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
+                        self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                        self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                     else:
-                        self.lgr.debug('call_param.nth is none, call it matched')
-                        addParam(exit_info, call_param)
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                    addParam(exit_info, call_param)
+
                     # keep kernel from triggering data watch mods if just reading more data into buffer
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
@@ -1949,7 +1944,6 @@ class Syscall():
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
-                            self.lgr.debug('syscall read, call_param.nth is none, call it matched')
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
