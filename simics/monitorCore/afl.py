@@ -190,7 +190,6 @@ class AFL():
         self.stop_hap_cycle = None
 
         self.exit_syscall = None
-        self.saved_msg = None
 
         self.did_page_faults = False
         self.test_file = test_file
@@ -202,13 +201,15 @@ class AFL():
             self.disableReverse()
 
         else:
-            if self.count > 1: 
+            if self.count > 1 or self.commence_params is not None: 
                 if self.commence_params is not None and os.path.isfile(self.commence_params):
                     self.loadCommenceParams()
                 else:
                     # need good data to determine where we should commence coverage
                     if self.test_file is None:
-                        self.in_data = self.getMsg(saveit=True)
+                        self.lgr.error('afl can only generate commence_params with a test file')
+                        self.top.quit()
+                        return
                     else:
                         with open(self.test_file, 'rb') as fh:
                             self.in_data = fh.read()
@@ -278,30 +279,6 @@ class AFL():
     def aflInitCallback(self):
         self.lgr.debug('afl aflInitCallback')
         ''' Now in target process'''
-        '''
-        self.coverage = self.top.getCoverage()
-        self.tid = self.top.getTID(target=self.target_cell)
-        
-        self.tid_list = self.context_manager.getWatchPids()
-        self.lgr.debug('afl aflInitCallback %d tids in list' % len(self.tid_list))
-
-        self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
-        analysis_path = self.top.getAnalysisPath(self.fname)
-        self.coverage.enableCoverage(self.tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
-            afl=True, fname=analysis_path)
-        self.coverage.doCoverage()
-        cmd = 'skip-to bookmark = bookmark0'
-        cli.quiet_run_command(cmd)
-        cli.quiet_run_command('disable-reverse-execution')
-        cli.quiet_run_command('enable-unsupported-feature internals')
-        cli.quiet_run_command('save-snapshot name = origin')
-        self.synchAFL()
-        self.lgr.debug('afl done init, num packets is %d stop_on_read is %r' % (self.packet_count, self.stop_on_read))
-        self.fault_hap = None
-        self.top.noWatchSysEnter()
-        self.tmp_time = time.time()
-        self.goN(0) 
-        '''
 
         self.target_tid = self.top.getTID()
         ''' We are in the target process and completed debug setup including getting coverage module.  Go back to origin '''
@@ -683,39 +660,33 @@ class AFL():
                 self.lgr.debug('AFL went away while in sendMsg');
         #self.lgr.debug('sent to AFL len %d: %s' % (msg_size, msg))
 
-    def getMsg(self, saveit=False):
-        if self.saved_msg is not None:
-            msg = self.saved_msg
-            self.saved_msg = None
-        else:
-            data = None
-            try:
-                data = self.sock.recv(4)
-            except socket.error as e:
-                self.lgr.error('afl recv error %s' % e)
-                self.top.quit()
-            #self.lgr.debug('got data len %d %s' % (len(data), data))
+    def getMsg(self):
+        data = None
+        try:
+            data = self.sock.recv(4)
+        except socket.error as e:
+            self.lgr.error('afl recv error %s' % e)
+            self.top.quit()
+        #self.lgr.debug('got data len %d %s' % (len(data), data))
+        if data is None or len(data) == 0:
+            self.sock.close()
+            return None
+        msg_len = struct.unpack("i", data)[0]
+        #self.lgr.debug('getMsg got msg_len of %d' % msg_len)
+        msg = bytearray()
+        expected = msg_len
+        amount_received = 0
+        while amount_received < msg_len:
+            data = self.sock.recv(expected)
             if data is None or len(data) == 0:
                 self.sock.close()
+                self.rmStopHap()
+                self.lgr.debug("got nothing from afl")
                 return None
-            msg_len = struct.unpack("i", data)[0]
-            #self.lgr.debug('getMsg got msg_len of %d' % msg_len)
-            msg = bytearray()
-            expected = msg_len
-            amount_received = 0
-            while amount_received < msg_len:
-                data = self.sock.recv(expected)
-                if data is None or len(data) == 0:
-                    self.sock.close()
-                    self.rmStopHap()
-                    self.lgr.debug("got nothing from afl")
-                    return None
-                #self.lgr.debug('got from afl: %s' % data)
-                amount_received += len(data)
-                expected = expected - len(data)
-                msg = msg+data
-            if saveit:
-                self.saved_msg = msg
+            #self.lgr.debug('got from afl: %s' % data)
+            amount_received += len(data)
+            expected = expected - len(data)
+            msg = msg+data
         return msg
  
 

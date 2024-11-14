@@ -231,7 +231,7 @@ class PlayAFL():
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
-            if self.count > 1:
+            if self.count > 1 or self.commence_params is not None:
                 if self.commence_params is not None and os.path.isfile(self.commence_params):
                     self.loadCommenceParams()
                 # assumes process is ready to injest data, e.g., a driver ready to read a json
@@ -273,7 +273,7 @@ class PlayAFL():
     def setCounterHap(self, dumb=None):
         self.exit_counter = 0
 
-        self.lgr.debug('playAFL setCounterHap currentContext %s will break on context %s eip: 0x%x' % (self.target_cpu.current_context, context, self.exit_eip))
+        self.lgr.debug('playAFL setCounterHap set break on eip: 0x%x' % (self.exit_eip))
         #self.counter_bp = SIM_breakpoint(context, Sim_Break_Linear, Sim_Access_Execute, self.exit_eip, 1, 0)
         self.counter_bp = SIM_breakpoint(self.target_cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, self.exit_eip, 1, 0)
         self.counter_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.counterHap, None, self.counter_bp)
@@ -285,12 +285,12 @@ class PlayAFL():
         
         tid = self.top.getTID(target=self.target_cell)
         if tid != self.target_tid:
-            self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %s cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
+            #self.lgr.debug('playAFL counterHap wrong tid:%s, wanted %s cycle: 0x%x' % (tid, self.target_tid, self.target_cpu.cycles))
             return
         self.exit_counter = self.exit_counter+1
-        self.lgr.debug('playAFL counterHap, count now %d cycles: 0x%x memory: 0x%x' % (self.exit_counter, self.target_cpu.cycles, memory.physical_address))
+        #self.lgr.debug('playAFL counterHap, count now %d cycles: 0x%x memory: 0x%x' % (self.exit_counter, self.target_cpu.cycles, memory.physical_address))
         if self.commence_after_exits is not None and self.exit_counter == self.commence_after_exits:
-            self.lgr.debug(' <><><><><><><><><><><><><>afl counterHap reached desired count, enable coverage breaks <><><><><><><><><><><><><>')
+            self.lgr.debug(' <><><><><><><><><><><><><>afl counterHap reached desired count, enable coverage breaks cycle 0x%x <><><><><><><><><><><><><>' % self.target_cpu.cycles)
             self.coverage.enableAll()
             SIM_run_alone(self.setHangCallback, None)
             hap = self.counter_hap
