@@ -682,12 +682,16 @@ Use {\tt jumper(from, to)} for general execution jumpers.
 This list below describes RESim commands related to fuzzing.  See section \ref{fuzz} for a fuller discussion of fuzzing with AFL and RESim
 \begin{itemize}
 
-\item{\tt afl(fname=None, target=None, targetFD=None, dead=False, test\_file=None)} -- Typically the {\tt runAFL} utility (from a bash shell in your workspace directory) is used instead of this command.  Uses a network connection to communicate AFL server \url{github.com/mfthomps/AFL}.  
+\item{\tt afl(fname=None, target=None, targetFD=None, dead=False, count=1test\_file=None)} -- Typically the {\tt runAFL} utility (from a bash shell in your workspace directory) is used instead of this command, which can be used for testing with the test\_file option.  Uses a network connection to communicate AFL server \url{github.com/mfthomps/AFL}.  
 The simulation is assumed to loaded from a checkpoint created using {\tt prepInject}.  Provide {\tt fname} to name a library, i.e., if the program's main
 text blocks is not what is to be instrumented.
 Use {\\tt target} and {\tt targetFD} to name some other process 
 and the FD from which it reads if the fuzzing target is other
-than the consumer of the AFL-generated data.  The {\tt dead} option creates a filter to avoid instrumenting basic blocks hit by other threads.
+than the consumer of the AFL-generated data.  The {\tt count} option will not commence code coverage tracking until the given 
+number of sucessful read/recv calls have occured on the FD from the prepInject,  or targetFD.   The {\tt commence\_params} option names a 
+file containing parameters computed for for the count.  If the file does not exist, it is created and populated, and then used on subsequent runs of afl or playAFL
+as an optimization. 
+The {\tt dead} option creates a filter to avoid instrumenting basic blocks hit by other threads.
 Use {\tt aflTCP} for TCP sessions, though note these assume all data is read into
 the same input buffer.  
 Use {\tt test\_file} to test RESim's AFL fuzzing portion on a selected file without starting AFL.
@@ -2257,6 +2261,19 @@ and you want the fuzzing guidance (i.e., code coverage feedback) to be driven by
 {\tt prepInject} as if the 1st process were the target.  Then provide the {\tt afl} command with the optional {\tt target} and {\tt targetFD}
 parameters to name the 2nd process and FD from which it reads the data.
 
+\subsection{Fuzz using the driver}
+As noted in \ref{where-to-inject}, you may wish to inject json data into the driver, and observe its effect on the some target process.
+This can be extended to fuzzing as follows:
+\begin{itemize}
+\item Create an AFL\_PACKET\_FILTER that inserts fuzzed data into a selected entry in the json file.  See the example at simics/workspace/json\_filter.py
+\item Create an AFL seed file, e.g., the original data in the json entry you wish to fuzz.
+\item Use the playAFL or afl command with a test\_file to create a {\tt commence\_params} file, providing a count to reach the data entry you selected in the json filter.
+This command would include a target naming your target component and process (full path), and the targetFD.
+\item Provide that file name as the {\tt --commence\_params} option to the runAFL command.
+\end{itemize}
+Note this approach may be slow because each AFL cycle requires data to be sent from the driver to the target; and it requires RESim to run the target forward 
+prior to commencing code coverage.
+
 \subsection{Thread isolation and skipping breakpoints}
 Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
 Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process -- or amongst
@@ -2276,7 +2293,6 @@ It would be nice if RESim could provide notice that some other thread is consumi
 breakpoint slows down the execution cycles by multiples.  One clue may be the stability displayed by AFL.  A low value can suggest interference by other threads.
 
 TBD: The runTrack artifacts reflect if multiple threads are referencing data. Use that to exempt selected threads from generation of dead zones.
-
 
 \subsection{Crash analysis}
 If AFL finds crashes, use the {\tt crashReport} command to generate reports on each crash.  These reports include stack traces, reverse
@@ -2336,7 +2352,7 @@ to be unique paths or unique crashes.  Consider putting a cap on the number of p
 Use the {\tt SUSPEND\_COVERAGE} ENV value in the ini file to name a file containing the address of a function (TBD expand to a list) start and end.
 RESim will suspend tracking coverage when the function start is hit and will not resume until the function end is hit.
 
-\item AFL sessions can be stopped when a selected function is hit bu using the {\tt FUNCTION\_BACKSTOP} env setting in the ini file.
+\item AFL sessions can be stopped when a selected function is hit by using the {\tt FUNCTION\_BACKSTOP} env setting in the ini file.
 \end{itemize}
 
 \subsection{Parallel fuzzing}
@@ -2617,6 +2633,44 @@ See \ref{BNT} and \ref{BNT-fuzz} for workflows related to finding branches not t
 See {\tt RESim/simics/examples/network\_file\_system} for an example use of RESim, including IO tracking and fuzzing.
 The README.md in that directory provides instructions for running the example, and for obtaining the disk images
 and binary files used within the example.
+
+\subsection{Fuzzing a web service}
+These steps describe how to stop a web service in the middle of
+a coversation to fuzz a specific command.
+\begin{itemize}
+\item Create a snapshot in which the web server is runnning and initialization has
+completed.  Be sure to use tracking to record the process shared libraries.
+
+\item Use a derivative of the simics/workspace/webproxy.sh to script let a local browser
+reach a target web server via the driver.
+
+\item Record a web conversation using traceAll and traceFD with web=True
+
+\item Use the resulting file as input to genJson.py with the -w option to
+create a json of the browser side of the conversation.
+
+\item Reference the traceFD output (or a trace) and find a string unique to the 
+data read immediately prior to the data you wish to replace with an inject.  
+For example, the timestamp preceeding the HTTP in the POST tokens.
+
+\item Start RESim and use debugProc or debugSnap to debug the web server.
+
+\item Use drive-driver to send the json content to the web server.
+
+\item Use noReverse to speed things up and then runToRead to find the read of the unique string you selected.
+
+\item Enable reverse execution with allowReverse.
+
+\item Step forward a few steps to be sure you are out of the kernel.
+
+\item Use prepInject to create a snapshot of the next read.
+
+\item Create a data file with the data you wish to inject.  Start with the data it expects as a test.
+
+\item Use injectIO with that file to confirm it is processing the data as expected.
+
+\item Use that file as a seed for AFl
+\end{itemize}
 
 \section{Example targets}
 \label{example-targets}
