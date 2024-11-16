@@ -415,7 +415,7 @@ class CallParams():
         self.count = 0
         self.call_list = []
     def toString(self):
-        retval = 'name: %s subcall %s  match_param %s call_list: %s' % (self.name, self.subcall, str(self.match_param), str(self.call_list))
+        retval = 'name: %s subcall %s  match_param %s proc: %s call_list: %s' % (self.name, self.subcall, str(self.match_param), self.proc, str(self.call_list))
         return retval
 
 class TidFilter():
@@ -1473,13 +1473,14 @@ class Syscall():
                 exit_info.call_params.append(sock_param)
 
             for call_param in self.call_params:
-                #self.lgr.debug('syscall call_params %s' % call_param.toString())
-                if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    #self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
-                    exit_info.call_params.append(call_param)
+                # TBD does not handle kbuffer as done in read/recv
+                self.lgr.debug('syscall %s FD: %d call_params %s' % (callname, exit_info.old_fd, call_param.toString()))
+                if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
+                    addParam(exit_info, call_param)
                 elif type(call_param.match_param) is str and call_param.subcall == 'recvmsg' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
-                    exit_info.call_params.append(call_param)
+                    addParam(exit_info, call_param)
             
         elif socket_callname == "sendmsg":
             # TBD Not complete
@@ -1529,10 +1530,10 @@ class Syscall():
 
 
             max_len = max(exit_info.count, 300)
-            byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
             s = None
-            if byte_array is not None:
-                s = resimUtils.getHexDump(byte_array[:max_len])
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
             self.checkSendParams(syscall_info, exit_info, ss, dest_ss, s)
 
         elif socket_callname == 'listen':
@@ -1987,13 +1988,12 @@ class Syscall():
                 elif type(call_param.match_param) is str:
                     self.lgr.debug('write match param for tid:%s is string, check match' % tid)
                     max_len = min(count, 1024)
-                    byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
-                    if byte_array is not None:
-                        if resimUtils.isPrintable(byte_array):
-                            s = ''.join(map(chr,byte_array))
+                    byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+                    if byte_tuple is not None:
+                        if resimUtils.isPrintable(byte_tuple):
+                            s = ''.join(map(chr,byte_tuple))
                             if call_param.match_param in s:
-                                exit_info.call_params.append(call_param)
-                                exit_info.matched_param = call_param
+                                addParam(exit_info, call_param)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if count < 4028:
                         self.lgr.debug('syscall write check dmod count %d' % count)
@@ -2024,6 +2024,26 @@ class Syscall():
             exit_info.count = frame['param3']
             ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
             self.lgr.debug(ida_msg)
+            add_msg, byte_tuple = self.getIOV(exit_info)
+            ida_msg = ida_msg + add_msg
+            for call_param in self.call_params:
+                if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('syscall writev call param found %d, matches %d' % (call_param.match_param, frame['param1']))
+                    exit_info.call_params.append(call_param)
+                elif type(call_param.match_param) is str:
+                    self.lgr.debug('syscall writev match param for tid:%s is string, check match' % tid)
+                    if byte_tuple is not None:
+                        if resimUtils.isPrintable(byte_tuple):
+                            s = ''.join(map(chr,byte_tuple))
+                            if call_param.match_param in s:
+                                self.lgr.debug('syscall writev found match for %s' % call_param.match_param)
+                                addParam(exit_info, call_param)
+                            else:
+                                self.lgr.debug('syscall writev failed to find match of %s in %s' % (call_param.match_param, s))
+                        else:
+                            s = ''.join(map(chr,byte_tuple))
+                            self.lgr.debug('syscall writev byte not printable: %s' % s)
+                       
 
         elif callname == 'readv':
             exit_info.old_fd = frame['param1']
@@ -2249,10 +2269,10 @@ class Syscall():
             mtype = self.mem_utils.readWord32(self.cpu, msgp)
             max_len = min(msgsz, 1024)
             mtext_addr = msgp + 4
-            byte_array = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
             s = None
-            if byte_array is not None:
-                s = resimUtils.getHexDump(byte_array[:max_len])
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
             ida_msg = '%s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg.strip()) 
         elif callname == 'msgrcv':
@@ -2487,11 +2507,12 @@ class Syscall():
             retval = True
         else:
             hap_name = self.context_manager.getHapName(break_num)
-            arm64_app = self.mem_utils.arm64App(self.cpu)
-            #self.lgr.debug('syscallHap ENTER addr 0x%x break 0x%x hap_name %s cycle: 0x%x' % (memory.logical_address, break_num, hap_name, self.cpu.cycles))
-            if hap_name.endswith('arm32') and arm64_app:
-                #self.lgr.debug('sycallHap arm32 break hit for arm64 app, bail')
-                retval = True
+            if hap_name is not None:
+                arm64_app = self.mem_utils.arm64App(self.cpu)
+                #self.lgr.debug('syscallHap ENTER addr 0x%x break 0x%x hap_name %s cycle: 0x%x' % (memory.logical_address, break_num, hap_name, self.cpu.cycles))
+                if hap_name.endswith('arm32') and arm64_app:
+                    #self.lgr.debug('sycallHap arm32 break hit for arm64 app, bail')
+                    retval = True
         return retval
 
     def syscallHap(self, dumb, context, break_num, memory):
@@ -2500,6 +2521,8 @@ class Syscall():
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
         if self.context_manager.isReverseContext():
+            return
+        if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
@@ -2511,14 +2534,11 @@ class Syscall():
             return
         if tid == '0':
             return
-        # TBD remove this?
+        # beware some systems execv init to some other process that you may care about
         #if tid == '1':
         #    return
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
-
-        #if tid == '1':
-        #    return
 
         #if comm == 'tar':
         #    return
@@ -3204,3 +3224,41 @@ class Syscall():
                     if call_param.match_param in s:
                         self.lgr.debug('syscall %s found match string, watch exit for param%s' % (call_param.subcall, call_param.name))
                         addParam(exit_info, call_param)
+
+    def getIOV(self, exit_info):
+        # Read data from IOV structures
+        # 
+        # how many iov structures will we look at? 
+        limit = min(10, exit_info.count)
+        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_addr = exit_info.retval_addr
+        # TBD better starting guess?
+        remain = 2000
+        self.lgr.debug('syscall getIOV %s starting remain %d iov_addr 0x%x' % (exit_info.callname, remain, iov_addr))
+        trace_msg = 'FD: %d iov count: %d' % (exit_info.old_fd, exit_info.count)
+        full_byte_tuple = ()
+        for i in range(limit):
+            base = self.mem_utils.readPtr(self.cpu, iov_addr)
+            if base == 0:
+                continue
+            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            if remain > length:
+                data_len = length
+            else:
+                data_len = remain
+            self.lgr.debug('syscall getIOV length 0x%x  data_len 0x%x' % (length, data_len))
+
+            max_len = min(length, 1024)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, base)
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
+                full_byte_tuple = full_byte_tuple + byte_tuple
+            else:
+                s = '<<NOT MAPPED>>'
+
+            self.lgr.debug('syscall getIOV %s base: 0x%x length: %d data: %s' % (exit_info.callname, base, length, s))
+            trace_msg = trace_msg+' buffer: 0x%x len: %d data: %s' % (base, length, s)
+            remain = remain - data_len 
+            iov_addr = iov_addr+iov_size
+        trace_msg = trace_msg+'\n'
+        return trace_msg, full_byte_tuple
