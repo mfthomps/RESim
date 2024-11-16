@@ -3541,7 +3541,7 @@ class GenMonitor():
         if self.isWindows():
             call_list = ['WriteFile']
         else:
-            call_list = ['write']
+            call_list = ['write', 'writev']
         self.runTo(call_list, call_params, name='write')
         self.lgr.debug('runToWrite to %s' % substring)
 
@@ -4334,16 +4334,18 @@ class GenMonitor():
 
         self.lgr.debug('writeConfig done to %s' % name)
 
-    def showCycle(self):
-        cpu = self.cell_config.cpuFromCell(self.target)
+    def showCycle(self, target=None):
+        if target is None:
+            target = self.target
+        cpu = self.cell_config.cpuFromCell(target)
         if self.bookmarks is None:
-            print ('cpu cycles  0x%x' % (cpu.cycles))
+            print ('cpu cycles for cell %s 0x%x' % (target, cpu.cycles))
         else:
             cycles = self.bookmarks.getCurrentCycle(cpu)
             if cycles is not None:
-                print ('cpu cycles since _start: 0x%x absolute cycle: 0x%x' % (cycles, cpu.cycles))
+                print ('cpu cycles on cell %s since _start: 0x%x absolute cycle: 0x%x' % (target, cycles, cpu.cycles))
             else:
-                print ('cpu cycles 0x%x -- bookmarks return nothing.' % (cpu.cycles))
+                print ('cpu cycles on cell %s 0x%x -- bookmarks return nothing.' % (target, cpu.cycles))
         
     def continueForward(self, dumb=None):
         if not self.isRunning():
@@ -4492,14 +4494,14 @@ class GenMonitor():
         fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print(fname) 
 
-    def retrack(self, clear=True, callback=None, use_backstop=True):
+    def retrack(self, clear=True, callback=None, use_backstop=True, run=False):
         self.lgr.debug('retrack')
         if callback is None:
             callback = self.stopTrackIO
         ''' Use existing data watches to track IO.  Clears later watch marks '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.getEIP(cpu)
-        self.lgr.debug('retrack cycle: 0x%x eip: 0x%x callback %s' % (cpu.cycles, eip, str(callback)))
+        self.lgr.debug('retrack cycle: 0x%x eip: 0x%x callback %s context: %s' % (cpu.cycles, eip, str(callback), cpu.current_context))
         if clear:
             cpu = self.cell_config.cpuFromCell(self.target)
             origin = self.bookmarks.getFirstCycle()
@@ -4515,17 +4517,18 @@ class GenMonitor():
         if self.coverage is not None:
             self.coverage.doCoverage()
         self.context_manager[self.target].watchTasks()
-        self.lgr.debug('retrack now continue')
-        try:
-            SIM_continue(0)
-            pass
-        except SimExc_General as e:
-            print('ERROR... try continue?')
-            self.lgr.error('ERROR in retrack  try continue? %s' % str(e))
-            if 'already running' in str(e):
-                self.lgr.debug('thinks it is already running?')
-            else:
+        if run:
+            self.lgr.debug('retrack now continue')
+            try:
                 SIM_continue(0)
+                pass
+            except SimExc_General as e:
+                print('ERROR... try continue?')
+                self.lgr.error('ERROR in retrack  try continue? %s' % str(e))
+                if 'already running' in str(e):
+                    self.lgr.debug('thinks it is already running?')
+                else:
+                    SIM_continue(0)
 
     def trackRecv(self, fd, max_marks=None, kbuf=False, commence=None):
         call_list = ['RECV', 'RECV_DATAGRAM']

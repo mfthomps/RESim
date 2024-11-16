@@ -400,7 +400,7 @@ class InjectIO():
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
-                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
+                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
                     # TBD why?
                     #self.callback = None
                 else:
