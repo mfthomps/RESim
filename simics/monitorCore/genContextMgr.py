@@ -595,7 +595,7 @@ class GenContextMgr():
             retval = True
         elif len(self.ignore_progs) > 0 and self.debugging_tid is None:
             if comm in self.ignore_progs:
-                
+                #self.lgr.debug('onlyOrIgnore found comm %s' % comm)
                 if self.cpu.current_context != self.ignore_context:
                     #self.lgr.debug('ignoring context for tid:%s comm %s' % (tid, comm))
                     #SIM_run_alone(self.restoreIgnoreContext, None)
@@ -1455,6 +1455,12 @@ class GenContextMgr():
 
     def isDebugContext(self):
         if self.cpu.current_context == self.resim_context:
+            return True
+        else:
+            return False
+
+    def isIgnoreContext(self):
+        if self.cpu.current_context == self.ignore_context:
             return True
         else:
             return False
