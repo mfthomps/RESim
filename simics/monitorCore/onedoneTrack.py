@@ -49,7 +49,7 @@ def onedone(top):
         run = False
 
     myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, 
-                      max_marks=max_marks, fname=fname, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=run)
+                      max_marks=max_marks, target=fname, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=run)
     myinject.setExitCallback(reportExit)
     myinject.go()
     if trace_all:
