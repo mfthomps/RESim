@@ -49,7 +49,7 @@ class InjectToBB():
         flist = findBB.findBB(afl_target, bb, quiet=True, lgr=lgr)
         self.lgr.debug('InjectToBB bb: 0x%x afl_target is %s len of flist is %d' % (bb, afl_target, len(flist)))
         self.inject_io = None
-        #self.top.debugSnap()
+        self.top.debugSnap()
         if target_prog is None:
             prog = self.top.getFullPath()
         else: 
