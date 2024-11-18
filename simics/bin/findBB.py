@@ -71,7 +71,7 @@ def getFirstReadCycle(trackio, quiet=False):
             break
     return retval
 
-def getWatchMark(trackio, bb, prog, quiet=False):
+def getWatchMark(trackio, bb, prog, quiet=False, lgr=None):
     #print('in getWatchMark')
     retval = (None, None, None)
     ''' Find a read watch mark within a given watch mark json for a given bb '''
@@ -79,15 +79,22 @@ def getWatchMark(trackio, bb, prog, quiet=False):
     if not os.path.isfile(trackio):
         if not quiet:
             print('ERROR: getWatchMark no trackio file at %s' % trackio)
+            if lgr is not None:
+                lgr.debug('ERROR: getWatchMark no trackio file at %s' % trackio)
+
         return retval
     try:
         tjson = json.load(open(trackio))
     except:
         print('ERROR: failed reading json from %s' % trackio)
+        if lgr is not None:
+            lgr.debug('ERROR: failed reading json from %s' % trackio)
         return retval
     index = 1
     somap = tjson['somap']
-    offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=None)
+    offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)
+    if lgr is not None:
+        lgr.debug('trackio file %s load offset of %s is 0x%x' % (trackio, prog, offset))
     reset_count = 0
     if offset != None:
         #print('not wrong file')
@@ -105,6 +112,8 @@ def getWatchMark(trackio, bb, prog, quiet=False):
             if mark['mark_type'] in read_marks:
                 eip = mark['ip'] - offset
                 #print('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
+                if lgr is not None:
+                    lgr.debug('is 0x%x in bb 0x%x - 0x%x' % (eip, bb['start_ea'], bb['end_ea']))
                 if eip >= bb['start_ea'] and eip < bb['end_ea']:
                     #print('getWatchMarks found read mark at 0x%x index: %d json: %s' % (eip, index, trackio))
                     retval = (eip, mark['packet'], reset_count)

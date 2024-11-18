@@ -52,7 +52,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                             for q in queue_list:
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
+                                read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet, lgr=lgr)
                                 if read_mark is not None:
                                     ''' Look for the best mark '''
                                     result, num_resetsx = findTrack.findTrackMark(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
