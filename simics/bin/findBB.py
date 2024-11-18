@@ -21,6 +21,7 @@ def findBB(target, bb, quiet=False, get_all=False, lgr=None):
     cover_list = aflPath.getAFLCoverageList(target, get_all=get_all)
     if len(cover_list) == 0:
         print('No coverage found for %s' % target)
+        return retval
     #print('%d files found' % len(cover_list))
     if lgr is not None:
         lgr.debug('findBB got %d cover files' % len(cover_list))
@@ -79,8 +80,8 @@ def getWatchMark(trackio, bb, prog, quiet=False, lgr=None):
     if not os.path.isfile(trackio):
         if not quiet:
             print('ERROR: getWatchMark no trackio file at %s' % trackio)
-            if lgr is not None:
-                lgr.debug('ERROR: getWatchMark no trackio file at %s' % trackio)
+        if lgr is not None:
+            lgr.debug('ERROR: getWatchMark no trackio file at %s' % trackio)
 
         return retval
     try:
