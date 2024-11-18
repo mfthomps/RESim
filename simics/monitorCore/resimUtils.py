@@ -499,16 +499,22 @@ def getLoadOffsetFromSO(so_json, prog, lgr=None):
     so_prog = os.path.basename(so_json['prog'])
     if so_prog == prog:
        #print('0x%x is in prog' % bb['start_ea'])  
-       if lgr is not None:
-           lgr.debug('resimUtils getLoadOffsetFromSO is prog: %s TBD assuming offset zero, fix this' % prog) 
+       prog_start = so_json['prog_start']
+       if 'relocate' in so_json:
+           offset = prog_start 
+           if lgr is not None:
+               lgr.debug('resimUtils getLoadOffsetFromSO is prog: %s and is relocate, set offset to prog_start 0x%x' % (prog, prog_start))
        pass
     else:
        wrong_file = True
        for section in so_json['sections']:
            #print('section file is %s' % section['file'])
+           if lgr is not None:
+               lgr.debug('section file is %s' % section['file'])
            if section['file'].endswith(prog):
                offset = section['locate']
-               #print('got section, offset is 0x%x' % offset)
+               if lgr is not None:
+                   lgr.debug('got section, offset is 0x%x' % offset)
                wrong_file = False
     if not wrong_file:
         retval = offset
