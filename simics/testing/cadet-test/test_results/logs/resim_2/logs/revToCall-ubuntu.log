@@ -1,0 +1,12 @@
+2024-10-25 10:31:23,133 - INFO - Start of log from revToCall-ubuntu.py
+2024-10-25 10:31:23,133 - DEBUG - reverseToCall, in init cell ubuntu
+2024-10-25 10:31:23,133 - DEBUG - __init__ bookmarks is None
+2024-10-25 10:31:23,412 - DEBUG - clearEnterCycles
+2024-10-25 10:31:23,414 - DEBUG - noWatchSysenter, NO ENTER BREAK
+2024-10-25 10:31:23,498 - DEBUG - noWatchSysenter, NO ENTER BREAK
+2024-10-25 10:35:28,111 - INFO - Start of log from revToCall-ubuntu.py
+2024-10-25 10:35:28,111 - DEBUG - reverseToCall, in init cell ubuntu
+2024-10-25 10:35:28,111 - DEBUG - __init__ bookmarks is None
+2024-10-25 10:35:28,397 - DEBUG - clearEnterCycles
+2024-10-25 10:35:28,398 - DEBUG - noWatchSysenter, NO ENTER BREAK
+2024-10-25 10:35:28,488 - DEBUG - noWatchSysenter, NO ENTER BREAK

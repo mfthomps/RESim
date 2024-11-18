@@ -1,0 +1,4 @@
+in onedone of oneDoneAFL
+call afl
+top.afl(port=8701, fname=None, linear=False, dead=None, target=None)
+back from afl
