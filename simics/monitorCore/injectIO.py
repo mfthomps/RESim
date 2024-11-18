@@ -450,7 +450,7 @@ class InjectIO():
             analysis_path = self.top.getAnalysisPath(self.target_prog) 
             self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
         if self.break_on is not None:
-            self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
+            self.lgr.debug('injectIO set break_on at 0x%x' % self.break_on)
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
             self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
         if not self.stay:
@@ -641,15 +641,21 @@ class InjectIO():
         return self.filter_module 
 
     def checkBreakOn(self, fname, break_on):
-        # Determine if we are to break on a basic block, and if so, confirm the 
+        # Determine if we are to break on a basic block, and if so, confirm we 
         # have the necessary information.
         retval = True
-        self.lgr.debug('injectIO checkBreakOn break_on given as %s fname as %s' % (str(break_on), fname))
+        self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x fname as %s' % (break_on, fname))
+        self.break_on = break_on
         if fname is not None:
             offset = self.so_map.getLoadOffset(fname)
         else:
             offset = None
-        self.break_on = break_on
+            tid = self.top.getTID()
+            prog = self.so_map.getProg(tid)
+            load_addr = self.so_map.getLoadAddr(prog)
+            if load_addr is not None:
+                self.break_on = self.break_on + load_addr
+                self.lgr.debug('checkBreakOn, adjust break_on by load_addr 0x%x.  break_on now 0x%x' % (load_addr, self.break_on))
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x' % break_on)
             if offset is None:
