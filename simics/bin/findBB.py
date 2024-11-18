@@ -29,11 +29,13 @@ def findBB(target, bb, quiet=False, get_all=False, lgr=None):
             try:
                 hit_list = json.load(fh)
             except:
+                if lgr is not None:
+                    lgr.debug('findBB Failed to open %s' % cover)
                 print('Failed to open %s' % cover)
                 continue
             #print('look for 0x%x in hit_list len %d' % (bb, len(hit_list)))
-            #if lgr is not None:
-            #    lgr.debug('findBB look for 0x%x in hit_list %s len %d' % (bb, cover, len(hit_list)))
+            if lgr is not None:
+                lgr.debug('findBB look for 0x%x in hit_list %s len %d' % (bb, cover, len(hit_list)))
             if str(bb) in hit_list:
                 queue = cover.replace('coverage', 'queue')
                 if not os.path.isfile(queue):
