@@ -75,7 +75,7 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
-        if target_prog is None:
+        if target_prog is None and break_on is not None:
             if not self.checkBreakOn(target_prog, break_on):
                 self.lgr.error('injectIO unable to break on given block.')
                 return
@@ -478,7 +478,7 @@ class InjectIO():
             self.top.instructTrace(trace_file, watch_threads=True)
         else:
             self.top.jumperStop()
-        if not self.checkBreakOn(self.target_prog, self.break_on):
+        if self.break_on is not None and not self.checkBreakOn(self.target_prog, self.break_on):
             self.lgr.error('injectIO injectCallback unable to break on given block.')
             return
         self.commonGo()
@@ -644,7 +644,8 @@ class InjectIO():
         # Determine if we are to break on a basic block, and if so, confirm we 
         # have the necessary information.
         retval = True
-        self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x fname as %s' % (break_on, fname))
+        if break_on is not None:
+            self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x fname as %s' % (break_on, fname))
         self.break_on = break_on
         if fname is not None:
             offset = self.so_map.getLoadOffset(fname)
