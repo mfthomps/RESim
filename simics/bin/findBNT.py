@@ -150,8 +150,8 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
         return bnt_list
     if prog_elf.text_start is None:
-        print('No text_start in prog_elf, use text_offset of 0x%x' % prog_elf.text_offset)
-        prog_elf.text_start = prog_elf.text_offset
+        # relocatable text. Set to zero
+        prog_elf.text_start = 0
     if not no_print:
         num_blocks = 0
         num_funs = len(blocks)
