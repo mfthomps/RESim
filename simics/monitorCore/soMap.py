@@ -557,13 +557,20 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         retval['group_leader'] = tid
+        self.lgr.debug('getSO tid:%s' % tid)
         if tid in self.so_file_map:
             if tid in self.prog_start and self.prog_start[tid] is not None:
                 prog = self.text_prog[tid]
                 if prog in self.prog_info:
                     retval['offset'] = self.prog_info[prog].text_offset
+                    if self.prog_info[prog].text_start == 0:
+                        retval['relocate'] = 'True'
+                        self.lgr.debug('getSO tid:%s is relocate' % tid)
+                    else:
+                        self.lgr.debug('getSO tid:%s text_start is 0x%x' % (tid, self.prog_info[prog].text_start))
                 else:
                     retval['offset'] = 0
+                    self.lgr.debug('getSO tid:%s prog %s not in prog_info' % prog)
                 retval['prog_start'] = self.prog_start[tid]
                 retval['prog_end'] = self.prog_end[tid]
                 retval['prog'] = self.text_prog[tid]
@@ -592,7 +599,7 @@ class SOMap():
                 section['file'] = prog
                 retval['sections'].append(section)
         else:
-            self.lgr.debug('no so map for %s' % tid)
+            self.lgr.debug('getSO no so map for %s' % tid)
         ret_json = json.dumps(retval) 
         if not quiet:
             print(ret_json)
