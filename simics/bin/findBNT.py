@@ -24,6 +24,10 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
     retval = []
     count = 0
     #print('in findBNTForFun')
+    if target is None:
+       target_prog = prog
+    else:
+       target_prog = target
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             #print('compare %s to %s' % (bb_hit, bb['start_ea']))
@@ -37,9 +41,10 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                         read_mark = None
                         packet_num = None
                         before_read = ''
-                        lgr.debug('bb_hit 0x%x has branch 0x%x not in hits' % (bb_hit, branch))
+                        lgr.debug('findBNTForFun target %s bb_hit 0x%x has branch 0x%x not in hits show read marks: %r' % (target, bb_hit, branch, show_read_marks))
                         if show_read_marks:
-                            queue_list = findBB.findBB(target, bb_hit, True) 
+                            queue_list = findBB.findBB(target_prog, bb_hit, True, lgr=lgr) 
+                            lgr.debug('findBNTForFun len of qlist for bb_hit 0x%x is %d' % (bb_hit, len(queue_list)))
                             least_packet = 100000
                             least_size = 100000
                             least_marks = 100000
@@ -50,6 +55,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                             best = None
                             # look at every trackIO that has a WM in this BB and find the "best" of them
                             for q in queue_list:
+                                lgr.debug('queue file %s' % q)
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
                                 read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet, lgr=lgr)
