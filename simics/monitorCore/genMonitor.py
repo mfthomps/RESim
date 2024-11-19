@@ -1530,7 +1530,7 @@ class GenMonitor():
                             if self.soMap[self.target].isDynamic(prog_name):
                                 image_base = self.soMap[self.target].getImageBase(prog_name)
                                 offset = load_info.addr - image_base
-                                self.lgr.debug('debug is dynamic, offset 0x%x image_base 0x%x' % (offset, image_base))
+                                self.lgr.debug('debug is dynamic, use load address as offset 0x%x image_base 0x%x' % (offset, image_base))
                             else:
                                 offset = 0
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
@@ -1644,8 +1644,11 @@ class GenMonitor():
             print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x code file: %s' % (cpu.name, context,
                    cpl, tid, comm, eip, so_file))
         else: 
-            print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
+            line = ('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
                    cpl, tid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
+            print(line)
+            # needed for testing
+            self.lgr.debug(line)
             pfamily = self.pfamily[self.target].getPfamily()
             tabs = ''
             while len(pfamily) > 0:
@@ -1874,7 +1877,11 @@ class GenMonitor():
             f3 = stopFunction.StopFunction(self.stackFrameManager[self.target].setStackBase, [], nest=False)
             f4 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3, f4]
-            self.toExecve(prog=proc, flist=flist, binary=True)
+            if track_threads:
+                watch_exit = True
+            else:
+                watch_exit = False
+            self.toExecve(prog=proc, flist=flist, binary=True, watch_exit=watch_exit)
        
 
     def listHasDebug(self, flist):
@@ -2983,7 +2990,7 @@ class GenMonitor():
         
         self.traceProcs[self.target].showAll()
  
-    def toExecve(self, prog=None, flist=None, binary=False):
+    def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False):
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
             params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
@@ -2994,8 +3001,10 @@ class GenMonitor():
             call_params = []
             cpu = self.cell_config.cpuFromCell(self.target)
             self.traceMgr[self.target].open('logs/execve.txt', cpu)
-
-        self.syscallManager[self.target].watchSyscall(None, ['execve', 'exit_group'], call_params, 'execve', flist=flist)
+        call_list = ['execve']
+        if watch_exit:
+            call_list.append('exit_group')
+        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'execve', flist=flist)
         SIM_continue(0)
 
     def clone(self, nth=1):
