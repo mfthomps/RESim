@@ -1,0 +1,5 @@
+!./background.sh "drive-driver json.directive -d"
+@cgc.debugSnap()
+@cgc.trackIO(11, count=18)
+@cgc.saveWatchMarks('my.wm')
+q
