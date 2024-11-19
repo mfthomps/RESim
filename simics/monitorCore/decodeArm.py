@@ -95,13 +95,32 @@ def regIsPartList(reg1, reg2_list):
 def isByteReg(reg):
     return False
 
-def getRegValue(cpu, reg):
+def getRegValue(cpu, reg, lgr=None):
+    reg_value = None
+    reg_num = None
+    if reg.startswith('w'):
+        use_reg = 'x'+reg[1:]
+    else:
+        use_reg = reg
     try:
-       reg_num = cpu.iface.int_register.get_number(reg)
+       reg_num = cpu.iface.int_register.get_number(use_reg)
     except:
-       print('decodeArm getRegvalue failed reg <%s> cpu:%s' % (reg, str(cpu)))
-       return None
-    reg_value = cpu.iface.int_register.read(reg_num)
+       print('decodeArm getRegvalue failed reg <%s> cpu:%s' % (use_reg, str(cpu)))
+       if lgr is not None:
+           lgr.error('decodeArm getRegvalue failed reg <%s> cpu:%s' % (use_reg, str(cpu)))
+    if reg_num is not None and reg_num >= 0:
+        try:
+            reg_value = cpu.iface.int_register.read(reg_num)
+        except:
+           print('decodeArm getRegvalue failed reg <%s>  reg_num 0x%x cpu:%s' % (reg, reg_num, str(cpu)))
+           if lgr is not None:
+               lgr.error('decodeArm getRegvalue failed reg <%s>  reg_num 0x%x cpu:%s' % (reg, reg_num, str(cpu)))
+    else:
+        print('decodeArm getRegValue failed to get reg num for reg %s' % use_reg)
+        if lgr is not None:
+            lgr.error('decodeArm getRegValue failed to get reg num for reg %s' % use_reg)
+    if reg.startswith('w'):
+        reg_value = reg_value & 0xffffffff
     return reg_value
 
 def getValue(item, cpu, lgr=None):
@@ -110,7 +129,7 @@ def getValue(item, cpu, lgr=None):
     if lgr is not None:
         lgr.debug('getValue for <%s>' % item)
     if isReg(item):
-        value = getRegValue(cpu, item)
+        value = getRegValue(cpu, item, lgr=lgr)
         if lgr is not None:
             lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):

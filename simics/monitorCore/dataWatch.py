@@ -3739,7 +3739,7 @@ class DataWatch():
             retval = True
         elif instruct[1].startswith('str'):
             op2, op1 = self.decode.getOperands(instruct[1])
-            if self.decode.isReg(op1) and self.decode.getValue(op1, self.cpu)==0:
+            if self.decode.isReg(op1) and self.decode.getValue(op1, self.cpu, lgr=self.lgr)==0:
                 retval = True
         return retval
 
