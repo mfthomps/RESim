@@ -1767,11 +1767,14 @@ e.g., created use genJsonIO.py
 
 \subsection{Tracking data}
 \label{tracking}
-RESim provides several functions for tracking data consumed by processes.  A {\tt Data Watch} data structure tracks input buffers into which
-data is read, e.g., automatically as the result of a {\tt runToIO} command.  The {\tt watchData} command causes the simulation to proceed until any of the
-{\tt Data Watch} structures are read -- and also lets the analyst create new Data Watches. The {\tt showDataWatch} command displays the current list in
-terms of starting address and length. 
-The {\tt trackIO} command automates iterations of {\tt watchData} commands, creating a list of execution
+RESim tracks references to data consumed by processes, generating a list of \textit{watch marks} that represent
+execution points at which the application referenced input data.  Each watch mark has an associated bookmark that can be skipped to, thereby bringing
+the execution state to when the reference was made.  If a data reference is made from within a clib function such as strcmp, the corresponding 
+watch mark identifies the function, and its bookmark is set at the return from the function.  RESim debugger plugins include a window listing data watch marks.
+Double clicking an entry in the list skips the simulation to that point of execution.  The {\tt showWatchMarks} command at the simics prompt displays the list,
+and {\tt goToWatchMark} skips to the bookmark.
+
+The {\tt trackIO} command creates a Data Watchesk
 points at which {\tt Data Watch} structures are read. The resulting {\tt watch marks} are bookmarks that can be view using {\tt showWatchMarks} and
 skipped to using the {\tt goToDataMark} command, naming the index.   
 The IDA client displays these in its {\tt data watch} window.
