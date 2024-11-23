@@ -7,6 +7,7 @@
 \usepackage{titling}
 \usepackage[page,toc,titletoc,title]{appendix}
 \usepackage{tocloft}
+%\usepackage{lmakeldx}
 \graphicspath{ {images/} }
 
 \pretitle{%
@@ -15,6 +16,7 @@
     \includegraphics[width=6cm]{resim.eps}\\[\smallskipamount]
 }
 \posttitle{\end{center}}
+%\makeIndex
 \begin{document}
 \title {%
   RESim User's Guide \\
@@ -429,12 +431,12 @@ threads that are waiting in the kernel.  If you want to run ahead to let the sys
 
 \item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
 
-\item {\tt getStackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
-uses the IDA-generated function database ({\tt .fun} files stored with the {\tt .idb} files to aid in determining if 
+\item {\tt stackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
+uses the IDA/Ghidra-generated function databases generated using idaDump.sh (or Ghidra) to aid in determining if 
 potential instruction calls are to functions.  The monitor-local {\tt stackTrace} command displays a
-stack trace that uses the IDA function database to resolve names.  (TBD, does not yet handle plt, and thus shows call addresses for such calls).
+stack trace that uses the IDA function database to resolve names.  Be sure to have generated function databases for any libraries that appear in stack traces.
 This function is not always reliable, e.g., phantom frames may appear based on calls that occurred previously. ARM stack frames may be
-difficult to determine due to its myriad ways of calling and returning. 
+difficult to determine due to its myriad ways of calling and returning.   
 
 \item {\tt runToSyscall(call number)} – Continue execution until the specified system call is invoked.  If a value of minus 1 is given, then any system call will stop execution.  The simulation stops after the return from the call.  If the debugger is active, then the simulation only halts when the debugged process makes the named call.
 
@@ -2644,10 +2646,13 @@ completed.  Be sure to use tracking to record the process shared libraries.
 \item Use a derivative of the simics/workspace/webproxy.sh to script let a local browser
 reach a target web server via the driver.
 
-\item Record a web conversation using traceAll and traceFD with web=True
+\item Record a web conversation using traceAll and traceFD with web=True.  Use a fresh browser
+to ensure stale cookes are not passed to the server (these would break the cookie replacement
+functions.)
 
-\item Use the resulting file as input to genJson.py with the -w option to
-create a json of the browser side of the conversation.
+\item Use the resulting file as input to genJson.py with the -w and -c options to
+create a json of the browser side of the conversation.  This will replace cookies with
+the string RESIM\_COOKIE.
 
 \item Reference the traceFD output (or a trace) and find a string unique to the 
 data read immediately prior to the data you wish to replace with an inject.  
@@ -3963,5 +3968,6 @@ executed before the program start is hit.  If that turns out to be wrong, we can
 
 
 \end{appendices}
+%\printIndex
 \end{document}
 
