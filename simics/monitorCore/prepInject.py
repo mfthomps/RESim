@@ -49,7 +49,7 @@ class PrepInject():
         if self.top.isWindows():
             self.top.runToIO(self.fd, flist_in=flist, count=self.count, sub_match=self.commence, just_input=True)
         else:
-            self.top.runToInput(self.fd, flist_in=flist, count=self.count, ignore_waiting=ignore_waiting)
+            self.top.runToInput(self.fd, flist_in=flist, count=self.count, ignore_waiting=ignore_waiting, sub_match=self.commence)
 
     def instrumentSelect(self, dumb):
         #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=True)
