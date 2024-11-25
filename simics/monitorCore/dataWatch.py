@@ -438,7 +438,7 @@ class DataWatch():
         if length == 0:
             self.lgr.error('dataWatch setRange called with length of zero')
             return
-        self.lgr.debug('dataWatch setRange commence with %s ignore: %r' % (self.commence_with, ignore_commence))
+        self.lgr.debug('dataWatch setRange start 0x%x length 0x%x commence with %s ignore: %r' % (start, length, self.commence_with, ignore_commence))
         if self.commence_with is not None and not ignore_commence:
             match = True
             addr = start
@@ -496,16 +496,16 @@ class DataWatch():
             self.use_back_stop = True
             #self.lgr.debug('DataWatch, backstop set, start data session')
 
-        if max_len is None:
+        if max_len is None or max_len == 0:
             my_len = length
         else:
             # TBD intent to handle applications that reference old buffer data, i.e., past the end of the read count, but what if 
             # read length is huge?
             if max_len > 1500:
-                #self.lgr.warning('dataWatch setRange large length given %d, setting len of buffer to what we got %s' % (max_len, length)) 
+                self.lgr.warning('dataWatch setRange large length given %d, setting len of buffer to what we got %s' % (max_len, length)) 
                 my_len = length
             else:
-                #self.lgr.warning('dataWatch setRange NOT large length given %d, setting len of read buffer to that.' % (max_len)) 
+                self.lgr.warning('dataWatch setRange NOT large length given %d, setting len of read buffer to that.' % (max_len)) 
                 my_len = max_len
 
         self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
@@ -4016,8 +4016,10 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch just a write to 0x%x that is part of a copy.  Ignore' % addr)
         else:
-            self.lgr.debug('****************dataWatch readHap tid:%s read addr: 0x%x index: %d breakpoint: %d marks: %s max: %s cycle: 0x%x eip: 0x%x' % (tid, addr, index, breakpoint, str(self.watchMarks.markCount()), str(self.max_marks), 
-                 self.cpu.cycles, eip))
+            break_handle = self.context_manager.getBreakHandle(breakpoint)
+            self.lgr.debug('****************dataWatch readHap tid:%s read addr: 0x%x index: %d breakpoint: %d handle: %d marks: %s max: %s cycle: 0x%x eip: 0x%x phys_addr 0x%x' % (tid, addr, index, breakpoint, break_handle, str(self.watchMarks.markCount()), str(self.max_marks), 
+                 self.cpu.cycles, eip, memory.physical_address))
+
             if self.mem_utils.isKernel(eip) and  self.top.getSharedSyscall().callbackPending():
                 self.lgr.debug('dataWatch readHap still kernel, is a write remove subrange and return')
                 self.rmSubRange(addr, memory.size)
@@ -4397,6 +4399,9 @@ class DataWatch():
         #if index == 52:
         #    self.lgr.debug('setOneBreak NOW CALL v2p')
         #self.lgr.debug('setOneBreak index %d' % index)
+        if self.length[index] == 0:
+            self.lgr.error('dataWatch setOneBreak length for index %d is zero?  bail start of that index is 0x%x' % (index, self.start[index]))
+            return
         phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=False)
         #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
         #if index == 52:
@@ -4451,12 +4456,12 @@ class DataWatch():
             if self.start[index] is not None:
                 if index < len(self.read_hap):
                     if self.read_hap[index] is None:
-                        #self.lgr.debug('remove this index %d of do replace' % index)
+                        #self.lgr.debug('remove this index %d of do replace and setOneBreak' % index)
                         self.setOneBreak(index, replace=True)
                     #else:
                     #    self.lgr.debug('remove this index %d of readhap is none' % index)
                 elif index == len(self.read_hap):
-                    #self.lgr.debug('remove this index %d of do append' % index)
+                    #self.lgr.debug('remove this index %d of do append and setOneBreak' % index)
                     self.setOneBreak(index, replace=False)
                 else:
                     self.lgr.error('dataWatch setBreakRange start index, hap index mismatch')
