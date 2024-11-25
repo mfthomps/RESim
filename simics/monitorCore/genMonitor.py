@@ -3786,7 +3786,7 @@ class GenMonitor():
                 self.continueForward()
                 #SIM_continue(0)
 
-    def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, ignore_waiting=False):
+    def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, ignore_waiting=False, sub_match=None):
         ''' Track syscalls that consume inputs.  Intended for use by prepInject functions '''
         ''' Also see runToIO for more general tracking '''
         input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
@@ -3794,10 +3794,11 @@ class GenMonitor():
         for call in input_calls:
             call_param = syscall.CallParams('runToInput', call, fd, break_simulation=break_simulation)        
             call_param.nth = count
+            call_param.sub_match = sub_match
             call_param_list.append(call_param)
 
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('runToInput on FD %d cycle: 0x%x' % (fd, cpu.cycles))
+        self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %d sub_match: %s' % (fd, cpu.cycles, count, sub_match))
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
             calls.remove('socketcall')
