@@ -4,13 +4,35 @@ import json
 import binascii
 import argparse
 
-def doWeb(packet, pack_list):
+def tokenCookie(item):
+    cookie = None
+    new_item = item
+    for line in item.splitlines():
+        if line.startswith(b'Cookie:'):
+            parts = line.split(b'=')
+            cookie = parts[1].strip()
+            #print('cookie is %s' % cookie)
+            break
+    return cookie
+    
+
+def doWeb(packet, pack_list, replace_cookie):
     delim = b"RESIM_WEB_DELIM"
     parts = packet.split(delim)
+    cookie = None
     for item in parts:
+        if replace_cookie:
+            # always do a replace once we find any cookie 
+            # so that we hit cookies in jsons and such
+            new_cookie = tokenCookie(item)
+            if new_cookie is not None:
+                cookie = new_cookie 
+            if cookie is not None:
+                item = item.replace(cookie, b'RESIM_COOKIE')
         pack_list.append(str(binascii.hexlify(item)))
 
     print('num parts is %d' % len(parts))
+
 
 def doJson(args):
     if args.output:
@@ -25,7 +47,7 @@ def doJson(args):
         with open(f, 'rb') as fh:
             packet = fh.read()
             if args.web:
-                doWeb(packet, pack_list)
+                doWeb(packet, pack_list, args.cookie)
             else:
                 #pack_list.append(bytes.decode(packet, encoding='unicode-escape'))
                 pack_list.append(str(binascii.hexlify(packet)))
@@ -55,7 +77,8 @@ def main():
     parser.add_argument('-i', '--host', action='store', help='IP of host.')
     parser.add_argument('-p', '--port', action='store', help='TCP Port.')
     parser.add_argument('-g', '--hang', action='store_true', help='Leave connection open.')
-    parser.add_argument('-w', '--web', action='store_true', help='Parse each input file for 0x0d0a sequences and break those into individual json entries, intended for consuming data captured from web sessions.')
+    parser.add_argument('-w', '--web', action='store_true', help='Parse each input file for RESIM_WEB_DELIM sequences and break those into individual json entries, intended for consuming data captured from web sessions.')
+    parser.add_argument('-c', '--cookie', action='store_true', help='uh.')
     args = parser.parse_args()
     doJson(args)
 
