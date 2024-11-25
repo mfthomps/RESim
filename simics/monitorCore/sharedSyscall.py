@@ -375,7 +375,7 @@ class SharedSyscall():
                     #SIM_break_simulation(trace_msg)
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
-                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None and addr_len > 0:
                     ''' in case we want to break on a read of address data '''
                     self.dataWatch.setRange(exit_info.retval_addr, addr_len, trace_msg, back_stop=False)
                     #if my_syscall.linger: 
@@ -496,11 +496,13 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 self.lgr.debug('sharedSyscall matched_param is %s, my_syscall %s linger %r' % (str(exit_info.matched_param), my_syscall.name, my_syscall.linger))
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
-                    if not self.checkCount(eax, exit_info, trace_msg):
+                    if not self.checkCount(eax, exit_info, trace_msg, s):
+                        self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                         if exit_info.src_addr is not None:
                             count = self.mem_utils.readWord32(self.cpu, exit_info.src_addr_len)
                             msg = 'recvfrom source for above, addr 0x%x %d bytes' % (exit_info.src_addr, count)
-                            self.dataWatch.setRange(exit_info.src_addr, count, msg)
+                            if count > 0:
+                                self.dataWatch.setRange(exit_info.src_addr, count, msg)
                 for call_param in exit_info.call_params:
                     if call_param == exit_info.matched_param:
                         continue
@@ -543,7 +545,7 @@ class SharedSyscall():
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data. ''' 
                     self.lgr.debug('sharedSyscall recvmsg call checkCount')
-                    if not self.checkCount(eax, exit_info, trace_msg):
+                    if not self.checkCount(eax, exit_info, trace_msg, s):
                         iov_size = 2*self.mem_utils.WORD_SIZE
                         iov_addr = msghdr.msg_iov
                         limit = min(10, msghdr.msg_iovlen)
@@ -565,7 +567,8 @@ class SharedSyscall():
                                 exit_info.retval_addr = base
                                 exit_info.count = data_len
                             self.lgr.debug('dataWatch recvmsg setRange base 0x%x len %d' % (base, data_len))
-                            self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
+                            if data_len > 0:
+                                self.dataWatch.setRange(base, data_len, msg=trace_msg, max_len=length, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                         self.lgr.debug('recvmsg set dataWatch')
                         if my_syscall.linger: 
                             self.dataWatch.stopWatch() 
@@ -619,7 +622,7 @@ class SharedSyscall():
         if cpu is None:
             self.lgr.error('sharedSyscall exitHap got nothing from curThread')
             return
-        self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
+        #self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
         #if tid == '1' and self.hack_exit_tid != '1':
         #    self.lgr.debug('sharedSyscall exitHap tid 1 bail')
         #    return
@@ -900,9 +903,10 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 self.lgr.debug('sharedSyscall return from read matched_param is %s linger %r my_syscall %s' % (str(exit_info.matched_param), my_syscall.linger, my_syscall.name))
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None \
-                   and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
-                    self.checkCount(eax, exit_info, trace_msg)
-
+                                and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
+                    if not self.checkCount(eax, exit_info, trace_msg, s):
+                        self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
+                # TBD make a config parameter
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
                     for call_param in exit_info.call_params:
@@ -1311,8 +1315,10 @@ class SharedSyscall():
             self.traceMgr.write(trace_msg) 
         return True
 
-    def checkCount(self, eax, exit_info, trace_msg):
-        self.lgr.debug('sharedSyscall checkCount') 
+    def checkCount(self, eax, exit_info, trace_msg, data_string):
+        # determine if a runToInput type syscall has an associated count; and if so, 
+        # whether that count has been reached
+        self.lgr.debug('sharedSyscall checkCount sub_match: %s data_string %s' % (exit_info.matched_param.sub_match, data_string))
         wait_for_count = False
         my_syscall = exit_info.syscall_instance
         if exit_info.matched_param.nth is not None:
@@ -1323,12 +1329,16 @@ class SharedSyscall():
                 wait_for_count = False
             else:
                 exit_info.matched_param = None
-
+        if not wait_for_count and exit_info.matched_param.sub_match is not None:
+            self.lgr.debug('sharedSyscall checkCount check sub_match %s' % exit_info.matched_param.sub_match)
+            if exit_info.matched_param.sub_match not in data_string:
+                wait_for_count = True
+                self.lgr.debug('sharedSyscall checkCount submatch not found, set wait_for_count')
+            else:
+                self.lgr.debug('sharedSyscall checkCount submatch was found')
+        self.lgr.debug('sharedSyscall checkCount wait_for_count is %r' % wait_for_count)
+       
         if not wait_for_count:
-            if eax > 0:
-                self.lgr.debug('sharedSyscall checkCount about to call dataWatch.setRange for read length (eax) is %d' % eax)
-                # Set range over max length of read to catch coding error reference to previous reads or such
-                self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
             if my_syscall.linger: 
                 self.dataWatch.stopWatch() 
                 self.dataWatch.watch(break_simulation=False, i_am_alone=True)
@@ -1337,6 +1347,8 @@ class SharedSyscall():
                 SIM_run_alone(self.stopAlone, None)
             if self.kbuffer is not None:
                 self.kbuffer.readReturn(eax)
+        else:
+            exit_info.matched_param = None
         return wait_for_count
 
     def startAllWrite(self):
