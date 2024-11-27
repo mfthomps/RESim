@@ -3201,7 +3201,7 @@ class Syscall():
     def checkSendParams(self, syscall_info, exit_info, ss, dest_ss, s):
             for call_param in self.call_params:
                 self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
-                if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                if (call_param.subcall is None or call_param.subcall in ['send', 'sendto', 'sendmsg']) and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params.append(call_param)
                     break
@@ -3216,7 +3216,7 @@ class Syscall():
                     else:
                         self.lgr.debug('syscall no ss in sendto from %d' % tid)
                 
-                elif type(call_param.match_param) is str and (call_param.subcall == 'send' or call_param.subcall == 'sendto') and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                elif type(call_param.match_param) is str and (call_param.subcall in ['send', 'sendto', 'sendmsg']) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     ''' look for string in output '''
                     self.lgr.debug('look in string %s' % s)
                     if call_param.match_param in s:
