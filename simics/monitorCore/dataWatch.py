@@ -2175,7 +2175,7 @@ class DataWatch():
             else:
                 self.mem_something.count = self.getStrLen(self.mem_something.src)        
             
-            self.lgr.debug('gatherCallParams dest 0x%x src 0x%x count 0x%x str_len 0x%x' % (self.mem_something.dest, self.mem_something.src, self.mem_something.count, str_len))
+            self.lgr.debug('gatherCallParams dest 0x%x src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, self.mem_something.count))
         elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 
                                        'mbscmp_l', 'strtok', 'strstr']: 
             self.mem_something.dest, self.mem_something.src, count_maybe = self.getCallParams(sp, word_size)
@@ -4181,7 +4181,7 @@ class DataWatch():
                     self.lgr.debug('DataWatch userSpaceRef stack trace is None, wrong tid?')
                 else:
                     self.frames = st.getFrames(20)
-                    if index is not None and not self.checkFree(self.frames, index, op_type):
+                    if index is not None and not self.checkFree(index, op_type):
                         if not self.lookForMemStuff(addr, start, length, trans_size, op_type, eip, fun):
                             self.lgr.debug('dataWatch, not memstuff, do finishRead trans_size %d' % trans_size)
                             self.finishReadHap(op_type, trans_size, eip, addr, length, start, tid, index=index)
@@ -4285,15 +4285,15 @@ class DataWatch():
         self.read_hap[index] = None
         self.start[index] = None
 
-    def checkFree(self, frames, index, op_type):
+    def checkFree(self, index, op_type):
         ''' Look at stack frame to determine if this is a call to a free-type of function '''
         retval = False
         if self.start[index] is None:
             self.debug('dataWatch checkFree called with index %d, but that start is None')
         else:
-            max_index = len(frames)-1
+            max_index = len(self.frames)-1
             for i in range(max_index, -1, -1):
-                frame = frames[i]
+                frame = self.frames[i]
                 fun = clibFuns.adjustFunName(frame, self.fun_mgr, self.lgr)
                 #self.lgr.debug('dataWatch checkFree fun is %s' % fun)
                 if fun in free_funs:
