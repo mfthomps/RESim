@@ -53,6 +53,8 @@ class FunMgr():
             self.jmpmn = 'jmp'
             self.decode = decode
         self.trace_addrs = []
+        # ARM64 BLR mapping (see ida/resimUtils imports)
+        self.arm_blr_funs = {}
 
     def getFun(self, addr):
         comm = self.top.getComm(target=self.cell_name)
@@ -97,8 +99,8 @@ class FunMgr():
             else:
                 self.lgr.debug('funMgr add call setRelocate funs path %s  start 0x%x offset was None' % (path, start))
             
-           
             self.setRelocateFuns(path, offset=use_offset)
+            self.setArmBLR(path, offset=use_offset)
         else:
             self.lgr.debug('funMgr add called with no IDA funs defined')
             
@@ -184,6 +186,7 @@ class FunMgr():
             if os.path.isfile(fun_path):
                 self.ida_funs[comm] = idaFuns.IDAFuns(fun_path, self.lgr, offset=offset)
                 self.setRelocateFuns(analysis_path, offset=offset)
+                self.setArmBLR(analysis_path, offset=offset)
                 self.lgr.debug('getIDAFuns for comm %s using IDA function analysis from %s' % (comm, fun_path))
             else:
                 self.lgr.error('getIDAFuns No IDA function file at %s' % fun_path)
@@ -496,3 +499,35 @@ class FunMgr():
         comm = self.top.getComm(target=self.cell_name)
         return self.ida_funs[comm].stackAdjust(fun)
 
+    def setArmBLR(self, full_path, offset=0):
+        comm = self.top.getComm(target=self.cell_name)
+        if comm not in self.arm_blr_funs:
+            self.arm_blr_funs[comm] = {}
+        if full_path.endswith('.funs'):
+            full_path = full_path[:-5]
+        blr_path = full_path+'.arm_blr'
+        if os.path.isfile(blr_path):
+            with open(blr_path) as fh:
+                funs = json.load(fh)
+                for addr_s in funs:
+                    blr_fun_name = funs[addr_s]
+                    blr_fun_name = idaFuns.rmPrefix(blr_fun_name)
+                    addr = int(addr_s)
+                    adjust = addr+offset
+                    if adjust in self.arm_blr_funs[comm]:
+                        #self.lgr.debug('funMgr 0x%x already in arm_blr_funs as %s' % (adjust, self.arm_blr_funs[adjust]))
+                        pass
+                    else:
+                        self.arm_blr_funs[comm][adjust] = blr_fun_name
+                        self.lgr.debug('funMgr blr adjust 0x%x to %s' % (adjust, blr_fun_name))
+                self.lgr.debug('funMgr setArmBLR loaded %s blr_funs for path %s num blrs now %s' % (len(funs), blr_path, len(self.arm_blr_funs[comm]))) 
+        else:
+            self.lgr.debug('setArmBLR no file at %s' % blr_path)
+       
+    def getBlr(self, addr): 
+        retval = None
+        comm = self.top.getComm(target=self.cell_name)
+        if addr in self.arm_blr_funs[comm]:
+            retval = self.arm_blr_funs[comm][addr]
+            self.lgr.debug('funMgr getBlr addr 0x%x return %s' % (addr, retval))
+        return retval

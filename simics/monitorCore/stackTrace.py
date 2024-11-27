@@ -213,12 +213,15 @@ class StackTrace():
             sp_string = ''
             if verbose:
                 sp_string = ' sp: 0x%x' % frame.sp
-            fun_of_ip = None
-            if self.fun_mgr is not None:
+            if frame.fun_of_ip is None:
+                fun_of_ip = None
+            else:
+                fun_of_ip = frame.fun_of_ip
+            if fun_of_ip is None and self.fun_mgr is not None:
                 fun_of_ip = self.fun_mgr.getFunName(frame.ip)
               
-                if fun_of_ip is not None:
-                    fun_of_ip = cppClean(fun_of_ip)
+            if fun_of_ip is not None:
+                fun_of_ip = cppClean(fun_of_ip)
             if fun_of_ip is not None: 
                 print('%s 0x%08x %s %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct, fun_of_ip))
             else:
@@ -277,11 +280,24 @@ class StackTrace():
                             self.lgr.debug('isCallToMe added frame %s' % frame.dumpString())
                             retval = (lr, adjust_sp)
                         elif cur_fun is not None and fun_hex is None and instruct[1].startswith('blr'):
-                            self.lgr.debug('stackTrace isCallToMe is a blr assumig call to cur fun 0x%x (name %s)' % (cur_fun, fun_name)) 
-                            call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
-                            frame = self.FrameEntry(call_instr, call_fname, instruct[1], 0, ret_addr=lr, fun_addr=cur_fun, fun_name=fun_name, lr_return=True)
-                            adjust_sp = self.addFrame(frame) + self.word_size
-                            retval = (lr, adjust_sp)
+                            blr_fun_name = self.fun_mgr.getBlr(call_instr) 
+                            if blr_fun_name is not None:
+                               if blr_fun_name != fun_name:
+                                   self.lgr.debug('stackTrace isCallToMe is a blr funs do not match, set fun_of_ip of previous frame to %s' % (blr_fun_name))
+                                   self.frames[-1].fun_of_ip = blr_fun_name 
+                               self.lgr.debug('stackTrace isCallToMe is a blr, getBlr got %s, was in fun is 0x%x (name %s)' % (blr_fun_name, cur_fun, fun_name)) 
+                               cur_fun = self.fun_mgr.getFunEntry(blr_fun_name)
+                               new_instruct = '%s (%s)' % (instruct[1], blr_fun_name)
+                               call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
+                               frame = self.FrameEntry(call_instr, call_fname, new_instruct, 0, ret_addr=lr, fun_addr=cur_fun, fun_name=blr_fun_name, lr_return=True)
+                               adjust_sp = self.addFrame(frame) + self.word_size
+                               retval = (lr, adjust_sp)
+                            else:
+                               self.lgr.debug('stackTrace isCallToMe is a blr, nothing from getBlr, assumig call to cur fun 0x%x (name %s)' % (cur_fun, fun_name)) 
+                               call_fname, dumb1, dumb2 = self.soMap.getSOInfo(call_instr)
+                               frame = self.FrameEntry(call_instr, call_fname, instruct[1], 0, ret_addr=lr, fun_addr=cur_fun, fun_name=fun_name, lr_return=True)
+                               adjust_sp = self.addFrame(frame) + self.word_size
+                               retval = (lr, adjust_sp)
                         elif fun_hex is not None and fun is not None and fun != 'None':
                             ''' LR does not suggest call to current function. Is current a different library then LR? '''
                             self.lgr.debug('try got with eip: 0x%x fun_hex 0x%x' % (eip, fun_hex))
@@ -816,14 +832,21 @@ class StackTrace():
  
 
     def getCallTo(self, call_ip): 
-        instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
-        call_to_s = instruct.split()[1]
         call_to = None
-        #self.lgr.debug('stackTrace getCallTo check call to %s' % call_to_s)
-        try:
-            call_to = int(call_to_s, 16)
-        except:
-            pass 
+        instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
+        if instruct.startswith('blr'):
+            self.lgr.debug('stackTrace getCallTo is blr call_ip 0x%x' % call_ip)
+            fun_name = self.fun_mgr.getBlr(call_ip) 
+            self.lgr.debug('stackTrace getCallTo fun name from getblr is %s' % fun_name)
+            if fun_name is not None:
+                call_to = self.fun_mgr.getFunEntry(fun_name)
+        else:
+            call_to_s = instruct.split()[1]
+            #self.lgr.debug('stackTrace getCallTo check call to %s' % call_to_s)
+            try:
+                call_to = int(call_to_s, 16)
+            except:
+                pass 
         return call_to
 
     def doTrace(self):
