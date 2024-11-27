@@ -2,9 +2,11 @@
 #
 # 
 # diff 2 watch mark text files
+# ignoring index, cycles and buf size
 #
 import sys
 import os
+import re
 
 def rmCycles(in_file, out):
     out_fh = open(out, 'w')
@@ -14,7 +16,9 @@ def rmCycles(in_file, out):
             parts = line.split(' ',1)
             if len(parts) == 2:
                 precycle = parts[1].split('cycle:')[0]
-                out_fh.write(precycle+'\n')
+
+                replaced = re.sub('buf size.....', 'buf size     ', precycle)
+                out_fh.write(replaced+'\n')
     out_fh.close()
 
 
