@@ -303,7 +303,7 @@ class Msghdr():
             retval = retval + iov_string    
         return retval
 
-    def getBytes(self):
+    def getDumpString(self):
         if self.msg_name is None:
             retval = 'msg_name not initialized'
         else:
@@ -316,11 +316,32 @@ class Msghdr():
             for i in range(limit):
                 base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
                 length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
-                limit = min(length, 80)
+                limit = min(length, 1024)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                byte_array = self.mem_utils.getBytes(self.cpu, limit, base)
-                s = resimUtils.getHexDump(byte_array[:1024])
+                byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
+                s = resimUtils.getHexDump(byte_tuple[:1024])
                 self.lgr.debug('base 0x%x length %d str: %s' % (base, length, s))
                 retval = retval + s
                 iov_addr = iov_addr+iov_size
+        return retval
+
+    def getByteArray(self):
+        if self.msg_name is None:
+            retval = 'msg_name not initialized'
+        else:
+            retval = bytearray()
+            iov_size = 2*self.mem_utils.wordSize(self.cpu)
+            iov_addr = self.msg_iov
+            iov_string = ''
+            limit = min(10, self.msg_iovlen)
+            self.lgr.debug('msg_iovlen is %d iov_addr 0x%x  iov_size %d limit %d' % (self.msg_iovlen, iov_addr, iov_size, limit))
+            for i in range(limit):
+                base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
+                limit = min(length, 1024)
+                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
+                byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
+                retval = retval + bytearray(byte_tuple)
+                iov_addr = iov_addr+iov_size
+                self.lgr.debug('len of byte tuple %d, current len of retval %d' % (len(byte_tuple), len(retval)))
         return retval
