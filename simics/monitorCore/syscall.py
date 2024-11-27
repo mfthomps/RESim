@@ -1478,7 +1478,7 @@ class Syscall():
                 if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
                     addParam(exit_info, call_param)
-                elif type(call_param.match_param) is str and call_param.subcall == 'recvmsg' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                elif type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall == 'recvmsg') and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
                     addParam(exit_info, call_param)
             
@@ -2383,7 +2383,6 @@ class Syscall():
                         #self.lgr.debug('will delete hap %s' % str(hc.hap))
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
-                self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
                 ''' check functions in list '''
                 self.lgr.debug('syscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
@@ -2400,10 +2399,9 @@ class Syscall():
                 self.lgr.debug('syscall stopHap run stop_action')
                 self.stop_action.run(cb_param=msg)
 
-                if self.call_list is not None:
-                    for callname in self.call_list:
-                        #self.top.rmCallTrace(self.cell_name, callname)
-                        self.top.rmCallTrace(self.cell_name, self.name)
+                for param in self.call_params:
+                    self.lgr.debug('syscall stopHap call rmSyscall for param %s' % param.name)
+                    self.top.rmSyscall(param.name, cell_name=self.cell_name)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
