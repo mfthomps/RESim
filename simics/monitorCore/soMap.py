@@ -895,8 +895,10 @@ class SOMap():
         if prog in self.prog_info:
             if self.prog_info[prog].text_start == 0:
                 retval = 0
-            else:
+            elif self.prog_info[prog].text_start is not None:
                 retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+            else:
+                retval = self.prog_info[prog].text_offset
         else:
             self.lgr.debug('soMap getImageBase not in prog_info: %s' % prog)
 
