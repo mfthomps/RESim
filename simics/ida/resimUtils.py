@@ -193,6 +193,7 @@ class ImportNames():
                 name = name.split('@@')[0]
             #print "%08x: %s (ord#%d)" % (ea, name, ord)
         return True
+
     def printit(self):
         for ea in self.imports:
             print('0x%x %s' % (ea, self.imports[ea]))
@@ -201,6 +202,34 @@ class ImportNames():
         with open(fname+'.imports', "w") as fh:
             json.dump(self.imports, fh)
             print('Wrote functions to %s.imports' % fname)
+
+    def armBlrXrefs(self, fname):
+        # ARM64 BLR and BR calls that first load offsets of imports that we should know.
+        arm_blr = {}
+        for ea in self.imports:
+            fun = self.imports[ea]
+            print('do xrefs ea 0x%x fun %s' % (ea, fun))
+            refs = idautils.DataRefsTo(ea)
+            for ref in refs:
+                print('\timports for 0x%x found ref 0x%x' % (ea, ref))
+                fun_refs = idautils.DataRefsTo(ref)
+                for fr in fun_refs:
+                    next_pc = fr+4
+                    instruct = idc.GetDisasm(next_pc)
+                    limit = 0
+                    while not instruct.startswith('BLR') and not instruct.startswith('BR'):
+                        next_pc = next_pc + 4
+                        limit = limit + 1
+                        if limit > 10:
+                            break
+                        instruct = idc.GetDisasm(next_pc)
+
+                    if (instruct.startswith('BLR') or instruct.startswith('BR')) and next_pc not in arm_blr:
+                        print('\t\timports fun_ref 0x%x next instruct 0x%x %s' % (fr, next_pc, instruct))
+                        arm_blr[next_pc] = fun
+        with open(fname+'.arm_blr', "w") as fh:
+            json.dump(arm_blr, fh)
+    
 
 def dumpImports(fname):
     imports = {}
@@ -218,6 +247,7 @@ def dumpImports(fname):
         idaapi.enum_import_names(i, import_names.imp_cb)
     import_names.printit()
     import_names.dumpit(fname)
+    import_names.armBlrXrefs(fname)
 
 def getString(ea):
     string_type = idc.get_str_type(idaapi.get_item_head(ea))

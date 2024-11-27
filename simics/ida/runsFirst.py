@@ -45,6 +45,8 @@ if arg_count > 1:
         print('do color')
         colorBlocks.colorBlocks()
         print('did color')
+        armBlrComments.addComments()
+        print('did armBlr')
         
     elif resim_ida_arg == 'clear':
         resetBlocks.resetBlocks()
