@@ -451,7 +451,7 @@ class SharedSyscall():
                         trace_msg = trace_msg +' EXTERNAL'
                 trace_msg = trace_msg + '\n'
                 if msghdr is not None:
-                    s =msghdr.getBytes()
+                    s =msghdr.getString()
                     trace_msg = trace_msg+'\t'+s+'\n'
             else:
                 trace_msg = err_trace_msg+('FD: %s, exception: %d\n' % (str(exit_info.old_fd), eax))
@@ -528,16 +528,17 @@ class SharedSyscall():
             if eax < 0:
                 trace_msg = err_trace_msg+('\terror return from socketcall %s tid:%s FD: %d exception: %d \n' % (socket_callname, tid, exit_info.old_fd, eax))
                 exit_info.matched_param = None
-            else:
+            elif exit_info.msghdr is not None:
                 #msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
                 msghdr = exit_info.msghdr
                 iovec = msghdr.getIovec()
-                trace_msg = trace_msg+('\treturn from socketcall %s tid:%s FD: %d count: %d first buffer: 0x%x' % (socket_callname, tid, exit_info.old_fd, eax, iovec[0].base))
+                byte_array = msghdr.getByteArray()
+                trace_msg = trace_msg+('\t FD: %d count: %d first buffer: 0x%x num_bytes read: %d' % (exit_info.old_fd, eax, iovec[0].base, len(byte_array)))
                 if tid in self.trace_procs:
                     if self.traceProcs.isExternal(tid, exit_info.old_fd):
                         trace_msg = trace_msg +' EXTERNAL'
                 trace_msg = trace_msg + '\n'
-                s = msghdr.getBytes()
+                s = msghdr.getDumpString()
                 trace_msg = trace_msg+'\t'+s+'\n'
                 if exit_info.matched_param is not None:
                     self.lgr.debug('sharedSyscall recvmsg has param %s' % exit_info.matched_param)
@@ -579,12 +580,10 @@ class SharedSyscall():
                         if exit_info.origin_reset:
                             self.lgr.debug('sharedSyscall found origin reset, do it')
                             SIM_run_alone(self.stopAlone, None)
-                for call_param in exit_info.call_params:
-                    if type(call_param.match_param) is str:
-                        self.lgr.debug('sharedSyscall recvmsg check string %s against %s' % (s, call_param.match_param))
-                        if call_params.match_param in s: 
-                            exit_info.matched_param = call_param
-                            break
+                self.checkStringMatch(exit_info, byte_array, tid)
+            else:
+                self.lgr.debug('sharedSyscall recvmsg no msghdr, assume return from syscall we already handled')
+                exit_info.matched_param = None
             
         elif socket_callname == "getpeername":
             if exit_info.sock_struct is not None:
@@ -987,18 +986,10 @@ class SharedSyscall():
 
         elif callname == 'writev' or callname == 'readv':
             if eax >= 0:
-                add_msg, byte_array = self.getIOV(eax, exit_info)
+                add_msg, byte_tuple = self.getIOV(eax, exit_info)
                 trace_msg = trace_msg + add_msg
-                if callname == 'writev':
-                    for call_param in exit_info.call_params:
-                        if type(call_param.match_param) is str:
-                            self.lgr.debug('syscall writev match param for tid:%s is string, check match' % tid)
-                            if byte_array is not None:
-                                if resimUtils.isPrintable(byte_array):
-                                    s = ''.join(map(chr,byte_array))
-                                    if call_param.match_param in s:
-                                       exit_info.matched_param = call_param 
-                                       self.lgr.debug('syscall writev match param for tid:%s is matching string' % tid)
+                #if callname == 'writev':
+                self.checkStringMatch(exit_info, bytearray(byte_tuple), tid)
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
@@ -1351,6 +1342,18 @@ class SharedSyscall():
             exit_info.matched_param = None
         return wait_for_count
 
+    def checkStringMatch(self, exit_info, byte_array, tid):
+        for call_param in exit_info.call_params:
+            if type(call_param.match_param) is str:
+                self.lgr.debug('sharedSyscall checkStringMatch match param for tid:%s is string, check match' % tid)
+                bmatch = call_param.match_param.encode()
+                if bmatch in byte_array:
+                    exit_info.matched_param = call_param 
+                    self.lgr.debug('sharedSyscall checkStringMatch match param for tid:%s is matching string' % tid)
+                else:
+                    exit_info.matched_param = None
+                break
+
     def startAllWrite(self):
         self.all_write = True
        
@@ -1462,7 +1465,7 @@ class SharedSyscall():
         remain = count 
         self.lgr.debug('sharedSyscall %s return count %d iov_addr 0x%x' % (exit_info.callname, count, iov_addr))
         trace_msg = 'FD: %d count: %d' % (exit_info.old_fd, count)
-        full_byte_array = ()
+        full_byte_tuple = ()
         for i in range(limit):
             base = self.mem_utils.readPtr(self.cpu, iov_addr)
             if base == 0:
@@ -1475,12 +1478,12 @@ class SharedSyscall():
 
             max_len = min(length, 1024)
             max_max_len = min(count, 10000)
-            byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, base)
-            if byte_array is not None:
-                s = resimUtils.getHexDump(byte_array[:max_len])
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_max_len, base)
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
                 if self.traceFiles is not None:
-                    self.traceFiles.write(exit_info.tid, exit_info.old_fd, byte_array)
-                full_byte_array = full_byte_array + byte_array
+                    self.traceFiles.write(exit_info.tid, exit_info.old_fd, byte_tuple)
+                full_byte_tuple = full_byte_tuple + byte_tuple
             else:
                 s = '<<NOT MAPPED>>'
 
@@ -1489,4 +1492,5 @@ class SharedSyscall():
             remain = remain - data_len 
             iov_addr = iov_addr+iov_size
         trace_msg = trace_msg+'\n'
-        return trace_msg, full_byte_array
+        return trace_msg, full_byte_tuple
+
