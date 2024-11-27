@@ -453,6 +453,9 @@ class findKernelWrite():
                     # MESSAGE used in cadet-test, do not change
                     bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
+                syscall_info = self.top.getPrevSyscallInfo()
+                bm = bm + ' '+syscall_info
+                ida_message = ida_message + ' '+syscall_info
                 if self.satisfy_value is not None:
                     self.lgr.debug(ida_message)
                     do_satisfy = True
@@ -835,7 +838,7 @@ class findKernelWrite():
                 rval = self.mem_utils.getRegValue(self.cpu, reg)
                 self.lgr.debug('findKernelWrite backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
-        elif self.cpu.architecture.startswith('arm') and mn.startswith('str'):
+        elif self.cpu.architecture.startswith('arm') and (mn.startswith('str') or (mn.startswith('stu'))):
             reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
             if reg is not None:
                 self.lgr.debug('findKernelWrite backOneAlone is str... reg %s, find mod', reg)
