@@ -1177,6 +1177,26 @@ class GenMonitor():
         frame, cycles = self.rev_to_call[self.target].getPreviousCycleFrame(tid)
         return frame, cycles
 
+    def getPrevSyscallInfo(self):
+        cpu, comm, tid = self.task_utils[self.target].curThread() 
+        frame, cycles = self.getPreviousEnterCycle()
+        call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+        retval = ''
+        #if call == 'socketcall' or call.upper() in net.callname:
+        if call == 'socketcall':
+            if 'ss' in frame:
+                ss = frame['ss']
+                socket_callnum = frame['param1']
+                socket_callname = net.callname[socket_callnum].lower()
+                retval = ('\ttid: %s syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
+                     call, socket_callname, ss.fd, frame['sp'], frame['pc'], cycles))
+            else:
+                retval = ('\ttid: %s socketcall but no ss in frame?' % tid)
+        else:
+            retval = ('\ttid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
+                 call, frame['param1'], frame['sp'], frame['pc'], cycles))
+        return retval
+
     def revToSyscall(self):
         frame, cycles = self.getPreviousEnterCycle()
         self.lgr.debug('revToSyscal got cycles 0x%x' % cycles)
@@ -1197,7 +1217,7 @@ class GenMonitor():
                 print('\ttid: %s socketcall but no ss in frame?' % tid)
         else:
             print('\ttid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
-                 call, frame['param1'], tasks[t].addr, frame['sp'], frame['pc'], cycles))
+                 call, frame['param1'], frame['sp'], frame['pc'], cycles))
 
     def tasksDBG(self, tid=None):
         cpu, cur_comm, cur_tid = self.task_utils[self.target].curThread() 
@@ -3597,6 +3617,7 @@ class GenMonitor():
         self.lgr.debug('runToCreate to %s' % substring)
         self.runTo([open_call_name], call_params, name='create')
 
+    # TBD redo all these runTo's to not rely on subcalls
     def runToSend(self, substring):
         call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
         call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
@@ -3618,9 +3639,22 @@ class GenMonitor():
 
     def runToReceive(self, substring):
         # socketCallName returns a list
+        call = self.task_utils[self.target].socketCallName('recv', self.is_compat32)
+        if 'socketcall' in call:
+            call_params = syscall.CallParams('runToReceive', 'recv', substring, break_simulation=True)        
+        else:
+            call_params = syscall.CallParams('runToReceive', None, substring, break_simulation=True)        
+        self.lgr.debug('runToReceive call %s substring %s' % (call, substring))
+        self.runTo(call, call_params, name='recv')
+
+    def runToReceiveMsg(self, substring):
+        # socketCallName returns a list
         call = self.task_utils[self.target].socketCallName('recvmsg', self.is_compat32)
-        call_params = syscall.CallParams('runToReceive', 'recvmsg', substring, break_simulation=True)        
-        self.lgr.debug('runToReceive to %s' % substring)
+        if 'socketcall' in call:
+            call_params = syscall.CallParams('runToReceiveMsg', 'recvmsg', substring, break_simulation=True)        
+        else:
+            call_params = syscall.CallParams('runToReceiveMsg', None, substring, break_simulation=True)        
+        self.lgr.debug('runToReceive call %s substring %s' % (call, substring))
         self.runTo(call, call_params, name='recv')
 
     def runToRead(self, substring, ignore_running=False):
