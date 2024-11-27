@@ -143,6 +143,12 @@ class PrepInject():
 
         tid = self.top.getTID()
         length = self.getLength()
+        ''' Save the buffer read at point of prep inject, e.g., for use as a seed'''
+        ret_count = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+        the_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, ret_count) 
+        with open('logs/orig_buffer.io', 'bw') as fh:
+            fh.write(the_buffer)
+        print('Last buffer of %d bytes written to logs/orig_buffer.io' % ret_count)
 
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
@@ -164,7 +170,8 @@ class PrepInject():
                 self.lgr.error('prepInject instrumentAlone, retval_addr is None')
                 return
             orig_buffer = None
-            ''' return to the call to record that IP and original data in the buffer'''
+            ''' return to the call to record that IP and original data in the buffer.  That is in case we inject less than the most recent read,
+                the remaining data will not reflect what it would have been.'''
             previous = cycle - 1
             self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
 
