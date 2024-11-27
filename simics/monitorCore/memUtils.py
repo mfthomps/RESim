@@ -785,6 +785,7 @@ class MemUtils():
         ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
         reg_value = None
         reg_num = None
+        mask = None
         if reg.startswith('xmm'):
             h_l = None
             if reg.endswith('L'):
@@ -806,6 +807,9 @@ class MemUtils():
                     reg_num = cpu.iface.int_register.get_number(reg)
             else:
                 arm64_app = self.arm64App(cpu)
+                if reg.startswith('w'):
+                    reg = 'x'+reg[1:]
+                    mask = 0xffffffff
                
                 if reg == 'sp':
                     reg = 'sp_el0'
@@ -853,6 +857,8 @@ class MemUtils():
                 reg_value = cpu.iface.int_register.read(reg_num)
             else:
                 self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
+            if reg_value is not None and mask is not None:
+                reg_value = reg_value & mask
         return reg_value
 
     def arm64App(self, cpu):
