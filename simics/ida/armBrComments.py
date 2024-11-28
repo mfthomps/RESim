@@ -26,7 +26,15 @@
 # comments to BL and BLR calls.
 import json
 import idc
+import ida_segment
 def addComments():
+    #seg = ida_segment.get_segm_by_name('LOAD')
+    #base = ida_segment.get_segm_base(seg)
+    seg_struct = ida_segment.segment_t()
+    seg_struct = ida_segment.get_segm_by_name('LOAD')
+    base = seg_struct.start_ea
+    print('base is 0x%x' % base)
+
     fname = os.getenv('ida_analysis_path')
     if fname is None:
         print('No ida_analysis_path defined')
@@ -38,6 +46,7 @@ def addComments():
             for addr_s in arm_blr:
                 blr_fun_name = arm_blr[addr_s]
                 addr = int(addr_s)
+                addr = addr+base
                 existing = idc.get_cmt(addr, 0) 
                 if existing is None:
                     idc.set_cmt(addr, blr_fun_name, 0) 
