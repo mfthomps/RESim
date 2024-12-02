@@ -472,8 +472,9 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
     return retval
 
-def isClib(lib_file):
+def isClib(in_lib_file):
     retval = False
+    lib_file = os.path.basename(in_lib_file) 
     if lib_file is not None:
         lf = lib_file.lower()
         if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr.dll' in lf or 'msvcp.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
