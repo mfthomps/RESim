@@ -54,7 +54,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim', 'getopt',
             'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
-            'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
+            'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc']
@@ -1358,7 +1358,7 @@ class DataWatch():
                    self.mem_something.count))
             self.watchMarks.strlen(self.mem_something.src, self.mem_something.count)
             self.checkNumericStore()
-        elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf']:
+        elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf', 'vasprintf', 'asprintf']:
             if self.mem_something.dest is None:
                 self.lgr.debug('dataWatch %s dest is None' % self.mem_something.fun)
             if self.mem_something.addr is None:
@@ -1849,22 +1849,19 @@ class DataWatch():
         #    else:
         #       self.recent_entry_bp = bp
          
-        '''
-        TBD for now if call is not from main, bail.  Note this is an optimization anyway, so if data is actually hit, we'll see it. 
+    
         # special case for memsomething functions calling memcpy.  
-        if fun == 'memcpy':
+        if fun in ['memcpy', 'strlen']:
             st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
                 self.lgr.error('DataWatch memSomethingEntry failed to get stack trace')
                 return 
             else:
                 self.frames = st.getFrames(20)
-                if not self.checkFree(self.frames, index):
-                    got_memsomething = memsomething(frames, local_mem_funs)
-                    if got_memsomething is not None:
-                        self.lgr.debug('DataWatch memSomethingEntry memcpy called from other memsomething. bail')
-                        return 
-        '''
+                got_memsomething = self.memsomething(self.frames[1:], mem_funs)
+                if got_memsomething is not None:
+                    self.lgr.debug('DataWatch memSomethingEntry %s called from other memsomething. bail' % fun)
+                    return 
         if self.max_marks is not None and self.watchMarks.markCount() >= self.max_marks:
             self.maxMarksExceeded()
             return
@@ -2251,7 +2248,7 @@ class DataWatch():
             self.lgr.debug('dataWatch gatherCallParams is strlen, call getStrLen for 0x%x' % self.mem_something.src)
             self.mem_something.count = self.getStrLen(self.mem_something.src)        
             self.lgr.debug('dataWatch gatherCallParams back from getStrLen')
-        elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf']:
+        elif self.mem_something.fun in ['vsnprintf', 'sprintf', 'snprintf', 'vasprintf', 'asprintf']:
             # TBD generalized this
             if word_size == 8:
                 dumb2, self.mem_something.dest, dumb = self.getCallParams(sp, word_size)
@@ -5099,7 +5096,7 @@ class DataWatch():
             #    pass
             #self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
             if frame.instruct is not None:
-                self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
+                #self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
                 #if self.top.isWindows():
                 #    fun = None
                 #else:
@@ -5107,10 +5104,10 @@ class DataWatch():
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                    if frame.fun_addr is not None:
-                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
-                    else:
-                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr None(maybe got jmp) ip: 0x%x sp: 0x%x' % (i, fun, frame.ip, frame.sp))
+                    #if frame.fun_addr is not None:
+                    #    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                    #else:
+                    #    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr None(maybe got jmp) ip: 0x%x sp: 0x%x' % (i, fun, frame.ip, frame.sp))
                 elif frame.fun_addr is not None:
                     if frame.ip is not None and frame.sp is not None:
                         self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
