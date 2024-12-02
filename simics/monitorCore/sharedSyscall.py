@@ -449,9 +449,10 @@ class SharedSyscall():
                 if tid in self.trace_procs:
                     if self.traceProcs.isExternal(tid, exit_info.old_fd):
                         trace_msg = trace_msg +' EXTERNAL'
+
                 trace_msg = trace_msg + '\n'
                 if msghdr is not None:
-                    s =msghdr.getString()
+                    s =msghdr.getDumpString()
                     trace_msg = trace_msg+'\t'+s+'\n'
             else:
                 trace_msg = err_trace_msg+('FD: %s, exception: %d\n' % (str(exit_info.old_fd), eax))
