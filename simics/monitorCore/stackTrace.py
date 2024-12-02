@@ -572,7 +572,7 @@ class StackTrace():
                         '''
                         was_clib = resimUtils.isClib(fname)
                         prev_sp = ret_to_addr - self.mem_utils.wordSize(self.cpu)
-                        frame, adjust_sp = self.genFrame(call_instr, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
+                        frame, adjust_sp = self.genFrame(call_inst, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
                         #self.lgr.debug('stackTrace x86 added frame add call_inst 0x%x  inst: %s fname %s frame: %s' % (call_inst, instruct_1, fname, frame.dumpString())) 
                         added_frame = True
 
@@ -584,7 +584,7 @@ class StackTrace():
                 else:
                     was_clib = resimUtils.isClib(fname)
                     prev_sp = ret_to_addr - self.mem_utils.wordSize(self.cpu)
-                    frame, adjust_sp = self.genFrame(call_instr, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
+                    frame, adjust_sp = self.genFrame(call_inst, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
                     #self.lgr.debug('stackTrace x86 no call_addr added frame add call_inst 0x%x  inst: %s fname %s frame: %s' % (call_inst, instruct_1, fname, frame.dumpString())) 
                     #self.lgr.debug(frame.dumpString())
                     pass
@@ -595,11 +595,11 @@ class StackTrace():
                 if call_addr is not None and not added_frame:
                     was_clib = resimUtils.isClib(fname)
                     prev_sp = ret_to_addr - self.mem_utils.wordSize(self.cpu)
-                    frame, adjust_sp = self.genFrame(call_instr, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
+                    frame, adjust_sp = self.genFrame(call_inst, instruct_1, prev_sp, call_addr, fun_name, ret_to, ret_to_addr)
                     #self.lgr.debug('stackTrace x86 added frame add call_inst 0x%x  inst: %s fname: %s frame: %s' % (call_inst, instruct_1, fname, frame.dumpString())) 
                     #self.lgr.debug(frame.dumpString())
             else:
-                #self.lgr.debug('stackTrace x86, no call_instr from ret_to 0x%x' % ret_to)
+                #self.lgr.debug('stackTrace x86, no call_inst from ret_to 0x%x' % ret_to)
                 break
         return bp
    
