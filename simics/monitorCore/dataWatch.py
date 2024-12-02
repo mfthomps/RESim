@@ -640,7 +640,8 @@ class DataWatch():
                 self.prev_cycle = self.cpu.cycles
         if no_backstop:
             self.no_backstop.append(start)
-        self.lgr.debug('dataWatch leaving setRange len of self.start is %d' % len(self.start))
+        self.setBreakRange()
+        self.lgr.debug('dataWatch setRange called setBreakRange, leaving setRange len of self.start is %d' % len(self.start))
 
     def stackThisHap(self, dumb, an_object, the_breakpoint, memory):
         ''' Returned from function on call chain that created a c++ object whose this is in the stack.  See
