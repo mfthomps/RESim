@@ -9,7 +9,7 @@ xdotool type "@cgc.debugSnap()"
 xdotool key Return
 xdotool type "run-command-file doprep.simics"
 xdotool key Return
-drive-driver.py z.directive -t -d
+drive-driver z.directive -d
 #
 # Now run the simulation
 

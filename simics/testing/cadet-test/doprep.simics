@@ -6,8 +6,8 @@
 script-branch "trackIO" {
    local $ob = Nil
 #   bp.log.wait-for RESim_log "Backstop hit."
-   wait-for-shell "sleep 40"
-   echo "doprep.simics slept 40"
+   wait-for-shell "sleep 10"
+   echo "doprep.simics slept 10"
    !./findWindow.sh "cadet01-tst"
    !sleep 1
    !xdotool type "@cgc.prepInjectWatch(1, 'cadetread')"
