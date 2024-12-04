@@ -66,35 +66,78 @@ def getIdaDataFromIni(prog, ini):
     else:
         root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         base = os.path.basename(root_fs)
+        #retval = os.path.join(resim_ida_data, base, prog, prog)
+        retval = os.path.join(resim_ida_data, base, prog)
+    return retval
+
+def getOldIdaDataFromIni(prog, ini):
+    retval = None
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('ERROR: RESIM_IDA_DATA not defined')
+    else:
+        root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        base = os.path.basename(root_fs)
         retval = os.path.join(resim_ida_data, base, prog, prog)
     return retval
 
-def getIdaData(full_path, root_prefix):
+def getIdaData(full_path, root_prefix, lgr=None):
     ''' get the ida data path, providing backward compatability with old style paths '''
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
+        if lgr is not None:
+            lgr.error('RESIM_IDA_DATA not defined')
+            return None
+    resim_image = os.getenv('RESIM_IMAGE')
+    if resim_image is None:
+        print('ERROR: RESIM_IMAGE not defined')
+        return None
+    ida_analysis = os.getenv('IDA_ANALYSIS')
+    if ida_analysis is None:
+        print('ERROR: IDA_ANALYSIS not defined')
+        return None
+    if full_path.startswith(resim_image):
+        offset = len(resim_image)+1
+        remain = full_path[offset:]
+        retval = os.path.join(resim_ida_data, remain)
+        if lgr is not None:
+            lgr.debug('getIdaData is image path full_path %s, remain %s return %s' % (full_path, remain, retval))
+    elif full_path.startswith(ida_analysis):
+        offset = len(ida_analysis)+1
+        remain = full_path[offset:]
+        retval = os.path.join(resim_ida_data, remain)
+        if lgr is not None:
+            lgr.debug('getIdaData is analysis path full_path %s, remain %s return %s' % (full_path, remain, retval))
+
     else: 
-        #print('full_path %s' % full_path)
+        if lgr is not None:
+            lgr.debug('full_path %s' % full_path)
         base = os.path.basename(full_path)
         root_base = os.path.basename(root_prefix)
-        #print('root_prefix %s' % root_prefix)
+        if lgr is not None:
+            lgr.debug('root_prefix %s' % root_prefix)
         new_path = os.path.join(resim_ida_data, root_base, base)
         old_path = os.path.join(resim_ida_data, base)
-        #print('old %s' % old_path)
-        #print('new %s' % new_path)
+        if lgr is not None:
+            lgr.debug('old %s' % old_path)
+        if lgr is not None:
+            lgr.debug('new %s' % new_path)
         if not os.path.isdir(new_path): 
             if os.path.isdir(old_path):
                 ''' Use old path style '''
                 retval = os.path.join(old_path, base)
-                #print('Using old style ida data path %s' % retval)
+                if lgr is not None:
+                    lgr.debug('Using old style ida data path %s' % retval)
             else:
                 retval = os.path.join(new_path, base)
-                #print('Using new style ida data path %s' % retval)
+                if lgr is not None:
+                    lgr.debug('Using new style ida data path %s' % retval)
         else:
             retval = os.path.join(new_path, base)
-            #print('no existing ida data path %s' % retval)
+            if lgr is not None:
+                lgr.debug('no existing ida data path %s' % retval)
         
     return retval
 
