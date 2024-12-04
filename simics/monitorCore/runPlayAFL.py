@@ -66,7 +66,7 @@ def handleClose(resim_procs, read_array, remote, lgr):
         fd.close()
 
 
-def runPlay(args, lgr, prog_path):
+def runPlay(args, lgr, hits_prefix):
     here= os.path.dirname(os.path.realpath(__file__))
     if args.search_list is None:
         os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
@@ -153,10 +153,10 @@ def runPlay(args, lgr, prog_path):
                     hit_i = int(hit)
                     if hit_i not in all_hits:
                         all_hits.append(hit_i)
-    
-            ida_data = os.getenv('RESIM_IDA_DATA')
+   
             hits_file = '%s.%s.hits' % (args.program, afl_name)
-            hits_path = os.path.join(prog_path, hits_file)
+            hits_path = os.path.join(hits_prefix, hits_file)
+            os.makedirs(os.path.dirname(hits_path), exist_ok=True)
             s = json.dumps(all_hits)
             with open(hits_path, 'w') as fh:
                 fh.write(s)
@@ -199,10 +199,10 @@ def main():
     else:
         root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
     root_name = os.path.basename(root_prefix)
-    prog_path = os.path.join(ida_data, root_name, args.program)
-    os.makedirs(prog_path, exist_ok=True)
+    hits_prefix = os.path.join(ida_data, root_name)
+    os.makedirs(hits_prefix, exist_ok=True)
 
-    runPlay(args, lgr, prog_path)
+    runPlay(args, lgr, hits_prefix)
   
 if __name__ == '__main__':
     sys.exit(main())
