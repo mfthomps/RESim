@@ -142,7 +142,7 @@ class BackStop():
         self.hang_callback = callback
         if now:
             self.hang_cycles = self.cpu.cycles + cycles
-            self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
+            #self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
             if self.hang_event is None:
                 self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
             SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
