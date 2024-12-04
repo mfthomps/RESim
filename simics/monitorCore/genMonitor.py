@@ -1647,6 +1647,7 @@ class GenMonitor():
             return
         cpl = memUtils.getCPL(cpu)
         eip = self.getEIP(cpu)
+        sp = self.mem_utils[self.target].getRegValue(cpu, 'sp')
         so_file = self.soMap[self.target].getSOFile(eip)
         context = SIM_object_name(cpu.current_context)
         if self.isWindows():
@@ -1658,14 +1659,14 @@ class GenMonitor():
             if cur_proc_rec is None:
                 self.lgr.error('show cur_proc_rec is None')
                 return
-            print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x code file: %s eproc: 0x%x ethread: 0x%x' % (cpu.name, context,
-                   cpl, tid, comm, eip, so_file, cur_proc_rec, cur_thread_rec))
+            print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x SP: 0x%x code file: %s eproc: 0x%x ethread: 0x%x' % (cpu.name, context,
+                   cpl, tid, comm, eip, sp, so_file, cur_proc_rec, cur_thread_rec))
         elif self.isVxDKM(): 
-            print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x code file: %s' % (cpu.name, context,
-                   cpl, tid, comm, eip, so_file))
+            print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x SP: 0x%x code file: %s' % (cpu.name, context,
+                   cpl, tid, comm, eip, sp, so_file))
         else: 
-            line = ('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x   current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
-                   cpl, tid, comm, eip, self.param[self.target].current_task, self.param[self.target].current_task_fs))
+            line = ('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x SP: 0x%x  current_task symbol at 0x%x (use FS: %r)' % (cpu.name, context, 
+                   cpl, tid, comm, eip, sp, self.param[self.target].current_task, self.param[self.target].current_task_fs))
             print(line)
             # needed for testing
             self.lgr.debug(line)
@@ -4606,7 +4607,7 @@ class GenMonitor():
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
         comm = self.task_utils[self.target].getCommFromTid(debug_tid)
         if not self.fun_mgr.hasIDAFuns(comm=comm):
-            print('No functions defined, needs IDA or Ghidra analysis.')
+            print('No functions defined for comm %s, needs IDA or Ghidra analysis.' % comm)
             return
            
         if commence is not None:
@@ -4854,7 +4855,7 @@ class GenMonitor():
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
+            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -4908,7 +4909,7 @@ class GenMonitor():
                   target_cell=target_cell, target_prog=target_prog, targetFD=targetFD, trace_all=trace_all, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
-                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc, trace_fd=trace_fd)
+                  no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc, trace_fd=trace_fd, fname=fname)
 
         if go:
             self.injectIOInstance.go()
@@ -5783,8 +5784,8 @@ class GenMonitor():
     def log(self, string):
         rprint(string)
 
-    def injectToBB(self, bb, target=None, targetFD=None):
-        ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target, targetFD=targetFD)
+    def injectToBB(self, bb, target=None, targetFD=None, fname=None):
+        ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target, targetFD=targetFD, fname=fname)
 
     def injectToWM(self, addr, target=None, targetFD=None, max_marks=None, no_reset=False):
         iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, target_prog=target, targetFD=targetFD, max_marks=max_marks, no_reset=no_reset)
@@ -6249,7 +6250,7 @@ class GenMonitor():
             target = self.target
         self.lgr.debug('getIdaData path %s' % path)
         root_prefix = self.comp_dict[target]['RESIM_ROOT_PREFIX']
-        ida_path = resimUtils.getIdaData(path, root_prefix)
+        ida_path = resimUtils.getIdaData(path, root_prefix, lgr=self.lgr)
         return ida_path
 
     def isWindows(self, target=None, cpu=None):
