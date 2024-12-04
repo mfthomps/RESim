@@ -38,20 +38,29 @@ if [ $# -eq 3 ]; then
 else
     user=""
 fi
+#
+# Copy hits files if any
+#
 remote_ida=$( ssh $user$remote "source \$HOME/.resimrc; echo \$RESIM_IDA_DATA" )
 if [ -z "$remote_ida" ];then
            echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
            exit 1
 fi
 #echo "remote_ida is $remote_ida"
-remote_program=$remote_ida/$root_dir/$program_base
-has_hits=$( ssh $user$remote "ls $remote_program/*.hits" )
+remote_program=$remote_ida/$root_dir/$program
+parent="$(dirname "$remote_program")"
+has_hits=$( ssh $user$remote "ls $remote_program*.hits" )
 #echo "has_hits is $has_hits"
 if [[ -z "$has_hits" ]]; then
     echo "No hits files on server, do not try to sync them."
 else
-    rsync -avh $user$remote:$remote_program/*.hits $RESIM_IDA_DATA/$root_dir/$program_base/
+    #echo "rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/"
+    rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/
 fi
+
+#
+#  Now copy analysis
+#
 
 analysis_dir=$IDA_ANALYSIS/$root_dir/$program_parent/
 #echo "analysis_dir is $analysis_dir"

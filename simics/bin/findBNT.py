@@ -5,6 +5,7 @@ import sys
 import os
 import glob
 import json
+import shutil
 import argparse
 import findBB
 import findTrack
@@ -136,13 +137,25 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
+    prog_base = os.path.basename(prog)
+    old_ida_path = resimUtils.getOldIdaDataFromIni(prog_base, ini)
+    if target is None:
+        old_fname = '%s.hits' % old_ida_path
+    else:
+        old_fname = '%s.%s.hits' % (old_ida_path, target)
+
     ida_path = resimUtils.getIdaDataFromIni(prog, ini)
-    #print('prog: %s  ida_path is %s' % (prog, ida_path))
+    print('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
         fname = '%s.hits' % ida_path
     else:
         fname = '%s.%s.hits' % (ida_path, target)
+    if os.path.isfile(old_fname) and not os.path.isfile(fname):
+        os.makedirs(os.path.dirname(fname), exist_ok=True) 
+        shutil.move(old_fname, fname)
+        print('Old file path found.  Moved from %s to %s' % (old_fname, fname))
+
     print('Using hits file %s' % fname)
     lgr.debug('Using hits file %s prog: %s' % (fname, prog))
     ''' hits are now just flat lists without functions '''
@@ -181,7 +194,7 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
 def main():
     parser = argparse.ArgumentParser(prog='findBNT', description='Show branches not taken for a given program.')
     parser.add_argument('ini', action='store', help='The ini file')
-    parser.add_argument('prog', action='store', help='The target program')
+    parser.add_argument('prog', action='store', help='The target program. Provide the path relative to the root prefix')
     parser.add_argument('-t', '--target', action='store', help='The target name, e.g., name of the workspace.  Use this option unless you have renamed the hits file to the program name')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
