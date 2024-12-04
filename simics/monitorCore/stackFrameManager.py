@@ -227,6 +227,8 @@ class StackFrameManager():
                 if fun_addr is not None:
                     name = fun_mgr.getName(fun_addr)
                     self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
+                else:
+                    name = 'unknown'
             print('%16x   %16x %s' % (ptr, value, name))
             if fh is not None:
                 fh.write('%16x   %16x %s\n' % (ptr, value, name))
