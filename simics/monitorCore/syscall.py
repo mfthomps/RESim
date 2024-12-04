@@ -2499,7 +2499,7 @@ class Syscall():
         reg_value = reg_value >> 26
         if reg_value != 0x11 and reg_value != 0x15:
             callnum = self.mem_utils.getCallNum(self.cpu)
-            self.lgr.debug('syscallHap arm64 NOT a syscall, reg_value is 0x%x callnum 0x%x' % (reg_value, callnum))
+            #self.lgr.debug('syscallHap arm64 NOT a syscall, reg_value is 0x%x callnum 0x%x' % (reg_value, callnum))
             #if callnum == 0xdc:
             #    SIM_break_simulation('remove this')
             retval = True
@@ -3180,7 +3180,7 @@ class Syscall():
         return retval 
 
     def resetHackCycle(self):
-        self.lgr.debug('syscall resetHackCycle')
+        #self.lgr.debug('syscall resetHackCycle')
         self.hack_cycle= 0
         self.linger_cycles = []
 
