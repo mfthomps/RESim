@@ -266,7 +266,7 @@ class AFL():
         #self.lgr.debug('afl counterHap, count now %d' % self.exit_counter)
         if self.commence_after_exits is not None and self.exit_counter == self.commence_after_exits:
             eip = self.top.getEIP(cpu=self.target_cpu)
-            self.lgr.debug('<><><><><><><><><><>afl counterHap reached desired count, enable coverage breaks eip 0x%x <><><><><><><><><><>' % eip)
+            #self.lgr.debug('<><><><><><><><><><>afl counterHap reached desired count, enable coverage breaks eip 0x%x <><><><><><><><><><>' % eip)
             self.coverage.enableAll()
             SIM_run_alone(self.setHangCallback, None)
             hap = self.counter_hap
