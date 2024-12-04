@@ -228,7 +228,7 @@ class StackTrace():
                 print('%s 0x%08x %s %s' % (sp_string, frame.ip, frame.fname, frame.instruct))
 
 
-    def isCallToMe(self, fname, eip):
+    def isCallToMe(self, fname, eip, ptr):
         ''' if LR looks like a call to current function, add frame. Returns lr and stack adjust if frame is added. '''
         retval = (None, None)
         if self.cpu.architecture in ['arm', 'arm64']:
@@ -241,7 +241,7 @@ class StackTrace():
                 lr = self.mem_utils.getRegValue(self.cpu, 'lr')
             '''
             lr = self.reg_frame['lr']
-            ptr = self.reg_frame['sp']
+            #ptr = self.reg_frame['sp']
             ''' TBD also for 64-bit? '''
             call_instr = lr-4
             #self.lgr.debug("isCallToMe lr was 0x%x call_instr 0x%x  eip 0x%x" % (lr, call_instr, eip))
@@ -900,16 +900,18 @@ class StackTrace():
         #    self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr 0x%x fun name %s' % (self.tid, eip, esp, instruct, fname, self.skip_recurse, first_fun_addr, first_fun_name))
         #else:
         #    self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr is none' % (self.tid, eip, esp, instruct, fname, self.skip_recurse))
-        frame, adjust_sp = self.genFrame(eip, instruct, esp, first_fun_addr, first_fun_name, None, None, msg='first frame')
+        frame, adjust_sp = self.genFrame(eip, instruct, ptr, None, None, None, None, msg='first frame')
+        #ptr = ptr + adjust_sp + self.word_size
         #self.lgr.debug('stackTrace first added frame %s' % frame.dumpString())
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         if prev_ip is None and self.cpu.architecture in ['arm', 'arm64']:
-            prev_ip, adjust_sp = self.isCallToMe(fname, eip)
+            prev_ip, adjust_sp = self.isCallToMe(fname, eip, ptr)
             if prev_ip is not None:
-                ptr = ptr + adjust_sp
-                #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
+                # TBD need explaination of why we put the word back here that was subtracted in addFrame.
+                ptr = ptr + adjust_sp + self.word_size
+                self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
             else:
-                #self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
+                self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
                 pass
         
         only_module = False
@@ -1538,9 +1540,9 @@ class StackTrace():
                         self.lgr.debug('stackTrace addFrame vxworks fun_addr 0x%x not a fun, bail' % frame.fun_addr)
             if not skip_this:
                 # adjust is confusing because we adjust on the next frame.  consider ldp x1,x2, [sp], #36  before changing.
-                self.lgr.debug('stackTrace addFrame get adjust for fun %s' % frame.fun_of_ip)
                 #adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
                 adjust = self.fun_mgr.stackAdjust(frame.fun_name)
+                self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_name, adjust))
                 self.frames.append(frame)
                 #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
                 self.prev_frame_sp = frame.sp
