@@ -41,7 +41,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
         if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
             lgr.error('injectIO called with target_prog but not targetFD')
             return
@@ -75,11 +75,12 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
+        self.target_fname = fname
         if target_prog is None and break_on is not None:
-            if not self.checkBreakOn(target_prog, break_on):
+            if not self.checkBreakOn(self.target_fname, break_on):
                 self.lgr.error('injectIO unable to break on given block.')
                 return
-        self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname))
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         if not self.top.hasAFL():
             self.backstop.reportBackstop(True)
@@ -478,7 +479,7 @@ class InjectIO():
             self.top.instructTrace(trace_file, watch_threads=True)
         else:
             self.top.jumperStop()
-        if self.break_on is not None and not self.checkBreakOn(self.target_prog, self.break_on):
+        if self.break_on is not None and not self.checkBreakOn(self.target_fname, self.break_on):
             self.lgr.error('injectIO injectCallback unable to break on given block.')
             return
         self.commonGo()
