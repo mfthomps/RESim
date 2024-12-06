@@ -2292,7 +2292,7 @@ class GenMonitor():
             if prev is not None:
                 instruct = SIM_disassemble_address(cpu, prev, 1, 0)
                 self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
-                if instruct[1] == 'int 128' or (not step_into and instruct[1].startswith('call')):
+                if instruct[1] == 'int 128' or (not step_into and (instruct[1].startswith('call') or instruct[1].startswith('blr'))):
                     self.revToAddr(prev)
                 else:
                     self.rev_to_call[self.target].doRevToCall(step_into, prev)
