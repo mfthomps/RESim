@@ -208,7 +208,9 @@ class DataWatch():
         self.break_simulation = True
         self.return_break = None
         self.return_hap = None
+        ''' for debugging multiple breaks on same address'''
         self.prev_cycle = None
+        self.prev_index = None
         ''' for guessing if stack buffer is being re-used '''
         self.prev_read_cycle = 0
         self.other_starts = [] # buffer starts that were skipped because they were subranges.
@@ -4052,7 +4054,11 @@ class DataWatch():
             ''' first data read, start data session if doing coverage '''
             self.top.startDataSessions()
         if self.cpu.cycles == self.prev_cycle and not self.undo_pending:
-            #self.lgr.debug('readHap hit twice')
+            if index != self.prev_index:
+                self.lgr.debug('readHap hit twice this index %d  previous index %d' % (index, self.prev_index))
+                if self.start[self.prev_index] is not None: 
+                    self.lgr.debug('readHap prev start[%d] is 0x%x start for this is 0x%x' % (self.prev_index, self.start[self.prev_index], self.start[index]))
+             
             return
         if len(self.read_hap) == 0:
             return
@@ -4092,6 +4098,7 @@ class DataWatch():
                 if self.oneByteCopy(addr, memory.size):
                     self.lgr.debug('dataWatch readHap, one byte copy')
                     self.prev_cycle = self.cpu.cycles
+                    self.prev_index = index
                     return
 
         ''' NOTE RETURNS above '''
@@ -4114,6 +4121,7 @@ class DataWatch():
             return
 
         self.prev_cycle = self.cpu.cycles
+        self.prev_index = index
 
         phys_addr = memory.physical_address
         if addr is None:
@@ -4725,6 +4733,7 @@ class DataWatch():
         if cycle is None:
             self.lgr.debug('DataWatch clearWatches, no cycle given')
             self.prev_cycle = None
+            self.prev_index = None
         else:
             self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
         self.stopWatch(immediate=immediate, leave_backstop=leave_backstop)
