@@ -16,6 +16,7 @@ import reHooks
 import idaversion
 import idbHooks
 import dbgHooks
+import armBrComments
 import subprocess
 
 ok = True
@@ -45,8 +46,6 @@ if arg_count > 1:
         print('do color')
         colorBlocks.colorBlocks()
         print('did color')
-        armBlrComments.addComments()
-        print('did armBlr')
         
     elif resim_ida_arg == 'clear':
         resetBlocks.resetBlocks()
@@ -56,6 +55,8 @@ if arg_count > 1:
         print('  color -- clear block coloring and then color per hits files')
         print('  clear -- clear block coloring')
         ok = False
+armBrComments.addComments()
+print('did armBr')
 if ok:
     idb_hooks = idbHooks.IDBHooks()
     idb_hooks.hook()
