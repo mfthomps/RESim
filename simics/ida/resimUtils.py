@@ -36,8 +36,9 @@ def dumpFuns(fname=None):
     #ea = get_screen_ea()
     #print 'ea is %x' % ea
     if fname is None:
-        #fname = idaversion.get_root_file_name()
-        fname = os.getenv('ida_analysis_path')
+        fname = idaversion.get_root_file_name()
+        #fname = '/tmp/myanalysis'
+        #fname = os.getenv('ida_analysis_path')
         if fname is None:
             print('No ida_analysis_path defined')
             fname = idaversion.get_input_file_path()
@@ -74,7 +75,7 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
-                #print('try fun %s' % function_name)
+                print('try fun %s' % function_name)
                 adjust_sp = adjustStack(function_ea)
                 if adjust_sp is not None:
                     print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
@@ -95,6 +96,7 @@ def dumpBlocks():
         basic blocks
     '''
     fname = os.getenv('ida_analysis_path')
+    #fname = '/tmp/myanalysis'
     if fname is None:
         print('No ida_analysis_path defined')
         fname = idaversion.get_input_file_path()
@@ -304,38 +306,59 @@ def renameFromLogger():
                     break
                     
 def adjustStack(fun_ea):
+    # Search end of function for indications of stack adjustment.  Used as an aide to stack tracing
     info = idaapi.get_inf_structure()
     ip_list = []
     for item_ea in idautils.FuncItems(fun_ea):
+        #print('\t item: 0x%x' % item_ea)
         ip_list.append(item_ea)
     count=0
-    adjust = None
+    adjust = 0
+    got_ret = False
     for item_ea in reversed(ip_list):
         ins = idautils.DecodeInstruction(item_ea)
-        mn = ins.get_canon_mnem()
-        #print('ea 0x%x mn is %s' % (item_ea, mn))
-        if mn.lower() == 'add':
+        mn = ins.get_canon_mnem().lower()
+        if not got_ret:
+            if mn != 'ret':
+                continue
+            else:
+                got_ret=True
+        '''
+        print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
+        op0 = idc.print_operand(item_ea, 0)
+        print('op0 is %s' % op0)
+        op1 = idc.print_operand(item_ea, 1)
+        print('op1 is %s' % op1)
+        op2 = idc.print_operand(item_ea, 2)
+        print('op2 is %s' % op2)
+        '''
+        if mn == 'add':
             #print('is add') 
-            op0 = idc.print_operand(item_ea, 0)
-            if op0.lower() == 'sp':
-                if info.procname == 'ARM':
+            op0 = idc.print_operand(item_ea, 0).lower()
+            if op0 == 'sp':
+                if info.procname.startswith('ARM'):
                     op2 = idaversion.get_operand_value(item_ea, 2)
                     #print('is SP, op2 value is 0x%x' % op2)
-                    adjust = op2
+                    adjust = adjust+op2
                 else:
                     op1 = idaversion.get_operand_value(item_ea, 1)
                     #print('is SP, op1 value is 0x%x' % op1)
-                    adjust = op1
+                    adjust = adjust+op1
                 break
-        elif info.procname == 'ARM' and mn.lower().startswith('l'):
-            op2 = idc.print_operand(item_ea, 2)
-            if op2.lower().startswith('[sp'):
-                #print('op2 is SP:  %s' % op2)
-                if '],' in op2:
-                    parts = op2.split('],')
+        elif info.procname == 'ARM' and mn.startswith('l'):
+            #print('is arm item_ea 0x%x mn %s' % (item_ea, mn))
+            if mn.startswith('ldp'):
+                addr_op = idc.print_operand(item_ea, 2).lower()
+            else: 
+                addr_op = idc.print_operand(item_ea, 1).lower()
+            #print('adr_op for 0x%x is %s' % (item_ea, addr_op))
+            if addr_op.startswith('[sp'):
+                print('fun_ea 0x%x addr_op is SP:  %s' % (fun_ea, addr_op))
+                if '],' in addr_op:
+                    parts = addr_op.split('],')
                     value = getValue(parts[-1])
-                    adjust = value
-                    #print('value got 0x%x' % value)
+                    adjust = adjust+value
+                    print('value got 0x%x' % value)
                     break
         count += 1
         if count > 4:
