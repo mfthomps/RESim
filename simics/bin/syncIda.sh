@@ -54,7 +54,7 @@ has_hits=$( ssh $user$remote "ls $remote_program*.hits" )
 if [[ -z "$has_hits" ]]; then
     echo "No hits files on server, do not try to sync them."
 else
-    #echo "rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/"
+    echo "Command is rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/"
     rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/
 fi
 
