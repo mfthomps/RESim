@@ -24,6 +24,7 @@
 '''
 # Reference the RESim arm_blr file (if any) and add
 # comments to BL and BLR calls.
+import os
 import json
 import idc
 import ida_segment
@@ -33,7 +34,7 @@ def addComments():
     seg_struct = ida_segment.segment_t()
     seg_struct = ida_segment.get_segm_by_name('LOAD')
     base = seg_struct.start_ea
-    print('base is 0x%x' % base)
+    print('armBlComments addComments, base is 0x%x' % base)
 
     fname = os.getenv('ida_analysis_path')
     if fname is None:
