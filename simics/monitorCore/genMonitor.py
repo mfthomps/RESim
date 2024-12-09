@@ -344,7 +344,7 @@ class GenMonitor():
 
         self.trace_buffers = {}
 
-        self.resim_version = 24
+        self.resim_version = 25
         self.snap_version = 0
 
         self.report_crash = None
