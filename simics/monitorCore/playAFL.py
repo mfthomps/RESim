@@ -180,6 +180,12 @@ class PlayAFL():
             bsc = os.getenv('BACK_STOP_CYCLES')
             if bsc is not None:
                 self.backstop_cycles = int(bsc)
+        
+        if os.getenv('BACK_STOP_DELAY') is not None:
+            self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
+            self.lgr.debug('BACK_STOP_DELAY is %d' % self.backstop_delay)
+        else:
+            self.backstop_delay =   None
         self.packet_count = packet_count
         self.afl_packet_count = None
         self.current_packet = 0
@@ -673,7 +679,7 @@ class PlayAFL():
                      pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                      #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
                      filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
-                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
+                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max, backstop_delay=self.backstop_delay)
         else:
             self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
         self.lgr.debug('playAFL call writeData write')

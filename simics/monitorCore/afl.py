@@ -119,6 +119,13 @@ class AFL():
             else:
                 self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
                 self.backstop_cycles =   1000000
+
+        if os.getenv('BACK_STOP_DELAY') is not None:
+            self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
+            self.lgr.debug('BACK_STOP_DELAY is %d' % self.backstop_delay)
+        else:
+            self.backstop_delay =  None 
+
         sioctl = os.getenv('IOCTL_COUNT_MAX')
         if sioctl is not None:
             self.ioctl_count_max = int(sioctl)
@@ -595,7 +602,7 @@ class AFL():
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max,backstop_delay=self.backstop_delay)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
