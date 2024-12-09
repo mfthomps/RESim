@@ -74,6 +74,7 @@ class BackStop():
         self.hang_cycles = None
         self.hang_cycles_delta = 0
         self.report_backstop = False
+        self.delay = None
         self.lgr.debug('backStop init cpu %s' % self.cpu.name)
 
     def setCallback(self, callback):
@@ -118,6 +119,14 @@ class BackStop():
             # crude way to defer hang cycle watch until first data read
             #self.lgr.debug('backStop setFutureCycles call setHangCallbackAlone')
             SIM_run_alone(self.setHangCallbackAlone, None)
+
+        if self.delay is not None:
+            self.delay = self.delay - 1
+            if self.delay == 0:
+                self.delay = None
+            else:
+                #self.lgr.debug('backStop setFuturecycle delay now %d, bail' % self.delay)
+                return
          
         if not now:
             SIM_run_alone(self.setFutureCycleAlone, cycles)
@@ -131,6 +140,8 @@ class BackStop():
            
 
     def hang_handler(self, obj, cycles):
+        if self.delay is not None:
+            return
         self.lgr.debug('backStop hang_handler will call callback %s' % str(self.hang_callback))
         self.hang_callback(self.cpu.cycles)
 
@@ -138,6 +149,8 @@ class BackStop():
         self.setHangCallback(self.hang_callback, self.hang_cycles_delta)
 
     def setHangCallback(self, callback, cycles, now=True):
+        if self.delay is None:
+            return
         self.hang_cycles_delta = cycles
         self.hang_callback = callback
         if now:
@@ -149,6 +162,9 @@ class BackStop():
 
     def reportBackstop(self, report):
         self.report_backstop = report
+
+    def setDelay(self, delay):
+        self.delay = delay
 
 if __name__ == "__main__":
     bs = backStop()
