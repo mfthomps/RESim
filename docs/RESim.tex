@@ -687,18 +687,16 @@ Use {\tt jumper(from, to)} for general execution jumpers.
 This list below describes RESim commands related to fuzzing.  See section \ref{fuzz} for a fuller discussion of fuzzing with AFL and RESim
 \begin{itemize}
 
-\item{\tt afl(fname=None, target=None, targetFD=None, dead=False, count=1test\_file=None)} -- Typically the {\tt runAFL} utility (from a bash shell in your workspace directory) is used instead of this command, which can be used for testing with the test\_file option.  Uses a network connection to communicate AFL server \url{github.com/mfthomps/AFL}.  
+\item{\tt afl(fname=None, target=None, targetFD=None, dead=False, count=1 test\_file=None, commence\_params=None)} -- Typically the {\tt runAFL} utility (from a bash shell in your workspace directory) is used instead of this command, which can be used for testing with the test\_file option.  Uses a network connection to communicate AFL server \url{github.com/mfthomps/AFL}.  
 The simulation is assumed to loaded from a checkpoint created using {\tt prepInject}.  Provide {\tt fname} to name a library, i.e., if the program's main
 text blocks is not what is to be instrumented.
 Use {\\tt target} and {\tt targetFD} to name some other process 
 and the FD from which it reads if the fuzzing target is other
-than the consumer of the AFL-generated data.  The {\tt count} option will not commence code coverage tracking until the given 
-number of sucessful read/recv calls have occured on the FD from the prepInject,  or targetFD.   The {\tt commence\_params} option names a 
+than the consumer of the AFL-generated data.  The {\tt count} option will delay commencement of code coverage tracking until the given 
+number of successful read/recv calls have occured on the FD from the prepInject,  or targetFD.   The {\tt commence\_params} option names a 
 file containing parameters computed for for the count.  If the file does not exist, it is created and populated, and then used on subsequent runs of afl or playAFL
-as an optimization. 
+as an optimization and in lieu of the targetFD and count fields.
 The {\tt dead} option creates a filter to avoid instrumenting basic blocks hit by other threads.
-Use {\tt aflTCP} for TCP sessions, though note these assume all data is read into
-the same input buffer.  
 Use {\tt test\_file} to test RESim's AFL fuzzing portion on a selected file without starting AFL.
 See section \ref{fuzz} for details.
 
@@ -747,8 +745,10 @@ a return from a read (e.g., using prepInject), set basic block coverage and iter
 IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
-\item{\tt playAFL(dfile, afl\_mode=False, trace\_all=False, fname=None, target=None, targetFD=None)} -- Play data input files discovered by AFL.  Assumes {\tt dfile} is a single file, or names a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
-Each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new hits files generated in the {\tt RESIM\_IDS\_DATA} directory.
+\item{\tt playAFL(dfile, afl\_mode=False, trace\_all=False, fname=None, target=None, targetFD=None)} -- Play data input files discovered by AFL.  The {\tt dfile} parameter 
+is a single file, or names a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
+If a directory, each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new coverage files generated in the {\tt AFL\_DATA} 
+coverage subdirectory.  If a single file, the coverage will be stored in the /tmp directory.
 \textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
 Tail the log if you suspect it has hung.  Provide a library name as {\tt fname}, e.g., libc.so.6, to record coverage of a library.  Note if if afl\_mode is set, no hits file is generated.
 
@@ -762,7 +762,7 @@ on a different cell, preface the name of the target process with the cell name f
 until the target has performed some number of read calls, provide the optional {\tt targetFD} and {\tt count} parameters.  For example, if you want to
 commence coverage tracking after the target has returned from two read, provide a count of 2.
 
-The {\tt playAFL} command also generates a hits file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
+The {\tt playAFL} command generates a coverage file for each AFL queue file and those are stored in a {\tt coverage} directory alongside the {\tt queue} directory.
 Those individual coverage files are intended to be read by the {\tt findBB.py} utility to find sessions that lead to BNTs.  
 The {\tt runPlay} stand-alone command launches parallel instances of RESim running the playAFL, for use in replaying sessions created by parallel fuzzing.  Note however this 
 does not generate a new total hits file, it only creates coverage files.  
@@ -787,10 +787,10 @@ a driver component.  Thus, only single-packet processing can be analyzed.  Use {
 in the AFL output directory.  Only the first packet is tracked.  If the AFL sessions ran in parallel, or include multiple packets, then use the runTrack utlity to 
 start new Simics sessions for each queue file within each parallel workspace.  Use the {\tt --trace\_all} option to create system call traces instead of watchmarks.  
 
-\item{\tt injectToBB(bb, fname)} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The target
+\item{\tt injectToBB(bb, fname, target, targetFD)} -- Find an AFL input file that leads to the given BB and play it using injectIO, breaking at the BB.  The AFL target
 is assumed to be the current RESim workspace directory name.  Note the simulation breaks at the BB, and thus the watch marks do not reflect subsequent
 processing -- it they will not reflect any watch mark in the target BB. (TBD, modify to process/track everything, and then skip back to the first hit of the BB.)
-Provide an fname if the bb is in a lib.  The bb value is per the program addresses, and RESim will adjust it to reflect the lib load address.
+Provide a target and targetFD if the process is other than that scheduled in the snapshot.  Provide an fname if the bb is in a lib.  The bb value is per the program addresses, and RESim will adjust it to reflect the lib load address.
 
 \item Also see utilties listed in section \ref{utilities}, e.g., to find branches not taken and AFL sessions that reach a given basic block.
 
@@ -1336,6 +1336,28 @@ A few data decoding options are available on the right-click on a register or me
 \item Show Ascii Map -- Interpret the next 256 bytes as a regx-type map and display characters corresponding to positions having a value of zero.  Intended
 for use within regx type parsers that refer to compiled expressions.
 \end{itemize}
+
+\subsubsection{Helping IDA with function names}
+Consider the following analysis from IDA of a ARM64 program.
+\begin{verbatim}
+  v:0x0000007f8f7785a8 p:0x000f54d85a8  adrp x4, 0x7f8f793000
+  v:0x0000007f8f7785ac p:0x000f54d85ac  ldr x4, [x4, #3848]
+  v:0x0000007f8f7785b0 p:0x000f54d85b0  adrp x1, 0x7f8f77c000
+  v:0x0000007f8f7785b4 p:0x000f54d85b4  add x1, x1, #0xd6
+  v:0x0000007f8f7785b8 p:0x000f54d85b8  blr x4
+\end{verbatim}
+
+Prior to re-basing, IDA knows that the ldr memory reference is to an imported function symbol, e.g., \textit{strdup}, and
+will display that if hovered over.  However, there is no comment indicating the function name, and the information is lost
+upon re-basing or debugger attachment. 
+The RESim {\tt idaDump.sh} utility uses IDA's xref database to generate a mapping of these type of function calls.
+This mapping is then used when creating stack traces, and it is used by the RESim {\tt armBlrComments.py} script to add comments
+to IDA's display of blr call instructions indicating the called function name.  The {\tt armBlrComments.py} runs automatically when the
+plugin is loaded, and it can be run manually from file scripts, e.g., without debugger attachment.
+
+Another function naming aide makes use of program logging subsystems.  If a program binary is stripped of symbols, calls to loggers can sometimes
+reveal the name original name of the function.  The {\tt RESim nameFunsFromLog.py} script looks for some instances of that, and sets function names.
+After running the script, rerun the idaDump.sh utility so that the artifacts used in stack traces reflect the revised function name.
 
 \subsubsection{IDA Troubleshooting}
 IDA will sometimes get confused about memory regions, especially when debugging libraries.  Use \textit{Debugger / Manual Memory Regions} to help it.
@@ -2047,7 +2069,7 @@ you want to analyze it or fuzz it, e.g., you'd like a snapshot of state prior to
 uses ioctl systems calls to determine how much data is waiting to be read.  Generated a directive file to send multiple files via
 TCP as part of the same conversation, with the last file containing the designated character (Z).  Use trackIO without the kbuf option, and
 use c to continue until the Zs are read.  Identify the watch mark assocated with the ioctl call that returned the size of the Z's data,
-and pass that to prepInjectWatch.
+and pass that to prepInjectWatch.  Alternatly, see \ref{web_conversation}.
 
 \subsubsection{Injecting data}
 \label{injecting-data}
@@ -2146,9 +2168,13 @@ A set of RESim ini environment variables affect the fuzzing sessions.  These inc
 value is defined in the {\tt AFL\_BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
 if the there is not more data to inject into application memory upon hitting the read call address.
 
-\item The {\tt HANG\_CYCLES} value determine when a session is considered to be hung, e.g., the program is in an infinite loop.
+\item The {\tt HANG\_CYCLES} value determines when a session is considered to be hung, e.g., the program is in an infinite loop.
 Hangs may reflect more than just DoS vulnerabilities, e.g., corruption of a return address might lead to a viable code location
 that leads to a loop.
+
+\item The {\tt BACK\_STOP\_DELAY} value will delay setting backstop or hang detection until the given count of basic block hits has been reached.
+The intended use is applications that do not commence parsing inputs until after performing some function.  This value can be used instead of setting a very
+large backstop, which can cause AFL to run very slowly.
 
 \item The AFL\_STOP\_ON\_CLOSE env value will end the fuzzing session if the FD is closed, and AFL\_STOP\_ON\_READ will end it if
 a read system call is encountered on the target FD after all fuzzed data is consumed.
@@ -2286,7 +2312,7 @@ This can be extended to fuzzing as follows:
 \item Create an AFL seed file, e.g., the original data in the json entry you wish to fuzz.
 \item Use the playAFL or afl command with a test\_file to create a {\tt commence\_params} file, providing a count to reach the data entry you selected in the json filter.
 This command would include a target naming your target component and process (full path), and the targetFD.
-\item Provide that file name as the {\tt --commence\_params} option to the runAFL command.
+\item Provide that file name as the {\tt --COMMENCE\_PARAMS} option to the runAFL command.
 \end{itemize}
 Note this approach may be slow because each AFL cycle requires data to be sent from the driver to the target; and it requires RESim to run the target forward 
 prior to commencing code coverage.
@@ -2652,6 +2678,7 @@ The README.md in that directory provides instructions for running the example, a
 and binary files used within the example.
 
 \subsection{Fuzzing a web service}
+\label{web_conversation}
 These steps describe how to stop a web service in the middle of
 a coversation to fuzz a specific command.
 \begin{itemize}
@@ -2685,7 +2712,8 @@ For example, the timestamp preceeding the HTTP in the POST tokens.
 
 \item Use prepInject to create a snapshot of the next read.
 
-\item Create a data file with the data you wish to inject.  Start with the data it expects as a test.
+\item Note prepInject displays the name of a file that now contains a copy of the 
+data that was read and would be replaced by injected data.
 
 \item Use injectIO with that file to confirm it is processing the data as expected.
 
@@ -2930,6 +2958,7 @@ to the driver.  There are several ways to send data to a target computer. The dr
 then restores them and copies them to the merged directory.
 \item genJson.py -- Package input data into a json file to provide to drive-driver, e.g., for a TCP\_JSON session.
 \item showFDs.py -- Show FD assignments at a given cycle from a RESim system call trace file.
+\item dumpCoverage.py -- Dump the content of a coverage file, e.g., generated by playAFL, displaying the hits addresses and cycles in hex.
 
 \end{itemize}
 
@@ -3154,7 +3183,7 @@ grep "pid:1731" syscall_trace.txt | grep "FD: 11
 \end{verbatim}
 That gives you the port and address information that you can then search for in the {\tt netLinks.txt} file.
 
-Alternately, if you have a trace file, use the {\tt findFDs.py} utility.
+Alternately, if you have a trace file, use the {\tt showFDs.py} utility.
 
 \section{Context management implementation notes}
 RESim manages two Simics contexts: the default for the cell, and a ``resim'' context for each cell.
@@ -3766,6 +3795,14 @@ You wish to debug the target's data consumption and you know it will hang on a s
 you run a while without giving it data and then create a snapshot.  When the snapshot
 is restored, your target process is not scheduled, and thus the debugSnap function will appear to hang until you provide data that causes your
 target to be scheduled.  This is expected.
+
+\subsection{Backstops}
+If you see fewer basic block hits or fewer watch marks than expected, try increasing the {\tt AFL\_BACK\_STOP\_CYCLES} or {\tt BACK\_STOP\_CYCLES} values and possibly the
+{\tt HANG\_CYCLES}.  Some applications have delays while they go off and do something other than processing your input data.  If you find that you need a very large backstop
+value that affects performance (e.g., causes AFL to be very slow), try using a {\tt BACK\_STOP\_DELAY} value.  To determine if this may help, use 
+playAFL to generate a hits file and then use the dumpCoverage.py utility to observe the cycles of the hits.  Look for a small number of hits, then a big delay, and
+then a lot of hits without large cycle gaps.  If you see that, then set the delay value so that backstops and hang detection does not commence until some number of hits have
+occurred. 
 
 \section{Windows}
 \label{Windows}
