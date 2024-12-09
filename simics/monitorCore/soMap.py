@@ -158,6 +158,19 @@ class SOMap():
                         if self.prog_info[prog].plt_offset is None:
                             self.prog_info[prog].plt_offset = 0
                             self.prog_info[prog].plt_size = 0
+                if version < 25:
+                    for prog in self.prog_info:
+                        #self.lgr.debug('soMap loadPickle prog %s start 0x%x size 0x%x' % (prog, self.prog_info[prog].text_offset, self.prog_info[prog].text_size))
+                        full_path = self.top.getFullPath(prog)
+                        real_path = resimUtils.realPath(full_path)
+                        #self.lgr.debug('soMap loadPickle add prog info for real path %s' % (real_path))
+                        self.addProgInfo(prog, real_path)
+                        for tid in self.text_prog:
+                            if self.text_prog[tid] == prog:
+                                self.prog_end[tid] = self.prog_start[tid] + self.prog_info[prog].text_size
+                                #self.lgr.debug('soMap loadPickle self.prog_start[%s] is 0x%x end changed to 0x%x' % (tid, self.prog_start[tid], self.prog_end[tid]))
+                                break
+
             else:
                 # backward compatability, but only most recent
                 # TBD remove all this
@@ -324,31 +337,7 @@ class SOMap():
         interp = None 
         skip_this = False
         if prog not in self.prog_info:
-            elf_info = elfText.getText(path, self.lgr)
-            if elf_info is not None:
-                self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                       elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp)
-                interp = elf_info.interp
-                self.lgr.debug('soMap addText prog info %s %s' % (prog, self.prog_info[prog].toString()))
-                if self.prog_info[prog].text_start is None:
-                    eip = self.top.getEIP(self.cpu)
-                    mem_utils = self.task_utils.getMemUtils()
-                    if mem_utils.isKernel(eip):
-                        eip = mem_utils.getKReturnAddr(self.cpu)
-                        if eip is None:
-                            self.lgr.error('soMap addText no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
-                            return
-                        self.lgr.debug('soMap addText no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
-                    else:
-                        self.lgr.debug('soMap addText no text start, assume dynamic eip is 0x%x' % eip)
-                    self.prog_info[prog].text_start = 0
-                    self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
-                    self.prog_info[prog].setDynamic()
-                    
-                     
-            else:
-                self.lgr.debug('soMap addText no elf info for %s' % path)
-                skip_this = True
+            self.addProgInfo(prog, path)
         else:
             self.lgr.debug('soMap addText prog already in prog_info: %s' % prog)
         if not skip_this:
@@ -379,6 +368,28 @@ class SOMap():
         else:
             self.lgr.debug('soMap addText told to skip %s, maybe not an elf' % prog) 
         return retval
+
+    def addProgInfo(self, prog, path):
+        elf_info = elfText.getText(path, self.lgr)
+        if elf_info is not None:
+            self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
+                   elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp)
+            interp = elf_info.interp
+            self.lgr.debug('soMap addProgInfo prog info %s %s' % (prog, self.prog_info[prog].toString()))
+            if self.prog_info[prog].text_start is None:
+                eip = self.top.getEIP(self.cpu)
+                mem_utils = self.task_utils.getMemUtils()
+                if mem_utils.isKernel(eip):
+                    eip = mem_utils.getKReturnAddr(self.cpu)
+                    if eip is None:
+                        self.lgr.error('soMap addProgInfo no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
+                        return
+                    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                else:
+                    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip is 0x%x' % eip)
+                self.prog_info[prog].text_start = 0
+                self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
+                self.prog_info[prog].setDynamic()
 
     def noText(self, prog, tid):
         self.lgr.debug('soMap noText, prog %s tid:%s' % (prog, tid))
