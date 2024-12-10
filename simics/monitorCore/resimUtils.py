@@ -541,6 +541,7 @@ def getLoadOffsetFromSO(so_json, prog, lgr=None):
     if lgr is not None: 
         lgr.debug('resimUtils getLoadOffsetFromSO prog: %s  so_json[proc] %s' % (prog, so_json['prog']))
     so_prog = os.path.basename(so_json['prog'])
+    prog = os.path.basename(prog)
     if so_prog == prog:
        #print('0x%x is in prog' % bb['start_ea'])  
        prog_start = so_json['prog_start']
