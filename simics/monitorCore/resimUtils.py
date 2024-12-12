@@ -457,12 +457,32 @@ def soMatch(fname, cache, lgr):
                 #lgr.debug('resimUtils soMatch found match %s' % item)
                 retval = item
     return retval
-    
+   
+def getWinPath(path, root_prefix, lgr=None): 
+    if path.startswith('/??/C:/') or path.startswith('/??/c:/'):
+        if os.path.isdir(os.path.join(root_prefix, 'C:')) or os.path.isdir(os.path.join(root_prefix, 'c:')):
+            path = path[4:]
+        else:
+            path = path[7:]
+    elif path.startswith('/??/D:/') or path.startswith('/??/d:/'):
+        if lgr is not None:
+            lgr.debug('resimUtils getWinPath is D:')
+        if os.path.isdir(os.path.join(root_prefix, 'D:')) or os.path.isdir(os.path.join(root_prefix, 'd:')):
+            path = path[4:]
+            if lgr is not None:
+                lgr.debug('resimUtils getWinPath is D: is dir path now %s' % path)
+        else:
+            if lgr is not None:
+                lgr.debug('resimUtils getWinPath is D: but not a subdir off root')
+            path = path[7:]
+    elif path.startswith('/'):
+        path = path[1:]
+    return path
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
-    #if lgr is not None:
-    #    lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    if lgr is not None:
+        lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
         lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
@@ -492,8 +512,11 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
-        if fname.startswith('/??/C:/'):
+        if root_prefix is None:
+            if fname.startswith('/??/C:/'):
                 fname = fname[7:]
+        else:
+            fname = getWinPath(fname, root_prefix, lgr=lgr)
 
         base = os.path.basename(fname)+'.funs'
         #if base.upper() in map(str.upper, fun_list_cache):
