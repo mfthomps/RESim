@@ -477,7 +477,7 @@ class PageFaultGen():
         ''' Called when an undefined instruction exception is hit '''
         cell_name = self.top.getTopComponentName(cpu)
         cpu, comm, tid = self.task_utils.curThread() 
-        name = cpu.iface.exception.get_name(exception_number)
+        name = self.cpu.iface.exception.get_name(exception_number)
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         #self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 
