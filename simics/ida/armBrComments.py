@@ -33,6 +33,9 @@ def addComments():
     #base = ida_segment.get_segm_base(seg)
     seg_struct = ida_segment.segment_t()
     seg_struct = ida_segment.get_segm_by_name('LOAD')
+    if seg_struct is None:
+        print('No load segment.  TBD update for windows?')
+        return
     base = seg_struct.start_ea
     print('armBlComments addComments, base is 0x%x' % base)
 
