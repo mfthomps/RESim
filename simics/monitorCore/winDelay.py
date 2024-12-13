@@ -154,9 +154,10 @@ class WinDelay():
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
             max_read = min(return_count, 100)
+            max_bytes = min(return_count, 2000)
             #read_data = self.mem_utils.readString(self.cpu, self.exit_info.retval_addr, max_read)
 
-            byte_array = self.mem_utils.getBytes(self.cpu, return_count, self.exit_info.retval_addr)
+            byte_array = self.mem_utils.getBytes(self.cpu, max_bytes, self.exit_info.retval_addr)
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
                 # TBD add traceFiles to windows
