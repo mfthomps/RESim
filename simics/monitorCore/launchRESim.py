@@ -362,6 +362,12 @@ class LaunchRESim():
         except:
             pass
         SIM_run_command('RESim_log.log-level 1')
+        
+        try:
+            # in case a dhcp service node was created, keep it off the network TBD make a param
+            SIM_run_command('dhcp_service_node.disable-real-dns')
+        except:
+            pass
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
