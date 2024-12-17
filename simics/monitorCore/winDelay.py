@@ -114,7 +114,7 @@ class WinDelay():
             #    SIM_continue(0)
         else:
             ''' assume we got here due to call parameters or stop_action'''
-            self.lgr.debug('winDelay doDataWatch stop_action is %s' % str(self.stop_action))
+            self.lgr.debug('winDelay doDataWatch no dataWatch stop_action is %s' % str(self.stop_action))
             my_syscall = self.exit_info.syscall_instance
             #if not my_syscall.linger: 
             #    self.stopTrace()
@@ -192,6 +192,7 @@ class WinDelay():
                             if c != chr(v):
                                 match = False
                                 self.lgr.debug('winDelay failed sub_match. %x does not match %x' % (ord(c), v))
+                                self.exit_info.matched_param = None
                                 break
                         if match:
                             self.lgr.debug('winDelay got sub_match.')  
