@@ -1,5 +1,6 @@
 class WinKParams():
     def __init__(self):
+        self.param_version = 11
         kernel_base = 0xffff000000000000
         self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
         self.current_task = None

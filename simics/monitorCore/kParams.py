@@ -1,5 +1,6 @@
 class Kparams():
     def __init__(self, cpu, word_size, platform):
+        self.param_version = 11
         ''' assumptions '''
 
         #if cpu.architecture == 'arm':
