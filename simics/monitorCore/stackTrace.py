@@ -1257,14 +1257,14 @@ class StackTrace():
                                 else:
                                     self.lgr.debug('stackTrace fun_hex hack failed fun_hex still none')
                         fname = self.soMap.getSOFile(val)
-                        if been_above_clib and resimUtils.isClib(fname):
+                        if fname is not None and been_above_clib and resimUtils.isClib(fname):
                             skip_this = True
                         elif fname is None:
                             #print('0x%08x  %-s' % (call_ip, 'unknown'))
                             ret_addr = call_ip + instruct[0] 
                             frame, adjust_sp = self.genFrame(call_ip, instruct_str, ptr, fun_hex, fun_name, ret_addr, ptr, msg='fname is none')
-                            ptr = ptr+adjust_spelf.addFrame(frame)
-                            #self.lgr.debug('stackTrace fname none added frame %s' % frame.dumpString())
+                            ptr = ptr+adjust_sp
+                            self.lgr.debug('stackTrace fname none added frame %s' % frame.dumpString())
                         else:
                             #if self.frames[-1].fun_addr is None:
                             #    self.lgr.error('fun_addr is none')
