@@ -2700,7 +2700,7 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=True):
+    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2729,7 +2729,7 @@ class GenMonitor():
             call_params = [no_param]
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
-        self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call)
+        self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger)
         if run: 
             SIM_continue(0)
 
@@ -2746,12 +2746,12 @@ class GenMonitor():
             if callnum == 120:
                 print('Disabling thread tracking for clone')
                 self.stopThreadTrack()
-            self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=True)
+            self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname)
 
         else:
             ''' watch all syscalls '''
             self.lgr.debug('runToSyscall for any system call')
-            self.trace_all[self.target] = self.syscallManager[self.target].watchAllSyscalls(None, 'runToSyscall', stop_on_call=True)
+            self.trace_all[self.target] = self.syscallManager[self.target].watchAllSyscalls(None, 'runToSyscall')
      
         self.lgr.debug('runToSyscall now continue')
         SIM_continue(0)
@@ -3301,7 +3301,7 @@ class GenMonitor():
                                len(self.call_traces[cell_name])))
         return retval
 
-    def tracingAll(self, cell_name, tid):
+    def tracingAll(self, cell_name, tid=None):
         ''' are we tracing all syscalls for the given tid? '''
         retval = False
         #self.lgr.debug('tracingAll cell_name %s len of self.trace_all is %d' % (cell_name, len(self.trace_all))) 
