@@ -128,7 +128,12 @@ def doConnect(switch, eth, switch_map, index):
         cmd = '%s.get-free-connector' % switch
     #print('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
-    cmd = 'connect $%s cnt1 = %s' % (eth, con)
+    eth_name = run_command('$%s' % eth)
+    #print('eth name %s' % eth_name)
+    if 'i82546bg' in eth_name:
+        eth_name = eth_name+'[0]'
+    #cmd = 'connect $%s cnt1 = %s' % (eth, con)
+    cmd = 'connect %s cnt1 = %s' % (eth_name, con)
     #print('doConnect cmd: %s' % cmd)
     run_command(cmd)
     switch_n = 'switch%d' % index
@@ -170,7 +175,7 @@ def createDict(config, not_a_target, lgr):
         if section in not_a_target and section != 'driver':
             continue
         comp_dict[section] = {}
-        print('assign %s CLI variables' % section)
+        #print('assign %s CLI variables' % section)
         lgr.debug('assign %s CLI variables' % section)
         ''' hack defaults, Simics CLI has no undefine operation '''
         comp_dict[section]['ETH0_SWITCH'] = 'switch0'
