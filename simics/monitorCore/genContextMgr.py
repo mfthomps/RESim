@@ -678,7 +678,17 @@ class GenContextMgr():
         else:
            proc_addr = new_addr
            tid = str(self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid))
-        
+        exit_tid = self.task_utils.getExitTid()
+        #self.lgr.debug('contextManager changedThread exit_tid: %s' % exit_tid)
+        if exit_tid is not None and tid.startswith(exit_tid):
+            if self.top.isWindows(target=self.cell_name):
+                if '-' in exit_tid:
+                    self.lgr.debug('contextManager changedThread to exiting tid %s, bail' % tid)
+                else:
+                    self.lgr.debug('contextManager changedThread to exiting Process tid %s, bail' % tid)
+            else:
+                self.lgr.debug('contextManager changedThread to exiting tid %s, bail' % tid)
+            return 
         prev_task = self.task_utils.getCurThreadRec()
         comm = self.mem_utils.readString(cpu, proc_addr + self.param.ts_comm, 16)
         
