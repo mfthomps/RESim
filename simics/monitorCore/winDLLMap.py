@@ -286,7 +286,7 @@ class WinDLLMap():
                     # TBD is pending_procs necessary?  Why not always add text if missing for pid?
                     if pid not in self.text:
                         #self.getText(tid)
-                        self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText')
+                        self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText' % pid)
                         eproc = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
                         full_path = self.top.getFullPath(fname=prog_name)
@@ -419,6 +419,18 @@ class WinDLLMap():
         if so_file is not None and resimUtils.isClib(so_file):
             retval = True
         return retval
+
+    def isFunNotLibc(self, address):
+        retval = False
+        if self.isMainText(address):
+            retval = True
+        else:
+            so_file = self.getSOFile(address)
+            if so_file is not None and not resimUtils.isClib(so_file):
+                fun = self.fun_mgr.getFunName(address)
+                if fun is not None:
+                    retval = True 
+        return retval           
 
     def getSOFile(self, addr_in):
         retval = None
@@ -822,3 +834,5 @@ class WinDLLMap():
     def getProgSize(self, prog_in):
         self.lgr.error('winDLL getProgSize not done yet')
         return None
+
+
