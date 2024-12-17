@@ -467,7 +467,9 @@ class DataWatch():
         # See returns above
         if len(self.start) == 0 and not self.top.isVxDKM(target=self.cell_name):
             # first range, set mmap syscall
-            self.watchMmap()
+            if not self.top.isWindows():
+                # TBD what about windows?
+                self.watchMmap()
             #self.watchExecve()
             self.top.trackThreads()
             dum_cpu, self.comm, tid = self.task_utils.curThread()
