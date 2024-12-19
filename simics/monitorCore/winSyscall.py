@@ -591,7 +591,7 @@ class WinSyscall():
                         self.top.rmSyscall(call_param.name)
                     else:
                         syscall.addParam(exit_info, call_param)
-                        self.lgr.debug('syscall syscallParse %s, runToCall, no stop/linger matched, added call_param' % alter_callname)
+                        self.lgr.debug('syscall syscallParse %s, runToCall, call match linger or not stop_on_call, added call_param' % alter_callname)
 
         frame_string = taskUtils.stringFromFrame(frame)
         #trace_msg = 'tid:%s (%s) %s %s' % (tid, comm, callname, frame_string)
@@ -712,6 +712,7 @@ class WinSyscall():
                         exit_info.call_params.append(call_param)
 
             elif callname == 'MapViewOfSection':
+                self.lgr.debug('MapViewOfSection word_size %d' % word_size)
                 load_address = self.paramOffPtr(3, [0], frame, word_size)
                 size = self.stackParamPtr(3, 0, frame) 
                 if load_address is not None and size is not None:
@@ -1094,14 +1095,20 @@ class WinSyscall():
                     trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
            
                 # data buffer address
-                if op_cmd in ['SEND', 'RECV']:
-                    exit_info.retval_addr = frame['param5']
-                    self.lgr.debug('winSyscall send set retval_addr to 0x%x' % frame['param5'])
-                else:
-                    exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
+                self.lgr.debug('winSyscall op_cmd <%s>' % op_cmd)
+                #if op_cmd in ['SEND', 'RECV']:
+                #    #exit_info.retval_addr = frame['param5']
+                #    exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame, word_size)
+                #    self.lgr.debug('winSyscall %s set retval_addr to 0x%x' % (op_cmd, frame['param5']))
+                #else:
+                #    exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
+                exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
                 # the return count address --> this is where kernel will store count ACTUALLY sent/received
                 frame_string = taskUtils.stringFromFrame(frame)
-                self.lgr.debug('winSyscall %s word_size %d' % (op_cmd, word_size))
+                if exit_info.retval_addr is not None:
+                    self.lgr.debug('winSyscall %s word_size %d retval_addr 0x%x' % (op_cmd, word_size, exit_info.retval_addr))
+                else:
+                    self.lgr.error('winSyscall %s word_size %d retval_addr None' % (op_cmd, word_size))
                 exit_info.count_addr = frame['param5'] + 8
                 '''
                 if word_size == 4:
@@ -1115,13 +1122,14 @@ class WinSyscall():
                     exit_info.count_addr = frame['param5'] + word_size 
                 '''
                 #SIM_break_simulation('in send/recv') 
-                if word_size == 4:
-                    value = self.paramOffPtr(7, [0, 0], frame, word_size) 
-                else:
-                    value = self.paramOffPtr(7, [0], frame, word_size) 
-                if value is not None:
+                count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+                #if word_size == 4:
+                #    count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+                #else:
+                #    count_value = self.paramOffPtr(7, [0], frame, word_size) 
+                if count_value is not None:
                     send_string = ''
-                    exit_info.count = value & 0xFFFFFFFF
+                    exit_info.count = count_value & 0xFFFFFFFF
 
                     if op_cmd == 'SEND_DATAGRAM':
                         if word_size == 8:
@@ -1507,7 +1515,9 @@ class WinSyscall():
                     break
             
         if cp is not None: 
-            if cp.match_param.__class__.__name__ == 'Dmod':
+            if cp.match_param is None:
+                retval = False
+            elif cp.match_param.__class__.__name__ == 'Dmod':
                self.task_utils.modExecParam(tid, self.cpu, cp.match_param)
             else: 
 
@@ -1541,6 +1551,7 @@ class WinSyscall():
                         if cp.break_simulation:
                             retval = False
                             self.top.rmSyscall('toCreateProc')
+                            self.lgr.debug('checkProg CreateUserProc of %s call runToUserSpace' % prog_string)
                             SIM_run_alone(self.top.runToUserSpace, None)
                             
                         else:
