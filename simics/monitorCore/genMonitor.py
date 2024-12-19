@@ -1835,7 +1835,7 @@ class GenMonitor():
             self.track_threads = None
         if self.isWindows():
             self.rmDebugWarnHap()
-            self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun)
+            self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun, new=new)
             return
 
         if type(proc) is not str:
@@ -1854,7 +1854,7 @@ class GenMonitor():
             self.lgr.debug('genMonitor debugProc is new, stop debug and stop tracking')
             self.stopDebug()
             self.stopTracking()
-        if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
+        if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s proc: %s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid(), proc))
             if proc.startswith('/') and self.target in self.soMap:
                 prog_name = self.soMap[self.target].getProg(plist[0])
@@ -2887,7 +2887,7 @@ class GenMonitor():
         if not track_threads:
             self.track_threads = None 
         ''' trace all system calls. if a program selected for debugging, watch only that program '''
-        self.lgr.debug('traceAll target %s begin' % target)
+        self.lgr.debug('traceAll target %s begin track_threads %r' % (target, track_threads))
         if target not in self.cell_config.cell_context:
             print('Unknown target %s' % target)
             return
@@ -2909,6 +2909,8 @@ class GenMonitor():
                 self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
                 self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
                 self.run_to[target].watchSO()
+                if track_threads:
+                    self.trackThreads()
                 return
             elif self.isVxDKM():
                 self.trace_all[target]= self.vxKMonitor[target].traceAll(record_fd=record_fd)
@@ -2917,6 +2919,7 @@ class GenMonitor():
             cell = self.cell_config.cell_context[target]
             tid, cpu = self.context_manager[target].getDebugTid() 
             if tid is not None:
+                self.lgr.debug('traceAll, tid back from getDebugTid is %s' % tid)
                 #tf = '/tmp/syscall_trace-%s-%s.txt' % (target, tid)
                 if trace_file is None:
                     tf = 'logs/syscall_trace-%s-%s.txt' % (target, tid)
@@ -2924,16 +2927,19 @@ class GenMonitor():
                     tf = trace_file
                 context = self.context_manager[target].getRESimContext()
             else:
+                self.lgr.debug('traceAll, no tid')
                 if trace_file is None:
                     tf = 'logs/syscall_trace-%s.txt' % target
                 else:
                     tf = trace_file
-                if not self.isVxDKM(target=target):
-                    cpu, comm, tid = self.task_utils[target].curThread() 
-                    self.trackThreads()
+
+            if not self.isVxDKM(target=target) and track_threads:
+                cpu, comm, tid = self.task_utils[target].curThread() 
+                self.lgr.debug('traceAll trackThreads')
+                self.trackThreads()
 
             self.traceMgr[target].open(tf, cpu)
-            if not self.isVxDKM(target=target):
+            if not self.isVxDKM(target=target) and not self.isWindows(target=target):
                 if not self.context_manager[self.target].watchingTasks():
                     self.traceProcs[target].watchAllExits()
                 self.lgr.debug('traceAll, create syscall hap')
@@ -5935,6 +5941,7 @@ class GenMonitor():
         if tid is None:
             self.lgr.debug('genMonitor getProgName tid is none')
             return None
+        prog_name = None
         if target in self.soMap:
             prog_name = self.soMap[target].getProg(tid)
         if prog_name is None:
