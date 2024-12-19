@@ -674,7 +674,10 @@ class GenContextMgr():
                 return
             pid = self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid)
             thread_id = self.task_utils.getThreadId(rec=new_addr)
-            tid = '%d-%d' % (pid, thread_id)
+            if pid is not None and thread_id is not None:
+                tid = '%d-%d' % (pid, thread_id)
+            else:
+                self.lgr.debug('contextManager bad pid %s or thread_id %s' % (pid, thread_id))
         else:
            proc_addr = new_addr
            tid = str(self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid))
