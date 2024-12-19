@@ -293,6 +293,8 @@ class WinSyscall():
         cpu, comm, tid = self.task_utils.curThread() 
         self.lgr.debug('winSyscall syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s cycle: 0x%x' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr), self.cpu.cycles))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
+        if tid is None:
+            return
         if tid.startswith('4-'):
             # TBD allow switch to override?
             return
