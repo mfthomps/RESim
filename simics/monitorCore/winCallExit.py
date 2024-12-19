@@ -242,7 +242,7 @@ class WinCallExit():
             else:
                 #self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
                 trace_msg = trace_msg+' section_handle: 0x%x bad load address or size' % (section_handle)
-                self.lgr.debug('winCallExit '+trace_msg)
+                self.lgr.debug('winCallExit not tracking threads '+trace_msg)
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -395,7 +395,7 @@ class WinCallExit():
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
-            if not my_syscall.linger:
+            if not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo')):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
                 if my_syscall is None:
