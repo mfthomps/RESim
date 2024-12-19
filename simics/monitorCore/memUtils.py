@@ -983,7 +983,8 @@ class MemUtils():
                 self.lgr.debug('sysret64 now 0x%x' % self.param.sysret64)
 
         if self.WORD_SIZE == 4:
-            self.param.iretd = self.param.iretd + delta
+            if self.param.iretd is not None:
+                self.param.iretd = self.param.iretd + delta
             self.param.page_fault = self.param.page_fault + delta
             self.param.syscall_compute = self.param.syscall_compute + delta
 
@@ -992,7 +993,8 @@ class MemUtils():
             self.param.syscall_jump = self.param.syscall_jump - delta
             self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
-            self.param.iretd = self.param.iretd + delta
+            if self.param.iretd is not None:
+                self.param.iretd = self.param.iretd + delta
             self.lgr.debug('page_fault was 0x%x' % self.param.page_fault)
             self.param.page_fault = self.param.page_fault - delta
             self.lgr.debug('page_fault now 0x%x' % self.param.page_fault)
