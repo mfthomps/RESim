@@ -340,7 +340,7 @@ class PageFaultGen():
                   
                 if phys_addr is not None:  
                     if tid in self.pending_double_faults:
-                        self.pending_double_falts[tid].cancel()
+                        self.pending_double_faults[tid].cancel()
                         del self.pending_double_faults[tid]
                     #self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
                     del self.pending_faults[tid]
