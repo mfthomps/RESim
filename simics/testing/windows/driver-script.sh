@@ -14,6 +14,9 @@ mkdir -p /home/mike/.ssh
 /usr/bin/simics-agent --executable --overwrite --download authorized_keys --to /home/mike/.ssh
 chown -R mike:mike /home/mike/.ssh
 
+/usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
+nohup /tmp/driver-server.py &
+
 # NOTE: default driver image has 10.0.0.91 as IP, redefine that.
 ip addr del 10.0.0.91/24 dev ens25
 
