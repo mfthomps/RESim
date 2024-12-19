@@ -172,23 +172,23 @@ class WinMonitor():
         self.lgr.debug('traceAll')
         if True:
             context = self.context_manager.getDefaultContext()
-            tid, cpu = self.context_manager.getDebugTid() 
+            tid, dumb = self.context_manager.getDebugTid() 
             if tid is not None:
                 pid = pidFromTID(tid)
                 tf = 'logs/syscall_trace-%s-%s.txt' % (self.cell_name, pid)
                 context = self.context_manager.getRESimContext()
             else:
                 tf = 'logs/syscall_trace-%s.txt' % self.cell_name
-                cpu, comm, tid = self.task_utils.curThread() 
+                dumb, comm, tid = self.task_utils.curThread() 
 
-            self.traceMgr.open(tf, cpu)
+            self.traceMgr.open(tf, self.cpu)
             if not self.context_manager.watchingTasks():
                 self.traceProcs.watchAllExits()
             self.lgr.debug('traceAll, create syscall hap')
             self.trace_all = self.syscallManager.watchAllSyscalls(None, 'traceAll', trace=True, 
                                       record_fd=record_fd, linger=True, swapper_ok=swapper_ok)
 
-            if self.run_from_snap is not None and self.snap_start_cycle == cpu.cycles:
+            if self.run_from_snap is not None and self.snap_start_cycle == self.cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
                 p_file = os.path.join('./', self.run_from_snap, self.cell_name, 'sharedSyscall.pickle')
                 if os.path.isfile(p_file):
