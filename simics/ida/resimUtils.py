@@ -36,12 +36,12 @@ def dumpFuns(fname=None):
     #ea = get_screen_ea()
     #print 'ea is %x' % ea
     if fname is None:
-        fname = idaversion.get_root_file_name()
         #fname = '/tmp/myanalysis'
-        #fname = os.getenv('ida_analysis_path')
+        fname = os.getenv('ida_analysis_path')
         if fname is None:
             print('No ida_analysis_path defined')
             fname = idaversion.get_input_file_path()
+    print('dumpFuns fname %s' % fname)
     image_base = os.getenv('target_image_base')
     if image_base is not None and len(image_base.strip())>0:
         image_base = int(image_base, 16)
@@ -75,10 +75,10 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
-                print('try fun %s' % function_name)
+                #print('try fun %s' % function_name)
                 adjust_sp = adjustStack(function_ea)
                 if adjust_sp is not None:
-                    print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
+                    #print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
                     funs[function_ea]['adjust_sp'] = adjust_sp
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
@@ -186,10 +186,10 @@ class ImportNames():
             )
             if demangled is None:
                 self.imports[ea] = name 
-                print('was NOT demangled %s ea: 0x%x ' % (name, ea))
+                #print('was NOT demangled %s ea: 0x%x ' % (name, ea))
             else:
                 self.imports[ea] = demangled 
-                print('was demangled %s to %s ea: 0x%x ' % (name, demangled, ea))
+                #print('was demangled %s to %s ea: 0x%x ' % (name, demangled, ea))
             # ad hoc pain
             if '@@' in name:
                 name = name.split('@@')[0]
@@ -210,10 +210,10 @@ class ImportNames():
         arm_blr = {}
         for ea in self.imports:
             fun = self.imports[ea]
-            print('do xrefs ea 0x%x fun %s' % (ea, fun))
+            #print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
             for ref in refs:
-                print('\timports for 0x%x found ref 0x%x' % (ea, ref))
+                #print('\timports for 0x%x found ref 0x%x' % (ea, ref))
                 fun_refs = idautils.DataRefsTo(ref)
                 for fr in fun_refs:
                     next_pc = fr+4
@@ -247,7 +247,7 @@ def dumpImports(fname):
 
         print("Walking-> %s" % name)
         idaapi.enum_import_names(i, import_names.imp_cb)
-    import_names.printit()
+    #import_names.printit()
     import_names.dumpit(fname)
     import_names.armBlrXrefs(fname)
 
