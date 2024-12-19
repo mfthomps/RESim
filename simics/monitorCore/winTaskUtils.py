@@ -188,7 +188,7 @@ class WinTaskUtils():
                     self.program_map[str(tid)] = pmap[tid]
                     self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[str(tid)]))
             else:
-                self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
+                self.lgr.error('winTaskUtils did not find %s for snap %s' % (exec_addrs_file, run_from_snap))
 
     def commSize(self):
         return 14
