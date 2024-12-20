@@ -13,5 +13,6 @@ try{
     $sn_conn=($sn.add-connector ip=10.0.0.1)
     connect $sn.$sn_conn (switch2.get-free-connector)
     connect-real-network-port-in target-port = 22 host-port = 4022 ethernet-link = switch2 target-ip = 10.0.0.140
+    connect-real-network-port-in target-port = 6459 host-port = 6459 ethernet-link = switch2 target-ip = 10.0.0.140
 }
 

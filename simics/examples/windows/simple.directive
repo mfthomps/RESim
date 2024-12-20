@@ -1,4 +1,8 @@
 #
 # sample directive file for testing windows with the simple_network.exe program
 #
-dogs.io 10.10.0.100 9999
+IP=10.10.0.101
+PORT=9999
+SESSION=TCP
+FILE=dogs.io
+
