@@ -41,9 +41,9 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None):
-        if target_prog is not None and targetFD is None:
-            self.lgr.error('injectIO called with target_prog but not targetFD')
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
+        if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
+            lgr.error('injectIO called with target_prog but not targetFD')
             return
         self.dfile = dfile
         self.stay = stay
@@ -75,11 +75,12 @@ class InjectIO():
             hang_callback = callback
         else:
             hang_callback = self.recordHang
-        if target_prog is None:
-            if not self.checkBreakOn(target_prog, break_on):
+        self.target_fname = fname
+        if target_prog is None and break_on is not None:
+            if not self.checkBreakOn(self.target_fname, break_on):
                 self.lgr.error('injectIO unable to break on given block.')
                 return
-        self.lgr.debug('injectIO backstop_cycles %d  hang: %d' % (self.backstop_cycles, hang_cycles))
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname))
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         if not self.top.hasAFL():
             self.backstop.reportBackstop(True)
@@ -386,23 +387,21 @@ class InjectIO():
                 if self.stop_on_read:
                     use_backstop = False
 
-
-                if not self.trace_all and not self.instruct_trace and not self.no_track:
-                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
-                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop)    
-
                 if self.malloc:
                     self.top.traceMalloc()
+
                 if self.trace_all or self.instruct_trace or self.no_track:
                     self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
                         cli.quiet_run_command('c')
 
-                if not self.mem_utils.isKernel(self.addr):
+                elif not self.mem_utils.isKernel(self.addr):
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         self.top.traceBufferMarks(target=self.cell_name)
+                    self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
+                    self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
                     # TBD why?
                     #self.callback = None
                 else:
@@ -452,7 +451,7 @@ class InjectIO():
             analysis_path = self.top.getAnalysisPath(self.target_prog) 
             self.top.enableCoverage(backstop_cycles=self.backstop_cycles, fname=analysis_path)
         if self.break_on is not None:
-            self.lgr.debug('injectIO set breakon at 0x%x' % self.break_on)
+            self.lgr.debug('injectIO set break_on at 0x%x' % self.break_on)
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.break_on, 1, 0)
             self.break_on_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.breakOnHap, None, proc_break, 'break_on')
         if not self.stay:
@@ -480,7 +479,7 @@ class InjectIO():
             self.top.instructTrace(trace_file, watch_threads=True)
         else:
             self.top.jumperStop()
-        if not self.checkBreakOn(self.target_prog, self.break_on):
+        if self.break_on is not None and not self.checkBreakOn(self.target_fname, self.break_on):
             self.lgr.error('injectIO injectCallback unable to break on given block.')
             return
         self.commonGo()
@@ -643,15 +642,22 @@ class InjectIO():
         return self.filter_module 
 
     def checkBreakOn(self, fname, break_on):
-        # Determine if we are to break on a basic block, and if so, confirm the 
+        # Determine if we are to break on a basic block, and if so, confirm we 
         # have the necessary information.
         retval = True
-        self.lgr.debug('injectIO checkBreakOn break_on given as %s fname as %s' % (str(break_on), fname))
+        if break_on is not None:
+            self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x fname as %s' % (break_on, fname))
+        self.break_on = break_on
         if fname is not None:
             offset = self.so_map.getLoadOffset(fname)
         else:
             offset = None
-        self.break_on = break_on
+            tid = self.top.getTID()
+            prog = self.so_map.getProg(tid)
+            load_addr = self.so_map.getLoadAddr(prog)
+            if load_addr is not None:
+                self.break_on = self.break_on + load_addr
+                self.lgr.debug('checkBreakOn, adjust break_on by load_addr 0x%x.  break_on now 0x%x' % (load_addr, self.break_on))
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x' % break_on)
             if offset is None:

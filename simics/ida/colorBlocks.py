@@ -145,7 +145,7 @@ def colorBlocks():
         ida_analysis_path = os.getenv('ida_analysis_path')
         print('ida_analysis_path is %s' % ida_analysis_path)
         if here.startswith(resim_ida_data):
-            less_ida_data = here[len(resim_ida_data):]
+            less_ida_data = here[len(resim_ida_data)+1:]
             print('less_ida_data is %s' % less_ida_data)
             root = less_ida_data.split(os.path.sep)[1]
             print('root is %s' % root)
@@ -156,7 +156,7 @@ def colorBlocks():
             base = os.path.basename(fname)
             print('orig base %s' % base)
             #base = base.rsplit('.',1)[0]
-            fname = os.path.join(resim_ida_data, root, base, base)
+            fname = os.path.join(resim_ida_data, less_ida_data, base)
             latest_hits_file = fname+'.hits' 
             
             if os.path.isfile(latest_hits_file):

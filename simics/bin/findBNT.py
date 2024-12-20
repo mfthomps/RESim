@@ -5,6 +5,7 @@ import sys
 import os
 import glob
 import json
+import shutil
 import argparse
 import findBB
 import findTrack
@@ -24,6 +25,10 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
     retval = []
     count = 0
     #print('in findBNTForFun')
+    if target is None:
+       target_prog = prog
+    else:
+       target_prog = target
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             #print('compare %s to %s' % (bb_hit, bb['start_ea']))
@@ -37,9 +42,10 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                         read_mark = None
                         packet_num = None
                         before_read = ''
-                        lgr.debug('bb_hit 0x%x has branch 0x%x not in hits' % (bb_hit, branch))
+                        lgr.debug('findBNTForFun target %s bb_hit 0x%x has branch 0x%x not in hits show read marks: %r' % (target, bb_hit, branch, show_read_marks))
                         if show_read_marks:
-                            queue_list = findBB.findBB(target, bb_hit, True) 
+                            queue_list = findBB.findBB(target_prog, bb_hit, True, lgr=lgr) 
+                            lgr.debug('findBNTForFun len of qlist for bb_hit 0x%x is %d' % (bb_hit, len(queue_list)))
                             least_packet = 100000
                             least_size = 100000
                             least_marks = 100000
@@ -50,9 +56,10 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                             best = None
                             # look at every trackIO that has a WM in this BB and find the "best" of them
                             for q in queue_list:
+                                lgr.debug('queue file %s' % q)
                                 trackio = q.replace('queue', 'trackio')   
                                 coverage = q.replace('queue', 'coverage')   
-                                read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet)
+                                read_mark, packet_num, num_resets = findBB.getWatchMark(trackio, bb, prog, quiet=quiet, lgr=lgr)
                                 if read_mark is not None:
                                     ''' Look for the best mark '''
                                     result, num_resetsx = findTrack.findTrackMark(trackio, read_mark, True, prog, quiet=True, lgr=lgr)
@@ -130,13 +137,25 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
+    prog_base = os.path.basename(prog)
+    old_ida_path = resimUtils.getOldIdaDataFromIni(prog_base, ini)
+    if target is None:
+        old_fname = '%s.hits' % old_ida_path
+    else:
+        old_fname = '%s.%s.hits' % (old_ida_path, target)
+
     ida_path = resimUtils.getIdaDataFromIni(prog, ini)
-    #print('prog: %s  ida_path is %s' % (prog, ida_path))
+    print('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
         fname = '%s.hits' % ida_path
     else:
         fname = '%s.%s.hits' % (ida_path, target)
+    if os.path.isfile(old_fname) and not os.path.isfile(fname):
+        os.makedirs(os.path.dirname(fname), exist_ok=True) 
+        shutil.move(old_fname, fname)
+        print('Old file path found.  Moved from %s to %s' % (old_fname, fname))
+
     print('Using hits file %s' % fname)
     lgr.debug('Using hits file %s prog: %s' % (fname, prog))
     ''' hits are now just flat lists without functions '''
@@ -149,13 +168,17 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     if blocks is None:
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
         return bnt_list
-
+    if prog_elf.text_start is None:
+        # relocatable text. Set to zero
+        prog_elf.text_start = 0
     if not no_print:
         num_blocks = 0
         num_funs = len(blocks)
         for f in blocks:
             num_blocks = num_blocks + len(blocks[f]['blocks']) 
         print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
+    if len(hits) == 0:
+        print('*** No hits found in %s.  Try providing the --target option.' % fname)
     if fun_name is None:
         for fun in sorted(blocks):
             this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
@@ -171,8 +194,8 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
 def main():
     parser = argparse.ArgumentParser(prog='findBNT', description='Show branches not taken for a given program.')
     parser.add_argument('ini', action='store', help='The ini file')
-    parser.add_argument('prog', action='store', help='The target program')
-    parser.add_argument('-t', '--target', action='store', help='Optional target name, e.g., name of the workspace.')
+    parser.add_argument('prog', action='store', help='The target program. Provide the path relative to the root prefix')
+    parser.add_argument('-t', '--target', action='store', help='The target name, e.g., name of the workspace.  Use this option unless you have renamed the hits file to the program name')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')

@@ -114,7 +114,8 @@ class WinTaskUtils():
             self.phys_current_task = phys
             self.savePhysCR3Addr()
             #self.phys_saved_cr3 = self.mem_utils.getKernelSavedCR3()
-            self.lgr.debug('winTaskUtils cell %s got phys_saved_cr3 of 0x%x' % (self.cell_name, self.phys_saved_cr3))
+            if self.phys_saved_cr3 is not None:
+                self.lgr.debug('winTaskUtils cell %s got phys_saved_cr3 of 0x%x' % (self.cell_name, self.phys_saved_cr3))
            
         else:
             phys_current_task_file = os.path.join('./', run_from_snap, cell_name, 'phys_current_task.pickle')
@@ -123,10 +124,12 @@ class WinTaskUtils():
                 if type(value) is int:
                     self.phys_current_task = value
                     self.savePhysCR3Addr()
-                    self.lgr.debug('winTaskUtils, cell %s snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.cell_name, self.param.saved_cr3, self.phys_saved_cr3))
+                    if self.phys_saved_cr3 is not None:
+                            self.lgr.debug('winTaskUtils, cell %s snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.cell_name, self.param.saved_cr3, self.phys_saved_cr3))
                 else:
                     self.phys_current_task = value['current_task_phys']
-                    self.phys_saved_cr3 = value['saved_cr3_phys']
+                    if 'saved_cr3_phys' in value:
+                        self.phys_saved_cr3 = value['saved_cr3_phys']
                     if 'system_proc_rec' in value and value['system_proc_rec'] is not None:
                         self.system_proc_rec = value['system_proc_rec']
                         self.lgr.debug('winTaskUtils, cell %s got system_proc_rec 0x%x' % (self.cell_name, self.system_proc_rec))
@@ -136,9 +139,11 @@ class WinTaskUtils():
                             self.lgr.error('WinTaskUtils failed to get system thread record')
                         else:
                             self.lgr.debug('winTaskUtils, snapshot lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
-                    self.lgr.debug('winTaskUtils, cell %s snapshot had saved phys addr of cr3, value 0x%x' % (self.cell_name, self.phys_saved_cr3))
+                    if self.phys_saved_cr3 is not None:
+                        self.lgr.debug('winTaskUtils, cell %s snapshot had saved phys addr of cr3, value 0x%x' % (self.cell_name, self.phys_saved_cr3))
                 #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
+                if self.phys_saved_cr3 is not None:
+                    self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
 
                 self.lgr.debug('windTaskUtils cell %s loaded phys_current_task from %s value 0x%x' % (self.cell_name, phys_current_task_file, self.phys_current_task))
             else:
@@ -148,14 +153,16 @@ class WinTaskUtils():
                 if os.path.isfile(pfile):
                     value = pickle.load(open(pfile, 'rb'))
                     if type(value) is int:
-                        self.phys_current_task = value
-                        gs_base = self.cpu.ia32_gs_base
-                        self.phys_saved_cr3 = gs_base+self.param.saved_cr3
-                        self.lgr.debug('winTaskUtils, hacked snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
-                        self.lgr.debug('winTaskUtils loaded only phys_current_task, value 0x%x' % value)
+                        if self.param.saved_cr3 is not None:
+                            self.phys_current_task = value
+                            gs_base = self.cpu.ia32_gs_base
+                            self.phys_saved_cr3 = gs_base+self.param.saved_cr3
+                            self.lgr.debug('winTaskUtils, hacked snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.param.saved_cr3, self.phys_saved_cr3))
+                            self.lgr.debug('winTaskUtils loaded only phys_current_task, value 0x%x' % value)
                     else:
-                        self.phys_current_task = value['current_task_phys']
-                        self.phys_saved_cr3 = value['saved_cr3_phys']
+                        if self.param.saved_cr3 is not None:
+                            self.phys_current_task = value['current_task_phys']
+                            self.phys_saved_cr3 = value['saved_cr3_phys']
                         if 'system_proc_rec' in value:
                             self.system_proc_rec = value['system_proc_rec']
                         else:
@@ -164,10 +171,12 @@ class WinTaskUtils():
                                 self.lgr.error('WinTaskUtils temp hack failed to get system thread record')
                             else:
                                 self.lgr.debug('winTaskUtils, hacked snapshot lacked system_proc_rec, got 0x%x' % self.system_proc_rec)
-                        self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
-                           self.phys_saved_cr3))
+                        if self.param.saved_cr3 is not None:
+                            self.lgr.debug('winTaskUtils loaded phys_current_task value 0x%x and saved_cr3 0x%x' % (self.phys_current_task, 
+                               self.phys_saved_cr3))
                     #saved_cr3 = SIM_read_phys_memory(self.cpu, self.phys_saved_cr3, self.mem_utils.WORD_SIZE)
-                    self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
+                    if self.param.saved_cr3 is not None:
+                        self.mem_utils.saveKernelCR3(self.cpu, phys_cr3=self.phys_saved_cr3)
                 else:
                     self.lgr.error('winTaskUtils did not find %s' % pfile)
                     return
@@ -179,7 +188,7 @@ class WinTaskUtils():
                     self.program_map[str(tid)] = pmap[tid]
                     self.lgr.debug('winTaskUtils from pickle got tid:%s  %s' % (tid, self.program_map[str(tid)]))
             else:
-                self.lgr.error('winTaskUtils did not find %s' % exec_addrs_file)
+                self.lgr.error('winTaskUtils did not find %s for snap %s' % (exec_addrs_file, run_from_snap))
 
     def commSize(self):
         return 14
@@ -358,7 +367,7 @@ class WinTaskUtils():
         #self.lgr.debug('taskProc cur_task 0x%x phys 0x%x  pid %d comm: %s  phys_current_task 0x%x' % (cur_proc_rec, phys, pid, comm, self.phys_current_task))
         return self.cpu, comm, pid_thread
 
-    def frameFromRegs(self, compat32=None, swap_r10=True):
+    def frameFromRegs(self, compat32=None, swap_r10=True, skip_sp=False):
         frame = {}
         if self.cpu.architecture.startswith('arm'):
             # TBD not suppored yet
@@ -383,22 +392,27 @@ class WinTaskUtils():
                     frame['param1'] = self.mem_utils.getRegValue(self.cpu, 'r10')
             else:
                 self.lgr.error('winTaskUtils frameFromRegs bad word size?') 
-        user_stack = frame['sp']+0x28
-        frame['param5'] = self.mem_utils.readWord(self.cpu, user_stack)
-        frame['param6'] = self.mem_utils.readWord(self.cpu, user_stack+self.mem_utils.wordSize(self.cpu))
-        frame['param7'] = self.mem_utils.readWord(self.cpu, user_stack+2*self.mem_utils.wordSize(self.cpu))
-        frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack+3*self.mem_utils.wordSize(self.cpu))
+        if not skip_sp:
+            user_stack = frame['sp']+0x28
+            #self.lgr.debug('wintTaskUtils frameFromRegs user_stack 0x%x' % user_stack)
+            frame['param5'] = self.mem_utils.readWord(self.cpu, user_stack)
+            frame['param6'] = self.mem_utils.readWord(self.cpu, user_stack+self.mem_utils.wordSize(self.cpu))
+            frame['param7'] = self.mem_utils.readWord(self.cpu, user_stack+2*self.mem_utils.wordSize(self.cpu))
+            frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack+3*self.mem_utils.wordSize(self.cpu))
         return frame
 
     def frameFromRegsComputed(self):
-        frame = self.frameFromRegs(swap_r10=False)
+        frame = self.frameFromRegs(swap_r10=False, skip_sp=True)
 
         gs_base = self.cpu.ia32_gs_base
         #ptr2stack = gs_base+0x6008
         ptr2stack = gs_base+self.param.ptr2stack
-        stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
-        #self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
-        user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
+        if not hasattr(self.param, 'param_version') or int(self.param.param_version) < 11:
+            stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
+            #self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
+            user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
+        else:
+            user_stack = self.mem_utils.readPtr(self.cpu, ptr2stack)
         
         r10 = self.mem_utils.getRegValue(self.cpu, 'r10')
         #self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (user_stack, frame['param1'], r10))
@@ -426,7 +440,8 @@ class WinTaskUtils():
             pass
         dict_val = {}
         dict_val['current_task_phys'] = self.phys_current_task
-        dict_val['saved_cr3_phys'] = self.phys_saved_cr3
+        if self.phys_saved_cr3 is not None:
+            dict_val['saved_cr3_phys'] = self.phys_saved_cr3
         dict_val['system_proc_rec'] = self.system_proc_rec 
         pickle.dump(dict_val , open( phys_current_task_file, "wb" ) )
         exec_addrs_file = os.path.join('./', fname, self.cell_name, 'exec_addrs.pickle')
@@ -906,6 +921,9 @@ class WinTaskUtils():
         return va
 
     def savePhysCR3Addr(self):
-        gs_base = self.cpu.ia32_gs_base
-        self.phys_saved_cr3 = self.mem_utils.v2p(self.cpu, gs_base+self.param.saved_cr3)
-        self.lgr.debug('winTaskUtils saved phys_saved_cr3 value 0x%x' % self.phys_saved_cr3)
+        if self.param.saved_cr3 is not None:
+            gs_base = self.cpu.ia32_gs_base
+            self.phys_saved_cr3 = self.mem_utils.v2p(self.cpu, gs_base+self.param.saved_cr3)
+            self.lgr.debug('winTaskUtils saved phys_saved_cr3 value 0x%x' % self.phys_saved_cr3)
+
+

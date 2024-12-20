@@ -1018,7 +1018,7 @@ class Coverage():
         self.diag_hits = diag_hits
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
-            self.analysis_path = fname
+            self.analysis_path = self.top.getAnalysisPath(fname)
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
             if prog_path is not None:

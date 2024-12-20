@@ -162,7 +162,7 @@ class TraceFiles():
         suf = '-write'
         if read:
             suf = '-read'
-        if the_bytes is None:
+        if the_bytes is None or len(the_bytes) == 0:
             return
         if self.raw:
             if tid in self.open_files and fd in self.open_files[tid]:

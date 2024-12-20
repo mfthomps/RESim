@@ -13,7 +13,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, ioctl_count_max=None, select_count_max=None, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True):
+                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True, backstop_delay=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -70,6 +70,9 @@ class WriteData():
         self.context_manager = context_manager
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
+        self.backstop_delay = backstop_delay
+        if backstop_delay is not None:
+            self.backstop.setDelay(backstop_delay)
         self.write_callback = write_callback
         self.lgr = lgr
         self.limit_one = limit_one
@@ -192,7 +195,8 @@ class WriteData():
         self.select_count = 0
         self.pending_callname = None
         self.pending_select = None
-
+        if self.backstop_delay is not None:
+            self.backstop.setDelay(self.backstop_delay)
     def writeKdata(self, data):
         ''' write data to kernel buffers '''
         if self.k_bufs is None:

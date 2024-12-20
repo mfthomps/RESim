@@ -1079,6 +1079,7 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChangedWin kernel exit eip 0x%x %s' % (eip, instruct[1]))
                 if instruct[1].startswith('iret'):
                     self.param.iretd = eip
+                    self.lgr.debug('entryModeChangedWin got iretd 0x%x' % eip)
                 elif instruct[1] == 'sysexit':
                     self.param.sysexit = eip
                 elif instruct[1] == 'sysret64':
@@ -1205,12 +1206,17 @@ class GetKernelParams():
             #             cs:0xfffff800034f1e28 p:0x0034f1e28  add r10,r11
 
             ptr2stack_prefix = 'mov rsp,qword ptr gs:'
+            other_ptr2stack_prefix = 'mov qword ptr gs:'
             prefix = 'movsx r11,dword ptr [r10'
+            reg_num = self.cpu.iface.int_register.get_number("cr3")
+            cr3 = self.cpu.iface.int_register.read(reg_num)
+            starting_cr3 = cr3
+            self.lgr.debug('starting cr3 0x%x' % cr3)
             while True:
                 SIM_run_command('si -q')
                 rip = self.mem_utils.getRegValue(self.cpu, 'rip')
                 instruct = SIM_disassemble_address(self.cpu, rip, 1, 0)
-                self.lgr.debug('rip: 0x%x instruct: %s' % (rip, instruct[1]))
+                self.lgr.debug('stepCompute rip: 0x%x instruct: %s' % (rip, instruct[1]))
                 if not self.mem_utils.isKernel(rip):
                     self.lgr.error('stepCompute returned to user space rip 0x%X  kernel_base 0x%x' % (rip, self.param.kernel_base))
                     return
@@ -1218,27 +1224,43 @@ class GetKernelParams():
                 if instruct[1].startswith(ptr2stack_prefix):
                     last = instruct[1].split()[-1].strip()
                     content = last.split('[', 1)[1].split(']')[0]
-                    value = int(content, 16)
-                    if self.param.saved_cr3 is None:
-                        self.param.saved_cr3 = value
-                        gs_base = self.cpu.ia32_gs_base
-                        ptr = gs_base + value
-                        phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
-                        self.win7_saved_cr3_phys = phys_block.address
-                        self.lgr.debug('stepCompute insruct %s param.saved_cr3 to 0x%x ptr 0x%x win7_saved_cr3 0x%x' % (instruct[1], self.param.saved_cr3,
-                            ptr, self.win7_saved_cr3_phys))
-                    elif self.param.ptr2stack is None:
-                        self.param.ptr2stack = value
+                    if '0x60' in content:
+                        self.lgr.debug('stepCompute we believe there is no saved cr3 in this kernel')
+                        no_cr3 = False
                     else:
-                        self.lgr.error('stepCompute confused')
+                        no_cr3 = True
+                    if not no_cr3:
+                        value = int(content, 16)
+                        if self.param.saved_cr3 is None:
+                            self.param.saved_cr3 = value
+                            gs_base = self.cpu.ia32_gs_base
+                            ptr = gs_base + value
+                            phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
+                            self.win7_saved_cr3_phys = phys_block.address
+                            self.lgr.debug('stepCompute instruct %s param.saved_cr3 to 0x%x ptr 0x%x win7_saved_cr3 0x%x' % (instruct[1], self.param.saved_cr3,
+                                ptr, self.win7_saved_cr3_phys))
+                        elif self.param.ptr2stack is None:
+                            self.param.ptr2stack = value
+                            self.lgr.debug('stepCompute saved ptr2stack as 0x%x' % value)
+                        else:
+                            self.lgr.error('stepCompute confused')
+                elif instruct[1].startswith(other_ptr2stack_prefix) and instruct[1].endswith('rsp'):
+                    ''' get offset from gs of where user stack stored'''
+                    after = instruct[1][len(other_ptr2stack_prefix):]
+                    bracketed = after.split(',')[0]
+                    content = bracketed.split('[', 1)[1].split(']')[0]
+                    value = int(content, 16)
+                    self.param.ptr2stack = value
+                    self.lgr.debug('stepCompute saved other ptr2stack as 0x%x' % value)
                        
                 elif instruct[1].startswith(prefix):
                     self.param.syscall_compute = rip
                     self.param.syscall_jump = self.mem_utils.getRegValue(self.cpu, 'r10')
                     self.lgr.debug('stepCompute win7 syscall_compute 0x%x syscall_jump 0x%x' % (self.param.syscall_compute, self.param.syscall_jump))
                     #SIM_run_alone(self.testCompute, eip)
-                    SIM_run_alone(self.setPageFaultHap, None)
                     break
+            #end while
+            SIM_run_alone(self.setPageFaultHap, None)
 
         else:
             ''' find where we do the syscall jump table computation '''

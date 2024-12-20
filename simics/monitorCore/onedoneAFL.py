@@ -5,7 +5,7 @@ been initialized.  This one calls AFL
 import os
 def onedone(top):
     port=int(os.getenv('ONE_DONE_PARAM'))
-    #protocol=os.getenv('ONE_DONE_PARAM2')
+    commence_params=os.getenv('ONE_DONE_PARAM2')
     dead=os.getenv('ONE_DONE_PARAM3')
     fname=os.getenv('ONE_DONE_PARAM4')
     linear=os.getenv('ONE_DONE_PARAM5')
@@ -34,12 +34,12 @@ def onedone(top):
         #else:
         fh.write('call afl\n')
         if targetFD is None:
-            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s)' % (port, fname, is_linear, dead, target)
+            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s, commence_params=%s)' % (port, fname, is_linear, dead, target, commence_params)
         else:
-            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s, targetFD=0x%x, count=%d)' % (port, fname, is_linear, dead, target, targetFD, count)
+            cmd = 'top.afl(port=%d, fname=%s, linear=%r, dead=%r, target=%s, targetFD=0x%x, count=%d, commence_params=%s)' % (port, fname, is_linear, dead, target, targetFD, count, commence_params)
         fh.write(cmd+'\n')
         fh.flush()
-        top.afl(port=port, fname=fname, linear=is_linear, dead=dead, target=target, targetFD=targetFD, count=count)
+        top.afl(port=port, fname=fname, linear=is_linear, dead=dead, target=target, targetFD=targetFD, count=count, commence_params=commence_params)
         fh.write('back from afl\n')
         fh.flush()
 

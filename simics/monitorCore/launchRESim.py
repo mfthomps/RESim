@@ -128,7 +128,12 @@ def doConnect(switch, eth, switch_map, index):
         cmd = '%s.get-free-connector' % switch
     #print('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
-    cmd = 'connect $%s cnt1 = %s' % (eth, con)
+    eth_name = run_command('$%s' % eth)
+    #print('eth name %s' % eth_name)
+    if 'i82546bg' in eth_name:
+        eth_name = eth_name+'[0]'
+    #cmd = 'connect $%s cnt1 = %s' % (eth, con)
+    cmd = 'connect %s cnt1 = %s' % (eth_name, con)
     #print('doConnect cmd: %s' % cmd)
     run_command(cmd)
     switch_n = 'switch%d' % index
@@ -170,7 +175,7 @@ def createDict(config, not_a_target, lgr):
         if section in not_a_target and section != 'driver':
             continue
         comp_dict[section] = {}
-        print('assign %s CLI variables' % section)
+        #print('assign %s CLI variables' % section)
         lgr.debug('assign %s CLI variables' % section)
         ''' hack defaults, Simics CLI has no undefine operation '''
         comp_dict[section]['ETH0_SWITCH'] = 'switch0'
@@ -276,6 +281,7 @@ class LaunchRESim():
         
         RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
         ADD_FROM_SNAP = os.getenv('ADD_FROM_SNAP')
+        INIT_FROM_SNAP = os.getenv('INIT_FROM_SNAP')
         self.SIMICS_VER = os.getenv('SIMICS_VER')
         if self.SIMICS_VER is not None:
             cmd = "$simics_version=%s" % (self.SIMICS_VER)
@@ -290,7 +296,7 @@ class LaunchRESim():
             print('add from snapshot %s' % ADD_FROM_SNAP)
             run_command('read-configuration %s' % ADD_FROM_SNAP)
 
-        if RUN_FROM_SNAP is None:
+        if RUN_FROM_SNAP is None and INIT_FROM_SNAP is None:
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             checkVLAN(self.config)
             if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
@@ -351,9 +357,13 @@ class LaunchRESim():
             if config_command is not None:
                 run_command(config_command)
         else:
-            print('run from checkpoint %s' % RUN_FROM_SNAP)
-            run_command('read-configuration %s' % RUN_FROM_SNAP)
-            #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
+            if RUN_FROM_SNAP is not None:
+                print('run from checkpoint %s' % RUN_FROM_SNAP)
+                run_command('read-configuration %s' % RUN_FROM_SNAP)
+                #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
+            elif INIT_FROM_SNAP is not None:
+                print('init from checkpoint %s (hold the pickles)' % INIT_FROM_SNAP)
+                run_command('read-configuration %s' % INIT_FROM_SNAP)
         self.doAlways()
         run_command('log-level 0 -all')
         ''' dummy logging object to support script branches for automated tests '''
@@ -362,6 +372,12 @@ class LaunchRESim():
         except:
             pass
         SIM_run_command('RESim_log.log-level 1')
+        
+        try:
+            # in case a dhcp service node was created, keep it off the network TBD make a param
+            SIM_run_command('dhcp_service_node.disable-real-dns')
+        except:
+            pass
         '''
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''

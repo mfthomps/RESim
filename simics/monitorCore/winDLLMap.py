@@ -79,12 +79,15 @@ class WinDLLMap():
         self.min_addr = {}
         self.max_addr = {}
         self.so_watch_callback = {}
+        self.fun_mgr = None
         self.text = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
         self.pending_procs = []
         self.fun_list_cache = []
         self.unknown_sections = {}
+        self.word_sizes = {}
+        self.loadWordSizes()
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -286,7 +289,7 @@ class WinDLLMap():
                     # TBD is pending_procs necessary?  Why not always add text if missing for pid?
                     if pid not in self.text:
                         #self.getText(tid)
-                        self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText')
+                        self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText' % pid)
                         eproc = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
                         full_path = self.top.getFullPath(fname=prog_name)
@@ -419,6 +422,18 @@ class WinDLLMap():
         if so_file is not None and resimUtils.isClib(so_file):
             retval = True
         return retval
+
+    def isFunNotLibc(self, address):
+        retval = False
+        if self.isMainText(address):
+            retval = True
+        else:
+            so_file = self.getSOFile(address)
+            if so_file is not None and not resimUtils.isClib(so_file):
+                fun = self.fun_mgr.getFunName(address)
+                if fun is not None:
+                    retval = True 
+        return retval           
 
     def getSOFile(self, addr_in):
         retval = None
@@ -629,7 +644,8 @@ class WinDLLMap():
 
     def addSectionFunction(self, section, locate):
         if self.fun_mgr is None:
-            self.lgr.error('winDLL MISSING fun_mgr *************************************')
+            #self.lgr.error('winDLL MISSING fun_mgr *************************************')
+            self.lgr.debug('winDLL MISSING fun_mgr *************************************')
             return
         fun_path = self.getAnalysisPath(section.fname)
         if fun_path is not None:
@@ -725,8 +741,13 @@ class WinDLLMap():
             else:
                 self.lgr.warning('winDLL getMachineSize pid:%s missing machine field' % pid) 
         elif pid is not None:
-            self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
-            pass
+            comm = self.task_utils.getCommFromTid(tid)
+            self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (comm, tid))
+            if comm in self.word_sizes:
+                retval = self.word_sizes[comm]*8
+            else:
+                self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
+                pass
         else:
             self.lgr.error('winDLL getMachineSize with pid of None')
        
@@ -822,3 +843,21 @@ class WinDLLMap():
     def getProgSize(self, prog_in):
         self.lgr.error('winDLL getProgSize not done yet')
         return None
+
+    def loadWordSizes(self):
+        fname = self.top.getCompDict(self.cell_name, 'WORD_SIZES')
+        if fname is not None:
+            if os.path.isfile(fname):
+                with open(fname) as fh:
+                    for line in fh:
+                        line = line.strip()
+                        if line.startswith('#') or len(line)==0:
+                            continue
+                        parts = line.split()
+                        comm = parts[0]
+                        size = parts[1]
+                        self.word_sizes[comm] = int(size)
+                        self.lgr.debug('winDLLMap loadWordSizes added %s %d' % (comm, self.word_sizes[comm]))
+                      
+            else:
+                self.lgr.error('winDLLMap failed to find word sizes file at %s' % fname)

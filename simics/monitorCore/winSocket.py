@@ -51,10 +51,13 @@ op_map_vals["START_LISTEN"]= 0x1200B
 op_map_vals["WAIT_FOR_LISTEN"]= 0x1200C
 # from web
 op_map_vals["TCP_FASTOPEN"]= 0x120BF
-op_map_vals["SUPER_CONNECT?"]= 0x120C7
+op_map_vals["SUPER_CONNECT"]= 0x120C7
+#op_map_vals["SUPER_CONNECT2"]= 0x120CF
 # from digging
 op_map_vals["12083_ACCEPT"]=0x12083
 op_map_vals["RANDOM_VALUE"]=0x390008
+# from trial/error/google
+op_map_vals["FSCTL_MARK_HANDLE"]=0x12000f
 
 
 def getOpMap():

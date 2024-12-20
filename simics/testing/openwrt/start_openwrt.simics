@@ -1,0 +1,13 @@
+try{
+    $exists=(driver_service_node)
+}except{
+    $sn=(new-service-node-comp name=driver_service_node)
+    $sn_conn=($sn.add-connector ip=10.20.200.1)
+    connect $sn.$sn_conn (switch1.get-free-connector)
+    connect-real-network-port-in target-port = 22 host-port = 4022 ethernet-link = switch1 target-ip = 10.20.200.91
+    connect-real-network-port-in target-port = 6459 host-port = 6459 ethernet-link = switch1 target-ip = 10.20.200.91
+
+}
+@cgc.toProc('/etc/init.d/odhcpd')
+@cgc.writeConfig('odhcpd')
+q

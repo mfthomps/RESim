@@ -11,6 +11,15 @@ import logging
 import logging.handlers
 import argparse
 import json
+def getCookie(data, lgr):
+    offset = data.index(b'set-cookie:') + len('set-cookie:')
+    rest = data[offset:]
+    lgr.debug('rest is %s' % rest)
+    auth = rest.split(b'=', 1)[1]
+    lgr.debug('auth is %s' % auth)
+    cookie = auth.split(b';')[0]
+    lgr.debug('data set cookie %s' % cookie)
+    return cookie
 
 def sendTCP(lgr):
     with open('/tmp/catchme.json', 'r') as fh:
@@ -36,25 +45,52 @@ def sendTCP(lgr):
                 time.sleep(1)
         #TBD REMOVE/FIX
         delim = b"\r\n\r\n"
-        for item in data:
-            item_hex = eval(item)
-            item_bytes = binascii.unhexlify(item_hex)
-            sock.sendall(item_bytes) 
-            lgr.debug('sent %d bytes' % len(item_bytes))
+        cookie = None
+        get_next = True
+        data_iter = iter(data)
+        #for item in data:
+        while True:
+            if get_next:
+                item = next(data_iter)
+                if item is None:
+                    lgr.debug('Got none from data iterator, break')
+                    break
+                item_hex = eval(item)
+                item_bytes = binascii.unhexlify(item_hex)
+            else:
+                get_next = True
+            if cookie is not None: 
+                if b'Cookie:' in item_bytes:
+                    lgr.debug('item has a cookie')
+                    if b'RESIM_COOKIE' in item_bytes:
+                        item_bytes = item_bytes.replace(b'RESIM_COOKIE', cookie)
+                        lgr.debug('item is Cookie: and has a RESIM cookie, replaced with %s, item_bytes now %s' % (cookie, item_bytes))
+                else:
+                    if b'RESIM_COOKIE' in item_bytes:
+                        item_bytes = item_bytes.replace(b'RESIM_COOKIE', cookie)
+                        lgr.debug('item has a RESIM cookie, maybe in a json, replaced with %s, item_bytes now %s' % (cookie, item_bytes))
+            elif b'RESIM_COOKIE' in item_bytes:
+                lgr.debug('item has RESIM cookie, but no cookie has been set, do not send yet')
+                #lgr.debug('item_bytes: %s' % item_bytes)
+                get_next = False
+            if get_next:
+                sock.sendall(item_bytes) 
+                lgr.debug('sent %d bytes' % len(item_bytes))
             done = False
             count = 0
             while not done:
                 got = sock.recv(1024)
-                lgr.debug('got len %d %s' % (len(got), got))
-                #if got.endswith(delim): 
+                lgr.debug('got len %d' % (len(got)))
+                if b'set-cookie:' in got:
+                    cookie = getCookie(got, lgr)
                 if len(got) == 1024:
                     # dangerous assumption
                     pass
                 elif len(got) > 1:
                     done = True
-                    time.sleep(.01)
+                    time.sleep(.1)
                 else:
-                    time.sleep(.01)
+                    time.sleep(.1)
                     count = count+1
                     if count > 10:
                         break

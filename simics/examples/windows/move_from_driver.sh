@@ -4,6 +4,6 @@
 # kill the process when the shell disconnects.
 #
 cd /tmp/
-scp -i id_rsa -o StrictHostKeyChecking=no simple_server.exe admin@10.10.0.100:C:\\Users\\admin\\simple_server.exe
-ssh -i id_rsa -o StrictHostKeyChecking=no -C admin@10.10.0.100 "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList C:\Users\admin\simple_server.exe"
+scp -i id_rsa -o StrictHostKeyChecking=no simple_server.exe admin@10.10.0.101:C:\\Users\\admin\\simple_server.exe
+ssh -i id_rsa -o StrictHostKeyChecking=no -C admin@10.10.0.101 "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe Invoke-WmiMethod -Class Win32_Process -Name Create -ArgumentList C:\Users\admin\simple_server.exe"
 

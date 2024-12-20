@@ -38,4 +38,8 @@ resim ubuntu_driver.ini -n || exit
 # the above should have created a rop warning in the log.  check it.
 ./checkROP.sh || exit
 ./testTrack.sh || exit
-./testAFL.sh
+./testAFL.sh 
+./testPlay.sh || exit
+./testDedupe.sh || exit
+./testRunTrack.sh || exit
+

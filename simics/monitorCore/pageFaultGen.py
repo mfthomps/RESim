@@ -340,7 +340,7 @@ class PageFaultGen():
                   
                 if phys_addr is not None:  
                     if tid in self.pending_double_faults:
-                        self.pending_double_falts[tid].cancel()
+                        self.pending_double_faults[tid].cancel()
                         del self.pending_double_faults[tid]
                     #self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
                     del self.pending_faults[tid]
@@ -477,7 +477,7 @@ class PageFaultGen():
         ''' Called when an undefined instruction exception is hit '''
         cell_name = self.top.getTopComponentName(cpu)
         cpu, comm, tid = self.task_utils.curThread() 
-        name = cpu.iface.exception.get_name(exception_number)
+        name = self.cpu.iface.exception.get_name(exception_number)
         eip = self.mem_utils.getRegValue(cpu, 'pc')
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         #self.lgr.debug('faultCallback %s  (%d)  tid:%s (%s)  eip: 0x%x %s cycle: 0x%x' % (name, 

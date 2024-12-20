@@ -531,8 +531,8 @@ def register(isim):
         ContinueForwardHandler(isim),
         'F9', 'Continue', idaapi.load_custom_icon(file_name=play_icon, format="png"))
 
-    idaapi.unregister_action("ThreadStepOver")
-    idaapi.unregister_action("ThreadStepInto")
+    #idaapi.unregister_action("ThreadStepOver")
+    #idaapi.unregister_action("ThreadStepInto")
     idaapi.register_action(do_show_cycle_action)
     idaapi.register_action(do_rebase_action)
     idaapi.register_action(do_reverse_action)

@@ -39,8 +39,8 @@ class TargetFS():
         retval = None
         self.lgr = lgr
         path = path.replace('\\', '/')
-        #if lgr is not None:
-        #     lgr.debug('getFull windows, new path is %s' % path)
+        if lgr is not None:
+             lgr.debug('getFull windows, new path is %s' % path)
         if path in self.cache:
             return self.cache[path]   
         elif path.startswith('./'):
@@ -57,12 +57,7 @@ class TargetFS():
         else:     
             #if lgr is not None:
             #    lgr.debug('getFull look at %s' % path) 
-            if path.startswith('/??/C:/'):
-                path = path[7:]
-                #if lgr is not None:
-                #    lgr.debug('TargetFS getFull not relative changed to %s' % path) 
-            elif path.startswith('/'):
-                path = path[1:]
+            path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
             self.lgr.debug('winTargetFS root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
             full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
             self.lgr.debug('full_insenstive is %s' % full_insensitive)

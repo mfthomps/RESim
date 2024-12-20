@@ -983,7 +983,7 @@ class reverseToCall():
                             done = True
                             retval = RegisterModType(None, RegisterModType.UNKNOWN)
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
-                            if mn.startswith('ldr') and op1.startswith('['):
+                            if (mn.startswith('ldr') or mn.startswith('ldu')) and op1.startswith('['):
                                 self.lgr.debug('is ldr op1 is %s' % op1)
                                 addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK

@@ -237,11 +237,12 @@ class WinCallExit():
             if load_address is not None and size is not None:
                 trace_msg = trace_msg+' section_handle: 0x%x load_address: 0x%x size: 0x%x' % (section_handle, load_address, size)
                 self.lgr.debug('winCallExit '+trace_msg)
-                self.soMap.mapSection(tid, section_handle, load_address, size)
+                if self.top.trackingThreads():
+                    self.soMap.mapSection(tid, section_handle, load_address, size)
             else:
                 #self.lgr.debug('winCallExit %s tid:%s (%s) fd: 0x%x returned bad load address or size?' % (callname, tid, comm, exit_info.old_fd))
                 trace_msg = trace_msg+' section_handle: 0x%x bad load address or size' % (section_handle)
-                self.lgr.debug('winCallExit '+trace_msg)
+                self.lgr.debug('winCallExit not tracking threads '+trace_msg)
 
         elif callname in ['CreateEvent', 'OpenProcessToken', 'OpenProcess']:
             fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
@@ -276,6 +277,12 @@ class WinCallExit():
                 if my_syscall.linger: 
                     self.dataWatch.stopWatch() 
                     self.dataWatch.watch(break_simulation=False, i_am_alone=True)
+
+        elif callname == 'QueryInformationProcess':
+            if exit_info.retval_addr is not None:
+                if exit_info.count == 4:
+                    data = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
+                    trace_msg = trace_msg + ('returned data: 0x%x' % data)
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             if exit_info.retval_addr is not None:
@@ -388,27 +395,27 @@ class WinCallExit():
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
-            if not my_syscall.linger: 
+            if not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo')):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
-            if my_syscall is None:
-                self.lgr.error('winCallExit could not get syscall for %s' % callname)
-            else:
-                if eax != 0:
-                    new_msg = exit_info.trace_msg + ' ' + trace_msg
-                    self.context_manager.setIdaMessage(new_msg)
-                self.lgr.debug('winCallExit call stopAlone of syscall')
+                if my_syscall is None:
+                    self.lgr.error('winCallExit could not get syscall for %s' % callname)
+                else:
+                    if eax != 0:
+                        new_msg = exit_info.trace_msg + ' ' + trace_msg
+                        self.context_manager.setIdaMessage(new_msg)
+                    self.lgr.debug('winCallExit call stopAlone of syscall')
 
-                stop_param = callname
-                if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
-                    stop_param = exit_info.socket_callname
-                self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.matched_param.name)
-                my_syscall.appendRmParam(exit_info.matched_param.name)
-                SIM_run_alone(my_syscall.stopAlone, stop_param)
-                self.top.idaMessage() 
-                # remove it from syscall else there will be stop hap to execute
-                #if not my_syscall.linger: 
-                #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
+                    stop_param = callname
+                    if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+                        stop_param = exit_info.socket_callname
+                    self.lgr.debug('winCallExit add call param %s to syscall remove list' % exit_info.matched_param.name)
+                    my_syscall.appendRmParam(exit_info.matched_param.name)
+                    SIM_run_alone(my_syscall.stopAlone, stop_param)
+                    self.top.idaMessage() 
+                    # remove it from syscall else there will be stop hap to execute
+                    #if not my_syscall.linger: 
+                    #    self.top.rmSyscall(exit_info.call_params.name, cell_name=self.cell_name)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))

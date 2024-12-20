@@ -127,15 +127,15 @@ class IdaSIM():
         curAddr = idaversion.get_reg_value(self.PC)
         prev_eip = idaversion.prev_head(curAddr)
         eip = None
-        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
-        '''
+        #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
+        print('doRevStepOver prev_eip 0x%x' % prev_eip) 
         if prev_eip == idaapi.BADADDR:
             prev_eip = None
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
         else:
             #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
             simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False, prev=0x%x)");' % prev_eip)
-        '''
+        print('doRevStepOver %s' % simicsString) 
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
             self.signalClient()

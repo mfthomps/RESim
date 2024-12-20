@@ -68,12 +68,13 @@ else
     fi
 fi    
 if [ "$resim_ida_arg" == color ] && [ ! -z $remote ]; then
-       remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$root_dir/$target_base; echo \$RESIM_IDA_DATA" )
-       if [ -z "$remote_ida" ];then
-           echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
-           exit 1 
-       fi
-       rsync -avh $remote:$remote_ida/$root_dir/$target_base/*.hits $RESIM_IDA_DATA/$root_dir/$target_base/
+       echo "Be sure to have run syncIda.sh so that IDA has the necessary hits files."
+       #remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$root_dir/$target_base; echo \$RESIM_IDA_DATA" )
+       #if [ -z "$remote_ida" ];then
+       #    echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
+       #    exit 1 
+       #fi
+       #rsync -avh $remote:$remote_ida/$root_dir/$target_base/*.hits $RESIM_IDA_DATA/$root_dir/$target_base/
 fi
 if [ ! -z "$remote" ]; then
     echo "REMOTE IS $remote"

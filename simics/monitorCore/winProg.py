@@ -238,6 +238,7 @@ class WinProg():
             return
         self.lgr.debug('winProg runToText load_addr 0x%x' % load_addr)
         print('Program %s image base is 0x%x' % (self.prog_string, load_addr))
+        self.context_manager.setDebugTid()
         self.top.debugExitHap()
         full_path = self.top.getFullPath(fname=self.prog_string)
         self.lgr.debug('winProg got full_path %s from prog %s' % (full_path, self.prog_string))
@@ -254,6 +255,7 @@ class WinProg():
         proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
         want_pid = want_tid.split('-')[0]
         self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
+        self.lgr.debug('winProg runToText set break at 0x%x size 0x%x context %s' % (text_addr, size, self.cpu.current_context))
 
     def findText(self, want_tid, one, old, new):
         if self.mode_hap is None:
@@ -274,6 +276,7 @@ class WinProg():
         SIM_run_alone(self.top.debug, False)
 
     def textHap(self, pid, third, forth, memory):
+        self.lgr.debug('winProg textHap') 
         if self.text_hap is None:
             return
         cpu, comm, this_tid = self.task_utils.curThread() 

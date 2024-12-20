@@ -66,35 +66,78 @@ def getIdaDataFromIni(prog, ini):
     else:
         root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         base = os.path.basename(root_fs)
+        #retval = os.path.join(resim_ida_data, base, prog, prog)
+        retval = os.path.join(resim_ida_data, base, prog)
+    return retval
+
+def getOldIdaDataFromIni(prog, ini):
+    retval = None
+    resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    if resim_ida_data is None:
+        print('ERROR: RESIM_IDA_DATA not defined')
+    else:
+        root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        base = os.path.basename(root_fs)
         retval = os.path.join(resim_ida_data, base, prog, prog)
     return retval
 
-def getIdaData(full_path, root_prefix):
+def getIdaData(full_path, root_prefix, lgr=None):
     ''' get the ida data path, providing backward compatability with old style paths '''
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
+        if lgr is not None:
+            lgr.error('RESIM_IDA_DATA not defined')
+            return None
+    resim_image = os.getenv('RESIM_IMAGE')
+    if resim_image is None:
+        print('ERROR: RESIM_IMAGE not defined')
+        return None
+    ida_analysis = os.getenv('IDA_ANALYSIS')
+    if ida_analysis is None:
+        print('ERROR: IDA_ANALYSIS not defined')
+        return None
+    if full_path.startswith(resim_image):
+        offset = len(resim_image)+1
+        remain = full_path[offset:]
+        retval = os.path.join(resim_ida_data, remain)
+        if lgr is not None:
+            lgr.debug('getIdaData is image path full_path %s, remain %s return %s' % (full_path, remain, retval))
+    elif full_path.startswith(ida_analysis):
+        offset = len(ida_analysis)+1
+        remain = full_path[offset:]
+        retval = os.path.join(resim_ida_data, remain)
+        if lgr is not None:
+            lgr.debug('getIdaData is analysis path full_path %s, remain %s return %s' % (full_path, remain, retval))
+
     else: 
-        #print('full_path %s' % full_path)
+        if lgr is not None:
+            lgr.debug('full_path %s' % full_path)
         base = os.path.basename(full_path)
         root_base = os.path.basename(root_prefix)
-        #print('root_prefix %s' % root_prefix)
+        if lgr is not None:
+            lgr.debug('root_prefix %s' % root_prefix)
         new_path = os.path.join(resim_ida_data, root_base, base)
         old_path = os.path.join(resim_ida_data, base)
-        #print('old %s' % old_path)
-        #print('new %s' % new_path)
+        if lgr is not None:
+            lgr.debug('old %s' % old_path)
+        if lgr is not None:
+            lgr.debug('new %s' % new_path)
         if not os.path.isdir(new_path): 
             if os.path.isdir(old_path):
                 ''' Use old path style '''
                 retval = os.path.join(old_path, base)
-                #print('Using old style ida data path %s' % retval)
+                if lgr is not None:
+                    lgr.debug('Using old style ida data path %s' % retval)
             else:
                 retval = os.path.join(new_path, base)
-                #print('Using new style ida data path %s' % retval)
+                if lgr is not None:
+                    lgr.debug('Using new style ida data path %s' % retval)
         else:
             retval = os.path.join(new_path, base)
-            #print('no existing ida data path %s' % retval)
+            if lgr is not None:
+                lgr.debug('no existing ida data path %s' % retval)
         
     return retval
 
@@ -414,12 +457,32 @@ def soMatch(fname, cache, lgr):
                 #lgr.debug('resimUtils soMatch found match %s' % item)
                 retval = item
     return retval
-    
+   
+def getWinPath(path, root_prefix, lgr=None): 
+    if path.startswith('/??/C:/') or path.startswith('/??/c:/'):
+        if os.path.isdir(os.path.join(root_prefix, 'C:')) or os.path.isdir(os.path.join(root_prefix, 'c:')):
+            path = path[4:]
+        else:
+            path = path[7:]
+    elif path.startswith('/??/D:/') or path.startswith('/??/d:/'):
+        if lgr is not None:
+            lgr.debug('resimUtils getWinPath is D:')
+        if os.path.isdir(os.path.join(root_prefix, 'D:')) or os.path.isdir(os.path.join(root_prefix, 'd:')):
+            path = path[4:]
+            if lgr is not None:
+                lgr.debug('resimUtils getWinPath is D: is dir path now %s' % path)
+        else:
+            if lgr is not None:
+                lgr.debug('resimUtils getWinPath is D: but not a subdir off root')
+            path = path[7:]
+    elif path.startswith('/'):
+        path = path[1:]
+    return path
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
-    #if lgr is not None:
-    #    lgr.debug('resimUtils getAnalyisPath find %s' % fname)
+    if lgr is not None:
+        lgr.debug('resimUtils getAnalyisPath find %s' % fname)
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
         lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
@@ -449,8 +512,11 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
-        if fname.startswith('/??/C:/'):
+        if root_prefix is None:
+            if fname.startswith('/??/C:/'):
                 fname = fname[7:]
+        else:
+            fname = getWinPath(fname, root_prefix, lgr=lgr)
 
         base = os.path.basename(fname)+'.funs'
         #if base.upper() in map(str.upper, fun_list_cache):
@@ -472,8 +538,9 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
     return retval
 
-def isClib(lib_file):
+def isClib(in_lib_file):
     retval = False
+    lib_file = os.path.basename(in_lib_file) 
     if lib_file is not None:
         lf = lib_file.lower()
         if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr.dll' in lf or 'msvcp.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
@@ -497,18 +564,25 @@ def getLoadOffsetFromSO(so_json, prog, lgr=None):
     if lgr is not None: 
         lgr.debug('resimUtils getLoadOffsetFromSO prog: %s  so_json[proc] %s' % (prog, so_json['prog']))
     so_prog = os.path.basename(so_json['prog'])
+    prog = os.path.basename(prog)
     if so_prog == prog:
        #print('0x%x is in prog' % bb['start_ea'])  
-       if lgr is not None:
-           lgr.debug('resimUtils getLoadOffsetFromSO is prog: %s TBD assuming offset zero, fix this' % prog) 
+       prog_start = so_json['prog_start']
+       if 'relocate' in so_json:
+           offset = prog_start 
+           if lgr is not None:
+               lgr.debug('resimUtils getLoadOffsetFromSO is prog: %s and is relocate, set offset to prog_start 0x%x' % (prog, prog_start))
        pass
     else:
        wrong_file = True
        for section in so_json['sections']:
            #print('section file is %s' % section['file'])
+           if lgr is not None:
+               lgr.debug('section file is %s' % section['file'])
            if section['file'].endswith(prog):
                offset = section['locate']
-               #print('got section, offset is 0x%x' % offset)
+               if lgr is not None:
+                   lgr.debug('got section, offset is 0x%x' % offset)
                wrong_file = False
     if not wrong_file:
         retval = offset

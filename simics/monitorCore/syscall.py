@@ -415,7 +415,7 @@ class CallParams():
         self.count = 0
         self.call_list = []
     def toString(self):
-        retval = 'name: %s subcall %s  match_param %s call_list: %s' % (self.name, self.subcall, str(self.match_param), str(self.call_list))
+        retval = 'name: %s subcall %s  match_param %s proc: %s call_list: %s' % (self.name, self.subcall, str(self.match_param), self.proc, str(self.call_list))
         return retval
 
 class TidFilter():
@@ -1431,21 +1431,16 @@ class Syscall():
                 if call_param.name == 'runToReceive':
                     exit_info.call_params.append(call_param)
                 elif (call_param.subcall is None or call_param.subcall == 'recv' or call_param.subcall == 'recvfrom') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    if call_param.nth is not None:
-                        call_param.count = call_param.count + 1
-                        self.lgr.debug('syscall parse socket recv call_param.nth not none, is %d, count incremented to  %d' % (call_param.nth, call_param.count))
-                        if call_param.count >= call_param.nth:
-                            self.lgr.debug('count >= param, set exit_info.call_params to catch return')
-                            addParam(exit_info, call_param)
-                            if self.kbuffer is not None:
-                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+
+                    if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
+                        self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                        self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                     else:
-                        self.lgr.debug('call_param.nth is none, call it matched')
-                        addParam(exit_info, call_param)
                         if self.kbuffer is not None:
                             self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                    addParam(exit_info, call_param)
+
                     # keep kernel from triggering data watch mods if just reading more data into buffer
                     # TBD apply this whereever we enter that might modify buffers
                     self.top.stopDataWatch(leave_backstop=True)
@@ -1478,13 +1473,14 @@ class Syscall():
                 exit_info.call_params.append(sock_param)
 
             for call_param in self.call_params:
-                #self.lgr.debug('syscall call_params %s' % call_param.toString())
-                if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                    #self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
-                    exit_info.call_params.append(call_param)
-                elif type(call_param.match_param) is str and call_param.subcall == 'recvmsg' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                # TBD does not handle kbuffer as done in read/recv
+                self.lgr.debug('syscall %s FD: %d call_params %s' % (callname, exit_info.old_fd, call_param.toString()))
+                if (call_param.subcall is None or call_param.subcall == 'recvmsg') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('syscall %s watch exit for FD call_param %s' % (socket_callname, call_param.match_param))
+                    addParam(exit_info, call_param)
+                elif type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall == 'recvmsg') and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('syscall %s watch exit for call_param %s' % (socket_callname, call_param.match_param))
-                    exit_info.call_params.append(call_param)
+                    addParam(exit_info, call_param)
             
         elif socket_callname == "sendmsg":
             # TBD Not complete
@@ -1534,10 +1530,10 @@ class Syscall():
 
 
             max_len = max(exit_info.count, 300)
-            byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
             s = None
-            if byte_array is not None:
-                s = resimUtils.getHexDump(byte_array[:max_len])
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
             self.checkSendParams(syscall_info, exit_info, ss, dest_ss, s)
 
         elif socket_callname == 'listen':
@@ -1945,21 +1941,14 @@ class Syscall():
                 ''' look for matching FD '''
                 if type(call_param.match_param) is int:
                     if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                        if call_param.nth is not None:
-                            call_param.count = call_param.count + 1
-                            self.lgr.debug('syscall read call_param.nth not none, is %d, count is %d' % (call_param.nth, call_param.count))
-                            if call_param.count >= call_param.nth:
-                                self.lgr.debug('count >= param, set it')
-                                addParam(exit_info, call_param)
-                                if self.kbuffer is not None:
-                                    self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                        if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
+                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
-                            self.lgr.debug('syscall read, call_param.nth is none, call it matched')
-                            addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                        addParam(exit_info, call_param)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     ''' handle read dmod during syscall return '''
                     #self.lgr.debug('syscall read, is dmod: %s' % call_param.match_param.toString())
@@ -1999,13 +1988,12 @@ class Syscall():
                 elif type(call_param.match_param) is str:
                     self.lgr.debug('write match param for tid:%s is string, check match' % tid)
                     max_len = min(count, 1024)
-                    byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
-                    if byte_array is not None:
-                        if resimUtils.isPrintable(byte_array):
-                            s = ''.join(map(chr,byte_array))
+                    byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+                    if byte_tuple is not None:
+                        if resimUtils.isPrintable(byte_tuple):
+                            s = ''.join(map(chr,byte_tuple))
                             if call_param.match_param in s:
-                                exit_info.call_params.append(call_param)
-                                exit_info.matched_param = call_param
+                                addParam(exit_info, call_param)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if count < 4028:
                         self.lgr.debug('syscall write check dmod count %d' % count)
@@ -2036,6 +2024,26 @@ class Syscall():
             exit_info.count = frame['param3']
             ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
             self.lgr.debug(ida_msg)
+            add_msg, byte_tuple = self.getIOV(exit_info)
+            ida_msg = ida_msg + add_msg
+            for call_param in self.call_params:
+                if type(call_param.match_param) is int and call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    self.lgr.debug('syscall writev call param found %d, matches %d' % (call_param.match_param, frame['param1']))
+                    exit_info.call_params.append(call_param)
+                elif type(call_param.match_param) is str:
+                    self.lgr.debug('syscall writev match param for tid:%s is string, check match' % tid)
+                    if byte_tuple is not None:
+                        if resimUtils.isPrintable(byte_tuple):
+                            s = ''.join(map(chr,byte_tuple))
+                            if call_param.match_param in s:
+                                self.lgr.debug('syscall writev found match for %s' % call_param.match_param)
+                                addParam(exit_info, call_param)
+                            else:
+                                self.lgr.debug('syscall writev failed to find match of %s in %s' % (call_param.match_param, s))
+                        else:
+                            s = ''.join(map(chr,byte_tuple))
+                            self.lgr.debug('syscall writev byte not printable: %s' % s)
+                       
 
         elif callname == 'readv':
             exit_info.old_fd = frame['param1']
@@ -2261,10 +2269,10 @@ class Syscall():
             mtype = self.mem_utils.readWord32(self.cpu, msgp)
             max_len = min(msgsz, 1024)
             mtext_addr = msgp + 4
-            byte_array = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, mtext_addr)
             s = None
-            if byte_array is not None:
-                s = resimUtils.getHexDump(byte_array[:max_len])
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
             ida_msg = '%s msqid: 0x%x mtype: 0x%x msgsz: %d msg: %s   tid:%s (%s) cycle:0x%x' % (callname, msqid, mtype, msgsz, s, tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg.strip()) 
         elif callname == 'msgrcv':
@@ -2375,7 +2383,6 @@ class Syscall():
                         #self.lgr.debug('will delete hap %s' % str(hc.hap))
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
-                self.lgr.debug('syscall stopHap will delete hap %s' % str(self.stop_hap))
                 ''' check functions in list '''
                 self.lgr.debug('syscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
@@ -2392,10 +2399,9 @@ class Syscall():
                 self.lgr.debug('syscall stopHap run stop_action')
                 self.stop_action.run(cb_param=msg)
 
-                if self.call_list is not None:
-                    for callname in self.call_list:
-                        #self.top.rmCallTrace(self.cell_name, callname)
-                        self.top.rmCallTrace(self.cell_name, self.name)
+                for param in self.call_params:
+                    self.lgr.debug('syscall stopHap call rmSyscall for param %s' % param.name)
+                    self.top.rmSyscall(param.name, cell_name=self.cell_name)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
@@ -2484,36 +2490,53 @@ class Syscall():
         self.lgr.debug(ida_msg)
         #SIM_break_simulation(ida_msg)
 
+    def arm64BailCheck(self, break_num):
+        # return True if arm64 syscall that should be ignored due to shared entry points
+        retval = False
+        # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
+        reg_num = self.cpu.iface.int_register.get_number('esr_el1')
+        reg_value = self.cpu.iface.int_register.read(reg_num)
+        reg_value = reg_value >> 26
+        if reg_value != 0x11 and reg_value != 0x15:
+            callnum = self.mem_utils.getCallNum(self.cpu)
+            #self.lgr.debug('syscallHap arm64 NOT a syscall, reg_value is 0x%x callnum 0x%x' % (reg_value, callnum))
+            #if callnum == 0xdc:
+            #    SIM_break_simulation('remove this')
+            retval = True
+        else:
+            hap_name = self.context_manager.getHapName(break_num)
+            if hap_name is not None:
+                arm64_app = self.mem_utils.arm64App(self.cpu)
+                #self.lgr.debug('syscallHap ENTER addr 0x%x break 0x%x hap_name %s cycle: 0x%x' % (memory.logical_address, break_num, hap_name, self.cpu.cycles))
+                if hap_name.endswith('arm32') and arm64_app:
+                    #self.lgr.debug('sycallHap arm32 break hit for arm64 app, bail')
+                    retval = True
+        return retval
+
     def syscallHap(self, dumb, context, break_num, memory):
         ''' Invoked when syscall is detected.  May set a new breakpoint on the
             return to user space so as to collect remaining parameters, or to stop
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
-        #self.lgr.debug('syscallHap addr 0x%x break 0x%x cycle: 0x%x' % (memory.logical_address, break_num, self.cpu.cycles))
         if self.context_manager.isReverseContext():
             return
-        if self.cpu.architecture == 'arm64':
-            # arm64 v8, anyway, shares kernel entry address between syscalls and faults.  Vectors are instructions vice addresses?
-            reg_num = self.cpu.iface.int_register.get_number('esr_el1')
-            reg_value = self.cpu.iface.int_register.read(reg_num)
-            reg_value = reg_value >> 26
-            if reg_value != 0x11 and reg_value != 0x15:
-                return
+        if self.context_manager.isIgnoreContext():
+            return
+        cpu, comm, tid = self.task_utils.curThread() 
+        if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
+            return
+ 
         if self.syscall_info.callnum is None and self.callback is not None:
             # only used syscall to set breaks, we'll take it from here.
             self.callback()
             return
-        cpu, comm, tid = self.task_utils.curThread() 
         if tid == '0':
             return
-        # TBD remove this?
+        # beware some systems execv init to some other process that you may care about
         #if tid == '1':
         #    return
         #self.lgr.debug('syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr)))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
-
-        #if tid == '1':
-        #    return
 
         #if comm == 'tar':
         #    return
@@ -2538,7 +2561,7 @@ class Syscall():
             if self.hack_cycle+20 >= cpu.cycles:
                 callnum = self.mem_utils.getCallNum(cpu)
                 callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, callnum, callname, cpu.cycles))
+                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. name: %s TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, self.name, callnum, callname, cpu.cycles))
                 return
             else:
                 self.hack_cycle = cpu.cycles
@@ -2549,6 +2572,7 @@ class Syscall():
            tracing_all = True
            callnum = self.mem_utils.getCallNum(cpu)
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
+           self.lgr.debug('syscallHap tid:%s traceAll callnum 0x%x name %s' % (tid, callnum, callname))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                self.lgr.debug('syscallHap not in record_fd list: %s' % callname)
                return
@@ -2570,7 +2594,7 @@ class Syscall():
                self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-           self.lgr.debug('syscallHap callnum is %s name %s' % (callnum, callname))
+           self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                return
            if tid == 1 and callname in ['open', 'openat', 'mmap', 'mmap2']:
@@ -2695,8 +2719,7 @@ class Syscall():
         ''' Set exit breaks '''
         frame_string = taskUtils.stringFromFrame(frame)
         #self.lgr.debug('syscallHap in tid:%s (%s), callnum: 0x%x (%s)  EIP: 0x%x' % (tid, comm, callnum, callname, break_eip))
-        self.lgr.debug('syscallHap frame: %s syscall_info.callnum %s' % (frame_string, str(self.syscall_info.callnum)))
-
+        #self.lgr.debug('syscallHap frame: %s syscall_info.callnum %s' % (frame_string, str(self.syscall_info.callnum)))
 
         if not tracing_all:
             #self.lgr.debug('syscallHap cell %s callnum %d self.syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
@@ -2770,11 +2793,11 @@ class Syscall():
                 self.lgr.debug('syscall handleExit, was killed so remove skipAndMail from stop_action')
                 self.stop_action.rmFun(self.top.skipAndMail)
         
-            self.lgr.debug('syscall handleExit retain_so %r ida_msg is %s' % (retain_so, ida_msg))
             if self.traceMgr is not None:
                 self.traceMgr.write(ida_msg+'\n')
             self.context_manager.setIdaMessage(ida_msg)
             am_watching = self.context_manager.amWatching(tid)
+            self.lgr.debug('syscall handleExit retain_so %r am_watching %r ida_msg is %s' % (retain_so, am_watching, ida_msg))
             if self.soMap is not None:
                 if not retain_so and not am_watching:
                     self.lgr.debug('syscall handleExit not watching, call soMap.handleExit')
@@ -2783,7 +2806,7 @@ class Syscall():
                 self.lgr.debug('syscall exit soMap is None, tid:%s' % (tid))
             last_one = self.context_manager.rmTask(tid, killed)
             debugging_tid, dumb = self.context_manager.getDebugTid()
-            self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid)))
+            self.lgr.debug('syscall handleExit %s tid:%s last_one %r debugging %d retain_so %r exit_group %r debugging_tid %s killed %r am_watching %r' % (self.name, tid, last_one, self.debugging, retain_so, exit_group, str(debugging_tid), killed, am_watching))
             #if (killed or last_one or (exit_group and tid == debugging_tid)) and self.debugging:
             if (killed or last_one or (exit_group and am_watching)) and self.debugging:
                 if self.top.hasProcHap():
@@ -2803,16 +2826,16 @@ class Syscall():
                 #fun = stopFunction.StopFunction(self.top.noDebug, [], False)
                 #self.stop_action.addFun(fun)
                 print('exit tid:%s' % tid)
-                self.lgr.debug('syscall hangleExit call stopAlone and checkExitCallback')
+                self.lgr.debug('syscall handleExit call stopAlone and checkExitCallback')
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
-                    self.lgr.debug('syscall hangleExit killed or group exit %s HAD pending fault, do something!' % tid)
+                    self.lgr.debug('syscall handleExit killed or group exit %s HAD pending fault, do something!' % tid)
                 SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
                 self.context_manager.checkExitCallback()
             else:
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
-                    self.lgr.debug('syscall hangleExit %s HAD pending fault, do something!' % tid)
+                    self.lgr.debug('syscall handleExit %s HAD pending fault, do something!' % tid)
 
 
     def getBinders(self):
@@ -2996,7 +3019,7 @@ class Syscall():
                     self.lgr.debug('sharedSyscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
                     continue   
                 if eip in [exit_eip1, exit_eip2, exit_eip3]:
-                    self.lgr.debug('sharedSyscall  % tid setExits is current thread about to exit, skip this one' % tid)
+                    self.lgr.debug('sharedSyscall  tid:%s setExits is current thread about to exit, skip this one' % tid)
                     continue   
 
             exit_info = ExitInfo(self, self.cpu, tid, callnum, callname, False, frame)
@@ -3157,7 +3180,7 @@ class Syscall():
         return retval 
 
     def resetHackCycle(self):
-        self.lgr.debug('syscall resetHackCycle')
+        #self.lgr.debug('syscall resetHackCycle')
         self.hack_cycle= 0
         self.linger_cycles = []
 
@@ -3178,7 +3201,7 @@ class Syscall():
     def checkSendParams(self, syscall_info, exit_info, ss, dest_ss, s):
             for call_param in self.call_params:
                 self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
-                if (call_param.subcall is None or call_param.subcall == 'send') and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                if (call_param.subcall is None or call_param.subcall in ['send', 'sendto', 'sendmsg']) and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params.append(call_param)
                     break
@@ -3193,9 +3216,47 @@ class Syscall():
                     else:
                         self.lgr.debug('syscall no ss in sendto from %d' % tid)
                 
-                elif type(call_param.match_param) is str and (call_param.subcall == 'send' or call_param.subcall == 'sendto') and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                elif type(call_param.match_param) is str and (call_param.subcall in ['send', 'sendto', 'sendmsg']) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     ''' look for string in output '''
                     self.lgr.debug('look in string %s' % s)
                     if call_param.match_param in s:
                         self.lgr.debug('syscall %s found match string, watch exit for param%s' % (call_param.subcall, call_param.name))
                         addParam(exit_info, call_param)
+
+    def getIOV(self, exit_info):
+        # Read data from IOV structures
+        # 
+        # how many iov structures will we look at? 
+        limit = min(10, exit_info.count)
+        iov_size = 2*self.mem_utils.WORD_SIZE
+        iov_addr = exit_info.retval_addr
+        # TBD better starting guess?
+        remain = 2000
+        self.lgr.debug('syscall getIOV %s starting remain %d iov_addr 0x%x' % (exit_info.callname, remain, iov_addr))
+        trace_msg = 'FD: %d iov count: %d' % (exit_info.old_fd, exit_info.count)
+        full_byte_tuple = ()
+        for i in range(limit):
+            base = self.mem_utils.readPtr(self.cpu, iov_addr)
+            if base == 0:
+                continue
+            length = self.mem_utils.readPtr(self.cpu, iov_addr+self.mem_utils.WORD_SIZE)
+            if remain > length:
+                data_len = length
+            else:
+                data_len = remain
+            self.lgr.debug('syscall getIOV length 0x%x  data_len 0x%x' % (length, data_len))
+
+            max_len = min(length, 1024)
+            byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, base)
+            if byte_tuple is not None:
+                s = resimUtils.getHexDump(byte_tuple[:max_len])
+                full_byte_tuple = full_byte_tuple + byte_tuple
+            else:
+                s = '<<NOT MAPPED>>'
+
+            self.lgr.debug('syscall getIOV %s base: 0x%x length: %d data: %s' % (exit_info.callname, base, length, s))
+            trace_msg = trace_msg+' buffer: 0x%x len: %d data: %s' % (base, length, s)
+            remain = remain - data_len 
+            iov_addr = iov_addr+iov_size
+        trace_msg = trace_msg+'\n'
+        return trace_msg, full_byte_tuple

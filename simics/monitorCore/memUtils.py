@@ -785,6 +785,7 @@ class MemUtils():
         ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
         reg_value = None
         reg_num = None
+        mask = None
         if reg.startswith('xmm'):
             h_l = None
             if reg.endswith('L'):
@@ -806,6 +807,9 @@ class MemUtils():
                     reg_num = cpu.iface.int_register.get_number(reg)
             else:
                 arm64_app = self.arm64App(cpu)
+                if reg.startswith('w'):
+                    reg = 'x'+reg[1:]
+                    mask = 0xffffffff
                
                 if reg == 'sp':
                     reg = 'sp_el0'
@@ -853,6 +857,8 @@ class MemUtils():
                 reg_value = cpu.iface.int_register.read(reg_num)
             else:
                 self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
+            if reg_value is not None and mask is not None:
+                reg_value = reg_value & mask
         return reg_value
 
     def arm64App(self, cpu):
@@ -977,7 +983,8 @@ class MemUtils():
                 self.lgr.debug('sysret64 now 0x%x' % self.param.sysret64)
 
         if self.WORD_SIZE == 4:
-            self.param.iretd = self.param.iretd + delta
+            if self.param.iretd is not None:
+                self.param.iretd = self.param.iretd + delta
             self.param.page_fault = self.param.page_fault + delta
             self.param.syscall_compute = self.param.syscall_compute + delta
 
@@ -986,7 +993,8 @@ class MemUtils():
             self.param.syscall_jump = self.param.syscall_jump - delta
             self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
-            self.param.iretd = self.param.iretd + delta
+            if self.param.iretd is not None:
+                self.param.iretd = self.param.iretd + delta
             self.lgr.debug('page_fault was 0x%x' % self.param.page_fault)
             self.param.page_fault = self.param.page_fault - delta
             self.lgr.debug('page_fault now 0x%x' % self.param.page_fault)
@@ -1155,7 +1163,7 @@ class MemUtils():
         while not done and bytes_to_go > 0 and curr_addr is not None:
             bytes_to_read = bytes_to_go
             remain_in_page = pageUtils.pageLen(curr_addr, pageUtils.PAGE_SIZE)
-            self.lgr.debug('getBytes remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x' % (remain_in_page, bytes_to_read, curr_addr))
+            #self.lgr.debug('getBytes remain is 0x%x  bytes to go is 0x%x  cur_addr is 0x%x' % (remain_in_page, bytes_to_read, curr_addr))
             if remain_in_page < bytes_to_read:
                 bytes_to_read = remain_in_page
             if bytes_to_read > 1024:
@@ -1169,7 +1177,7 @@ class MemUtils():
                 #self.lgr.error('memUtils v2p for 0x%x returned None' % curr_addr)
                 #SIM_break_simulation('bad phys memory mapping at 0x%x' % curr_addr) 
                 return None, None
-            self.lgr.debug('getBytes read (bytes_to_read) 0x%x bytes from 0x%x phys 0x%x ' % (bytes_to_read, curr_addr, phys))
+            #self.lgr.debug('getBytes read (bytes_to_read) 0x%x bytes from 0x%x phys 0x%x ' % (bytes_to_read, curr_addr, phys))
             try:
                 #read_data = readPhysBytes(cpu, phys_block.address, bytes_to_read)
                 read_data = readPhysBytes(cpu, phys, bytes_to_read)
@@ -1190,7 +1198,7 @@ class MemUtils():
                 retbytes = retbytes+read_data
             del read_data
             bytes_to_go = bytes_to_go - bytes_to_read
-            self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
+            #self.lgr.debug('0x%x bytes of data read from %x bytes_to_go is %d' % (count, curr_addr, bytes_to_go))
             curr_addr = curr_addr + bytes_to_read
         return retbytes
 

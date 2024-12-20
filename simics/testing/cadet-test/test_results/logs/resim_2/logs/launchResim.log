@@ -1,0 +1,14 @@
+2024-10-25 10:31:22,436 - INFO - Start of log from launchResim.py
+2024-10-25 10:31:22,437 - DEBUG - Start of log from LaunchRESim workspace /eems_images/ubuntu_img/simics6/cadet-tst/resim_2  ONE_DONE_SCRIPT: /eems_images/cgc-monitor/RESim/simics/monitorCore/onedoneAFL.py
+2024-10-25 10:31:22,437 - DEBUG - SIMICS dir is /mnt/resim_eems/resim/archive/simics6/new_install/simics-6
+2024-10-25 10:31:22,440 - DEBUG - assign ENV variables
+2024-10-25 10:31:22,441 - DEBUG - assign ubuntu CLI variables
+2024-10-25 10:31:22,441 - DEBUG - assign driver CLI variables
+2024-10-25 10:31:23,125 - DEBUG - genMonitor for target ubuntu
+2024-10-25 10:35:27,474 - INFO - Start of log from launchResim.py
+2024-10-25 10:35:27,474 - DEBUG - Start of log from LaunchRESim workspace /eems_images/ubuntu_img/simics6/cadet-tst/resim_2  ONE_DONE_SCRIPT: /eems_images/cgc-monitor/RESim/simics/monitorCore/onedoneAFL.py
+2024-10-25 10:35:27,475 - DEBUG - SIMICS dir is /mnt/resim_eems/resim/archive/simics6/new_install/simics-6
+2024-10-25 10:35:27,478 - DEBUG - assign ENV variables
+2024-10-25 10:35:27,479 - DEBUG - assign ubuntu CLI variables
+2024-10-25 10:35:27,479 - DEBUG - assign driver CLI variables
+2024-10-25 10:35:28,102 - DEBUG - genMonitor for target ubuntu

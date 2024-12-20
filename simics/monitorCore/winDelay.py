@@ -114,7 +114,7 @@ class WinDelay():
             #    SIM_continue(0)
         else:
             ''' assume we got here due to call parameters or stop_action'''
-            self.lgr.debug('winDelay doDataWatch stop_action is %s' % str(self.stop_action))
+            self.lgr.debug('winDelay doDataWatch no dataWatch stop_action is %s' % str(self.stop_action))
             my_syscall = self.exit_info.syscall_instance
             #if not my_syscall.linger: 
             #    self.stopTrace()
@@ -154,9 +154,10 @@ class WinDelay():
             self.lgr.debug('winDelay return count of zero.  now what?')
         else:
             max_read = min(return_count, 100)
+            max_bytes = min(return_count, 2000)
             #read_data = self.mem_utils.readString(self.cpu, self.exit_info.retval_addr, max_read)
 
-            byte_array = self.mem_utils.getBytes(self.cpu, return_count, self.exit_info.retval_addr)
+            byte_array = self.mem_utils.getBytes(self.cpu, max_bytes, self.exit_info.retval_addr)
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
                 # TBD add traceFiles to windows
@@ -191,6 +192,7 @@ class WinDelay():
                             if c != chr(v):
                                 match = False
                                 self.lgr.debug('winDelay failed sub_match. %x does not match %x' % (ord(c), v))
+                                self.exit_info.matched_param = None
                                 break
                         if match:
                             self.lgr.debug('winDelay got sub_match.')  

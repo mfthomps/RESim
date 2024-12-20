@@ -211,7 +211,7 @@ def main():
             client_cmd = 'clientTCPJson'
         elif directive.session.lower() == 'client':
             client_cmd = directive.client
-        elif directive.session.lower() != 'replay':
+        elif directive.session.lower() not in ['replay', 'command']:
             client_cmd = 'clientudpMult3'
         if client_cmd is not None:
             if directive.client is not None:

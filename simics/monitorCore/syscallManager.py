@@ -252,6 +252,8 @@ class SyscallManager():
                 retval = self.trace_all[context] 
                 self.lgr.debug('syscallManager watchSyscall found traceAll, add params to that.')
                 retval.addCallParams(call_params_list)
+                if stop_on_call:
+                    retval.stop_on_call = True
             else:
                 self.lgr.debug('syscallManager watchSyscall context %s, create new instance for %s, cell %s' % (context, name, cell))
                 if self.top.isWindows(self.cell_name):

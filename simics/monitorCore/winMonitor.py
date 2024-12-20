@@ -45,6 +45,9 @@ class WinMonitor():
         self.cell_name = cell_name
         self.lgr = lgr
         self.param = param
+        # remove this hack
+        if self.param.ptr2stack is None:
+            self.param.ptr2stack = 16
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.traceMgr = traceMgr
@@ -104,12 +107,12 @@ class WinMonitor():
         self.lgr.debug('winMonitor debugAlone, call top debug')
         SIM_run_alone(self.top.debug, False)
 
-    def debugProc(self, proc, final_fun=None, pre_fun=None):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, new=False):
         ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
 
         plist = self.task_utils.getTidsForComm(proc)
-        if len(plist) > 0 and not (len(plist)==1 and self.task_utils.isExitTid(plist[0])):
-            self.lgr.debug('winMonitor debugProc plist len %d plist[0] %d  exittid %s' % (len(plist), plist[0], self.task_utils.getExitTid()))
+        if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils.isExitTid(plist[0])):
+            self.lgr.debug('winMonitor debugProc plist len %d plist[0] %s  exittid %s' % (len(plist), plist[0], self.task_utils.getExitTid()))
 
             self.lgr.debug('winMonitor debugProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running.  Will continue until some instance of it is scheduled' % proc)
@@ -169,23 +172,23 @@ class WinMonitor():
         self.lgr.debug('traceAll')
         if True:
             context = self.context_manager.getDefaultContext()
-            tid, cpu = self.context_manager.getDebugTid() 
+            tid, dumb = self.context_manager.getDebugTid() 
             if tid is not None:
                 pid = pidFromTID(tid)
                 tf = 'logs/syscall_trace-%s-%s.txt' % (self.cell_name, pid)
                 context = self.context_manager.getRESimContext()
             else:
                 tf = 'logs/syscall_trace-%s.txt' % self.cell_name
-                cpu, comm, tid = self.task_utils.curThread() 
+                dumb, comm, tid = self.task_utils.curThread() 
 
-            self.traceMgr.open(tf, cpu)
+            self.traceMgr.open(tf, self.cpu)
             if not self.context_manager.watchingTasks():
                 self.traceProcs.watchAllExits()
             self.lgr.debug('traceAll, create syscall hap')
             self.trace_all = self.syscallManager.watchAllSyscalls(None, 'traceAll', trace=True, 
                                       record_fd=record_fd, linger=True, swapper_ok=swapper_ok)
 
-            if self.run_from_snap is not None and self.snap_start_cycle == cpu.cycles:
+            if self.run_from_snap is not None and self.snap_start_cycle == self.cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
                 p_file = os.path.join('./', self.run_from_snap, self.cell_name, 'sharedSyscall.pickle')
                 if os.path.isfile(p_file):

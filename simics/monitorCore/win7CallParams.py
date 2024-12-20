@@ -117,7 +117,8 @@ class Win7CallParams():
         if only is not None:
             call_num = self.task_utils.syscallNumber(only)
             if call_num is not None:
-                self.one_entry = self.task_utils.getSyscallEntry(call_num)
+                if not self.top.tracingAll(self.cell_name):
+                    self.one_entry = self.task_utils.getSyscallEntry(call_num)
                 self.only_call_num = call_num
             else:
                 self.lgr.error('%s not found in syscall map' % only)
@@ -237,6 +238,20 @@ class Win7CallParams():
                 self.lgr.debug('win7CallParams stoppedAtSyscall tid:%s (%s) rip: 0x%x' % (tid,comm,rip))
                 SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
 
+    def getCallName(self, call_num, computed=False):
+        call_name = self.task_utils.syscallName(call_num)
+        if call_name == 'DeviceIoControlFile':
+            if computed:
+                frame = self.task_utils.frameFromRegsComputed()
+            else:
+                frame = self.task_utils.frameFromRegs()
+            operation = frame['param6']
+            ioctl_op_map = winSocket.getOpMap()
+            op_cmd = None
+            if operation in ioctl_op_map:
+                call_name = ioctl_op_map[operation]
+        return call_name
+
     def oneCallHap(self, dumb, third, forth, memory):
         ''' Invoked when the "only" system call is hit at its computed entry '''
         #SIM_run_alone(SIM_run_command, 'enable-reverse-execution')
@@ -250,25 +265,8 @@ class Win7CallParams():
         if self.reverse_to_call:
             ''' Initiate a chain to cause simulation to reverse to the system call
                 so that we can gather all parameter references '''
-            call_name = self.task_utils.syscallName(self.only_call_num)
-            skip_it = False
-            if call_name != self.only and call_name == 'DeviceIoControlFile':
- 
-                ''' looking for a socket call.  it this it? '''
-                skip_it = True
-                frame = self.task_utils.frameFromRegsComputed()
-                operation = frame['param6']
-                ioctl_op_map = winSocket.getOpMap()
-                op_cmd = None
-                if operation in ioctl_op_map:
-                    op_cmd = ioctl_op_map[operation]
-                    if op_cmd == self.only:
-                        self.lgr.debug('oneCallHap found socket call we were looking for %s' % self.only)
-                        skip_it = False
-                else:
-                    self.lgr.debug('oneCallHap failed to find operation for 0x%x' % operation)
-
-            if not skip_it: 
+            call_name = self.getCallName(self.only_call_num, computed=True)
+            if call_name == self.only:
                 self.lgr.debug('oneCallHap call stopAndGo to reverseToCall')
                 self.top.stopAndGo(self.reverseToSyscall)
         else:
@@ -293,7 +291,7 @@ class Win7CallParams():
         ''' Assuming we are at the sysentry, track kernel references to user space'''
         if call_name is None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-            call_name = self.task_utils.syscallName(rax)
+            call_name = self.getCallName(rax)
 
         self.lgr.debug('trackFromSysEntry')
         rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
@@ -301,7 +299,7 @@ class Win7CallParams():
         rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
         r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
         r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
-        if self.only is not None:
+        if self.one_entry is not None:
             self.doParamTrack(rcx, rdx, r8, r9, rsp, call_name)
             status = SIM_simics_is_running()
             if not status:
@@ -323,9 +321,12 @@ class Win7CallParams():
         #    return
         if tid is not None:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-            self.lgr.debug('win7CallParams syscallHap tid:%s (%s) call %d' % (tid, comm, rax))
             ''' Use the call map to get the call name, and strip off "nt" '''
-            call_name = self.task_utils.syscallName(rax)
+            call_name = self.getCallName(rax)
+            self.lgr.debug('win7CallParams syscallHap tid:%s (%s) call %d name %s' % (tid, comm, rax, call_name))
+            if self.only_call_num is not None and call_name != self.only:
+                self.lgr.debug('win7CallParams call call_name %s looking for %s' % (call_name, self.only))
+                return
 
             if call_name == 'Continue':
                 return
@@ -533,7 +534,7 @@ class Win7CallParams():
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
             self.lgr.error('userReadHap not in kernel???')
-            SIM_break_simulation('fix this')
+            #SIM_break_simulation('fix this')
             return
         self.lgr.debug('win7CallParams tid:%s userReadHap memory 0x%x len %d current_context %s' % (tid, memory.logical_address, memory.size, str(self.cpu.current_context)))
         orig_value = self.mem_utils.readBytes(self.cpu, memory.logical_address, memory.size)
@@ -578,7 +579,7 @@ class Win7CallParams():
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
             self.lgr.error('userWriteHap not in kernel???  tid is %s' % tid)
-            SIM_break_simulation('fix this')
+            #SIM_break_simulation('fix this')
             return
         if memory.size <= 8:
             new_value = SIM_get_mem_op_value_le(memory)

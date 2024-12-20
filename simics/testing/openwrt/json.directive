@@ -1,0 +1,7 @@
+#FILE=big.io
+#FILE=/tmp/tst_filter.json
+FILE=baseline.json
+#FILE=get2.json
+IP=10.0.0.1
+PORT=80
+SESSION=TCP_JSON

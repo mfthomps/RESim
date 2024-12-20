@@ -1,0 +1,6 @@
+@cgc.debugProc('uhttpd', track_threads=False)
+@cgc.show()
+@cgc.noReverse()
+@cgc.runToSeconds(400)
+@cgc.writeConfig('uhttpd_400')
+q
