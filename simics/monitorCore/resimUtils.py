@@ -608,3 +608,36 @@ def getFree():
                  return int(percent)
     return None
 
+def getExecList(ini, lgr=None):
+    retval = None
+    if lgr is not None:
+        lgr.debug('resimUtils getExecList ini %s' % ini)
+    analysis_path = os.getenv('IDA_ANALYSIS')
+    if analysis_path is None:
+        if lgr is not None:
+            lgr.error('resimUtils getExecList path IDA_ANALYSIS not defined')
+        return None
+    root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+    root_dir = os.path.basename(root_prefix)
+    top_dir = os.path.join(analysis_path, root_dir)
+    retval = os.path.join(top_dir, 'exec_list.txt')
+    return retval
+
+def getExecDict(root_prefix, lgr=None):
+    retval = None
+    if lgr is not None:
+        lgr.debug('resimUtils getExecDict root_prefix %s' % root_prefix)
+    analysis_path = os.getenv('IDA_ANALYSIS')
+    if analysis_path is None:
+        if lgr is not None:
+            lgr.error('resimUtils getExecDict path IDA_ANALYSIS not defined')
+        return None
+    root_dir = os.path.basename(root_prefix)
+    top_dir = os.path.join(analysis_path, root_dir)
+    path = os.path.join(top_dir, 'exec_dict.json')
+    if lgr is not None:
+        lgr.debug('resimUtils getExecDict path %s' % path)
+    if os.path.isfile(path):
+       with open(path) as fh:
+           retval = json.load(fh)
+    return retval
