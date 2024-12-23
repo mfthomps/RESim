@@ -111,7 +111,7 @@ class WinCallExit():
         if callname is None:
             self.lgr.debug('winCallExit bad callnum %d' % exit_info.callnum)
             return
-        self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
+        #self.lgr.debug('winCallExit cell %s callnum %d name %s  tid:%s  parm1: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, exit_info.frame['param1']))
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
@@ -188,6 +188,9 @@ class WinCallExit():
                         if tid not in self.tid_sockets:
                             self.tid_sockets[tid] = {}
                         self.tid_sockets[tid][fd] = socket_type
+                    elif exit_info.fname.endswith('AsyncConnectHlp'):
+                        self.tid_sockets[tid][fd] = 0xbaabaa
+                        self.lgr.debug('winCallExit CreateFile set tid_sockets[%s][0x%x] to Async' % (tid, fd))
                     self.openCallParams(exit_info)
 
                 else:
@@ -338,26 +341,32 @@ class WinCallExit():
                 ''' delay_count_addr has address of return count'''
                 call_return_not_ready = not_ready
                 not_ready = False
-                trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                 if exit_info.delay_count_addr is None:
                     self.lgr.debug('winCallExit %s: Returned count address is None' % exit_info.socket_callname)
+                    trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                 
                 else: 
                     if exit_info.asynch_handler is not None:
                         self.matching_exit_info = exit_info
+                        # hack to avoid duplicate call names
+                        trace_msg = trace_msg.rsplit(' ', 1)[0]
+                        self.lgr.debug('winCallExit %s call exitingKernel with trace_msg %s' % (exit_info.socket_callname, trace_msg))
                         was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
 
                         ''' Call params satisfied in winDelay'''
                         #exit_info.call_params = None
                         self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
-                        if was_ready:
-                            not_ready = False
+                        if not was_ready:
+                            not_ready = True
+                    else:
+                        trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                     if not_ready:
                         trace_msg = trace_msg+' - Device not ready'
                         self.lgr.debug('winCallExit %s' % trace_msg)
                     else:
                         # why was this being set to nothing?
-                        #trace_msg = ''
+                        self.lgr.debug('winCallExit %s  was ready and trace_msg was %s, remove because already recorded' % (exit_info.socket_callname, trace_msg))
+                        trace_msg = ''
                         pass
  
             elif exit_info.socket_callname in ['ACCEPT', '12083_ACCEPT']:
@@ -375,6 +384,15 @@ class WinCallExit():
                     if my_syscall.linger: 
                         self.dataWatch.stopWatch() 
                         self.dataWatch.watch(break_simulation=False, i_am_alone=True)
+            elif exit_info.socket_callname in ['CONNECT']:
+                sock_type = self.getSockType(tid, exit_info.old_fd)
+                if sock_type == 0xbaabaa:
+                    bind_handle = exit_info.syscall_instance.paramOffPtr(7, [8], exit_info.frame, word_size) 
+                    trace_msg = trace_msg + " %s is Async bind connect fd: 0x%x bind handle: 0x%x" % (exit_info.sock_struct.dottedPort(), exit_info.old_fd, bind_handle)
+                else:
+                    trace_msg = trace_msg + " %s fd: 0x%x" % (exit_info.sock_struct.getString(), exit_info.old_fd)
+                   
+                self.lgr.debug('winCallExit %s' % (trace_msg)) 
 
             else:
                 max_count = min(exit_info.count, 100)
