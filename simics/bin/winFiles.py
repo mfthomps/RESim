@@ -34,7 +34,7 @@ def findFiles(infile, outfile, find, lgr):
     else:
         print('Failed to find input file %s' % infile)
 def main():
-    parser = argparse.ArgumentParser(prog='winProgSizes', description='Parse a log file and generate a file reflecting word sizes of created prgrams.  For use with WORD_SIZES in the ini file.')
+    parser = argparse.ArgumentParser(prog='winProgSizes', description='Parse a trace file for file names containing a give regx pattern.  Record each match in a output file.')
     parser.add_argument('infile', action='store', help='Path to  the log file.')
     parser.add_argument('outfile', action='store', help='Name of the output file.')
     parser.add_argument('find', action='store', help='Regex to find.')
