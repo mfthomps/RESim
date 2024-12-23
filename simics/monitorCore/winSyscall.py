@@ -28,20 +28,19 @@ PROG_NAME_OFFSET=0x18
 def paramOffPtrUtil(pnum, offset_list, frame, word_size, cpu, mem_utils, lgr):
         param = 'param%d' % pnum
         pval = frame[param]
-        #lgr.debug('paramOffPtr word size %d' % word_size)
+        #lgr.debug('paramOffPtr word size %d starting pval is 0x%x' % (word_size, pval))
         for offset in offset_list:
             ptr = pval + offset
             #lgr.debug('paramOffPtr param%d offset 0x%x from pval 0x%x ptr 0x%x' % (pnum, offset, pval, ptr))
-            
             if word_size == 8:
                 pval = mem_utils.readWord(cpu, ptr)
             elif word_size == 4: 
                 pval = mem_utils.readWord32(cpu, ptr)
             if pval is not None:
-                #lgr.debug('paramOffPtr got new pval 0x%x' % (pval))
+                #lgr.debug('paramOffPtr got new pval 0x%x by reading ptr 0x%x' % (pval, ptr))
                 pass
             else:
-                #lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
+                lgr.error('paramOffPtr got new pval is None reading from ptr 0x%x' % ptr)
                 break
         return pval
 
@@ -291,7 +290,7 @@ class WinSyscall():
         if self.context_manager.isReverseContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('winSyscall syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s cycle: 0x%x' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr), self.cpu.cycles))
+        #self.lgr.debug('winSyscall syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s cycle: 0x%x' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr), self.cpu.cycles))
         #self.lgr.debug('memory.ini_ptr.name %s' % (memory.ini_ptr.name))
         if tid is None:
             return
@@ -323,7 +322,7 @@ class WinSyscall():
 
         if self.syscall_info.callnum is None:
            callnum = self.mem_utils.getCallNum(cpu)
-           self.lgr.debug('syscallHap callnum %d' % callnum)
+           #self.lgr.debug('syscallHap callnum %d' % callnum)
            if callnum == 9999:
                SIM_break_simulation('0x4254, is that you?')
                reutrn
@@ -543,10 +542,16 @@ class WinSyscall():
         # variable to determine if we are going to be doing 32 or 64 bit syscall
         if tid in self.word_size_cache:
             word_size = self.word_size_cache[tid]
+            #self.lgr.debug('winSyscall syscallParse tid %s in cache word size %d' % (tid, word_size))
         else: 
             word_size = self.default_app_word_size
-            if self.soMap.getMachineSize(tid) == 32: # we find out otherwise
-                word_size = 4
+            somap_size = self.soMap.wordSize(tid)
+            if somap_size is None:
+                #self.lgr.debug('winSyscall syscallParse tid %s got somap_size none' % (tid))
+                pass
+            else:
+                #self.lgr.debug('winSyscall syscallParse tid %s not in cache somap_size %d' % (tid, somap_size))
+                word_size = somap_size
             self.word_size_cache[tid] = word_size
         exit_info.word_size = word_size
         #user_sp = frame['sp']
@@ -908,6 +913,9 @@ class WinSyscall():
                                     extended_hx = binascii.hexlify(extended)
                                     sock_type = net.socktype[b36]
                                     trace_msg = trace_msg + ' - socket() call socket type: %s\n AFD extended: %s' % (sock_type, extended_hx)
+                    elif exit_info.fname.endswith('AsyncConnectHlp'):
+                        ''' will be used with connect calls that name a bind ''' 
+                        self.lgr.debug('winSyscall is AsnycConnect, record this in winCallExit')
                     exit_info = self.genericCallParams(syscall_info, exit_info, param_callname)
 
         elif callname == 'QueryAttributesFile':
@@ -1051,6 +1059,7 @@ class WinSyscall():
                     self.lgr.debug('pdata_addr: 0x%x  sock_addr: 0x%x sock_type unknown word_size %d ' % (pdata_addr, sock_addr, word_size))
                 sock_struct = net.SockStruct(self.cpu, sock_addr, self.mem_utils, exit_info.old_fd, sock_type=sock_type)
                 to_string = sock_struct.getString()
+                exit_info.sock_struct = sock_struct
                 trace_msg = trace_msg+' '+to_string
             elif op_cmd == 'SUPER_CONNECT' or op_cmd == 'SUPER_CONNECT2':
 
@@ -1080,7 +1089,7 @@ class WinSyscall():
                     trace_msg = trace_msg+'New_Handle: 0x%x' % (exit_info.new_fd)
                 else:
                     handle_addr = pdata_addr+self.mem_utils.wordSize(self.cpu)
-                    exit_info.new_fd = self.mem_utils.readWord(self.cpu, handle_addr)
+                    exit_info.new_fd = self.mem_utils.readWord32(self.cpu, handle_addr)
                 trace_msg = trace_msg + " Bind_Handle: 0x%x  Connect_Handle: 0x%x" % (exit_info.old_fd, exit_info.new_fd)
                 self.lgr.debug(trace_msg)
                 for call_param in self.call_params:
