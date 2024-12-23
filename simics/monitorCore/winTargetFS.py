@@ -23,13 +23,14 @@ def findPattern(path: str, glob_pat: str, ignore_case: bool = False, lgr=None):
 
 
 class TargetFS():
-    def __init__(self, top, root_prefix, root_subdirs):
+    def __init__(self, top, root_prefix, root_subdirs, lgr):
         self.top = top
         self.root_prefix = root_prefix
         self.root_subdirs = root_subdirs
         self.cache = {}
-        self.lgr = None
-
+        self.lgr = lgr
+        self.comm_len = 14
+        self.exec_dict = resimUtils.getExecDict(root_prefix)
 
     def getRootPrefix(self):
         return self.root_prefix
@@ -59,33 +60,35 @@ class TargetFS():
             #    lgr.debug('getFull look at %s' % path) 
             path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
             self.lgr.debug('winTargetFS root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
-            full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
-            self.lgr.debug('full_insenstive is %s' % full_insensitive)
-            if full_insensitive is None or not os.path.isfile(full_insensitive):
-                pattern = path
-                if self.root_subdirs is None or len(self.root_subdirs) == 0:
-                    #self.lgr.debug('pattern %s' % pattern)
-                    flist = findPattern(self.root_prefix, pattern, ignore_case=True, lgr=self.lgr)
-                    if len(flist) == 0:
-                        pattern = '%s*' % path
+            retval = self.checkExecDict(path)
+            if retval is None:
+                full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
+                self.lgr.debug('full_insenstive is %s' % full_insensitive)
+                if full_insensitive is None or not os.path.isfile(full_insensitive):
+                    pattern = path
+                    if self.root_subdirs is None or len(self.root_subdirs) == 0:
+                        #self.lgr.debug('pattern %s' % pattern)
                         flist = findPattern(self.root_prefix, pattern, ignore_case=True, lgr=self.lgr)
-                    if len(flist) > 0:
-                        retval = os.path.join(self.root_prefix, flist[0])
-                else:
-                    for subdir in self.root_subdirs:
-                        subpath = os.path.join(self.root_prefix, subdir)
-                        #self.lgr.debug('TargetFS getFull subpath %s  pattern %s' % (subpath, pattern))
-                        flist = findPattern(subpath, pattern, lgr=self.lgr)
                         if len(flist) == 0:
                             pattern = '%s*' % path
-                            flist = findPattern(subpath, pattern, ignore_case=True, lgr=self.lgr)
+                            flist = findPattern(self.root_prefix, pattern, ignore_case=True, lgr=self.lgr)
                         if len(flist) > 0:
-                            retval = os.path.join(subpath, flist[0])
-                            break 
-                #for f in flist:
-                #    self.lgr.debug('targetFS getFull got %s' % f)
-            else:
-                retval = full_insensitive
+                            retval = os.path.join(self.root_prefix, flist[0])
+                    else:
+                        for subdir in self.root_subdirs:
+                            subpath = os.path.join(self.root_prefix, subdir)
+                            #self.lgr.debug('TargetFS getFull subpath %s  pattern %s' % (subpath, pattern))
+                            flist = findPattern(subpath, pattern, lgr=self.lgr)
+                            if len(flist) == 0:
+                                pattern = '%s*' % path
+                                flist = findPattern(subpath, pattern, ignore_case=True, lgr=self.lgr)
+                            if len(flist) > 0:
+                                retval = os.path.join(subpath, flist[0])
+                                break 
+                    #for f in flist:
+                    #    self.lgr.debug('targetFS getFull got %s' % f)
+                else:
+                    retval = full_insensitive
         if retval is not None:
             retval = os.path.abspath(retval)
             ret_base = os.path.basename(retval)
@@ -93,4 +96,18 @@ class TargetFS():
                 self.cache[ret_base] = retval
             elif self.cache[ret_base] != retval:
                 self.lgr.error('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
+        return retval
+
+    def checkExecDict(self, path):
+        retval = None   
+        if self.exec_dict is not None:
+            path_base = os.path.basename(path)
+            if path_base in self.exec_dict:
+                retval = os.path.join(self.root_prefix, self.exec_dict[path_base]['path'])
+                self.lgr.debug('winTargetFS checkExecDict found path for %s, %s' % (path_base, retval))
+            elif path_base == path and len(path) == self.comm_len:
+                for exec_base in self.exec_dict:
+                    if exec_base.startswith(path):
+                        retval = os.path.join(self.root_prefix, self.exec_dict[exec_base]['path'])
+                        self.lgr.debug('winTargetFS checkExecDict found truncated base, and path for %s, %s' % (path_base, retval))
         return retval
