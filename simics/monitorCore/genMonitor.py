@@ -546,7 +546,7 @@ class GenMonitor():
                 for sd in parts:
                     root_subdirs.append(sd.strip()) 
             if self.isWindows(cell_name):
-                self.targetFS[cell_name] = winTargetFS.TargetFS(self, root_prefix, root_subdirs)
+                self.targetFS[cell_name] = winTargetFS.TargetFS(self, root_prefix, root_subdirs, self.lgr)
             else:
                 self.targetFS[cell_name] = targetFS.TargetFS(self, root_prefix, root_subdirs)
             self.lgr.debug('targetFS for %s is %s' % (cell_name, self.targetFS[cell_name]))
