@@ -88,6 +88,12 @@ class WinDLLMap():
         self.unknown_sections = {}
         self.word_sizes = {}
         self.loadWordSizes()
+        self.root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+        self.exec_dict = resimUtils.getExecDict(self.root_prefix, lgr=self.lgr)
+        if self.exec_dict is not None:
+            self.lgr.debug('winDLLMap using exec_dict')
+        else:
+            self.lgr.debug('winDLLMap NO exec_dict')
 
     def pickleit(self, name):
         somap_file = os.path.join('./', name, self.cell_name, 'soMap.pickle')
@@ -617,8 +623,7 @@ class WinDLLMap():
                 del self.so_watch_callback[fname][name]
 
     def getAnalysisPath(self, fname):
-        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=root_prefix, lgr=self.lgr)
+        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=self.root_prefix, lgr=self.lgr)
 
     def setFunMgr(self, fun_mgr, tid):
         if fun_mgr is None:
@@ -726,12 +731,37 @@ class WinDLLMap():
             retval = self.mem_utils.wordSize(self.cpu)
         return retval
 
+    def findSize(self, find_comm):
+        retval = None
+        if find_comm in self.word_sizes:
+            retval = self.word_sizes[find_comm]
+        elif len(find_comm) == self.task_utils.commSize():
+            for comm in self.word_sizes:
+                if comm.startswith(find_comm):
+                    retval = self.word_sizes[comm]
+        if find_comm == 'services.exe':
+            self.lgr.debug('winDLL findSize HEREEEEEE')
+        if retval is None and self.exec_dict is not None:
+            if find_comm in self.exec_dict:
+                retval = self.exec_dict[find_comm]['word_size']
+                self.lgr.debug('winDLLMap findSize found size in exec_dict for %s, %s' % (find_comm, retval))
+            elif len(find_comm) == self.task_utils.commSize():
+                for exec_base in self.exec_dict:
+                    if exec_base.startswith(find_comm):
+                        retval = self.exec_dict[exec_base]['word_size']
+                        self.lgr.debug('winDLLMap findSize truncated base found size in exec_dict for %s, %s' % (find_comm, retval))
+   
+        return retval
+
     def getMachineSize(self, tid):
         retval = None
         pid = self.pidFromTID(tid)
+        self.lgr.debug('getMachineSize tid %s' % tid)
         if pid in self.text:
+            self.lgr.debug('getMachineSize tid %s in text' % tid)
             if hasattr(self.text[pid], 'machine'):
                machine = self.text[pid].machine
+               self.lgr.debug('getMachineSize tid %s has machine %s' % (tid, machine))
                if machine is not None:
                    if 'I386' in machine:
                        retval = 32
@@ -741,13 +771,14 @@ class WinDLLMap():
             else:
                 self.lgr.warning('winDLL getMachineSize pid:%s missing machine field' % pid) 
         elif pid is not None:
-            comm = self.task_utils.getCommFromTid(tid)
-            self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (comm, tid))
-            if comm in self.word_sizes:
-                retval = self.word_sizes[comm]*8
-            else:
+            find_comm = self.task_utils.getCommFromTid(tid)
+            self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (find_comm, tid))
+            num_bytes = self.findSize(find_comm) 
+            if num_bytes is None:
                 self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
                 pass
+            else:
+                retval = num_bytes * 8
         else:
             self.lgr.error('winDLL getMachineSize with pid of None')
        
