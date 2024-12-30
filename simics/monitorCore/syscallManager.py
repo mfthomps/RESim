@@ -175,7 +175,7 @@ class SyscallManager():
             self.sharedSyscall = sharedSyscall
 
     def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
-                         trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[]):
+                         trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[], no_gui=False):
    
         if compat32 is None:
             compat32 = self.compat32
@@ -193,7 +193,7 @@ class SyscallManager():
                                self.lgr, self.traceMgr, self.dataWatch, call_list=None, call_params=[], targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, 
                                stop_on_call=stop_on_call, trace=trace, soMap=self.soMap,
-                               record_fd=record_fd, swapper_ok=swapper_ok)
+                               record_fd=record_fd, swapper_ok=swapper_ok, no_gui=no_gui)
         elif self.top.isVxDKM(target = self.cell_name):
             retval = vxKSyscall.VxKSyscall(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.soMap, self.sharedSyscall, self.traceMgr, 
                          self.context_manager, self.lgr, name=name, flist_in=flist, linger=linger)
