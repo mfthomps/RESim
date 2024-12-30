@@ -166,7 +166,7 @@ class WinMonitor():
             if fh is not None:
                 fh.write('pid: %d  %s\n' % (pid, plist[pid]))
 
-    def traceAll(self, record_fd=False, swapper_ok=False):
+    def traceAll(self, record_fd=False, swapper_ok=False, no_gui=False):
 
         ''' trace all system calls. if a program selected for debugging, watch only that program '''
         self.lgr.debug('traceAll')
@@ -186,7 +186,7 @@ class WinMonitor():
                 self.traceProcs.watchAllExits()
             self.lgr.debug('traceAll, create syscall hap')
             self.trace_all = self.syscallManager.watchAllSyscalls(None, 'traceAll', trace=True, 
-                                      record_fd=record_fd, linger=True, swapper_ok=swapper_ok)
+                                      record_fd=record_fd, linger=True, swapper_ok=swapper_ok, no_gui=no_gui)
 
             if self.run_from_snap is not None and self.snap_start_cycle == self.cpu.cycles:
                 ''' running from snap, fresh from snapshot.  see if we recorded any calls waiting in kernel '''
@@ -227,7 +227,8 @@ class WinMonitor():
         tf = 'logs/trace_windows.txt'
         self.traceMgr.open(tf, self.cpu)
         call_list = ['CreateUserProcess', 'CreateThread', 'CreateThreadEx', 'ConnectPort', 'AlpcConnectPort', 'OpenFile', 'CreateFile', 'CreateSection', 'MapViewOfSection',
-                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32',
+                         #'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 'WaitForMultipleObjects32',
+                         'CreatePort', 'AcceptConnectPort', 'ListenPort', 'AlpcAcceptConnectPort', 'RequestPort', 'DeviceIoControlFile', 
                          'DuplicateObject', 'ReadFile', 'WriteFile', 'TerminateProcess', 'TerminateThread']
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
