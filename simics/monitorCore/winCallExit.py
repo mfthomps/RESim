@@ -147,9 +147,9 @@ class WinCallExit():
             exit_info.matched_param = None
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
-            self.lgr.debug('winCallExit is %s' % callname)
+            #self.lgr.debug('winCallExit is %s' % callname)
             if exit_info.retval_addr is not None:
-                self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
+                #self.lgr.debug('winCallExit retval_addr 0x%x' % exit_info.retval_addr)
                 fd = self.mem_utils.readWord(self.cpu, exit_info.retval_addr)
                 if fd is None:
                      self.lgr.error('winCallExit bad fd read from 0x%x' % exit_info.retval_addr)
@@ -188,6 +188,7 @@ class WinCallExit():
                         if tid not in self.tid_sockets:
                             self.tid_sockets[tid] = {}
                         self.tid_sockets[tid][fd] = socket_type
+                        self.lgr.debug('winCallExit CreateFile Endpoint set tid_sockets[%s][0x%x] to socket type %d' % (tid, fd, socket_type))
                     elif exit_info.fname.endswith('AsyncConnectHlp'):
                         self.tid_sockets[tid][fd] = 0xbaabaa
                         self.lgr.debug('winCallExit CreateFile set tid_sockets[%s][0x%x] to Async' % (tid, fd))
@@ -390,7 +391,8 @@ class WinCallExit():
                     bind_handle = exit_info.syscall_instance.paramOffPtr(7, [8], exit_info.frame, word_size) 
                     trace_msg = trace_msg + " %s is Async bind connect fd: 0x%x bind handle: 0x%x" % (exit_info.sock_struct.dottedPort(), exit_info.old_fd, bind_handle)
                 else:
-                    trace_msg = trace_msg + " %s fd: 0x%x" % (exit_info.sock_struct.getString(), exit_info.old_fd)
+                    bind_handle = exit_info.syscall_instance.paramOffPtr(7, [8], exit_info.frame, word_size) 
+                    trace_msg = trace_msg + " %s fd: 0x%x  bind handle??: 0x%x" % (exit_info.sock_struct.getString(), exit_info.old_fd, bind_handle)
                    
                 self.lgr.debug('winCallExit %s' % (trace_msg)) 
 
