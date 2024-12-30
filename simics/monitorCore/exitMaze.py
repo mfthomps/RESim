@@ -167,8 +167,8 @@ class ExitMaze():
                     ''' have we called tod enough to establish a circuit? '''
                     if (tod - self.timeofday_count_start) > max_loops:
                         self.lgr.debug('exitMaze tid:%s been around, collected instructions' % self.tid)
-                        for eip in self.instructs: 
-                            self.lgr.debug('\t0x%x  %s' % (eip, self.instructs[eip][1]))
+                        for instruct_eip in self.instructs: 
+                            self.lgr.debug('\t0x%x  %s' % (instruct_eip, self.instructs[instruct_eip][1]))
                         if len(self.break_addrs) == 0:
                             ''' we've run the circuit, look at the collected instructions and 
                                 select breakpoints based on branches not followed '''
@@ -212,11 +212,11 @@ class ExitMaze():
                 mn = parts[0]
                 if mn == 'call':
                     self.instructs[eip] = instruct
-                    self.lgr.debug('adding to list %x %s' % (eip, instruct[1]))
+                    self.lgr.debug('exitMaze adding to list %x %s' % (eip, instruct[1]))
                     ret_addr = eip + instruct[0]
                     ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                     self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, i, ret_break, 'retMaze')
-                    self.lgr.debug('call from tid:%s eip 0x%x, %s set break/hap on return now run' % (self.tid, eip, instruct[1]))
+                    self.lgr.debug('exitMaze call from tid:%s eip 0x%x, %s set break/hap on return 0x%x now run' % (self.tid, eip, instruct[1], ret_addr))
                     SIM_run_command('c')
                     return
                 elif mn == 'ret':
@@ -225,7 +225,7 @@ class ExitMaze():
                 else:
                     if len(self.break_addrs) == 0 and eip not in self.instructs:
                         self.instructs[eip] = instruct
-                        self.lgr.debug('adding to list %x %s' % (eip, instruct[1]))
+                        self.lgr.debug('ExitMaze not call or ret adding to list %x %s' % (eip, instruct[1]))
 
             else:
                 ''' in kernel run til out '''
@@ -347,6 +347,7 @@ class ExitMaze():
         done = False
         ip = dest
         self.lgr.debug('exitMaze isBump is 0x%x a bump?' % dest)
+        count = 0
         while not done and not retval:
             instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
             if instruct[1].startswith('jmp'):
@@ -383,6 +384,9 @@ class ExitMaze():
                 done = True
             in_len = instruct[0]
             ip = ip + in_len
+            count = count + 1
+            if count > 1000:
+                done = True
         return retval
 
 
