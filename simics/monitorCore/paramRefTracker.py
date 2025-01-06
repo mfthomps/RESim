@@ -26,7 +26,7 @@ import resimUtils
 import winSocket
 class ParamRefTracker():
         ''' Track kernel references to user space during a system call '''        
-        def __init__(self, rsp, rcx, rdx, r8, r9, mem_utils, task_utils, cpu, call_name, lgr):
+        def __init__(self, rsp, rcx, rdx, r8, r9, mem_utils, task_utils, cpu, call_name, ignore_sp, lgr):
             ''' will include rsp rcx, rdx, r8, r9 '''
             self.mem_utils = mem_utils
             self.task_utils = task_utils
@@ -39,6 +39,7 @@ class ParamRefTracker():
             self.r8 = r8
             self.r9 = r9
             self.rsp = rsp
+            self.ignore_sp = ignore_sp
             self.base_params = {}
             value = self.mem_utils.readWord32(self.cpu, rcx)
             if value is not None:
@@ -85,7 +86,7 @@ class ParamRefTracker():
             
 
         class ParamRef():
-            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base):
+            def __init__(self, addr, operator, value, hexstring, other_ptr, size, best_base, best_base_delta, ref_of_base, lgr=None):
                 self.addr = addr
                 self.operator = operator
                 self.hexstring = hexstring
@@ -95,15 +96,22 @@ class ParamRefTracker():
                 self.best_base = best_base
                 self.best_base_delta = best_base_delta
                 self.ref_of_base = ref_of_base
+                self.lgr = lgr
 
             def hackEncode(self, the_bytes):
-                if resimUtils.isPrintable(the_bytes, ignore_zero=True):
+                if self.lgr is not None:
+                    self.lgr.debug('hackEncode len %d hex_string %s' % (len(the_bytes), self.hexstring))
+                if resimUtils.isPrintable(the_bytes, ignore_zero=True, lgr=None):
+                    if self.lgr is not None:
+                        self.lgr.debug('hackEncode IS printable')
                     retval = ''
                     for b in the_bytes:
                         if b > 0:
                            c = chr(b)
                            retval = retval + c
                 else:
+                    if self.lgr is not None:
+                        self.lgr.debug('hackEncode not printable')
                     retval = the_bytes
                 return retval
 
@@ -223,13 +231,13 @@ class ParamRefTracker():
 
         def mergeRef(self):
             ''' Go through all reference records and merge obvious strings into a single reference '''
-            #self.lgr.debug('mergeRef')
+            self.lgr.debug('mergeRef ignore_sp is %r' % self.ignore_sp)
             candidate = {}
             current_base = None
             current_base_of_base = None
             current_base_of_base_delta = None
             current_base_delta = None
-            current_addr = None
+            current_addr = 0
             running_count = 0
             running_size = 0
             running_hexstring = ''
@@ -238,22 +246,30 @@ class ParamRefTracker():
             running_start = None
             add_these = {}
             rm_these = {}
+            reverse_index = None
+            forward_start = None
             for reference in self.refs:
-                if current_base is None or reference.best_base != current_base or reference.addr != (current_addr - reference.size):
+                if current_base is None or reference.best_base != current_base or (reference.addr != (current_addr - reference.size) and reference.addr != (current_addr + reference.size)):
                     ''' TBD clean up any open runs ''' 
-                    if running_count > 3 or len(running_hexstring)>20:
+                    if running_count > 3 or len(running_hexstring)>32:
                         #start_addr = current_start - running_size + 1
-                        #self.lgr.debug('merge running size 0x%x  current_start 0x%x  yields start addr 0x%x' % (running_size, current_start, start_addr))
-                        start_addr = current_addr
+                        if reverse_index == True:
+                            start_addr = current_addr
+                        else: 
+                            start_addr = forward_start
+                        self.lgr.debug('merge running size 0x%x  current_start 0x%x  yields start addr 0x%x' % (running_size, current_start, start_addr))
                         ref_of_base = self.refOfBase(current_base)
+                        self.lgr.debug('MERGE running hex string %s' % running_hexstring)
                         new_ref = self.ParamRef(start_addr, current_operator, running_value, running_hexstring, None, running_size, 
-                             current_base, current_base_delta, ref_of_base)
+                             current_base, current_base_delta, ref_of_base, lgr=self.lgr)
                         add_these[running_start] = new_ref
                         rm_these[running_start] = running_count
-                    if type(reference.best_base) is str and reference.best_base.startswith('rsp'):
+                        #self.lgr.debug('merge running set rm_these[0x%x] = %d' % (running_start, running_count))
+                    if self.ignore_sp and type(reference.best_base) is str and reference.best_base.startswith('rsp'):
                         index = index + 1 
                         continue
 
+                    #self.lgr.debug('mergeRef NOT sequence ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
                     current_start = reference.addr
                     current_operator = reference.operator
                     current_base = reference.best_base
@@ -266,18 +282,26 @@ class ParamRefTracker():
                     running_start = index
                   
                 else:
-                    #self.lgr.debug('mergeRef ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
+                    #self.lgr.debug('mergeRef is a sequence ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
+                    if reference.addr == (current_addr - reference.size):
+                        running_hexstring = reference.hexstring+running_hexstring
+                        reverse_index = True
+                    else:
+                        if running_count == 0:
+                            forward_start = reference.addr
+                        running_hexstring = running_hexstring+reference.hexstring
+                        reverse_index = False
                     current_addr = reference.addr 
                     running_count = running_count+1
                     running_size = running_size + reference.size
-                    running_hexstring = reference.hexstring+running_hexstring
                     running_value = reference.value+running_value
                     current_base_delta = reference.best_base_delta
 
                 index = index + 1
-            for rm_index in rm_these:
+            rm_keys = list(rm_these.keys())
+            for rm_index in reversed(rm_keys):
                 end = rm_index + rm_these[rm_index] + 1
-                #self.lgr.debug('mergeRef rm %d to %d' % (rm_index, end))
+                self.lgr.debug('mergeRef rm %d to %d' % (rm_index, end))
                 del self.refs[rm_index:end]
             for add_index in add_these:
                 self.refs.insert(add_index, add_these[add_index])
