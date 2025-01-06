@@ -135,6 +135,7 @@ import vxKTaskUtils
 import vxKModules
 import findRefs
 import findText
+import recordEntry
 
 #import fsMgr
 import json
@@ -353,8 +354,8 @@ class GenMonitor():
         self.disassemble_instruct = {}
         self.max_marks = None
         self.no_reset = False
-
-        ''' ****NO init data below here**** '''
+        self.record_entry = {}
+        ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
         exit_hap = RES_hap_add_callback("Core_At_Exit", self.simicsQuitting, None)
@@ -927,6 +928,8 @@ class GenMonitor():
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
 
+            self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
+                                           self.param[cell_name], self.is_compat32, self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
@@ -2880,7 +2883,7 @@ class GenMonitor():
             self.ignoreThreadList()
         return retval
  
-    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True, trace_file=None):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True, trace_file=None, no_gui=False):
         if target is None:
             target = self.target
 
@@ -2906,7 +2909,7 @@ class GenMonitor():
             self.lgr.debug('traceAll Was tracing.  Limit to FD recording? %r' % (record_fd))
         else:
             if self.isWindows():
-                self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok)
+                self.trace_all[target]= self.winMonitor[target].traceAll(record_fd=record_fd, swapper_ok=swapper_ok, no_gui=no_gui)
                 self.lgr.debug('traceAll back from winMonitor trace_all set to %s' % self.trace_all[target])
                 self.run_to[target].watchSO()
                 if track_threads:
@@ -3198,6 +3201,7 @@ class GenMonitor():
     def noWatchSysEnter(self):
         self.lgr.debug('noWatchSysEnter')
         self.rev_to_call[self.target].noWatchSysenter()
+        self.record_entry[self.target].noWatchSysenter()
 
     def stopWatchTasks(self, target=None, immediate=False):
         if target is None:
@@ -3224,7 +3228,7 @@ class GenMonitor():
             retval = True
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.stopWatchPageFaults(tid, immediate=immediate)
-            self.rev_to_call[self.target].noWatchSysenter()
+            self.noWatchSysEnter()
             if self.track_threads is not None and self.target in self.track_threads:
                 self.track_threads[self.target].stopTrack(immediate=immediate)
             if self.isWindows():
@@ -4442,7 +4446,7 @@ class GenMonitor():
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         word_size = self.mem_utils[self.target].wordSize(cpu)
         prog_machine_size = self.soMap[self.target].getMachineSize(tid)
-        self.lgr.debug('printRegJson prog_machine_size %d' % prog_machine_size)
+        self.lgr.debug('printRegJson prog_machine_size %s' % prog_machine_size)
         if prog_machine_size is not None:
             if prog_machine_size == 64:
                 word_size = 8
@@ -5153,7 +5157,8 @@ class GenMonitor():
     def precall(self, tid=None):
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
-        cycle_list = self.rev_to_call[self.target].getEnterCycles(tid)
+        #cycle_list = self.rev_to_call[self.target].getEnterCycles(tid)
+        cycle_list = self.record_entry[self.target].getEnterCycles(tid)
         self.lgr.debug('precall tid:%s len of cycle_list %d' % (tid, len(cycle_list)))
         if cycle_list is None:
             print('No cycles for tid:%s' % tid)
@@ -6387,9 +6392,6 @@ class GenMonitor():
                 print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
         return retval
 
-    def recordEnter(self):
-        self.rev_to_call[self.target].sysenterHap(None, None, None, None)
- 
     def getCompDict(self, target, item):
         retval = None
         if target in self.comp_dict and item in self.comp_dict[target]: 
@@ -6753,6 +6755,12 @@ class GenMonitor():
     def traceWrite(self, msg):
         if self.target in self.traceMgr:
             self.traceMgr[self.target].write(msg)
+
+    def recordEntry(self):
+        if self.reverseEnabled():
+            self.record_entry[self.target].watchSysenter()
+        else:
+            print('Reverse execution is not enabled.')
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
