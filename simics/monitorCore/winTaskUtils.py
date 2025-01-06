@@ -300,6 +300,12 @@ class WinTaskUtils():
                 retval = self.call_map[call_num][2:]
         return retval 
 
+    def isGUICall(self, call_num):
+        if call_num  >= 4096:
+            return True
+        else:
+            return False
+
     def getSyscallEntry(self, callnum, compat32=False):
         ''' given a call number, compute the address of the kernel code that handles the call
             based on observations made walking the instructions that follow syscall entry.''' 
@@ -401,7 +407,7 @@ class WinTaskUtils():
             frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack+3*self.mem_utils.wordSize(self.cpu))
         return frame
 
-    def frameFromRegsComputed(self):
+    def frameFromRegsComputed(self, word_size):
         frame = self.frameFromRegs(swap_r10=False, skip_sp=True)
 
         gs_base = self.cpu.ia32_gs_base
@@ -409,13 +415,13 @@ class WinTaskUtils():
         ptr2stack = gs_base+self.param.ptr2stack
         if not hasattr(self.param, 'param_version') or int(self.param.param_version) < 11:
             stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
-            #self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
+            #self.lgr.debug('winTaskUtils frameFromRegsComputed, no_param_veresion or < 11 gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
             user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
         else:
             user_stack = self.mem_utils.readPtr(self.cpu, ptr2stack)
         
         r10 = self.mem_utils.getRegValue(self.cpu, 'r10')
-        #self.lgr.debug('winTaskUtils frameFromRegsComputed user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (user_stack, frame['param1'], r10))
+        #self.lgr.debug('winTaskUtils frameFromRegsComputed gs_base: 0x%x ptr2stack: 0x%x user_stack 0x%x rcx is 0x%x  r10: 0x%x' % (gs_base, ptr2stack, user_stack, frame['param1'], r10))
         frame['sp'] = user_stack
         frame['rsp'] = user_stack
         user_stack_28 = user_stack+0x28 
@@ -571,6 +577,14 @@ class WinTaskUtils():
         got = self.walk(task_ptr, self.param.ts_next)
         #self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
+
+    def getPidList(self):
+        retval = []
+        task_list = self.getTaskList()
+        for task in task_list:
+            pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
+            retval.append(str(pid))
+        return retval
     
     def getTaskStructs(self):
         retval = {}
