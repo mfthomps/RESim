@@ -259,19 +259,26 @@ def findEndBB(blocks, addr):
         exit(1)
     return retval
  
-def isPrintable(thebytes, ignore_zero=False):
+def isPrintable(thebytes, ignore_zero=False, lgr=None):
     gotone=False
     retval = True
     zcount = 0
+    goodcount = 0
     for b in thebytes:
-        if ignore_zero and b == 0 and zcount == 0:
+        if ignore_zero and b == 0 and (zcount == 0 or goodcount > 10):
             zcount = zcount + 1 
         elif b is None or b > 0x7f or (b < 0x20 and b != 0xa and b != 0xd):
+            if lgr is not None:
+                lgr.debug('resimUtils isPrintable failed on 0x%x zcount %d' % (b, zcount))
             retval = False
             break
-        elif b > 0x20:
+        elif b >= 0x20 or b in [0xa, 0xd]:
             gotone=True
             zcount = 0
+            goodcount = goodcount+1
+        else:
+            if lgr is not None:
+                lgr.debug('what to do with byte 0x%x' % b)
     if not gotone:
         retval = False 
     return retval
