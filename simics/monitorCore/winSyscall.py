@@ -324,15 +324,6 @@ class WinSyscall():
                 self.hack_cycle = cpu.cycles
 
         if self.syscall_info.callnum is None:
-           if not self.cpu.architecture.startswith('arm'):
-               rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-               if self.mem_utils.isKernel(rax):
-                   # this is just an assumption.  TBD better way to determine if the call is internel, e.g., FlushKey resulting in WriteFile
-                   self.lgr.debug('syscallHap tid:%s rax is kernel, assume internal kernel use of syscall')
-                   return
-           else:
-               # TBD not yet handled
-               pass
            callnum = self.mem_utils.getCallNum(cpu)
            #self.lgr.debug('syscallHap callnum %d' % callnum)
            if callnum == 9999:
@@ -365,7 +356,7 @@ class WinSyscall():
                self.lgr.debug('winSyscallHap name: %s break eip 0x%x not in syscall_info break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum) 
-           #self.lgr.debug('winSyscallHap, here callname %s' % callname)
+           self.lgr.debug('winSyscallHap, here callname %s' % callname)
            if callname is None:
                self.lgr.debug('winSyscallHap tracing selected callnumbers, bad call number %d  ?????' % (callnum))
                return
@@ -381,6 +372,15 @@ class WinSyscall():
         if callname == 'sppsvc.exe':
             ''' windows licensing service. RESim will crash if computed entry because it does not seem to run in the same context as other apps.  runs in kernel?'''
             return
+        if not self.cpu.architecture.startswith('arm'):
+            rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+            if self.mem_utils.isKernel(rax):
+                # this is just an assumption.  TBD better way to determine if the call is internel, e.g., FlushKey resulting in WriteFile
+                self.lgr.debug('syscallHap tid:%s rax is kernel, assume internal kernel use of syscall')
+                return
+        else:
+            # TBD not yet handled
+            pass
         value = memory.logical_address
         self.lgr.debug('syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d callname: %s hap name: %s cycle: 0x%x' % (self.cell_name, str(context), 
              tid, comm, break_eip, value, callnum, callname, self.name, self.cpu.cycles))
@@ -450,11 +450,10 @@ class WinSyscall():
             exit_info_name = '%s-%s-exit' % (callname, self.name)
 
         pending_call = self.sharedSyscall.getPendingCall(tid, exit_info_name)
-                 
 
         if callname in self.exit_calls:
             self.context_manager.tidExit(tid)
-            self.lgr.debug('winSyscall %s exit of tid:%s stop_on_exit: %r' % (self.name, tid, self.stop_on_exit))
+            self.lgr.debug('winSyscall %s call %s exit of tid:%s stop_on_exit: %r' % (self.name, callname, tid, self.stop_on_exit))
             ida_msg = '%s tid:%s (%s)' % (callname, tid, comm)
             if callname == 'TerminateProcess':
                 who = frame['param1']
@@ -478,6 +477,11 @@ class WinSyscall():
 
 
         if self.syscall_info.callnum is not None:
+            # computed syscall
+
+            if frame['param6'] is None:
+                self.lgr.debug('syscallHap param6 is None, assume internal kernel call')
+                return
             #self.lgr.debug('syscallHap cell %s callnum %d self.syscall_info.callnum %d stop_on_call %r' % (self.cell_name, 
             #     callnum, self.syscall_info.callnum, self.stop_on_call))
             if True:
@@ -637,7 +641,7 @@ class WinSyscall():
                         self.lgr.warning('winSyscall failed to read program name for CreateUserProcess.  TBD Add callback for when program name is mapped to memory')
                         return
                     trace_msg = trace_msg+' prog: %s frame: %s' % (prog, frame_string)
-                    self.lgr.debug('winSyscall syscallparse cup %s' % trace_msg)
+                    self.lgr.debug('winSyscall syscallParse cup %s' % trace_msg)
                     want_to_debug = False
                     if self.name == 'CreateUserProcess': 
                         ''' TBD section needs cleanup.  criteria for debugging seems hazy'''
@@ -999,7 +1003,7 @@ class WinSyscall():
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
         elif callname == 'DeviceIoControlFile':
-            callname = self.parseDeviceIoCall(tid, exit_info, trace_msg, frame, word_size)
+            callname, trace_msg = self.parseDeviceIoCall(tid, exit_info, trace_msg, frame, word_size)
         elif callname in ['CreateEvent', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
             trace_msg = trace_msg + ' Handle_addr: 0x%x' % (exit_info.retval_addr)
@@ -1188,6 +1192,7 @@ class WinSyscall():
                     self.traceMgr.write(trace_msg+'\n'+frame_string+'\n')
 
         if exit_info.asynch_handler is not None:
+            # catch orphan winDelays'
             if tid not in self.win_delays:
                 self.win_delays[tid] = {}
             if callname not in self.win_delays[tid]:
@@ -1830,7 +1835,7 @@ class WinSyscall():
                                  go = re.search(pat, s, re.M|re.I)
                              except:
                                  self.lgr.error('invalid expression: %s' % pat)
-                                 return None
+                                 return None, None
                          
                              #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
                          if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
@@ -1974,7 +1979,12 @@ class WinSyscall():
                     #frame_string = taskUtils.stringFromFrame(frame)
                     #SIM_break_simulation(trace_msg+' '+to_string+ ' '+frame_string)
                 if word_size == 4:
-                    exit_info.delay_count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
+                    param_val = self.paramOffPtr(5, [0], frame, word_size) 
+                    if param_val is None:
+                        self.lgr.error('winSyscall failed to get paramOffPtr for stack1, frame string %s' % taskUtils.stringFromFrame(frame))
+                        SIM_break_simulation('remove this')
+                    else:
+                        exit_info.delay_count_addr = param_val + word_size
                 else:
                     exit_info.delay_count_addr = self.stackParam(1, frame) + word_size
                 self.lgr.debug('winSyscall %s returned length addr 0x%x' % (op_cmd, exit_info.delay_count_addr))
@@ -2051,7 +2061,7 @@ class WinSyscall():
             if self.watchData(exit_info):
                 self.lgr.debug('doing winDelay.setDataWatch, maybe')
                 exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
-        return op_cmd 
+        return op_cmd, trace_msg
 
     def getWordSize(self, tid):
         # determine if we are going to be doing 32 or 64 bit syscall
