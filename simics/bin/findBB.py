@@ -3,7 +3,6 @@
 #
 import sys
 import os
-import glob
 import json
 import argparse
 resim_dir = os.getenv('RESIM_DIR')
