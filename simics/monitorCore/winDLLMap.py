@@ -10,6 +10,9 @@ import resimUtils
 Track DLLs within windows processes.
 Tracked by PID as integers for historical reasons.  
 Interface variables are TIDs.
+
+TBD Text sizes need to distinguish code from data so that isCode is precise
+and data addresses are part of the image for getSO.
 '''
 class DLLInfo():
     def __init__(self, pid, fname, fd):
