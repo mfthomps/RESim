@@ -22,12 +22,14 @@
  * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
 '''
-
+'''
+Call a function from user space, assuming we start in kernel space
+'''
 from simics import *
 import resimHaps
 import memUtils
 class DoInUser():
-    def __init__(self, top, cpu, callback, param, task_utils, mem_utils, lgr):
+    def __init__(self, top, cpu, callback, param, task_utils, mem_utils, lgr, tid=None):
         self.top = top
         self.cpu = cpu
         self.callback = callback
@@ -35,7 +37,10 @@ class DoInUser():
         self.task_utils = task_utils
         self.mem_utils = mem_utils
         self.lgr = lgr
-        dum_cpu, comm, self.tid = self.task_utils.curThread()
+        if tid is None:
+            dum_cpu, comm, self.tid = self.task_utils.curThread()
+        else:
+            self.tid = tid
         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, self.cpu)
         self.lgr.debug('doInUser mode hap set for tid:%s' % self.tid)
 
