@@ -286,6 +286,7 @@ class DataWatch():
 
         ''' Do not start tracking until this string is read '''
         self.commence_with = None
+        self.commence_offset = 0
 
         ''' Optimization for loopy calls to memcpy from within clibish functions. '''
         self.recent_entry_bp = None
@@ -443,7 +444,7 @@ class DataWatch():
         self.lgr.debug('dataWatch setRange start 0x%x length 0x%x commence with %s ignore: %r' % (start, length, self.commence_with, ignore_commence))
         if self.commence_with is not None and not ignore_commence:
             match = True
-            addr = start
+            addr = start + self.commence_offset
             for c in self.commence_with:
                 v = self.mem_utils.readByte(self.cpu, addr)
                 if v is None or c != chr(v):
@@ -3261,7 +3262,7 @@ class DataWatch():
                 adhoc = True
                 break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
                 dest_op = op1
-                if self.cpu.architecturein ['arm', 'arm64']:
+                if self.cpu.architecture in ['arm', 'arm64']:
                     dest_op = op2
                 ''' We have a candidate check move destination.  Run there to check if it really moves our register into memory '''
                 self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
@@ -5485,8 +5486,9 @@ class DataWatch():
     def setUserIterators(self, iterators):
         self.fun_mgr.setUserIterators(iterators)
 
-    def commenceWith(self, commence_with):
+    def commenceWith(self, commence_with, offset=0):
         self.commence_with = commence_with
+        self.commence_offset = offset
  
     def hasCommenceWith(self):
         if self.commence_with is not None:
