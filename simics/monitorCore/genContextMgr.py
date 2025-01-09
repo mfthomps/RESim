@@ -607,9 +607,13 @@ class GenContextMgr():
                 else:
                     #SIM_run_alone(self.restoreDefaultContext, None)
                     self.restoreDefaultContext()
+                    if len(self.watch_for_prog) > 0: 
+                        self.checkFirstSchedule(new_addr, tid, comm)
             else:
                 #SIM_run_alone(self.restoreDefaultContext, None)
                 self.restoreDefaultContext()
+                if len(self.watch_for_prog) > 0: 
+                    self.checkFirstSchedule(new_addr, tid, comm)
             retval = True 
         elif len(self.only_progs) > 0 and self.debugging_tid is None:
             #self.lgr.debug('onlyOrIgnore tid:%s comm %s' % (tid, comm))
@@ -1660,12 +1664,20 @@ class GenContextMgr():
         self.current_tasks = self.task_utils.getTaskList()
         self.setTaskHap()
 
+    def listStartsWith(self, the_list, the_value):
+        for l in the_list:
+            if l.startswith(the_value):
+                return True
+        return False
+
     def checkFirstSchedule(self, task_rec, tid, comm):
-        if task_rec not in self.current_tasks and comm in self.watch_for_prog and comm in self.watch_for_prog_callback:
-            self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
-            self.watch_for_prog.remove(comm)
-            self.watch_for_prog_callback[comm](tid)
-            del self.watch_for_prog_callback[comm]
+        if task_rec not in self.current_tasks: 
+            #self.lgr.debug('contextManager checkFirstSchedule tid:%s (%s) not yet in current tasks' % (tid, comm))
+            if self.listStartsWith(self.watch_for_prog, comm) and self.listStartsWith(self.watch_for_prog_callback, comm):
+                self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
+                self.watch_for_prog.remove(comm)
+                self.watch_for_prog_callback[comm](tid)
+                del self.watch_for_prog_callback[comm]
 
     def recordProcessText(self, tid):
         comm = self.task_utils.getCommFromTid(tid) 
