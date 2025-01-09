@@ -54,7 +54,11 @@ class PageCallbacks():
             self.callbacks[addr][name] = callback
             self.setTableHaps(addr,use_pid=use_pid)
         else:
-            self.lgr.error('pageCallbacks setCallback for 0x%x pid %d but addr already mapped' % (addr, pid))
+            self.lgr.debug('pageCallbacks setCallback for 0x%x pid %d but addr already mapped, just make the call' % (addr, pid))
+            if name is None:
+                callback(addr)
+            else:
+                callback(addr, name)
 
     def setTableHaps(self, addr, use_pid=None):
         table_base = None
