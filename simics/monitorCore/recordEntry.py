@@ -25,8 +25,10 @@
 
 from simics import *
 import net
+import os
+import pickle
 class RecordEntry():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, param, compat32, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, param, compat32, snap_name, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -40,6 +42,8 @@ class RecordEntry():
         self.recent_cycle = {}
         self.sysenter_hap = None
         self.sysenter64_hap = None
+        if snap_name is not None:
+            self.loadPickle(snap_name)
 
     def noWatchSysenter(self):
         if self.sysenter_hap is not None:
@@ -56,6 +60,7 @@ class RecordEntry():
     def watchSysenter(self, dumb=None):
         if self.cpu is None:
             return
+        self.lgr.debug('recordEntry watchSysenter context of cpu %s' % self.cpu.current_context)
         cell = self.top.getCell()
         if self.sysenter_hap is None:
             if self.top.isVxDKM(self.cell_name):
@@ -95,7 +100,7 @@ class RecordEntry():
 
     def sysenterHap(self, prec, third, forth, memory):
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
+        #self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
         if tid is not None:
             if True:
                 cycles = self.cpu.cycles
@@ -211,3 +216,27 @@ class RecordEntry():
             self.lgr.debug('getPreviousCycleFrame tid not in sysenter_cycles')
         return frame, ret_cycles
 
+    def loadPickle(self, name):
+        self.lgr.debug('recordEntry load pickle for %s  cell_name %s' % (name, self.cell_name))
+        record_entry_file = os.path.join('./', name, self.cell_name, 'recordEntry.pickle')
+        if os.path.isfile(record_entry_file):
+            self.lgr.debug('recordEntry pickle from %s' % record_entry_file)
+            self.recent_cycle = pickle.load( open(record_entry_file, 'rb') ) 
+            pickle_cycle = pickle.load( open(record_entry_file, 'rb') ) 
+            for tid in pickle_cycle:
+                self.recent_cycle[str(tid)] = pickle_cycle[tid]
+                self.lgr.debug('loadPickle tid %s frame %s' % (tid, str(self.recent_cycle[tid])))
+            #self.recent_cycle = rev_call_pickle['recent_cycle']
+
+    def pickleit(self, name, cell_name):
+        record_entry_file = os.path.join('./', name, cell_name, 'recordEntry.pickle')
+        self.lgr.debug('recordEntry pickleit to %s ' % (record_entry_file))
+        save_cycles = {}
+        for tid in self.sysenter_cycles:
+            frame, cycles = self.getPreviousCycleFrame(tid)
+            save_cycles[tid] = [cycles, frame]
+            self.lgr.debug('recordEntry pickleit tid %s cycle 0x%x f %s' % (tid, cycles, str(frame)))
+        try:
+            pickle.dump( save_cycles, open( record_entry_file, "wb") ) 
+        except TypeError as ex:
+            self.lgr.error('trouble dumping pickle of cycle fames')
