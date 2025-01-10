@@ -6353,6 +6353,7 @@ class GenMonitor():
         if tid is None:
             self.checkOnlyIgnore()
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
+        self.trackThreads()
         self.lgr.debug('traceWindows set trace_all[%s] to %s' % (self.target, str(self.trace_all[self.target])))
 
     ''' Hack to catch erzat syscall from application with 9999 as syscall number for purpose of locating program text section load address'''
