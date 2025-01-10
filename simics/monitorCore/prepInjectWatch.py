@@ -192,6 +192,7 @@ class PrepInjectWatch():
                                 len(orig_buf)))
             else:
                 self.lgr.debug('prepInjectWatch pickleit saving %d kbufs of len list %s.  ' % (len(kbufs), str(k_buf_len_list)))
+            pickDict['tid'] = self.kbuffer.getTID()
         if self.top.isWindows():
             pickDict['addr_of_count'] = self.read_count_addr
         elif is_ioctl:
