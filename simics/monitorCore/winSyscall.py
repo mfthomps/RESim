@@ -1978,19 +1978,25 @@ class WinSyscall():
                 if word_size == 4:
                     param_val = self.paramOffPtr(5, [0], frame, word_size) 
                     if param_val is None:
-                        self.lgr.error('winSyscall failed to get paramOffPtr for stack1, frame string %s' % taskUtils.stringFromFrame(frame))
-                        SIM_break_simulation('remove this')
+                        self.lgr.debug('winSyscall failed to get delay_count_addr from stack2, count_addr is 0x%x set delay_count to none' % (exit_info.count_addr))
+                        exit_info.delay_count_addr = None
                     else:
                         exit_info.delay_count_addr = param_val + word_size
                 else:
                     exit_info.delay_count_addr = self.stackParam(1, frame) + word_size
-                self.lgr.debug('winSyscall %s returned length addr 0x%x' % (op_cmd, exit_info.delay_count_addr))
+                if exit_info.delay_count_addr is not None:
+                    self.lgr.debug('winSyscall %s returned delay_count_addr 0x%x' % (op_cmd, exit_info.delay_count_addr))
+                else:
+                    self.lgr.debug('winSyscall %s returned delay count addr is None' % (op_cmd))
                 if exit_info.retval_addr is None:
                     self.lgr.error('winSyscall retval_addr None')
                 elif exit_info.count is None:
                     self.lgr.error('winSyscall count None')
                 elif exit_info.count_addr is None:
                     self.lgr.error('winSyscall count_addr None')
+                elif exit_info.delay_count_addr is None:
+                    trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x count_addr: 0x%x delay_count_addr is None  %s' %  (exit_info.retval_addr, 
+                            exit_info.count, exit_info.count_addr, send_string)
                 else: 
                     trace_msg = trace_msg + ' data_buf_addr: 0x%x count_requested: 0x%x count_addr: 0x%x delay_count_addr: 0x%x %s' %  (exit_info.retval_addr, 
                             exit_info.count, exit_info.count_addr, exit_info.delay_count_addr, send_string)
