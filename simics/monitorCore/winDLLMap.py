@@ -309,7 +309,8 @@ class WinDLLMap():
                         self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
                     elif self.text[pid].load_addr is None:
                         eproc = self.task_utils.getCurThreadRec()
-                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
+                        prog_name = self.top.getProgName(tid)
+                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, prog_name, self.lgr)
                         if text_load_addr is not None:
                             self.text[pid].load_addr = text_load_addr
                             self.lgr.debug('WinDLLMap mapSection got load_addr 0x%x for text for pid %s' % (text_load_addr, pid))
@@ -841,7 +842,7 @@ class WinDLLMap():
             dll_info = self.text[pid]
             if dll_info.load_addr is None:
                 eproc = self.task_utils.getCurThreadRec()
-                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
+                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
                 dll_info.load_addr = text_load_addr
                 if dll_info.load_addr is None:
                     self.lgr.debug('winDLL getLoadInfo load_addr None for text[%s] %s' % (pid, dll_info.fname))
@@ -895,3 +896,12 @@ class WinDLLMap():
                       
             else:
                 self.lgr.error('winDLLMap failed to find word sizes file at %s' % fname)
+
+    def findPendingProg(self, comm):
+        retval = None
+        for pp in self.pending_procs:
+            proc_base = ntpath.basename(pp)
+            self.lgr.debug('winDLL findPendingProg does %s start with %s' % (proc_base, comm))
+            if proc_base.startswith(comm):
+                retval = pp
+        return retval
