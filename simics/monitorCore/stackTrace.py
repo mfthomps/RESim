@@ -1427,7 +1427,7 @@ class StackTrace():
             pass
         elif first_instruct[1].lower().startswith('jmp dword') or first_instruct[1].lower().startswith('jmp qword'):
             fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(first_instruct, call_to)
-            if not (self.fun_mgr.isFun(fun_hex) and self.fun_mgr.inFun(prev_ip, fun_hex)):
+            if not (self.fun_mgr.isFun(fun_hex) and self.fun_mgr.inFun(call_ip, fun_hex)):
                 skip_this = True
                 #self.lgr.debug('stackTrace addr (prev_ip) 0x%x not in fun 0x%x, or just branch 0x%x skip it' % (prev_ip, call_to, fun_hex))
             else:
