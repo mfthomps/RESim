@@ -439,9 +439,12 @@ class MemUtils():
             except:
                 self.lgr.debug('memUtils v2pUserAddr cpl 0, logical_to_physical failed on 0x%x' % v)
              
+        if retval == 0:
+            retval = None
         if retval is None and cpl == 0 and self.top.isWindows(cpu=cpu) and self.WORD_SIZE == 8:
             table_base = self.getWindowsTableBase(cpu, use_pid)
             if table_base is None:
+                self.lgr.debug('memUtils v2pUserAddr windows kernel mode user space ref table_base none')
                 return None
             #self.lgr.debug('memUtils v2pUserAddr windows kernel mode user space ref table_base 0x%x' % (table_base))
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=table_base)
@@ -457,8 +460,6 @@ class MemUtils():
                 retval = ptable_info.page_addr
             else:
                 self.lgr.debug('memUtils v2pUserAddr tried user CR3 and failed to get page')
-        if retval == 0:
-            retval = None
         
         if cpl == 0 and (retval is None or retval == 0):
             if do_log:
