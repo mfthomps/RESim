@@ -6,6 +6,7 @@ import taskUtils
 import winDelay
 import winSocket
 import net
+import syscall
 from resimSimicsUtils import rprint
 from resimHaps import *
 import syscall
@@ -197,11 +198,13 @@ class WriteData():
         self.pending_select = None
         if self.backstop_delay is not None:
             self.backstop.setDelay(self.backstop_delay)
+
     def writeKdata(self, data):
         ''' write data to kernel buffers '''
         if self.k_bufs is None:
             ''' TBD remove this, all kernel buffers should now use k_bufs'''
             self.lgr.error('writeKdata, missing k_bufs')
+            return
         else:
             remain = len(data)
             offset = 0
@@ -210,28 +213,34 @@ class WriteData():
                 We are in a read system call, but not at the kernel entry.'''
             if self.user_space_count is None: 
                 self.user_space_addr, self.user_space_count = self.top.getReadAddr()
-            #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+            self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
-            #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             if not self.no_call_hap and not self.tracing_io:
-                #self.lgr.debug('writeData writeKdata, call setCallHap')
+                self.lgr.debug('writeData writeKdata, call setCallHap')
                 self.setCallHap()
             while remain > 0:
                  if index >= len(self.k_bufs):
-                     self.lgr.error('writeKdata index %d out of range with %d bytes remaining.' % (index, remain))
+                     self.lgr.error('writeKdata index %d out of range with %d bytes remaining. len self.k_bufs is %d' % (index, remain, len(self.k_bufs)))
                      break
                  count = min(self.k_buf_len[index], remain)
                  end = offset + count
-                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index]))
+                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d remain: %d count: %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index], remain, count))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
+                 self.lgr.debug('writeKdata offset %d remain %d' % (offset, remain))
 
             if self.top.isWindows() and self.dataWatch is not None:
                 self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
-                asynch_handler = winDelay.WinDelay(self.top, self.cpu, self.addr_of_count, self.user_space_addr, None,
-                        self.mem_utils, self.context_manager, None, None, None, self.fd, self.user_space_count, self.lgr, watch_count_addr=False)
+                dum, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
+                exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None)
+                exit_info.retval_addr = self.user_space_addr
+                exit_info.count_addr = self.addr_of_count
+                exit_info.delay_count_addr = self.addr_of_count
+                asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, self.user_space_addr, 
+                        self.mem_utils, self.context_manager, None, None, None, self.fd, len(data), None, self.lgr, watch_count_addr=False)
 
                 asynch_handler.setDataWatch(self.dataWatch, True)
                 asynch_handler.toUserAlone(None)
@@ -270,9 +279,10 @@ class WriteData():
             if self.filter is not None: 
                 result = self.filter.filter(self.in_data, self.current_packet)
                 if len(result) > self.max_len:
-                    self.lgr.warning('dataWrite filter generated %d bytes, will be trimmed to %d.  May cause breakage, e.g., CRCs' % (len(result), self.max_len))
+                    self.lgr.warning('writeData filter generated %d bytes, will be trimmed to %d.  May cause breakage, e.g., CRCs' % (len(result), self.max_len))
                     result = result[:self.max_len]
                 self.writeKdata(result)
+                self.lgr.debug('writeData filter wrote %d bytes' % len(result))
                 retval = len(result)
             else:
                 self.writeKdata(self.in_data)
@@ -1024,7 +1034,6 @@ class WriteData():
                 self.k_end_ptr = so_pickle['k_end_ptr']
 
             if 'k_bufs' in so_pickle:
-                self.lgr.debug('writeData pickle got k_bufs')
                 self.k_bufs = so_pickle['k_bufs']
                 buf_len = so_pickle['k_buf_len']
                 if type(buf_len) is int:
@@ -1033,6 +1042,7 @@ class WriteData():
                         self.k_buf_len.append(buf_len)
                 else:
                     self.k_buf_len = buf_len
+                self.lgr.debug('writeData pickle got %d k_bufs' % len(self.k_bufs))
 
             if 'orig_buffer' in so_pickle:
                 self.orig_buffer = so_pickle['orig_buffer']
