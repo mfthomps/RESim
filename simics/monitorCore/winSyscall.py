@@ -21,6 +21,7 @@ import winFile
 import winNTSTATUS
 import net
 import winDelay
+import doInUser
 from resimHaps import *
 from resimSimicsUtils import rprint
 PROC_CREATE_INFO_OFFSET=0x58
@@ -658,10 +659,15 @@ class WinSyscall():
                         self.lgr.debug('winSyscall cup add %s as pending proc' % prog)
                         self.soMap.addPendingProc(prog)
                         base = ntpath.basename(prog)
-                        if base.startswith(comm):
-                            ''' creating another process for same program '''
-                            self.lgr.debug('winSyscall syscallParase cup of same program')
-                            self.context_manager.callWhenFirstScheduled(comm, self.recordStack)
+                        if self.top.trackingThreads(): 
+                            want_comm = base[:taskUtils.COMM_SIZE-1]
+                            self.lgr.debug('winSyscall is tracking threads base %s' % want_comm)
+                            self.context_manager.callWhenFirstScheduled(want_comm, self.recordLoadAddr)
+                        # TBD need to record stack ???
+                        #if base.startswith(comm):
+                        #    ''' creating another process for same program '''
+                        #    self.lgr.debug('winSyscall syscallParase cup of same program')
+                        #    self.context_manager.callWhenFirstScheduled(comm, self.recordStack)
             else:
                 trace_msg = trace_msg + ' base read from 0x%x was none' % ptr
                 self.lgr.debug(trace_msg)
@@ -791,20 +797,20 @@ class WinSyscall():
                                 syscall.addParam(exit_info, call_param)
                                 if self.kbuffer is not None:
                                     self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                    self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
                             self.lgr.debug('winSyscall read, call_param.nth is none, call it matched')
                             syscall.addParam(exit_info, call_param)
                             if self.kbuffer is not None:
                                 self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         break
                     else:
                         self.lgr.debug('winSyscall read match_param was int, no match?')
                         skip_this = True
             if not skip_this:
                 self.lgr.debug('winSyscall ReadFile set asynch_handler')
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, exit_info, None,
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, None,
                         self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
                 if self.watchData(exit_info):
                     self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
@@ -1003,7 +1009,7 @@ class WinSyscall():
             #SIM_break_simulation('string at 0x%x' % exit_info.fname_addr)
   
         elif callname == 'DeviceIoControlFile':
-            callname, trace_msg = self.parseDeviceIoCall(tid, exit_info, trace_msg, frame, word_size)
+            callname, trace_msg = self.parseDeviceIoCall(tid, comm, exit_info, trace_msg, frame, word_size)
         elif callname in ['CreateEvent', 'OpenProcess']:
             exit_info.retval_addr = frame['param1']
             trace_msg = trace_msg + ' Handle_addr: 0x%x' % (exit_info.retval_addr)
@@ -1720,6 +1726,7 @@ class WinSyscall():
         return retval 
 
     def recordStack(self, tid):
+        # TBD not used yet?
         self.lgr.debug('winSyscall recordStack tid:%s' % tid)
         self.top.recordStackClone(tid, -1)
 
@@ -1783,7 +1790,7 @@ class WinSyscall():
             retval = True
         return retval
 
-    def parseDeviceIoCall(self, tid, exit_info, trace_msg, frame, word_size):
+    def parseDeviceIoCall(self, tid, comm, exit_info, trace_msg, frame, word_size):
         exit_info.old_fd = frame['param1']
         event_handle = frame['param2']
         operation = frame['param6'] & 0xffffffff
@@ -1933,18 +1940,6 @@ class WinSyscall():
                 self.lgr.debug('winSyscall %s word_size %d retval_addr 0x%x' % (op_cmd, word_size, exit_info.retval_addr))
             else:
                 self.lgr.error('winSyscall %s word_size %d retval_addr None' % (op_cmd, word_size))
-            exit_info.count_addr = frame['param5'] + 8
-            '''
-            if word_size == 4:
-                #  Seems to be same for 32 and 64 bit?   TBD is different for DATAGRAM, see below
-                #exit_info.fname_addr = frame['param5'] + 8
-                #exit_info.fname_addr = frame['param5'] + word_size
-                # TBD confused
-                exit_info.count_addr = self.paramOffPtr(5, [0], frame, word_size) + word_size
-                self.lgr.debug('frames: %s' % frame_string)
-            else:
-                exit_info.count_addr = frame['param5'] + word_size 
-            '''
             #SIM_break_simulation('in send/recv') 
             count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
             #if word_size == 4:
@@ -1978,6 +1973,8 @@ class WinSyscall():
                     #self.lgr.debug('winSyscall sock %s' % to_string)
                     #frame_string = taskUtils.stringFromFrame(frame)
                     #SIM_break_simulation(trace_msg+' '+to_string+ ' '+frame_string)
+                # TBD count_addr vs delay_count_addr
+                exit_info.count_addr = frame['param5'] + 8
                 if word_size == 4:
                     param_val = self.paramOffPtr(5, [0], frame, word_size) 
                     if param_val is None:
@@ -2027,14 +2024,14 @@ class WinSyscall():
                         syscall.addParam(exit_info, call_param)
                         if self.kbuffer is not None:
                             self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         break
                 else:
                     self.lgr.debug('call_param.nth is none, call it matched')
                     syscall.addParam(exit_info, call_param)
                     if self.kbuffer is not None:
                         self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                        self.kbuffer.read(exit_info.retval_addr, exit_info.count)
+                        self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                 break
             elif call_param.name == 'runToIO' and type(call_param.match_param) is int:
                 exit_info = None
@@ -2055,7 +2052,7 @@ class WinSyscall():
                         SIM_break_simulation('stop_on_call') 
         
         if do_async_io and exit_info is not None: 
-            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, exit_info, exit_info.sock_addr,
+            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, exit_info.sock_addr,
                       self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
                       exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
             if self.watchData(exit_info):
@@ -2079,3 +2076,32 @@ class WinSyscall():
                 word_size = somap_size
             self.word_size_cache[tid] = word_size
         return word_size
+
+
+    def recordLoadAddr(self, tid):
+        # use doInUser to ensure record is paged in
+        comm = self.task_utils.getCommFromTid(tid) 
+        self.lgr.debug('recordLoadAddr tid:%s (%s) do it in user space' % (tid, comm))
+        doInUser.DoInUser(self.top, self.cpu, self.doRecordLoadAddr, tid, self.task_utils, self.mem_utils, self.lgr, tid=tid)
+
+    def doRecordLoadAddr(self, tid):
+        # WARNING this is a contextManager callback on a reschedule.  The task info is not yet loaded
+        comm = self.task_utils.getCommFromTid(tid) 
+        eproc = self.task_utils.getProcRecForTid(tid)
+        self.lgr.debug('doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
+        load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
+        if load_addr is None:
+            self.lgr.error('winSyscall doRecordLoad failed to get load addess for %s' % tid)
+            return
+        prog = self.soMap.findPendingProg(comm)
+        if prog is None:
+            self.lgr.error('winSyscall doRecordLoad failed to get pending prog for %s (%s)' % (tid, comm))
+            return
+        full_path = self.top.getFullPath(prog)
+        size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
+        if size is None:
+            self.lgr.error('winProg doRecordLoad unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            return 
+        text_addr = load_addr + text_offset
+        self.lgr.debug('winProg runToText got size 0x%x' % size)
+        self.soMap.addText(prog, tid, load_addr, size, machine, image_base, text_offset, full_path)
