@@ -3,6 +3,7 @@ import pickle
 import json
 import os
 import sys
+import ntpath
 import markCompare
 class CallMark():
     def __init__(self, msg, max_len, recv_addr, length, fd, is_lib=False, data_stream=False):
@@ -1008,9 +1009,12 @@ class WatchMarks():
         tid = self.top.getTID()
         if cycles is None:
             cycles = self.cpu.cycles
-        fname_ret = self.top.getSO(ip)
-        if fname_ret is not None and ':' in fname_ret:
-            fname = fname_ret.split(':')[0]
+        fname_ret = self.top.getSO(ip, just_name=True)
+        if fname_ret is not None:
+            if self.top.isWindows(target=self.cell_name):
+                fname = ntpath.basename(fname_ret)
+            else:
+                fname = os.path.basename(fname_ret)
         else:
             fname = None
         wm = self.WatchMark(cycles, self.call_cycle, ip, tid, fname, mark)
