@@ -99,9 +99,11 @@ class InjectIO():
         self.limit_one = limit_one
         self.clear_retrack = False
         self.fd = None
+        self.tid = None
 
         self.snap_name = snap_name
         self.addr_of_count = None
+        
         # Loading pickle below. init those variable above
 
         self.loadPickle(snap_name)
@@ -256,7 +258,8 @@ class InjectIO():
             self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
             self.lgr.debug('injectIO restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
 
-        tid = self.top.getTID()
+        if self.tid is None:
+            self.tid = self.top.getTID()
         if self.target_prog is None and not self.trace_all and not self.instruct_trace and not self.no_track:
             ''' Set Debug before write to use RESim context on the callHap '''
             ''' We assume we are in user space in the target process and thus will not move.'''
@@ -273,7 +276,7 @@ class InjectIO():
             if self.reset_debug:
                 self.top.stopDebug()
                 self.lgr.debug('injectIO call debugTidGroup')
-                self.top.debugTidGroup(tid, to_user=False, track_threads=False) 
+                self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             if not self.no_page_faults:
@@ -291,7 +294,7 @@ class InjectIO():
             trace_file = base+'.trace'
             self.top.instructTrace(trace_file, watch_threads=True)
         elif self.trace_all and self.target_prog is None and not self.no_trace_dbg:
-            self.top.debugTidGroup(tid, to_user=False, track_threads=False) 
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
@@ -601,6 +604,8 @@ class InjectIO():
                 self.lgr.debug('injectIO addr_addr is 0x%x size %d' % (self.addr_addr, self.addr_size))
             if 'fd' in so_pickle:
                 self.fd = so_pickle['fd']
+            if 'tid' in so_pickle:
+                self.tid = so_pickle['tid']
             if 'addr_of_count' in so_pickle and so_pickle['addr_of_count'] is not None: 
                 self.addr_of_count = so_pickle['addr_of_count']
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
