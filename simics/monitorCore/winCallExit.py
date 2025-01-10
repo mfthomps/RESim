@@ -415,7 +415,11 @@ class WinCallExit():
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
-            if not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo')):
+            async_waiting = False
+            if  exit_info.asynch_handler is not None and exit_info.asynch_handler.exit_info is not None:
+                async_waiting = True
+                self.lgr.debug('winCallExit think async still waiting so do not stop')
+            if not async_waiting and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
                 if my_syscall is None:
