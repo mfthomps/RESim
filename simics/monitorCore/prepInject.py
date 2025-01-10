@@ -112,11 +112,12 @@ class PrepInject():
             length = self.exit_info.count
             self.lgr.debug('prepInject getLength length from count is %d' % length)
             if self.top.isWindows():
-                if self.exit_info.did_delay:
-                    self.addr_of_count = self.exit_info.delay_count_addr
-                else:
-                    self.addr_of_count = self.exit_info.count_addr
-                self.lgr.debug('prepInject getLength length address of count 0x%x' % self.addr_of_count)
+                #if self.exit_info.did_delay:
+                #    self.addr_of_count = self.exit_info.delay_count_addr
+                #else:
+                #    self.addr_of_count = self.exit_info.count_addr
+                self.addr_of_count = self.exit_info.delay_count_addr
+                self.lgr.debug('prepInject getLength windows, address of count 0x%x' % self.addr_of_count)
         return length
 
     def instrumentAlone(self, dumb): 
@@ -124,7 +125,7 @@ class PrepInject():
         self.top.stopTracking(keep_watching=True, keep_coverage=True)
         current_ip = self.top.getEIP(self.cpu)
         tid = self.top.getTID()
-        self.lgr.debug('instrumentAlone tid %s ip 0x%x' % (tid, current_ip))
+        self.lgr.debug('prepInject instrumentAlone tid %s ip 0x%x' % (tid, current_ip))
         if self.mem_utils.isKernel(current_ip): 
             ''' go forward one to user space and record the return IP '''
             SIM_run_command('pselect %s' % self.cpu.name)
@@ -144,10 +145,17 @@ class PrepInject():
         tid = self.top.getTID()
         length = self.getLength()
         ''' Save the buffer read at point of prep inject, e.g., for use as a seed'''
-        ret_count = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+
+        if self.top.isWindows():
+            ret_count = self.mem_utils.readWord(self.cpu, self.addr_of_count)
+            self.lgr.debug('prepInject instrument Last buffer addr_of_count 0x%x ret_count %d' % (self.addr_of_count, ret_count))
+        else:
+            ret_count = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+
         the_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, ret_count) 
         with open('logs/orig_buffer.io', 'bw') as fh:
             fh.write(the_buffer)
+        self.lgr.debug('prepInject instrument Last buffer of %d bytes written to logs/orig_buffer.io' % ret_count)
         print('Last buffer of %d bytes written to logs/orig_buffer.io' % ret_count)
 
         frame, cycle = self.top.getRecentEnterCycle()
