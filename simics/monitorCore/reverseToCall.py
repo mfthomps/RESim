@@ -165,8 +165,6 @@ class reverseToCall():
             self.cpu = cpu
             self.x_pages = x_pages
             self.page_faults = page_faults
-            if self.run_from_snap is not None:
-                self.loadPickle(self.run_from_snap)
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
                 self.lgr.debug('reverseToCall setup bookmarks set to %s' % str(bookmarks))
