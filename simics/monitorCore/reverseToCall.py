@@ -39,7 +39,6 @@ import net
 import syscall
 import resimHaps
 import time
-import pickle
 from resimHaps import *
 '''
 BEWARE syntax errors are not seen.  TBD make unit test
@@ -82,11 +81,12 @@ class RegisterToTrack():
 
 class reverseToCall():
     def __init__(self, top, cell_name, param, task_utils, mem_utils, page_size, context_manager, name, 
-                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap):
+                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap, record_entry):
             #print('call getLogger')
             logname = '%s-%s' % (name, cell_name)
             self.lgr = resimUtils.getLogger(logname, logdir)
             self.context_manager = context_manager 
+            self.record_entry = record_entry 
             #sys.stderr = open('err.txt', 'w')
             self.top = top 
             self.cpu = None
@@ -113,11 +113,7 @@ class reverseToCall():
             self.bookmarks = bookmarks
             self.previous_eip = None
             self.step_into = None
-            self.sysenter_cycles = {}
-            self.recent_cycle = {}
             self.jump_stop_hap = None
-            self.sysenter_hap = None
-            self.sysenter64_hap = None
             self.page_faults = None
             self.frame_ips = []
             self.uncall_hap = None
@@ -142,16 +138,7 @@ class reverseToCall():
             self.callmn = None
 
     def noWatchSysenter(self):
-        if self.sysenter_hap is not None:
-            self.lgr.debug('reverseToCall noWatchSystenter, remove sysenter breaks and hap handle %d' % self.sysenter_hap)
-            self.context_manager.genDeleteHap(self.sysenter_hap, immediate=True)
-            self.sysenter_hap = None
-        else:
-           self.lgr.debug('noWatchSysenter, NO ENTER BREAK')
-        if self.sysenter64_hap is not None:
-            self.lgr.debug('reverseToCall noWatchSystenter, remove sysenter64 breaks and hap handle %d' % self.sysenter64_hap)
-            self.context_manager.genDeleteHap(self.sysenter64_hap, immediate=True)
-            self.sysenter64_hap = None
+        self.record_entry.noWatchSysenter()
 
     def v2p(self, cpu, v):
         try:
@@ -171,42 +158,7 @@ class reverseToCall():
     def watchSysenter(self, dumb=None):
         if self.cpu is None:
             return
-        cell = self.top.getCell()
-        if self.sysenter_hap is None:
-            if self.top.isVxDKM(self.cell_name):
-                # TBD fix this
-                #return
-                bp_start = None
-                self.global_sym = self.task_utils.getGlobalSymDict()
-                for addr in self.global_sym:
-                    bp = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, 1, 0)
-                    if bp_start is None:
-                        bp_start = bp
-                self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, bp_start, bp, 'reverseToCall sysenter')
-                self.lgr.debug('vxKSyscall setGlobal set bp range %d %d' % (bp_start, bp))
-            elif self.cpu.architecture.startswith('arm'):
-                if self.param.arm_entry is not None:
-                    self.lgr.debug('watchSysenter set linear break at 0x%x' % (self.param.arm_entry))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, 1, 0)
-                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
-                if self.cpu.architecture == 'arm64' and hasattr(self.param, 'arm64_entry'):
-                    self.lgr.debug('watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
-                    self.sysenter64_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
-            else:
-                if self.param.sysenter is not None and self.param.sys_entry is not None:
-                    self.lgr.debug('watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
-                    enter_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
-                    self.sysenter_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, enter_break2, 'reverseToCall sysenter')
-                elif self.param.sysenter is not None:
-                    self.lgr.debug('watchSysenter sysenter set linear breaks at 0x%x ' % (self.param.sysenter))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
-                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sysenter')
-                elif self.param.sys_entry is not None:
-                    self.lgr.debug('watchSysenter sys_entry set linear breaks at 0x%x ' % (self.param.sys_entry))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sys_entry, 1, 0)
-                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'reverseToCall sys_entry')
+        self.record_entry.watchSysenter()
 
     def setup(self, cpu, x_pages, bookmarks=None, page_faults = None):
         if self.cpu is None:
@@ -222,7 +174,8 @@ class reverseToCall():
                (hasattr(self.param, 'sys_entry') and self.param.sys_entry is not None) or \
                (hasattr(self.param, 'arm_entry') and self.param.arm_entry is not None):
                 '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
-                SIM_run_alone(self.watchSysenter, None)
+                #SIM_run_alone(self.watchSysenter, None)
+                SIM_run_alone(self.top.recordEntry, None)
 
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.context_manager.changeDebugTid(tid) 
@@ -493,6 +446,7 @@ class reverseToCall():
         self.lgr.debug('tryOneStopped reversed 1, eip: %x  %s' % (eip, instruct[1]))
         cpl = memUtils.getCPL(self.cpu)
         done = False
+        entry_cycles = self.record_entry.getEnterCycles(tid)
         if cpl > 0 or self.kernel:
             if cpl > 0:
                 self.lgr.debug('tryOneStopped user space')
@@ -520,15 +474,16 @@ class reverseToCall():
                 '''
                 done = True
 
-        elif tid in self.sysenter_cycles and len(self.sysenter_cycles[tid]) > 0:
+        elif len(entry_cycles) > 0:
             cur_cycles = self.cpu.cycles
             self.lgr.debug('tryOneStopped kernel space tid %s expected %s' % (tid, my_args.tid))
             is_exit = self.isExit(instruct[1], eip)
-            if tid in self.sysenter_cycles and is_exit:
+            if is_exit:
                 self.lgr.debug('tryOneStopped is sysexit, cur_cycles is 0x%x' % cur_cycles)
                 prev_cycles = None
                 got_it = None
-                page_cycles = self.sysenter_cycles[tid]
+                # TBD why call it page cycles?
+                page_cycles = entry_cycles
                 if self.page_faults is not None:
                     pass
                     #self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
@@ -547,7 +502,7 @@ class reverseToCall():
                     got_it = prev_cycles - 1
                 SIM_run_alone(self.jumpCycle, got_it)
                 done = True
-            elif tid in self.sysenter_cycles and not is_exit:
+            else:
                 self.lgr.debug('tryOneStopped in kernel but not exit? 0x%x  %s' % (eip, instruct[1]))
         
 
@@ -601,12 +556,13 @@ class reverseToCall():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('jumpOverKernel kernel space tid %s eip:0x%x %s cycle: 0x%x' % (tid, eip, instruct[1], self.cpu.cycles))
         is_exit = self.isExit(instruct[1], eip)
-        if tid in self.sysenter_cycles and is_exit:
+        entry_cycles = self.record_entry.getEnterCycles(tid)
+        if len(entry_cycles)>0 and is_exit:
             self.lgr.debug('jumpOverKernel is sysexit, cur_cycles is 0x%x' % cur_cycles)
 
             prev_cycles = None
             got_it = None
-            page_cycles = self.sysenter_cycles[tid]
+            page_cycles = entry_cycles
             if self.page_faults is not None:
                 #self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
                 #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
@@ -718,7 +674,7 @@ class reverseToCall():
         retval = False
         all_faults = self.expandFaultList(page_faults)
         closest_fault = self.getClosestFault(all_faults)
-        frame, closest_call = self.getPreviousCycleFrame(tid)
+        frame, closest_call = self.record_entry.getPreviousCycleFrame(tid)
         if closest_fault is None or closest_call > closest_fault:
             if closest_call is not None:
                 self.lgr.debug('tryRecentCycle skipping to recent call')
@@ -815,7 +771,6 @@ class reverseToCall():
                 self.lgr.debug('doRevToModReg entered kernel')
                 if not self.tooFarBack():
     
-                    #if tid in self.sysenter_cycles and len(self.sysenter_cycles[tid]) > 0:
                     if True:
                         kjump = self.jumpOverKernel(tid)
                         if kjump is None:
@@ -1480,124 +1435,9 @@ class reverseToCall():
             start = limit
         self.lgr.debug('setBreakRange done')
 
-
-    def sysenterHap(self, prec, third, forth, memory):
-        #self.lgr.debug('sysenterHap')
-        cur_cpu, comm, tid  = self.task_utils.curThread()
-        if tid is not None:
-            if True:
-                cycles = self.cpu.cycles
-                if tid not in self.sysenter_cycles:
-                    self.sysenter_cycles[tid] = {}
-                if cycles not in self.sysenter_cycles[tid]:
-                    #self.lgr.debug('third: %s  forth: %s' % (str(third), str(forth)))
-                    frame = self.task_utils.frameFromRegs(compat32=self.compat32)
-                    if not self.top.isVxDKM(target=self.cell_name):
-                        call_num = self.mem_utils.getCallNum(self.cpu)
-                        frame['syscall_num'] = call_num
-                        #self.lgr.debug('sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], self.cpu.cycles))
-                        #self.lgr.debug(taskUtils.stringFromFrame(frame))
-                        #SIM_break_simulation('debug me')
-                        callname = self.task_utils.syscallName(call_num, self.compat32)
-                        if callname is None:
-                            self.lgr.debug('sysenterHap bad call num %d, ignore' % call_num)
-                            return
-                    else:
-                        pc = self.top.getEIP(self.cpu)
-                        callname = self.task_utils.getGlobalSym(pc)
-                        if callname is None:
-                            self.lgr.debug('sysenterHap pc 0x%x not a vxwork symbol' % pc)
-                            return
-                    if callname == 'select' or callname == '_newselect':        
-                        select_info = syscall.SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
-                             self.cpu, self.mem_utils, self.lgr)
-                        frame['select'] = select_info.getFDList()
-                    elif callname == 'socketcall':        
-                        ''' must be 32-bit get params from struct '''
-                        socket_callnum = frame['param1']
-                        if socket_callnum < len(net.callname):
-                            socket_callname = net.callname[socket_callnum].lower()
-                            #self.lgr.debug('sysenterHap socket_callnum is %d name %s' % (socket_callnum, socket_callname))
-                            if socket_callname != 'socket' and socket_callname != 'setsockopt':
-                                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils)
-                                frame['ss'] = ss
-                        else:
-                            self.lgr.error('sysenterHap socket_callnum %d out of range for net.callname len %d' % (socket_callnum, len(net.callname)))
-
-                    self.sysenter_cycles[tid][cycles] = frame 
-                    if tid in self.recent_cycle:
-                        recent_cycle, recent_frame = self.recent_cycle[tid]
-                        if cycles > recent_cycle:
-                            self.recent_cycle[tid] = [cycles, frame]
-                            #self.lgr.debug('sysenterHap setting most recent cycle')
-                    else:
-                        self.recent_cycle[tid] = [cycles, frame]
-                        #self.lgr.debug('sysenterHap setting first recent cycle')
-                else:
-                    self.lgr.debug('sysenterHap, cycles already there for tid %s cycles: 0x%x' % (tid, cycles)) 
-
-    def getEnterCycles(self, tid):
-        retval = []
-        if tid in self.sysenter_cycles:
-            for cycle in sorted(self.sysenter_cycles[tid]):
-                retval.append(cycle)
-        return retval
-
     def clearEnterCycles(self):
-        self.lgr.debug('clearEnterCycles')
-        self.sysenter_cycles.clear()
+        self.record_entry.clearEnterCycles()
 
-    def getRecentCycleFrame(self, tid):
-        ''' 
-            This returns the most recent  frame and cycle entry,
-            whose cycle is not related to the current cycle.
-        '''
-        ''' NOTE these frames do not reflect socket call decoding '''
-        frame = None
-        ret_cycles = None
-        if self.cpu is not None:
-            cur_cycles = self.cpu.cycles
-            self.lgr.debug('getRecentCycleFrame tid %s' % tid)
-            if tid in self.recent_cycle:
-                ret_cycles, frame = self.recent_cycle[tid]
-            else:
-                self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
-        else:
-            self.lgr.debug('getRecentCycleFrame cpu was None')
-        return frame, ret_cycles
-
-    def getPreviousCycleFrame(self, tid, cpu=None):
-        ''' NOTE these frames do not reflect socket call decoding '''
-        frame = None
-        ret_cycles = None
-        if cpu is None:
-            cur_cycles = self.cpu.cycles
-            self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x' % (tid, cur_cycles))
-        else:
-            cur_cycles = cpu.cycles
-            self.lgr.debug('getPreviousCycleFrame tid %s cur_cycles 0x%x from given cpu' % (tid, cur_cycles))
-        cycles = None
-        prev_cycles = None
-        if tid in self.sysenter_cycles:
-            got_it = None
-            for cycles in sorted(self.sysenter_cycles[tid]):
-                if prev_cycles is not None and cycles > cur_cycles:
-                    self.lgr.debug('getPreviousCycleFrame found cycle 0x%x just prior to current 0x%x' % (prev_cycles, cur_cycles))
-                    got_it = prev_cycles
-                    break
-                else:
-                    prev_cycles = cycles
-
-            if got_it is not None:
-                frame = self.sysenter_cycles[tid][got_it] 
-                ret_cycles = got_it
-            else:
-                frame = self.sysenter_cycles[tid][cycles] 
-                ret_cycles = cycles
-                self.lgr.debug('getPreviousCycleFrame did not find cycle greater than 0x%x, returning newest cycle 0x%x' % (cur_cycles, cycles))
-        else:
-            self.lgr.debug('getPreviousCycleFrame tid not in sysenter_cycles')
-        return frame, ret_cycles
 
     def satisfyCondition(self, pc):
         ''' See the findKernelWrite skipAlone function for memory mod and retrack call '''
@@ -1640,7 +1480,7 @@ class reverseToCall():
         for tid in plist:
             t = plist[tid]
             if tasks[t].state > 0:
-                frame, cycles = self.getPreviousCycleFrame(tid)
+                frame, cycles = self.record_entry.getPreviousCycleFrame(tid)
                 if frame is not None:
                     call = self.task_utils.syscallName(frame['syscall_num'], self.compat32)
                     if call in read_calls and frame['param1'] == fd:
@@ -1676,34 +1516,6 @@ class reverseToCall():
                 return False
 
             self.top.restoreDebugBreaks(was_watching=True)
-    def loadPickle(self, name):
-        self.lgr.debug('reverseToCall load pickle for %s  cell_name %s' % (name, self.cell_name))
-        rev_call_file = os.path.join('./', name, self.cell_name, 'revCall.pickle')
-        if os.path.isfile(rev_call_file):
-            self.lgr.debug('reverseToCall pickle from %s' % rev_call_file)
-            #rev_call_pickle = pickle.load( open(rev_call_file, 'rb') ) 
-            self.recent_cycle = pickle.load( open(rev_call_file, 'rb') ) 
-            pickle_cycle = pickle.load( open(rev_call_file, 'rb') ) 
-            for tid in pickle_cycle:
-                self.recent_cycle[str(tid)] = pickle_cycle[tid]
-                self.lgr.debug('loadPickle tid %s frame %s' % (tid, str(self.recent_cycle[tid])))
-            #self.recent_cycle = rev_call_pickle['recent_cycle']
-
-    def pickleit(self, name, cell_name):
-        rev_call_file = os.path.join('./', name, cell_name, 'revCall.pickle')
-        #rev_call_pickle = {}
-        #rev_call_pickle['recent_cycle'] = self.recent_cycle
-        #pickle.dump( rev_call_pickle, open( rev_call_file, "wb")) 
-        self.lgr.debug('reverseToCall pickleit to %s ' % (rev_call_file))
-        save_cycles = {}
-        for tid in self.sysenter_cycles:
-            frame, cycles = self.getPreviousCycleFrame(tid)
-            save_cycles[tid] = [cycles, frame]
-            self.lgr.debug('pickleit tid %s cycle 0x%x f %s' % (tid, cycles, str(frame)))
-        try:
-            pickle.dump( save_cycles, open( rev_call_file, "wb") ) 
-        except TypeError as ex:
-            self.lgr.error('trouble dumping pickle of cycle fames')
 
     def setCallback(self, callback):
         self.callback = callback
