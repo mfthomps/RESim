@@ -146,11 +146,14 @@ class WinDelay():
 
     def setCountWriteHap(self):
         if self.count_write_hap is None:
-            ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.exit_info.delay_count_addr, 1, 0)
-            name = 'windDelayCountHap-%s' % self.tid
-            self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, name)
-            self.lgr.debug('winDelay setCountWriteHap to 0x%x hap %d module %s delay_count_addr 0x%x' % (self.exit_info.delay_count_addr, self.count_write_hap, str(self), self.exit_info.delay_count_addr))
+            if self.exit_info.delay_count_addr is None:
+                self.lgr.debug('winDelay setCountWriteHap but delay_count_addr is None')
+            else:
+                ''' Set a break/hap on the address at which we think the kernel will write the byte count from an asynch read/recv '''
+                proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.exit_info.delay_count_addr, 1, 0)
+                name = 'windDelayCountHap-%s' % self.tid
+                self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeCountHap, None, proc_break, name)
+                self.lgr.debug('winDelay setCountWriteHap to 0x%x hap %d module %s delay_count_addr 0x%x' % (self.exit_info.delay_count_addr, self.count_write_hap, str(self), self.exit_info.delay_count_addr))
             #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, self.exit_info.retval_addr, self.count, 0)
             #self.count_write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeBufferHap, None, proc_break, 'winDelayBufferHap')
         else:
