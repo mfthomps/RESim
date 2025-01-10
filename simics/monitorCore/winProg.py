@@ -37,15 +37,15 @@ class Text():
 def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
     load_address = None
     if eproc is not None:
-        load_address = getLoadAddress(cpu, mem_utils, eproc, lgr)
+        load_address = getLoadAddress(cpu, mem_utils, eproc, full_path, lgr)
     text_size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
     return WinProgInfo(load_address, text_offset, text_size, machine, image_base)
 
-def getLoadAddress(cpu, mem_utils, eproc, lgr):
+def getLoadAddress(cpu, mem_utils, eproc, prog, lgr):
         retval = None
         ''' TBD put in params! '''
         peb_addr = eproc+PEB_ADDR
-        lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x' % (eproc, peb_addr))
+        lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x prog %s' % (eproc, peb_addr, prog))
         peb = mem_utils.readPtr(cpu, peb_addr)
         if peb is not None:
             image_load_addr_addr = peb + 0x10
@@ -232,7 +232,7 @@ class WinProg():
     def runToText(self, want_tid):
         self.lgr.debug('winProg runToText want_tid %s' % want_tid)
         eproc = self.task_utils.getCurProcRec()
-        load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.lgr)
+        load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.prog_string, self.lgr)
         if load_addr is None:
             self.lgr.error('winprog failed to get load addess for %s' % want_tid)
             return
