@@ -126,16 +126,15 @@ class WinCallExit():
         if eax == 0x103:
             not_ready = True
             eax = 0
-        if eax == 0x40000003:
-            self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
-            eax = 0
-        if eax == 0xc000023f:
+        #if eax in [0x40000003, 0x80000005, 0xc000023f, 0xc00000a3]:
+        if eax in [0x40000003, 0x80000005]:
+            # windows has  a lot of garbage ruturn values.
             self.lgr.debug('winSyscall modifying eax back to zero from 0x%x' % eax)
             eax = 0
         
         # variable to determine if we are going to be doing 32 or 64 bit syscall
         word_size = exit_info.word_size
-
+        exit_info.syscall_instance.rmPendingCall(tid)
         if eax != 0:
             if exit_info.matched_param is not None and exit_info.matched_param.subcall == 'BIND':
                 ''' TBD why does this need special case?  remove it?''' 
@@ -145,6 +144,9 @@ class WinCallExit():
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
             exit_info.matched_param = None
+            #if eax == 0xc00000a3 and exit_info.asynch_handler is not None:
+            #    self.lgr.debug('winCallExit is STATUS_DEVICE_NOT_READY tid: %s fd: 0x%x' % (tid, exit_info.old_fd))
+            #    exit_info.asynch_handler.deviceNotReady()
 
         elif callname in ['OpenFile', 'OpenKeyEx', 'OpenKey', 'OpenSection']:
             #self.lgr.debug('winCallExit is %s' % callname)
