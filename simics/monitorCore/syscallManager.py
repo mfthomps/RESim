@@ -184,7 +184,7 @@ class SyscallManager():
             context = self.getDebugContextName()
             
         cell = self.context_manager.getCellFromContext(context)
-        self.lgr.debug('syscallManager watchAllSyscalls name %s context %s' % (name, context))
+        self.lgr.debug('syscallManager watchAllSyscalls name %s context %s callback %s' % (name, context, callback))
         # gather parameters first and stuff them into traceall
         removed_params = self.rmSyscallByContext(context)
         if self.top.isWindows(self.cell_name):
