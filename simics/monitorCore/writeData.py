@@ -334,10 +334,10 @@ class WriteData():
             else: 
                 self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
                 self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=8)
-            self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
+            #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
-            self.lgr.debug('writeData wrote count value %d to reg num  %d' % (count, self.len_reg_num))
+            #self.lgr.debug('writeData wrote count value %d to reg num  %d' % (count, self.len_reg_num))
 
     def userBufWrite(self, record=False):
         ''' inject data into the application buffer and set the return count value seen by the application '''
@@ -375,7 +375,7 @@ class WriteData():
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
+                #self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
