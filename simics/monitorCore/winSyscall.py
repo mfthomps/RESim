@@ -190,6 +190,8 @@ class WinSyscall():
         self.win_delays = {}
         self.no_gui = no_gui
 
+        ''' catch syscall calling syscall '''
+        self.pending_calls = {}
 
 
     def breakOnProg(self):
@@ -294,6 +296,10 @@ class WinSyscall():
             the simulation as part of a debug session '''
         ''' NOTE Does not track Tar syscalls! '''
         if self.context_manager.isReverseContext():
+            return
+        if self.syscall_info.callnum is None and self.callback is not None:
+            # only used syscall to set breaks, we'll take it from here.
+            self.callback()
             return
         cpu, comm, tid = self.task_utils.curThread() 
         #self.lgr.debug('winSyscall syscallHap tid:%s (%s) %s context %s break_num %s cpu is %s t is %s cycle: 0x%x' % (tid, comm, self.name, str(context), str(break_num), str(memory.ini_ptr), type(memory.ini_ptr), self.cpu.cycles))
@@ -450,8 +456,9 @@ class WinSyscall():
         else:
             exit_info_name = '%s-%s-exit' % (callname, self.name)
 
-        pending_call = self.sharedSyscall.getPendingCall(tid, exit_info_name)
-
+        if tid in self.pending_calls:
+            self.lgr.debug('winSyscall tid %s has pending call %s, bail' % (tid, self.pending_calls[tid]))
+            return
         if callname in self.exit_calls:
             self.context_manager.tidExit(tid)
             self.lgr.debug('winSyscall %s call %s exit of tid:%s stop_on_exit: %r' % (self.name, callname, tid, self.stop_on_exit))
@@ -507,6 +514,7 @@ class WinSyscall():
                                         self.dataWatch.stopWatch()
                                     #self.lgr.debug('winSyscall call sharedSyscall.addExit')
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
+                                    self.pending_calls[tid] = callname
                                     #if callname == 'Close': 
                                     #    SIM_break_simulation('is close')
                                     #    return
@@ -538,6 +546,7 @@ class WinSyscall():
                         exit_info.call_params.append(cp)
                     #self.lgr.debug('syscallHap tid:%s call addExitHap' % tid)
                     self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name)
+                    self.pending_calls[tid] = callname
                 else:
                     self.lgr.debug('syscallHap tid:%s skip exitHap for tar' % tid)
             else:
@@ -1201,11 +1210,12 @@ class WinSyscall():
             # catch orphan winDelays'
             if tid not in self.win_delays:
                 self.win_delays[tid] = {}
-            if callname not in self.win_delays[tid]:
-                self.win_delays[tid][callname] = exit_info.asynch_handler
+            if exit_info.old_fd not in self.win_delays[tid]:
+                self.win_delays[tid][exit_info.old_fd] = exit_info.asynch_handler
             else:
-                self.win_delays[tid][callname].remove()
-                self.win_delays[tid][callname] = exit_info.asynch_handler
+                # hacky catch of what should have been already removed
+                self.win_delays[tid][exit_info.old_fd].remove()
+                self.win_delays[tid][exit_info.old_fd] = exit_info.asynch_handler
                 
 
 
@@ -1466,6 +1476,7 @@ class WinSyscall():
                     self.lgr.debug('setExits almost done for tid:%s call %d retval_addr is None' % (tid, callnum))
                 exit_info_name = '%s-%s-exit' % (the_callname, self.name)
                 self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
+                self.pending_calls[tid] = callname
             else:
                 self.lgr.debug('setExits call_param is none')
 
@@ -1792,6 +1803,7 @@ class WinSyscall():
 
     def parseDeviceIoCall(self, tid, comm, exit_info, trace_msg, frame, word_size):
         exit_info.old_fd = frame['param1']
+
         event_handle = frame['param2']
         operation = frame['param6'] & 0xffffffff
         if operation in self.ioctl_op_map:
@@ -2039,6 +2051,9 @@ class WinSyscall():
                         self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                         self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                 break
+            elif call_param.name == 'runToReceive' and op_cmd in ['RECV', 'RECV_DATAGRAM']:
+                self.lgr.debug('winSyscall parse socket call %s is runToReceive append call_param.match_param %s' % (op_cmd, call_param.match_param))
+                exit_info.call_params.append(call_param)
             elif call_param.name == 'runToIO' and type(call_param.match_param) is int:
                 exit_info = None
             elif call_param.name == 'runToCall':
@@ -2094,7 +2109,7 @@ class WinSyscall():
         # WARNING this is a contextManager callback on a reschedule.  The task info is not yet loaded
         comm = self.task_utils.getCommFromTid(tid) 
         eproc = self.task_utils.getProcRecForTid(tid)
-        self.lgr.debug('doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
+        self.lgr.debug('winSyscall doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
         load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
         if load_addr is None:
             self.lgr.error('winSyscall doRecordLoad failed to get load addess for %s' % tid)
@@ -2106,8 +2121,13 @@ class WinSyscall():
         full_path = self.top.getFullPath(prog)
         size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
         if size is None:
-            self.lgr.error('winProg doRecordLoad unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            self.lgr.error('winSyscall doRecordLoad unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
             return 
         text_addr = load_addr + text_offset
-        self.lgr.debug('winProg runToText got size 0x%x' % size)
+        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x%x' % size)
         self.soMap.addText(prog, tid, load_addr, size, machine, image_base, text_offset, full_path)
+
+    def rmPendingCall(self, tid):
+        if tid in self.pending_calls:
+            del self.pending_calls[tid]
+
