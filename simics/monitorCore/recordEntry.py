@@ -118,7 +118,7 @@ class RecordEntry():
                         if callname is None:
                             self.lgr.debug('recordEntry sysenterHap bad call num %d, ignore' % call_num)
                             return
-                        self.lgr.debug('recordEntry sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x callnum %d callname %s cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], call_num, callname, self.cpu.cycles))
+                        #self.lgr.debug('recordEntry sysenterHap tid:%s frame pc 0x%x sp 0x%x param3 0x%x callnum %d callname %s cycles: 0x%x' % (tid, frame['pc'], frame['sp'], frame['param3'], call_num, callname, self.cpu.cycles))
                     else:
                         pc = self.top.getEIP(self.cpu)
                         callname = self.task_utils.getGlobalSym(pc)
