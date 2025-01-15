@@ -186,7 +186,7 @@ class Coverage():
             if phys_addr not in self.dead_map:
             
                 if phys_addr == 0 or phys_addr is None:
-                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     bp = self.setPhysBreak(phys_addr)
