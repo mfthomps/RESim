@@ -68,9 +68,9 @@ def regLen(reg):
         return 8
     elif reg.startswith('e'):
         return 4
-    elif reg.endswith('l') or reg.endswith('h'):
+    elif len(reg) == 2 and reg.endswith('x'):
         return 2
-    elif len(reg) == 2 and not reg.endswith('x'):
+    elif len(reg) == 2 and (reg.endswith('h') or reg.endswith('l')):
         return 1
     else:
         return 4
@@ -240,7 +240,13 @@ def getValue(s, cpu, lgr=None, reg_values={}):
         retval = 1
         parts = s.split('*')
         for p in parts:
-            retval = retval * getValue(p, cpu, lgr=lgr, reg_values=reg_values) 
+            got_value = getValue(p, cpu, lgr=lgr, reg_values=reg_values) 
+            if got_value is not None:
+                retval = retval * got_value
+            else:
+                if lgr is not None:
+                    lgr.error('decode getValue failed to getvalue for part %s' % p)
+                    break
     elif isReg(s):
         if s in reg_values:
             retval = reg_values[s]
