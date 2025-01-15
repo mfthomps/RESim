@@ -302,7 +302,7 @@ class WinDLLMap():
                         eproc = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
                         full_path = self.top.getFullPath(fname=prog_name)
-                        self.top.setFullPath(full_path)
+                        #self.top.setFullPath(full_path)
                         win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
                         if win_prog_info is None:
                             self.lgr.error('WinDLLMap mapSection got None for win_prog_info for path %s' % full_path)
@@ -760,12 +760,12 @@ class WinDLLMap():
     def getMachineSize(self, tid):
         retval = None
         pid = self.pidFromTID(tid)
-        self.lgr.debug('getMachineSize tid %s' % tid)
+        #self.lgr.debug('getMachineSize tid %s' % tid)
         if pid in self.text:
-            self.lgr.debug('getMachineSize tid %s in text' % tid)
+            #self.lgr.debug('getMachineSize tid %s in text' % tid)
             if hasattr(self.text[pid], 'machine'):
                machine = self.text[pid].machine
-               self.lgr.debug('getMachineSize tid %s has machine %s' % (tid, machine))
+               #self.lgr.debug('getMachineSize tid %s has machine %s' % (tid, machine))
                if machine is not None:
                    if 'I386' in machine:
                        retval = 32
@@ -776,10 +776,10 @@ class WinDLLMap():
                 self.lgr.warning('winDLL getMachineSize pid:%s missing machine field' % pid) 
         elif pid is not None:
             find_comm = self.task_utils.getCommFromTid(tid)
-            self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (find_comm, tid))
+            #self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (find_comm, tid))
             num_bytes = self.findSize(find_comm) 
             if num_bytes is None:
-                self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
+                #self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
                 pass
             else:
                 retval = num_bytes * 8
