@@ -303,7 +303,7 @@ class AFL():
 
     def finishCallback(self, dumb=None):
         ''' restore origin and go '''
-        self.lgr.debug('afl finishCallback call finishInit')
+        #self.lgr.debug('afl finishCallback call finishInit')
         self.finishInit()
         #cmd = 'skip-to bookmark = bookmark0'
         #cli.quiet_run_command(cmd)
@@ -312,7 +312,7 @@ class AFL():
         self.top.setTarget(self.cell_name)
         self.context_manager.stopWatchTasks()
         tid = self.top.getTID()
-        self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
+        #self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %s' % (self.cell_name, tid))
         self.goN(0)
 
     def disableReverse(self):
@@ -402,7 +402,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -512,7 +512,7 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        self.lgr.debug('afl stopHap cycle 0x%x' % self.target_cpu.cycles)
+        #self.lgr.debug('afl stopHap cycle 0x%x' % self.target_cpu.cycles)
         if self.stop_hap is None:
             return
         if self.target_cpu.cycles == self.starting_cycle:
