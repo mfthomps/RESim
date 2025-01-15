@@ -82,6 +82,9 @@ class WinDelay():
         self.to_user_limit = 5000
         self.to_user_count = 0
 
+        self.do_not_stop = False
+        self.device_not_ready = False
+
 
     def setDataWatch(self, data_watch, linger):
         #self.lgr.debug('winDelay setDataWatch')
@@ -130,7 +133,7 @@ class WinDelay():
             #    self.stopTrace()
             if my_syscall is None:
                 self.lgr.error('winDelay doDataWatch could not get syscall for %s' % self.call_name)
-            elif not my_syscall.linger:
+            elif not my_syscall.linger and not self.do_not_stop:
                 # TBD should not be soley based on linger.  break_simulation parameter?
                 #if eax != 0:
                 #    new_msg = exit_info.trace_msg + ' ' + trace_msg
@@ -187,7 +190,7 @@ class WinDelay():
                 self.trace_mgr.write(trace_msg)
                 self.lgr.debug('winDelay getIOData already did exit so log the trace message %s' % trace_msg)
             else:
-                trace_msg = self.call_name+' handle: 0x%x return count: 0x%x request: 0x%x data: %s\n' % (self.fd, return_count, self.exit_info.count, repr(read_data))
+                trace_msg = self.call_name+' handle: 0x%x return count: 0x%x request: 0x%x address: 0x%x data: %s\n' % (self.fd, return_count, self.exit_info.count, self.exit_info.retval_addr, repr(read_data))
                 self.lgr.debug('winDelay getIOData have not yet done exit so log SAVE the trace message %s' % trace_msg)
             if self.call_name == 'RECV_DATAGRAM':
                 self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
@@ -197,27 +200,21 @@ class WinDelay():
                 trace_msg = trace_msg + ' '+sock_string+'\n'
                 self.lgr.debug('winDelay RECV_DATAGRAM socket addr %s' % sock_string)
                 #SIM_break_simulation(trace_msg)
+            if self.call_name in ['RECV_DATAGRAM', 'RECV']:
                 for call_param in self.exit_info.call_params:
-                    if call_param.sub_match is not None:
-                        self.lgr.debug('winDelay sees a submatch, test it')
-                        byte_index = 0
-                        match = True
-                        for c in call_param.sub_match:
-                            v = byte_array[byte_index]
-                            if c != chr(v):
-                                match = False
-                                self.lgr.debug('winDelay failed sub_match. %x does not match %x' % (ord(c), v))
-                                self.exit_info.matched_param = None
-                                break
-                        if match:
-                            self.lgr.debug('winDelay got sub_match.')  
-                            call_param.sub_match = None
+                    if call_param.match_param is not None and call_param.name == 'runToReceive':
+                        if call_param.match_param in read_data:
+                            self.lgr.debug('winDelay got match of matched_param.')  
+                            call_param.match_param = None
                             self.exit_info.matched_param = call_param
                         else:
+                            self.exit_info.matched_param = None
+                            self.do_not_stop = True
                             pass
 
             self.trace_msg = trace_msg
             self.lgr.debug('winDelay getIOData trace_msg: %s' % trace_msg)
+                
         self.return_count = return_count
 
     def writeCountHap(self, dumb, third, forth, memory):
@@ -250,6 +247,9 @@ class WinDelay():
             self.lgr.debug('winDelay writeCountHap return_count was %d from address 0x%x, removing count_write_hap %d' % (return_count, memory.logical_address, hap))
             SIM_run_alone(self.rmHap, hap) 
             self.count_write_hap = None
+            #if self.did_exit and self.exit_info.syscall_instance is not None:
+            #    self.lgr.debug('winDelay writeCountHap remove win delay for tid:%s fd 0x%x' % (self.tid, self.exit_info.old_fd))
+            #    self.exit_info.syscall_instance.rmWinDelay(self.tid, self.exit_info.old_fd)
         else:
             self.lgr.debug('winDelay writeCountHap got count of zero, assume kernel init')
 
@@ -329,6 +329,9 @@ class WinDelay():
                 if self.data_watch is not None or (self.exit_info is not None and self.exit_info.matched_param is not None and self.exit_info.matched_param.break_simulation):
                     self.lgr.debug('winDelay exitingKernel do data watch or break simulation due to call params')
                     SIM_run_alone(self.toUserAlone, None)
+                #if self.exit_info.syscall_instance is not None:
+                #    self.lgr.debug('winDelay exitingKernel remove win delay for tid:%s fd 0x%x' % (self.tid, self.exit_info.old_fd))
+                #    self.exit_info.syscall_instance.rmWinDelay(self.tid, self.exit_info.old_fd)
         else:
             self.lgr.debug('winDelay exitingKernel tid:%s did not yet see data' % self.tid)
             self.did_exit = True
@@ -337,3 +340,7 @@ class WinDelay():
         self.lgr.debug('winDelay remove tid:%s' % self.tid)
         self.rmAllHaps()
         self.exit_info = None
+        self.device_not_ready = False
+
+    def deviceNotReady(self):
+        self.device_not_ready = True
