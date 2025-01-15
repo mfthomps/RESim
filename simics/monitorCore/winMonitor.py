@@ -318,7 +318,7 @@ class WinMonitor():
         plist = {}
         tid_dict = self.task_utils.findThreads()
         for tid in tid_dict:
-            frame, cycles = self.top.getRecentCycleFrame(tid)
+            frame, cycles = self.top.getRecentEnterCycle(tid)
             if frame is not None:
                 retval[tid] = frame
         return retval
