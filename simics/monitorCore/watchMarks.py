@@ -593,6 +593,12 @@ class OptMark():
     def getMsg(self):
         return self.msg
 
+class NullTestMark():
+    def __init__(self, addr, end_addr):
+        self.msg = 'Null test loop from 0x%x to 0x%x' % (addr, end_addr)
+    def getMsg(self):
+        return self.msg
+
 class MscMark():
     def __init__(self, fun, addr, msg_append):
         self.addr = addr
@@ -1353,6 +1359,11 @@ class WatchMarks():
         om = OptMark(fun, read_addr, token, argc, argv, optstring)
         self.addWatchMark(om)
         self.lgr.debug(om.getMsg())
+
+    def nullTestLoop(self, addr, end_addr):
+        nm = NullTestMark(addr, end_addr)
+        self.addWatchMark(nm)
+        self.lgr.debug(nm.getMsg())
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
