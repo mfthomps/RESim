@@ -148,6 +148,9 @@ class PrepInject():
 
         if self.top.isWindows():
             ret_count = self.mem_utils.readWord(self.cpu, self.addr_of_count)
+            if ret_count > length:
+               self.lgr.debug('prepInject instrument count value bogus set to length %d' % length)
+               ret_count = length 
             self.lgr.debug('prepInject instrument Last buffer addr_of_count 0x%x ret_count %d' % (self.addr_of_count, ret_count))
         else:
             ret_count = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
