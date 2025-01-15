@@ -1171,23 +1171,26 @@ class GenMonitor():
             self.lgr.debug('getDbgFrames return %d frames' % len(retval))
         return retval 
 
-    def getRecentEnterCycle(self):
+    def getRecentEnterCycle(self, tid=None):
         ''' return latest cycle in which the kernel was entered for this TID 
             regardless of the current cycle.  '''
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
+        if tid is None:
+            cpu, comm, tid = self.task_utils[self.target].curThread() 
         frame, cycles = self.record_entry[self.target].getRecentCycleFrame(tid)
         return frame, cycles
 
-    def getPreviousEnterCycle(self):
+    def getPreviousEnterCycle(self, tid=None):
         ''' return most recent cycle in which the kernel was entered for this TID 
             relative to the current cycle.  '''
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
+        if tid is None:
+            cpu, comm, tid = self.task_utils[self.target].curThread() 
         frame, cycles = self.record_entry[self.target].getPreviousCycleFrame(tid)
         return frame, cycles
 
-    def getPrevSyscallInfo(self):
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
-        frame, cycles = self.getPreviousEnterCycle()
+    def getPrevSyscallInfo(self, tid=None):
+        if tid is None:
+            cpu, comm, tid = self.task_utils[self.target].curThread() 
+        frame, cycles = self.getPreviousEnterCycle(tid=tid)
         call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
         retval = ''
         #if call == 'socketcall' or call.upper() in net.callname:
@@ -3656,12 +3659,16 @@ class GenMonitor():
         self.runTo(call, call_params, name='sendport')
 
     def runToReceive(self, substring):
-        # socketCallName returns a list
-        call = self.task_utils[self.target].socketCallName('recv', self.is_compat32)
-        if 'socketcall' in call:
-            call_params = syscall.CallParams('runToReceive', 'recv', substring, break_simulation=True)        
+        if self.isWindows():
+            call_params = syscall.CallParams('runToReceive', 'RECV', substring, break_simulation=True)        
+            call = ['RECV']
         else:
-            call_params = syscall.CallParams('runToReceive', None, substring, break_simulation=True)        
+            # socketCallName returns a list
+            call = self.task_utils[self.target].socketCallName('recv', self.is_compat32)
+            if 'socketcall' in call:
+                call_params = syscall.CallParams('runToReceive', 'recv', substring, break_simulation=True)        
+            else:
+                call_params = syscall.CallParams('runToReceive', None, substring, break_simulation=True)        
         self.lgr.debug('runToReceive call %s substring %s' % (call, substring))
         self.runTo(call, call_params, name='recv')
 
