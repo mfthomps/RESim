@@ -46,7 +46,7 @@ class TargetFS():
         self.lgr = lgr
         if path is None:
             return None
-        if self.top.isWindows():
+        if self.top is not None and self.top.isWindows():
             path = path.replace('\\', '/')
             #if lgr is not None:
             #     lgr.debug('getFull windows, new path is %s' % path)
