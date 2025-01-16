@@ -51,7 +51,7 @@ class BackStop():
             if self.report_backstop:
                 rprint('Backstop hit.')
         else: 
-            self.lgr.debug('backStop cycle_handler lingering after cpu set to None, ignore')
+            rprint('backStop cycle_handler lingering after cpu set to None, ignore')
             SIM_continue(0)
         #SIM_run_alone(self.runalone_callback, None)
        
