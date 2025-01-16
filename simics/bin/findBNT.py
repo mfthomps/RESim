@@ -28,14 +28,15 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
        target_prog = prog
     else:
        target_prog = target
+    lgr.debug('findBNTForFun len of fun_blocks is %d' % len(fun_blocks['blocks']))
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
-            #print('compare %s to %s' % (bb_hit, bb['start_ea']))
+            #lgr.debug('compare %s to %s' % (bb_hit, bb['start_ea']))
             if bb_hit == bb['start_ea']:
                 if bb_hit < prog_elf.text_start or bb_hit > (prog_elf.text_start + prog_elf.text_size):
-                    #print('bb_hit 0x%x not in program text' % bb_hit)
+                    lgr.debug('bb_hit 0x%x not in program text' % bb_hit)
                     continue
-                #print('check bb_hit 0x%x' % bb_hit)
+                lgr.debug('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
                     if branch not in hits:
                         read_mark = None
@@ -143,7 +144,7 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     else:
         old_fname = '%s.%s.hits' % (old_ida_path, target)
 
-    ida_path = resimUtils.getIdaDataFromIni(prog, ini)
+    ida_path = resimUtils.getIdaDataFromIni(prog, ini, lgr=lgr)
     print('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
@@ -169,7 +170,9 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         return bnt_list
     if prog_elf.text_start is None:
         # relocatable text. Set to zero
+        lgr.debug('text_start is None, set to zero')
         prog_elf.text_start = 0
+    
     if not no_print:
         num_blocks = 0
         num_funs = len(blocks)
@@ -180,6 +183,7 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('*** No hits found in %s.  Try providing the --target option.' % fname)
     if fun_name is None:
         for fun in sorted(blocks):
+            lgr.debug('call findBNTForFun for fun %s' % fun)
             this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
             bnt_list.extend(this_list)
     else:
