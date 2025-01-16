@@ -659,10 +659,12 @@ class InjectIO():
             offset = None
             tid = self.top.getTID()
             prog = self.so_map.getProg(tid)
-            load_addr = self.so_map.getLoadAddr(prog)
-            if load_addr is not None:
-                self.break_on = self.break_on + load_addr
-                self.lgr.debug('checkBreakOn, adjust break_on by load_addr 0x%x.  break_on now 0x%x' % (load_addr, self.break_on))
+            load_offset = self.so_map.getLoadOffset(prog)
+            if load_offset is not None:
+                self.break_on = self.break_on + load_offset
+                self.lgr.debug('checkBreakOn, adjust break_on by load_offset 0x%x.  break_on now 0x%x' % (load_offset, self.break_on))
+            else:
+                self.lgr.debug('checkBreakOn, load_offset is None, just break on 0x%x' % break_on)
         if break_on is not None and fname is not None:
             self.lgr.debug('injectIO checkBreakOn break_on given as 0x%x' % break_on)
             if offset is None:
@@ -671,4 +673,5 @@ class InjectIO():
             else:
                 self.break_on = self.break_on + offset
                 self.lgr.debug('injectIO checkBreakOn adjusted break_on to be 0x%x' % self.break_on)
+        self.lgr.debug('injectIO checkBreakOn done, break_on is now 0x%x' % self.break_on)
         return retval
