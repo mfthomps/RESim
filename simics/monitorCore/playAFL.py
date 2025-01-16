@@ -520,9 +520,10 @@ class PlayAFL():
                 self.setCounterHap()
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
-                    self.lgr.debug('playAfl goAlone call stoCover and doBlockBreaks')
-                    self.coverage.stopCover() 
-                    self.coverage.setBlockBreaks()
+                    self.lgr.debug('playAfl goAlone already have coverage, re-enable all breakpoints')
+                    self.coverage.enableAll()
+                    #self.coverage.stopCover() 
+                    #self.coverage.setBlockBreaks()
                     #self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
