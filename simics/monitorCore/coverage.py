@@ -128,6 +128,8 @@ class Coverage():
         self.suspend_callback = None
 
         self.target_cr3 = None
+        ''' optimization '''
+        self.last_block_file = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -211,6 +213,7 @@ class Coverage():
         self.physical = physical
         self.target_cr3 = memUtils.getCR3(self.cpu)
         block_file = self.analysis_path+'.blocks'
+
         if not os.path.isfile(block_file):
             if os.path.islink(self.analysis_path):
                 real = os.readlink(self.analysis_path)
@@ -222,16 +225,23 @@ class Coverage():
             else:
                 self.lgr.error('coverage: No blocks file at %s' % block_file)
                 return
-        self.loadBlocks(block_file)         
-        self.offset = self.so_map.getLoadOffset(self.prog_path)
-        if self.offset is None:
-            self.lgr.error('cover offset for %s is None, bails' % (self.prog_path))
-            return
-        self.lgr.debug('cover offset for %s is 0x%x' % (self.prog_path, self.offset))
-        if self.blocks is None:
-            self.lgr.error('Coverge: No basic blocks defined')
-            return
-        self.setBlockBreaks()
+        self.lgr.debug('coverage block_file: %s last_block_file %s' % (block_file, self.last_block_file))
+        if block_file == self.last_block_file:
+            self.lgr.debug('coverage cover same block file, just enable all')
+            self.enableAll() 
+            self.lgr.debug('coverage cover back from enable_all')
+        else:
+            self.last_block_file = block_file
+            self.loadBlocks(block_file)         
+            self.offset = self.so_map.getLoadOffset(self.prog_path)
+            if self.offset is None:
+                self.lgr.error('cover offset for %s is None, bails' % (self.prog_path))
+                return
+            self.lgr.debug('cover offset for %s is 0x%x' % (self.prog_path, self.offset))
+            if self.blocks is None:
+                self.lgr.error('Coverge: No basic blocks defined')
+                return
+            self.setBlockBreaks()
 
     def setBlockBreaks(self):
         self.lgr.debug('setBlockBreaks')
