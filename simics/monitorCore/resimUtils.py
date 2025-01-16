@@ -9,6 +9,8 @@ import re
 import fnmatch
 import winProg
 import ntpath
+import targetFS
+import winTargetFS
 try:
     import importlib
 except:
@@ -58,16 +60,21 @@ def isParallel():
     else:
         return False
 
-def getIdaDataFromIni(prog, ini):
+def getIdaDataFromIni(prog, ini, lgr=None):
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
     else:
         root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+        if '/' in prog:
+            prog_relative = prog
+        else:
+            full_prog = getFullPath(prog, ini, lgr=lgr)
+            prog_relative = full_prog[len(root_fs)+1:]
         base = os.path.basename(root_fs)
         #retval = os.path.join(resim_ida_data, base, prog, prog)
-        retval = os.path.join(resim_ida_data, base, prog)
+        retval = os.path.join(resim_ida_data, base, prog_relative)
     return retval
 
 def getOldIdaDataFromIni(prog, ini):
@@ -648,3 +655,14 @@ def getExecDict(root_prefix, lgr=None):
        with open(path) as fh:
            retval = json.load(fh)
     return retval
+
+def getFullPath(prog, ini, lgr=None):
+    root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
+    root_subdirs = getIniTargetValue(ini, 'RESIM_ROOT_SUBDIRS', lgr=lgr)
+    os_type = getIniTargetValue(ini, 'OS_TYPE', lgr=lgr)
+    if os_type.startswith('WIN'):
+        target_fs = winTargetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
+    else:
+        target_fs = targetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
+    full = target_fs.getFull(prog)
+    return full
