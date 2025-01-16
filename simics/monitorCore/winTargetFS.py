@@ -38,7 +38,8 @@ class TargetFS():
  
     def getFull(self, path, lgr=None):
         retval = None
-        self.lgr = lgr
+        if self.lgr is None:
+            self.lgr = lgr
         path = path.replace('\\', '/')
         if lgr is not None:
              lgr.debug('getFull windows, new path is %s' % path)
