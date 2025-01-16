@@ -11,6 +11,12 @@ try:
     import ConfigParser
 except:
     import configparser as ConfigParser
+def fixit(value):
+    if type(value) == str:
+        retval = int(value)
+    else:
+        retval = value
+    return retval
 def main():
     parser = argparse.ArgumentParser(prog='showHits', description='Show content of a hits file as hex. ')
     parser.add_argument('hits_file', action='store', help='Name of the hits file')
@@ -21,10 +27,10 @@ def main():
     print('hits from %s:' % hits)
     if args.sort:
         for hit in sorted(jhits):
-            print('\t0x%x' % hit)
+            print('\t0x%x' % fixit(hit))
     else:
         for hit in jhits:
-            print('\t0x%x' % hit)
+            print('\t0x%x' % fixit(hit))
     print('Total hits %d' % len(jhits))
     
          
