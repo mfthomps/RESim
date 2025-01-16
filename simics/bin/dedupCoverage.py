@@ -226,6 +226,8 @@ def main():
     for f in hit_dict:
         #print('remove subsets for %s' % f)
         did_orig_basenames = []
+        if f in remove_set:
+            continue
         for this_f in hit_dict:
             if this_f == f:
                 continue
@@ -241,6 +243,7 @@ def main():
                     did_orig_basenames.append(basename)
                 continue
             got_dif = False
+            ''' is there a hit in this dict that is not in f? '''
             for hit in hit_dict[this_f]:
                 if hit not in all_hits:
                     all_hits.append(hit)
