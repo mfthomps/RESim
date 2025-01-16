@@ -1,12 +1,42 @@
 #!/usr/bin/env python3
+#
+#  Start multiple instances of runTrack.py.  We get the args
+#  only to get target so we can delete corrupt jsons here
+#
 import os
 import sys
 import glob
+import json
+import argparse
 glist = glob.glob('resim_*/')
 resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
+import aflPath
 here = os.getcwd()
-args = ' '.join(sys.argv[1:])
-cmd = os.path.join(resim_dir, 'simics', 'monitorCore', 'runTrack.py') + ' '+args
+cmd_args = ' '.join(sys.argv[1:])
+
+parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
+parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
+parser.add_argument('target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
+parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
+parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when needed, will miss SEGV.')
+parser.add_argument('-m', '--max_marks', action='store', help='Optional maximum watch marks to record before stopping simulation.')
+parser.add_argument('-f', '--fname', action='store', help='Optional name of library.')
+parser.add_argument('-t', '--trace_all', action='store_true', help='Do not track, trace all system calls.')
+    
+args = parser.parse_args()
+target = args.target
+''' remove any empty or corrupt track jsons '''
+track_list = aflPath.getAFLTrackList(target)
+for track_file in track_list:
+    if os.path.isfile(track_file):
+        with open(track_file) as fh:
+            try:
+                jfile = json.load(fh)
+            except:
+                print('removing empty or corrupt file %s' % track_file)
+                os.remove(track_file) 
+cmd = os.path.join(resim_dir, 'simics', 'monitorCore', 'runTrack.py') + ' '+cmd_args
 cmd = cmd+" &"
 if len(glist) > 0:
     for instance in glist:
