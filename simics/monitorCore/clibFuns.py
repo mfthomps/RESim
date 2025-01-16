@@ -144,7 +144,13 @@ def adjustFunName(frame, fun_mgr, lgr):
                     fun = 'string_basic_windows'
                 elif fun.startswith('??_'):
                     fun = fun[3:]
-                    
+            elif fun.startswith('ZN') and 'Q' in fun[:9]:
+                #lgr.debug('is QT')
+                ''' QTCore5 '''
+                fun = fun.split('Q')[1]
+                fun = fun.split('EP')[0]
+            elif fun.startswith('Z') and 'QString' in fun and 'Hash' in fun:
+                fun = 'QStringHash'
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy') or 'destructor' in fun:
