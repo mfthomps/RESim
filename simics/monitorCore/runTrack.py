@@ -3,6 +3,8 @@
 Executable program for running injectIO for all AFL queue sessions by starting/stopping
 RESim for each session.  This permits multi-packet replays which would otherwise corrupt
 the origin bookmark if run repeatedly in a single Simics session.
+Multiple instances of this program may be started.  Each looks at all queue files
+and uses simple file exclusive create for locking.
 '''
 import os
 import sys
@@ -135,16 +137,6 @@ def main():
         #afl_list = aflPath.getTargetQueue(target, ws_filter=workspace)
         afl_list = aflPath.getTargetQueue(target)
 
-    ''' remove any empty or corrupt track jsons '''
-    track_list = aflPath.getAFLTrackList(target, ws_filter=workspace)
-    for track_file in track_list:
-        if os.path.isfile(track_file):
-            with open(track_file) as fh:
-                try:
-                    jfile = json.load(fh)
-                except:
-                    print('removing empty or corrupt file %s' % track_file)
-                    os.remove(track_file) 
 
     ''' The script to be called by RESim once it is initialized '''
     os.environ['ONE_DONE_SCRIPT'] = os.path.join(script_path, 'onedoneTrack.py')
