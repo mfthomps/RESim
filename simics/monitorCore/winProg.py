@@ -109,7 +109,11 @@ def getSizeAndMachine(full_path, lgr):
 
 def getText(full_path, lgr):
     size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
-    return Text(image_base, text_offset, size)
+    # TBD fix binary size vs text size
+    retval = Text(image_base, text_offset, size)
+    retval.text_size = size
+    retval.text_start = image_base
+    return retval
 
 def getRelocate(full_path, lgr):
     ''' This is not used.  See IDA resimUtils for dumpImports. '''
