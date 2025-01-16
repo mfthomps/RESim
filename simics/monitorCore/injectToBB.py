@@ -43,7 +43,7 @@ class InjectToBB():
             return
         here = os.getcwd()
         afl_target = os.path.basename(here)
-        print('afl_target is %s' % afl_target)
+        #print('afl_target is %s' % afl_target)
         os_type = top.getTargetEnv('OS_TYPE')
         root_prefix = top.getTargetEnv('RESIM_ROOT_PREFIX')
         flist = findBB.findBB(afl_target, bb, quiet=True, lgr=lgr)
@@ -85,7 +85,7 @@ class InjectToBB():
             print('Will inject %s' % best_qfile)
             qfile = best_qfile
         if qfile is not None:
-            self.lgr.debug('InjectToBB inject %s' % qfile)
+            self.lgr.debug('InjectToBB 0x%x found file to inject %s' % (bb, qfile))
             self.top.setCommandCallback(self.doStop)
             self.top.overrideBackstopCallback(self.doStop)
             self.inject_io = self.top.injectIO(qfile, callback=self.doStop, break_on=bb, go=False, target=target_prog, targetFD=targetFD, reset_debug=False, fname=fname)
