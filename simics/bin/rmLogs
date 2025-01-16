@@ -1,2 +1,3 @@
 #!/bin/bash
 rm -fr resim_*/logs/*
+rm -f resim_*/resim_*.log
