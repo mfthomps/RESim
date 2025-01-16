@@ -66,7 +66,7 @@ def handleClose(resim_procs, read_array, remote, lgr):
         fd.close()
 
 
-def runPlay(args, lgr, hits_prefix):
+def runPlay(args, lgr, hits_prefix, full):
     here= os.path.dirname(os.path.realpath(__file__))
     if args.search_list is None:
         os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
@@ -153,8 +153,9 @@ def runPlay(args, lgr, hits_prefix):
                     hit_i = int(hit)
                     if hit_i not in all_hits:
                         all_hits.append(hit_i)
-   
-            hits_file = '%s.%s.hits' % (args.program, afl_name)
+
+            hits_file = '%s.%s.hits' % (full, afl_name)
+
             hits_path = os.path.join(hits_prefix, hits_file)
             os.makedirs(os.path.dirname(hits_path), exist_ok=True)
             s = json.dumps(all_hits)
@@ -201,8 +202,13 @@ def main():
     root_name = os.path.basename(root_prefix)
     hits_prefix = os.path.join(ida_data, root_name)
     os.makedirs(hits_prefix, exist_ok=True)
-
-    runPlay(args, lgr, hits_prefix)
+    if '/' in args.program:
+        full = args.program
+    else:
+        full_with_prefix = resimUtils.getFullPath(args.program, args.ini, lgr=lgr)
+        full = full_with_prefix[len(root_prefix)+1:]
+    print('Using analysis for program: %s' % full)   
+    runPlay(args, lgr, hits_prefix, full)
   
 if __name__ == '__main__':
     sys.exit(main())
