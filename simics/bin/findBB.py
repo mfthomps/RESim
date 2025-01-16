@@ -93,6 +93,8 @@ def getWatchMark(trackio, bb, prog, quiet=False, lgr=None):
     index = 1
     somap = tjson['somap']
     offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)
+    if offset is None:
+        offset = 0
     if lgr is not None:
         lgr.debug('trackio file %s load offset of %s is 0x%x' % (trackio, prog, offset))
     reset_count = 0
