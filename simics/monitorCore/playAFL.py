@@ -144,7 +144,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL, single file, abs path is %s' % dfile)
         else:
             if not crashes:
-                print('get dfile queue')
+                print('get dfile queue for %s' % dfile)
                 self.lgr.debug('playAFL get queue for dfile %s' % dfile)
                 self.afl_list = aflPath.getTargetQueue(dfile, get_all=True)
                 if len(self.afl_list) == 0:
@@ -521,10 +521,10 @@ class PlayAFL():
             if self.coverage is not None:
                 if clear_hits and not self.repeat:
                     self.lgr.debug('playAfl goAlone already have coverage, re-enable all breakpoints')
-                    self.coverage.enableAll()
-                    #self.coverage.stopCover() 
-                    #self.coverage.setBlockBreaks()
-                    #self.coverage.doCoverage(no_merge=True, physical=self.physical) 
+                    self.coverage.resetCoverage()
+            #        #self.coverage.stopCover() 
+            #        #self.coverage.setBlockBreaks()
+            #        #self.coverage.doCoverage(no_merge=True, physical=self.physical) 
             #if self.orig_buffer is not None:
             #    #self.lgr.debug('playAFL restored %d bytes to original buffer at 0x%x' % (len(self.orig_buffer), self.addr))
             #    self.mem_utils.writeBytes(self.cpu, self.addr, self.orig_buffer) 
@@ -600,7 +600,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone repeat set, did continue')
                 pass
             else:
-                self.lgr.debug('playAFL goAlone repeat not set, do continue')
+                self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
                 SIM_continue(0)
                 self.lgr.debug('playAFL goAlone repeat not set, back from did continue')
                 pass
@@ -841,7 +841,7 @@ class PlayAFL():
                     hap = self.stop_hap
                     SIM_run_alone(self.delStopHap, hap)
                     self.stop_hap = None
-                    self.lgr.debug('playAFL stopHap, one play, should be done.')
+                    self.lgr.debug('playAFL stopHap, not repeat, should be done.')
                 if self.coverage.didExit() or self.did_exit:
                     self.lgr.debug('playAFL stopHap coverage says didExit, add to exit_list')
                     self.exit_list.append(self.afl_list[self.index])
@@ -857,7 +857,6 @@ class PlayAFL():
             if self.repeat or self.dfile != 'oneplay':
                 self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
-
 
     def delStopHap(self, hap):
         if hap is not None:
