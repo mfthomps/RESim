@@ -66,7 +66,7 @@ def handleClose(resim_procs, read_array, remote, lgr):
         fd.close()
 
 
-def runPlay(args, lgr, hits_prefix, full):
+def runPlay(args, lgr, hits_prefix, full, workspace):
     here= os.path.dirname(os.path.realpath(__file__))
     if args.search_list is None:
         os.environ['ONE_DONE_SCRIPT'] = os.path.join(here, 'onedonePlay.py')
@@ -78,9 +78,12 @@ def runPlay(args, lgr, hits_prefix, full):
         exit(1)
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
     hostname = aflPath.getHost()
-
-    here = os.getcwd()
-    afl_name = os.path.basename(here)
+    if workspace is not None:
+        afl_name = workspace
+    else:
+        here = os.getcwd()
+        afl_name = os.path.basename(here)
+    print('Using afl_name %s' % afl_name)
     resim_procs = []
 
     if not args.ini.endswith('.ini'):
@@ -106,8 +109,11 @@ def runPlay(args, lgr, hits_prefix, full):
     os.environ['ONE_DONE_PARAM6']=args.count
     os.environ['ONE_DONE_PARAM7']=str(args.no_page_faults)
     os.environ['ONE_DONE_PARAM8']=str(args.search_list)
+    if args.workspace is not None:
+        os.environ['ONE_DONE_PARAM9']=args.workspace
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
+    print('Found %d files in cover list' % len(cover_list))
     for cfile in cover_list:
         fstat = os.stat(cfile)
         if fstat.st_size == 0:
@@ -182,6 +188,7 @@ def main():
     parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
     parser.add_argument('-s', '--search_list', action='store', help='Name of file containing search criteria, e.g., to find writes to a range')
+    parser.add_argument('-w', '--workspace', action='store', help='Name of the workspace that originated the AFL artifacts.')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
@@ -208,7 +215,7 @@ def main():
         full_with_prefix = resimUtils.getFullPath(args.program, args.ini, lgr=lgr)
         full = full_with_prefix[len(root_prefix)+1:]
     print('Using analysis for program: %s' % full)   
-    runPlay(args, lgr, hits_prefix, full)
+    runPlay(args, lgr, hits_prefix, full, args.workspace)
   
 if __name__ == '__main__':
     sys.exit(main())
