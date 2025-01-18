@@ -778,7 +778,7 @@ class WinTaskUtils():
             self.lgr.error('winTaskUtils findThreads failed to get cur_proc from getCurProcRec')
             return thread_id_dict
         else:
-            self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x ' % (cur_proc))
+            #self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x ' % (cur_proc))
             comm = self.mem_utils.readString(self.cpu, cur_proc + self.param.ts_comm, self.commSize())
             pid = self.mem_utils.readWord32(self.cpu, cur_proc + self.param.ts_pid)
             if pid is None:
@@ -786,13 +786,13 @@ class WinTaskUtils():
                 return thread_id_dict
 
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + self.ACTIVE_THREADS)
-            self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_proc, pid, comm, active_threads))
+            #self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_proc, pid, comm, active_threads))
             if active_threads < 1:
                 print('not enough threads %d' % active_threads)
                 self.lgr.debug('winTaskUtils findThreads not enough threads %d' % active_threads)
                 return thread_id_dict
             thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + self.THREAD_HEAD)
-            self.lgr.debug('thread list head is 0x%x' % thread_list_head)
+            #self.lgr.debug('thread list head is 0x%x' % thread_list_head)
 
             next_thread = self.mem_utils.readPtr(self.cpu, thread_list_head+8)
             got = []
