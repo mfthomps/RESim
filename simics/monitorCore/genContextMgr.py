@@ -1057,7 +1057,7 @@ class GenContextMgr():
         ''' stop watching for death of tasks ''' 
         for tid in self.task_rec_bp:    
             if self.task_rec_bp[tid] is not None:
-                self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
+                #self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
                 if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
                     RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[tid])        
@@ -1348,7 +1348,7 @@ class GenContextMgr():
         ''' set breakpoint on task record that points to this (or the given) tid '''
         # TBD This asssume all threads die together.  On windows we assume the EPROCESS record is removed
         # and in Linux we assume the group leader is removed.
-        self.lgr.debug('contextManager watchExit tid:%s' % tid)
+        #self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
             self.lgr.debug('contextManager watchExit for tid 1, ignore')
@@ -1382,7 +1382,7 @@ class GenContextMgr():
                 # TBD um, windows pid zero points to this process as being next?
                 self.lgr.debug('contextManager watchExit, seems to be pid 0, ignore it')
                 return False
-            self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
+            #self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x context: %s' % (watch_tid, watch_comm, tid, list_addr, cell))
             #self.task_rec_bp[tid] = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Write, list_addr, self.mem_utils.WORD_SIZE, 0)
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
@@ -1397,7 +1397,7 @@ class GenContextMgr():
     def watchTaskHapAlone(self, tid):
         if tid in self.task_rec_bp and tid and self.task_rec_bp[tid] is not None:
             if tid not in self.task_rec_hap or self.task_rec_hap[tid] is None:
-                self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
+                #self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
                 self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
             else:
                 self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x ALREADY has hap' % (tid, self.task_rec_bp[tid]))
