@@ -1116,10 +1116,10 @@ class StackTrace():
                                 self.lgr.debug('stackTrace call_to 0x%x was not an entry, adjusted to function entry 0x%x' % (call_to, altered_call_to))
                                 call_to = altered_call_to
                         if self.fun_mgr.isFun(call_to):
-                            self.lgr.debug('stackTrace call_to 0x%x is fun prev_ip is 0x%x' % (call_to, prev_ip))
+                            #self.lgr.debug('stackTrace call_to 0x%x is fun prev_ip is 0x%x' % (call_to, prev_ip))
                             if not self.fun_mgr.inFun(prev_ip, call_to):
                                 first_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
-                                self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
+                                #self.lgr.debug('stackTrace not inFun.  first_instruct is %s' % first_instruct[1])
                                 cur_fun = self.fun_mgr.getFun(call_ip)
                                 if cur_fun is not None:
                                     cur_fun_name = self.fun_mgr.funFromAddr(cur_fun)
@@ -1140,7 +1140,7 @@ class StackTrace():
                                     #self.lgr.debug('stackTrace addr (prev_ip) 0x%x not in fun 0x%x, skip it' % (prev_ip, call_to))
                             else:
                                 # inFun returned true
-                                self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
+                                #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
                                 instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)
                                 this_fname = self.soMap.getSOFile(call_ip)
                                 fun_hex, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_ip)
@@ -1154,7 +1154,7 @@ class StackTrace():
                                 frame, adjust_sp = self.genFrame(call_ip, call_instruction, ptr, fun_hex, fun_name, ret_addr, ptr, msg='simple call')
                                 ptr = ptr+adjust_sp
                         else:
-                            self.lgr.debug('stackTrace call_to 0x%x is not a fun' % (call_to))
+                            #self.lgr.debug('stackTrace call_to 0x%x is not a fun' % (call_to))
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
                             if tmp_instruct.startswith(self.jmpmn):
                                 skip_this = True
@@ -1167,7 +1167,7 @@ class StackTrace():
                                 pass
                     else:
                         # call_to is None
-                        self.lgr.debug('stackTrace call to getCallTo was none for call_ip 0x%x' % call_ip)
+                        #self.lgr.debug('stackTrace call to getCallTo was none for call_ip 0x%x' % call_ip)
                         skip_this = False
 
                 ''' The block above assumes we've been in a non-clib type library or main '''
@@ -1227,7 +1227,7 @@ class StackTrace():
                                 instruct_str = '%s   %s' % (self.callmn, fun_name)
                                 #self.lgr.debug('stackTrace no cur_fun_name, instruct_str set to %s' % instruct_str)
                         else:
-                            self.lgr.debug('stackTrace fun was None from instruct %s' % instruct[1])
+                            #self.lgr.debug('stackTrace fun was None from instruct %s' % instruct[1])
                             pass
                         fun_fname = None
                         if fun_hex is not None:
@@ -1487,7 +1487,7 @@ class StackTrace():
         frame = self.FrameEntry(called_from_address, fname, instruction, stack_ptr, fun_addr=called_to_address, fun_name=called_fun_name, 
                                ret_addr=return_addr, ret_to_addr=addr_of_ret_addr)
         adjust_sp = self.addFrame(frame)
-        self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x frame: %s' % (msg, adjust_sp, frame.dumpString()))
+        #self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x frame: %s' % (msg, adjust_sp, frame.dumpString()))
         return frame, adjust_sp
 
     def addFrame(self, frame):
