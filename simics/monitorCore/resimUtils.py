@@ -664,5 +664,5 @@ def getFullPath(prog, ini, lgr=None):
         target_fs = winTargetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
     else:
         target_fs = targetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
-    full = target_fs.getFull(prog)
+    full = target_fs.getFull(prog, lgr=lgr)
     return full
