@@ -1,4 +1,5 @@
 import os
+import sys
 import glob
 import pickle
 import json
@@ -6,6 +7,9 @@ import ntpath
 import soMap
 import winProg
 import resimUtils
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'bin'))
+import missingDLLAnalysis
 '''
 Track DLLs within windows processes.
 Tracked by PID as integers for historical reasons.  
@@ -355,7 +359,7 @@ class WinDLLMap():
                     self.lgr.debug('winDLL checkSOWatch do callback for %s, name %s' % (basename, name))
                     self.so_watch_callback[basename][name](section.load_addr, name)
 
-    def showSO(self, tid, filter=None):
+    def showSO(self, tid, filter=None, save=False):
         if tid is None: 
             cpu, comm, tid = self.task_utils.curThread() 
         
@@ -374,16 +378,27 @@ class WinDLLMap():
                     self.lgr.debug('WinDLLMap no addr for section %s' % section.fname)
 
         self.lgr.debug('WinDLLMap showSO pid:%d %d sections, %d in pids section_map' % (pid, len(sort_map), len(self.section_map[pid])))
+        if save:
+            ofile = 'logs/somap-%s.somap' % tid
+            ofile_fh = open(ofile, 'w')
         for section_addr in sorted(sort_map):
             section = sort_map[section_addr]
             if filter is None or filter in section.fname:
                 if section.size is None:
-                    print('pid:%s 0x%x size UNKNOWN %s' % (section.pid, section.load_addr, section.fname)) 
+                    if save:
+                        ofile_fh.write('pid:%s 0x%x size UNKNOWN %s\n' % (section.pid, section.load_addr, section.fname)) 
+                    else:
+                        print('pid:%s 0x%x size UNKNOWN %s' % (section.pid, section.load_addr, section.fname)) 
                    
                 else:
                     end = section.load_addr+section.size - 1
-                    print('pid:%s 0x%x - 0x%x %s' % (section.pid, section.load_addr, end, section.fname)) 
+                    if save:
+                        ofile_fh.write('pid:%s 0x%x - 0x%x %s\n' % (section.pid, section.load_addr, end, section.fname)) 
+                    else:
+                        print('pid:%s 0x%x - 0x%x %s' % (section.pid, section.load_addr, end, section.fname)) 
                     self.lgr.debug('winDLLMap showSO pid:%s 0x%x - 0x%x %s' % (section.pid, section.load_addr, end, section.fname)) 
+        if save:
+            ofile_fh.close()
 
     def listSO(self, filter=None):
         #for pid in self.text:
@@ -904,4 +919,19 @@ class WinDLLMap():
             self.lgr.debug('winDLL findPendingProg does %s start with %s' % (proc_base, comm))
             if proc_base.startswith(comm):
                 retval = pp
+        return retval
+
+    def checkClibAnalysis(self, tid):
+        if '-' in tid:
+            tid = tid.split('-')[0]
+        sofile = 'logs/somap-%s.somap' % tid
+        self.lgr.debug('winDLL checkClibAnalysis tid:%s sofile %s' % (tid, sofile))
+        retval = False
+        if not os.path.isfile(sofile):
+            self.lgr.debug('winDLL checkClibAnalysis tid:%s no file at %s' % (tid, sofile))
+            self.showSO(tid, save=True)
+            retval = missingDLLAnalysis.checkMissingDLLs(None, sofile, self.lgr, root_prefix=self.root_prefix, generate=False)
+            self.lgr.debug('winDLL checkClibAnalysis tid:%s created sofile, result is %r' % (tid, retval))
+        else:
+            retval = True
         return retval

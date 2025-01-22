@@ -1,11 +1,15 @@
 from simics import *
 import os
+import sys
 import pickle
 import elfText
 import resimUtils
 import json
 from pathlib import Path
 from resimHaps import *
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'bin'))
+import missingDLLAnalysis
 '''
 Manage maps of shared object libraries
 Also track text segment.
@@ -526,7 +530,7 @@ class SOMap():
                     #print('tid:%s  no text found' % tid)
                     pass
           
-    def showSO(self, tid=None, filter=None):
+    def showSO(self, tid=None, filter=None, save=False):
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
@@ -535,6 +539,9 @@ class SOMap():
             print('no so map for %s' % tid)
         print('SO Map for threads led by group leader tid: %s' % tid)
         if tid in self.so_file_map:
+            if save:
+                ofile = 'logs/somap-%s.somap' % tid
+                ofile_fh = open(ofile, 'w')
             if tid in self.prog_start and self.prog_start[tid] is not None:
                 print('0x%x - 0x%x   %s' % (self.prog_start[tid], self.prog_end[tid], self.text_prog[tid]))
             else:
@@ -552,11 +559,22 @@ class SOMap():
                 if filter is None or filter in prog:
                     if prog in self.prog_info: 
                         if self.prog_info[prog].text_offset is not None:
-                            print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, load_info.end, self.prog_info[prog].text_offset, self.prog_info[prog].text_size, prog))
+                            if save:
+                                ofile_fh.write('0x%x - 0x%x 0x%x 0x%x  %s\n' % (locate, load_info.end, self.prog_info[prog].text_offset, self.prog_info[prog].text_size, prog))
+                            else:
+                                print('0x%x - 0x%x 0x%x 0x%x  %s' % (locate, load_info.end, self.prog_info[prog].text_offset, self.prog_info[prog].text_size, prog))
                         else:
-                            print('0x%x - 0x%x ???? ????  %s' % (locate, load_info.end, prog))
+                            if save:
+                                ofile_fh.write('0x%x - 0x%x ???? ????  %s\n' % (locate, load_info.end, prog))
+                            else:
+                                print('0x%x - 0x%x ???? ????  %s' % (locate, load_info.end, prog))
                     else:
-                        print('0x%x - 0x%x ???  ???   %s' % (locate, load_info.end, prog))
+                        if save:
+                            ofile_fh.write('0x%x - 0x%x ???  ???   %s\n' % (locate, load_info.end, prog))
+                        else:
+                            print('0x%x - 0x%x ???  ???   %s' % (locate, load_info.end, prog))
+            if save:
+                ofile_fh.close()
         else:
             print('no so map for %s' % tid)
             
@@ -1053,3 +1071,15 @@ class SOMap():
             self.lgr.debug('soMap rmTask so_addr_map for tid %s' % tid)
             self.so_addr_map[tid] = {}
         self.cheesy_tid = 0
+
+    def checkClibAnalysis(self, tid):
+        sofile = 'logs/somap-%s.somap' % tid
+        self.lgr.debug('soMap checkClibAnalysis tid:%s sofile %s' % (tid, sofile))
+        retval = False
+        if not os.path.isfile(sofile):
+            self.showSO(tid, save=True)
+            retval = missingDLLAnalysis.checkMissingDLLs(None, sofile, self.lgr, root_prefix=self.root_prefix, generate=False)
+            self.lgr.debug('soMap checkClibAnalysis tid:%s created sofile, result is %r' % (tid, retval))
+        else:
+            retval = True
+        return retval
