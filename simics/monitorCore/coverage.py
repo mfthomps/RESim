@@ -1202,6 +1202,8 @@ class Coverage():
         self.lgr.debug('coverage enableAll enabled %d bb breaks and %d missing breaks' % (len(self.bp_list), len(self.missing_breaks)))
 
     def resetCoverage(self):
+        self.funs_hit = []
+        self.blocks_hit = OrderedDict()
         self.lgr.debug('coverge resetCoverage %d in did_missing_break' % len(self.did_missing_break))
 
         # bp and haps added to bp_list as a result of paging
