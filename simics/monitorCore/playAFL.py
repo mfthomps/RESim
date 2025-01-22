@@ -44,6 +44,7 @@ class PlayAFL():
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
              fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
              search_list=None, commence_params=None):
+        lgr.debug('playAFL dfile: %s' % dfile)
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -142,6 +143,14 @@ class PlayAFL():
             else:
                 self.afl_list = [dfile]
                 self.lgr.debug('playAFL, single file, abs path is %s' % dfile)
+        elif os.path.isdir(dfile):
+            self.lgr.debug('playAFL, directory of input files')
+            flist = os.listdir(dfile)
+            for f in sorted(flist):
+                rfile = os.path.join(dfile, f)
+                if os.path.isfile(rfile):
+                    self.afl_list.append(rfile)
+             
         else:
             if not crashes:
                 print('get dfile queue for %s' % dfile)
@@ -477,6 +486,7 @@ class PlayAFL():
         SIM_break_simulation('stopOnRead')
 
     def goAlone(self, clear_hits):
+        self.write_data = None
         self.current_packet=1
         if not self.repeat:
             self.index += 1
@@ -774,7 +784,8 @@ class PlayAFL():
                 hit = int(hit)
                 if hit not in self.all_hits:
                     self.all_hits.append(hit)
-            print('%d hits in this play.' % len(hit_bbs))
+            base = os.path.basename(fname)
+            print('%d hits in this play for %s.' % (len(hit_bbs), base))
             self.reportNewHits()
 
     def reportNewHits(self):
