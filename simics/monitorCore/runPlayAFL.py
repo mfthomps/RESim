@@ -78,10 +78,10 @@ def runPlay(args, lgr, hits_prefix, full, workspace):
         exit(1)
     resim_path = os.path.join(resim_dir, 'simics', 'bin', 'resim')
     hostname = aflPath.getHost()
+    here = os.getcwd()
     if workspace is not None:
         afl_name = workspace
     else:
-        here = os.getcwd()
         afl_name = os.path.basename(here)
     print('Using afl_name %s' % afl_name)
     resim_procs = []
