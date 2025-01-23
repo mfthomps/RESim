@@ -50,7 +50,7 @@ import functionNoWatch
 import dataWatchManager
 import nullTestLoop
 MAX_WATCH_MARKS = 1000
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
+mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp', 'strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
             'strcasecmp', 'strncpy', 'strlcpy', 'strtoul', 'String5toInt', 'string_strncmp', 'string_strnicmp', 'string_strlen',
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim', 'getopt',
             'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
@@ -58,15 +58,16 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp','strncasecmp
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'String4leftEi', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash']
+            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 'String14compare_helper',
+            'JsonObject5value', 'JsonObjectix']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
-no_stop_funs = ['xml_element_free']
+no_stop_funs = ['xml_element_free', 'JsonObject5value', 'JsonObjectix']
 ''' made up functions that could not have ghost frames?'''
 no_ghosts = ['charLookup', 'charLookupX', 'charLookupY']
 ''' TBD confirm end_cleanup is a good choice for free'''
-free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc', 'memset']
+free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc', 'memset', 'ArrayData10deallocate']
 # remove allocators, should not get that as windows function
 allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
@@ -1293,7 +1294,7 @@ class DataWatch():
             self.watchMarks.compare(self.mem_something.fun, str1, str2, self.mem_something.count, buf_start)
             #self.lgr.debug('dataWatch returnHap, return from %s compare: 0x%x  to: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
             #       self.mem_something.dest, self.mem_something.count))
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strnicmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 
                                         'mbscmp','mbscmp_l', 'strtok', 'buffer_caseless_compare', 'strstr', 'string_strncmp']: 
             buf_start = self.findRange(self.mem_something.dest)
             if self.mem_something.fun == 'strtok':
@@ -1443,7 +1444,7 @@ class DataWatch():
             #    self.setRange(self.mem_something.dest, self.mem_something.count, None, watch_mark=mark) 
             #    self.setBreakRange()
             self.recent_fgets = self.mem_something.dest
-        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'trim', 'QStringHash']:
+        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'trim', 'QStringHash', 'JsonObject5value', 'JsonObjectix']:
             mark = self.watchMarks.mscMark(self.mem_something.fun, self.mem_something.addr)
             if self.mem_something.fun == 'ostream_insert':
                 # TBD assuming this is always a temporary string
@@ -1735,7 +1736,9 @@ class DataWatch():
                 self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, ret_addr))
                 wm = self.watchMarks.getopt(self.mem_something.fun, None, None, self.mem_something.count, self.mem_something.src, self.mem_something.the_string)
         elif self.mem_something.fun == 'String16fromAscii_helper':
-            self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            this_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            ''' Treat the whole structure as the range so we catch writes to byte 0 by deallocator '''
+            self.mem_something.dest = this_addr 
             count = len(self.mem_something.the_string) * 2
             buf_start, buf_length = self.findBufForRange(self.mem_something.src, count)
             if buf_start is None:
@@ -1745,7 +1748,35 @@ class DataWatch():
                 self.lgr.debug('%s returned dest addr 0x%x count %d' % (self.mem_something.fun, self.mem_something.dest, count)) 
                 wm = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, count, buf_start, Sim_Trans_Load, fun_name=self.mem_something.fun)
                 self.setRange(self.mem_something.dest, count, watch_mark=wm)
-                
+        elif self.mem_something.fun == 'String5split':
+            ret_struct_addr_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            ret_struct_addr = self.mem_utils.readAppPtr(self.cpu, ret_struct_addr_addr, size=word_size)
+            ret_count_addr = ret_struct_addr + 3 * word_size
+            ret_count_max = 20
+            ret_item_addr_addr = ret_struct_addr + 0x10
+            self.lgr.debug('%s ret_strut_addr 0x%x' % (self.mem_something.fun, ret_struct_addr))
+            item_list = []
+            for index in range(ret_count_max):
+                ret_item_addr = self.mem_utils.readAppPtr(self.cpu, ret_item_addr_addr, size=word_size)
+                ret_item_len_addr = ret_item_addr + word_size
+                ret_item_len = self.mem_utils.readWord32(self.cpu, ret_item_len_addr)
+                if ret_item_len == 0 or ret_item_len is None:
+                    break
+                ret_item_string_addr = ret_item_addr + 0x10
+                self.lgr.debug('\t %s len 0x%x  str_addr 0x%x' % (self.mem_something.fun, ret_item_len, ret_item_string_addr))
+                item_list.append((ret_item_len, ret_item_string_addr))
+                ret_item_addr_addr = ret_item_addr_addr + word_size
+            wm = self.watchMarks.split(self.mem_something.src, self.mem_something.the_string, item_list, self.mem_something.fun)
+            for item_len, item_addr in item_list:
+                self.setRange(item_addr, item_len, watch_mark=wm)
+        elif self.mem_something.fun == 'String14compare_helper':
+            buf_start, buf_length = self.findBufForRange(self.mem_something.src, self.mem_something.count)
+            if buf_start is None:
+                self.lgr.debug('%s failed to get buf_start for src 0x%x' % (self.mem_something.fun, self.mem_something.src))
+            else:
+                self.lgr.debug('%s buf_start is 0x%x for mem_something.src 0x%x dest: 0x%x compare string %s' % (self.mem_something.fun, buf_start, self.mem_something.src,
+                    self.mem_something.dest, self.mem_something.the_string))
+                self.watchMarks.compare(self.mem_something.fun, self.mem_something.src, self.mem_something.dest, self.mem_something.count, buf_start)
             
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -2139,7 +2170,7 @@ class DataWatch():
                         if self.mem_something.count is None:
                             self.mem_something.count = buf_length 
                         self.mem_something.op_type = Sim_Trans_Load
-                    self.lgr.debug('dataWatch getMemParams not via hit, found src 0x%x in buf_start of 0x%x' % (self.mem_something.src, buf_start))
+                    self.lgr.debug('dataWatch getMemParams fun %s not via hit, found src 0x%x in buf_start of 0x%x' % (self.mem_something.fun, self.mem_something.src, buf_start))
             if not skip_fun:
                 if self.mem_something.fun in self.mem_fun_entries:
                     self.mem_fun_entries[self.mem_something.fun][eip].disabled = False
@@ -2257,7 +2288,7 @@ class DataWatch():
                 self.mem_something.count = self.getStrLen(self.mem_something.src)        
             
             self.lgr.debug('gatherCallParams dest 0x%x src 0x%x count 0x%x' % (self.mem_something.dest, self.mem_something.src, self.mem_something.count))
-        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 
+        elif self.mem_something.fun in ['strcmp', 'strncmp', 'strnicmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 'mbscmp', 
                                        'mbscmp_l', 'strtok', 'strstr']: 
             self.mem_something.dest, self.mem_something.src, count_maybe = self.getCallParams(sp, word_size)
             if self.mem_something.fun == 'strncmp':
@@ -2360,7 +2391,7 @@ class DataWatch():
 
         elif self.mem_something.fun == 'inet_ntop':
             dumb1, dumb2, self.mem_something.dest = self.getCallParams(sp, word_size)
-        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'trim', 'QStringHash']:
+        elif self.mem_something.fun in ['getenv', 'regexec', 'ostream_insert', 'trim', 'QStringHash', 'JsonObject5value', 'JsonObjectix']:
             self.lgr.debug('dataWatch getMemParms %s' % self.mem_something.fun)
             self.mem_something.src, dumb1, dumb = self.getCallParams(sp, word_size)
 
@@ -2538,6 +2569,24 @@ class DataWatch():
             self.mem_something.src, dumb2, dumb = self.getCallParams(sp, word_size)
             self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.src, 100)
             self.lgr.debug('dataWatch getMemParams %s src: 0x%x string %s' % (self.mem_something.fun, self.mem_something.src, self.mem_something.the_string))
+        elif self.mem_something.fun == 'String5split':
+            struct_addr_addr, dumb2, dumb = self.getCallParams(sp, word_size)
+            delim_addr_addr = struct_addr_addr + word_size
+            struct_addr = self.mem_utils.readAppPtr(self.cpu, struct_addr_addr, size=word_size)
+            src_len_addr = struct_addr + word_size
+            src_len = self.mem_utils.readWord32(self.cpu, src_len_addr)
+            self.mem_something.src = struct_addr + 0x10
+            delim_addr = self.mem_utils.readAppPtr(self.cpu, delim_addr_addr, size=word_size) 
+            delim_len_addr = delim_addr + word_size
+            delim_len = self.mem_utils.readWord32(self.cpu, delim_len_addr)
+            delim_chr_addr = delim_addr+0x10
+            delim = self.mem_utils.readString(self.cpu, delim_chr_addr, delim_len) 
+            self.mem_something.the_string = delim
+            self.lgr.debug('%s struct_addr 0x%x src_len 0x%x src 0x%x delim_addr 0x%x delim %s' % (self.mem_something.fun, struct_addr, src_len, self.mem_something.src, delim_addr, delim))
+        elif self.mem_something.fun == 'String14compare_helper':
+            self.mem_something.src, self.mem_something.count, self.mem_something.dest = self.getCallParams(sp, word_size)
+            self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.dest, self.mem_something.count)
+            
 
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -4128,6 +4177,9 @@ class DataWatch():
                 self.lgr.debug('dataWatch just a write to 0x%x that is part of a copy.  Ignore' % addr)
         else:
             break_handle = self.context_manager.getBreakHandle(breakpoint)
+            if break_handle is None:
+                self.lgr.error('dataWatch failed to get break_handle for breakpoint 0x%x (%d)' % (breakpoint, breakpoint))
+                return
             self.lgr.debug('****************dataWatch readHap tid:%s read addr: 0x%x index: %d breakpoint: %d handle: %d marks: %s max: %s cycle: 0x%x eip: 0x%x phys_addr 0x%x' % (tid, addr, index, breakpoint, break_handle, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip, memory.physical_address))
 
