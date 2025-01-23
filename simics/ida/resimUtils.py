@@ -6,6 +6,7 @@ import idaversion
 import idautils
 import ida_segment
 import ida_loader
+import ida_bytes
 import os
 import sys
 import logging
@@ -75,7 +76,7 @@ def dumpFuns(fname=None):
                 if demangled is not None:
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
-                #print('try fun %s' % function_name)
+                print('try adjustStack fun %s fun ea 0x%x' % (function_name, function_ea))
                 adjust_sp = adjustStack(function_ea)
                 if adjust_sp is not None:
                     #print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
@@ -231,6 +232,39 @@ class ImportNames():
                         arm_blr[next_pc] = fun
         with open(fname+'.arm_blr', "w") as fh:
             json.dump(arm_blr, fh)
+
+    def x86RegCallXrefs(self, fname):
+        # x86 mov eax, ds:some_xref
+        x86_call_reg = {}
+        for ea in self.imports:
+            fun = self.imports[ea]
+            print('do xrefs ea 0x%x fun %s' % (ea, fun))
+            refs = idautils.DataRefsTo(ea)
+            for ref in refs:
+                ref_instruct = idc.GetDisasm(ref)
+                print('\timports for 0x%x found ref 0x%x instruct %s' % (ea, ref, ref_instruct))
+                if ref_instruct.startswith('mov'): 
+                    insn = idaapi.insn_t()
+                    instruct_len = idaapi.decode_insn(insn, ref)
+                    our_reg = insn.ops[0].reg            
+                    print('\t len of mov is %d' % instruct_len)
+                    next_pc = ref 
+                    for index in range(4):
+                        next_pc = next_pc + instruct_len
+                        instruct = idc.GetDisasm(next_pc)
+                        instruct_len = idaapi.decode_insn(insn, next_pc)
+                        print('\t\t next_pc 0x%x instruct %s len is %d' % (next_pc, instruct, instruct_len))
+                        if instruct.startswith('call'):
+                            call_reg = insn.ops[0].reg
+                            if call_reg == our_reg and next_pc not in x86_call_reg:
+                                x86_call_reg[next_pc] = fun
+                                print('\t\timports adding fun_ref 0x%x next instruct 0x%x %s' % (ref, next_pc, instruct))
+                            break
+                        #instruct_len = ida_bytes.get_item_size(next_pc)
+                        insn = idaapi.insn_t()
+
+        with open(fname+'.x86_call_reg', "w") as fh:
+            json.dump(x86_call_reg, fh)
     
 
 def dumpImports(fname):
@@ -250,6 +284,7 @@ def dumpImports(fname):
     #import_names.printit()
     import_names.dumpit(fname)
     import_names.armBlrXrefs(fname)
+    import_names.x86RegCallXrefs(fname)
 
 def getString(ea):
     string_type = idc.get_str_type(idaapi.get_item_head(ea))
@@ -308,9 +343,14 @@ def renameFromLogger():
 def adjustStack(fun_ea):
     # Search end of function for indications of stack adjustment.  Used as an aide to stack tracing
     info = idaapi.get_inf_structure()
+    if info.is_32bit():
+        word_size = 4
+    else:
+        word_size = 8
     ip_list = []
     for item_ea in idautils.FuncItems(fun_ea):
-        #print('\t item: 0x%x' % item_ea)
+        #if fun_ea == 0x6ff5de4a:
+        #    print('\t item: 0x%x' % item_ea)
         ip_list.append(item_ea)
     count=0
     adjust = 0
@@ -318,20 +358,25 @@ def adjustStack(fun_ea):
     for item_ea in reversed(ip_list):
         ins = idautils.DecodeInstruction(item_ea)
         mn = ins.get_canon_mnem().lower()
+        if fun_ea == 0x6ff5de4a:
+            print('0x%x mn is %s' % (item_ea, mn))
         if not got_ret:
-            if mn != 'ret':
+            if not mn.startswith('ret'):
                 continue
             else:
                 got_ret=True
         '''
-        print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
-        op0 = idc.print_operand(item_ea, 0)
-        print('op0 is %s' % op0)
-        op1 = idc.print_operand(item_ea, 1)
-        print('op1 is %s' % op1)
-        op2 = idc.print_operand(item_ea, 2)
-        print('op2 is %s' % op2)
+        if fun_ea == 0x6ff5de4a:
+
+            print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
+            op0 = idc.print_operand(item_ea, 0)
+            print('op0 is %s' % op0)
+            op1 = idc.print_operand(item_ea, 1)
+            print('op1 is %s' % op1)
+            op2 = idc.print_operand(item_ea, 2)
+            print('op2 is %s' % op2)
         '''
+
         if mn == 'add':
             #print('is add') 
             op0 = idc.print_operand(item_ea, 0).lower()
@@ -360,6 +405,10 @@ def adjustStack(fun_ea):
                     adjust = adjust+value
                     print('value got 0x%x' % value)
                     break
+        # WARNING x86 code may have pushes mid-code, cannot always rely on pops
+        #elif info.procname == 'metapc' and mn.startswith('pop'):
+        #    adjust = adjust + word_size
+            
         count += 1
         if count > 4:
             break
