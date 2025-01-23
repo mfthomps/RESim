@@ -96,17 +96,20 @@ def adjustFunName(frame, fun_mgr, lgr):
                 if fun.startswith('basic_stringbuf'):
                     stringbuf = True
                 lgr.debug('clibFuns basic_string windows fun %s' % fun)
-                pre_paren, in_paren = fun.split('(', 1)
-                fun = pre_paren.split('::')[-1]
-                if fun.startswith('allocator'):
-                    lgr.debug('clibFuns windows fun %s looks like allocator pre_paren %s in_paran %s' % (fun, pre_paren, in_paren))
-                    #if in_paren.startswith('char'):
-                    if 'char' in in_paren:
-                        lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
-                        if stringbuf:
-                            fun = 'stringbuf_win_basic_char' 
-                        else:
-                            fun = 'string_win_basic_char' 
+                if '(' in fun:
+                    pre_paren, in_paren = fun.split('(', 1)
+                    fun = pre_paren.split('::')[-1]
+                    if fun.startswith('allocator'):
+                        lgr.debug('clibFuns windows fun %s looks like allocator pre_paren %s in_paran %s' % (fun, pre_paren, in_paren))
+                        #if in_paren.startswith('char'):
+                        if 'char' in in_paren:
+                            lgr.debug('clibFuns windows fun %s looks like allocator for char*' % fun)
+                            if stringbuf:
+                                fun = 'stringbuf_win_basic_char' 
+                            else:
+                                fun = 'string_win_basic_char' 
+                else:
+                    lgr.debug('clibFuns expected parens.  TBD QTCore?')
             elif fun.startswith('basic_streambuf'):
                 if 'sgetc' in fun or 'snextc' in fun:
                     fun = 'win_streambuf_getc'
@@ -148,7 +151,10 @@ def adjustFunName(frame, fun_mgr, lgr):
                 #lgr.debug('is QT')
                 ''' QTCore5 '''
                 fun = fun.split('Q')[1]
-                fun = fun.split('EP')[0]
+                q_suffix = ['EP', 'ER', 'E5']
+                for suf in q_suffix:
+                    if suf in fun:
+                        fun = fun.split(suf)[0]
             elif fun.startswith('Z') and 'QString' in fun and 'Hash' in fun:
                 fun = 'QStringHash'
 
