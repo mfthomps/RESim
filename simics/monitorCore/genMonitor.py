@@ -3406,9 +3406,9 @@ class GenMonitor():
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("GenContext", self.proc_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-          self.stopHap, stop_action)
-        self.lgr.debug('runToText hap set, now run. flist in stophap is %s breakpoint set on 0x%x' % (stop_action.listFuns(), start))
+            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
+              self.stopHap, stop_action)
+            self.lgr.debug('runToText hap set, now run. flist in stophap is %s breakpoint set on 0x%x' % (stop_action.listFuns(), start))
 
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
 
@@ -3946,9 +3946,9 @@ class GenMonitor():
 
         return retval
      
-    def showSOMap(self, tid=None, filter=None):
+    def showSOMap(self, tid=None, filter=None, save=False):
         self.lgr.debug('showSOMap')
-        self.soMap[self.target].showSO(tid, filter=filter)
+        self.soMap[self.target].showSO(tid, filter=filter, save=save)
 
     def listSOMap(self, filter=None):
         self.lgr.debug('listSOMap for cell %s' % self.target)
@@ -4635,6 +4635,10 @@ class GenMonitor():
         if not self.fun_mgr.hasIDAFuns(comm=comm):
             print('No functions defined for comm %s, needs IDA or Ghidra analysis.' % comm)
             return
+
+        clib_ok = self.soMap[self.target].checkClibAnalysis(debug_tid)
+        if not clib_ok:
+            print('*********** MISSING analysis for one or more clib-type libraries; tracking may fail')
            
         if commence is not None:
             self.dataWatch[self.target].commenceWith(commence, offset=commence_offset)
