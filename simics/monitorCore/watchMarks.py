@@ -599,6 +599,18 @@ class NullTestMark():
     def getMsg(self):
         return self.msg
 
+class SplitMark():
+    def __init__(self, src, delim, item_list, fun_name):
+        self.src = src
+        self.delim = delim
+        self.fun_name = fun_name
+        self.item_list = item_list
+    def getMsg(self):
+        retval = '%s from 0x%x delim %s ' % (self.fun_name, self.src, self.delim)
+        for item_len, item_addr in self.item_list:
+            retval = retval + ' (0x%x %d bytes) ' % (item_addr, item_len)
+        return retval
+
 class MscMark():
     def __init__(self, fun, addr, msg_append):
         self.addr = addr
@@ -1364,6 +1376,11 @@ class WatchMarks():
         nm = NullTestMark(addr, end_addr)
         self.addWatchMark(nm)
         self.lgr.debug(nm.getMsg())
+
+    def split(self, src, delim, item_list, fun_name):
+        sm = SplitMark(src, delim, item_list, fun_name)
+        self.addWatchMark(sm)
+        self.lgr.debug(sm.getMsg())
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
