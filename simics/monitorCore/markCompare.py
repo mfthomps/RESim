@@ -157,6 +157,8 @@ class MarkCompare():
                             eip = value
                         else:
                             break
+                    elif self.decode.isCall(self.cpu, instruct[1]):
+                        break
                         
                     else:
                         self.lgr.debug('markCompare findCompare is our_reg %s in instruct %s' % (our_reg, instruct[1]))
