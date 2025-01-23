@@ -54,7 +54,7 @@ class FunMgr():
             self.decode = decode
         self.trace_addrs = []
         # ARM64 BLR mapping (see ida/resimUtils imports)
-        self.arm_blr_funs = {}
+        self.call_reg_funs = {}
 
     def getFun(self, addr):
         comm = self.top.getComm(target=self.cell_name)
@@ -111,9 +111,18 @@ class FunMgr():
         else:
             return False
 
-    def inFun(self, prev_ip, call_to):
+    def inFun(self, prev_ip, call_to, call_ip=None):
         comm = self.top.getComm(target=self.cell_name)
-        return self.ida_funs[comm].inFun(prev_ip, call_to)
+       
+        retval = self.ida_funs[comm].inFun(prev_ip, call_to)
+        if not retval and call_ip is not None:
+               f1 = self.top.getSOFile(prev_ip) 
+               f2 = self.top.getSOFile(call_to) 
+               f_from = self.top.getSOFile(call_ip)
+               if f1 == f2 and f_from != f1:
+                   self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
+                   retval = True
+        return retval
 
     def funFromAddr(self, addr):
         comm = self.top.getComm(target=self.cell_name)
@@ -501,33 +510,35 @@ class FunMgr():
 
     def setArmBLR(self, full_path, offset=0):
         comm = self.top.getComm(target=self.cell_name)
-        if comm not in self.arm_blr_funs:
-            self.arm_blr_funs[comm] = {}
+        if comm not in self.call_reg_funs:
+            self.call_reg_funs[comm] = {}
         if full_path.endswith('.funs'):
             full_path = full_path[:-5]
-        blr_path = full_path+'.arm_blr'
-        if os.path.isfile(blr_path):
-            with open(blr_path) as fh:
-                funs = json.load(fh)
-                for addr_s in funs:
-                    blr_fun_name = funs[addr_s]
-                    blr_fun_name = idaFuns.rmPrefix(blr_fun_name)
-                    addr = int(addr_s)
-                    adjust = addr+offset
-                    if adjust in self.arm_blr_funs[comm]:
-                        #self.lgr.debug('funMgr 0x%x already in arm_blr_funs as %s' % (adjust, self.arm_blr_funs[adjust]))
-                        pass
-                    else:
-                        self.arm_blr_funs[comm][adjust] = blr_fun_name
-                        self.lgr.debug('funMgr blr adjust 0x%x to %s' % (adjust, blr_fun_name))
-                self.lgr.debug('funMgr setArmBLR loaded %s blr_funs for path %s num blrs now %s' % (len(funs), blr_path, len(self.arm_blr_funs[comm]))) 
+        suffix_list = ['.arm_blr', '.x86_call_reg']
+        for suffix in suffix_list:
+            blr_path = full_path+suffix
+            if os.path.isfile(blr_path):
+                with open(blr_path) as fh:
+                    funs = json.load(fh)
+                    for addr_s in funs:
+                        blr_fun_name = funs[addr_s]
+                        blr_fun_name = idaFuns.rmPrefix(blr_fun_name)
+                        addr = int(addr_s)
+                        adjust = addr+offset
+                        if adjust in self.call_reg_funs[comm]:
+                            #self.lgr.debug('funMgr 0x%x already in call_reg_funs as %s' % (adjust, self.call_reg_funs[adjust]))
+                            pass
+                        else:
+                            self.call_reg_funs[comm][adjust] = blr_fun_name
+                            #self.lgr.debug('funMgr blr adjust 0x%x to %s' % (adjust, blr_fun_name))
+                    self.lgr.debug('funMgr setArmBLR loaded %s blr_funs for path %s num blrs now %s' % (len(funs), blr_path, len(self.call_reg_funs[comm]))) 
         else:
             self.lgr.debug('setArmBLR no file at %s' % blr_path)
        
     def getBlr(self, addr): 
         retval = None
         comm = self.top.getComm(target=self.cell_name)
-        if addr in self.arm_blr_funs[comm]:
-            retval = self.arm_blr_funs[comm][addr]
+        if addr in self.call_reg_funs[comm]:
+            retval = self.call_reg_funs[comm][addr]
             self.lgr.debug('funMgr getBlr addr 0x%x return %s' % (addr, retval))
         return retval
