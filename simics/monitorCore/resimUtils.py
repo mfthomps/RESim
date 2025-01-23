@@ -411,7 +411,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
             if len(root_subdirs) > 0:
                 for subpath in root_subdirs:
                     top_path = os.path.join(root_prefix, subpath)
-                    #lgr.debug('getfileInsensitive walk from %s' % top_path)
+                    lgr.debug('getfileInsensitive using subdir %s walk from %s' % (subpath, top_path))
                     for root, dirs, files in os.walk(top_path):
                         for f in files:
                             if f.upper() == path.upper():
@@ -420,7 +420,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                                 return abspath
             else:
                 top_path = os.path.join(root_prefix)
-                #lgr.debug('getfileInsensitive walk from %s' % top_path)
+                lgr.debug('getfileInsensitive no subdirs walk from %s' % top_path)
                 for root, dirs, files in os.walk(top_path):
                     for f in files:
                         if f.upper() == path.upper():
@@ -502,11 +502,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
     quick_check = fname+'.funs'
     if fname.startswith(analysis_path) and os.path.isfile(quick_check):
-        #if lgr is not None:
-        #    lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
         retval = fname
     else:
-        #lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
         if root_prefix is None: 
             root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         root_dir = os.path.basename(root_prefix)
@@ -518,12 +519,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
                 retval = analysis_path[:-5]
        
     if retval is None:    
-        #if lgr is not None:
-        #    lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
-            #if lgr is not None:
-            #    lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
         fname = fname.replace('\\', '/')
         if root_prefix is None:
@@ -539,11 +540,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             parent = os.path.dirname(fname)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
-            #if lgr is not None:
-            #    lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+            if lgr is not None:
+                lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, [], lgr, force_look=True)
             if retval is not None:
-                #lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
+                if lgr is not None:
+                    lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
             if lgr is not None:
