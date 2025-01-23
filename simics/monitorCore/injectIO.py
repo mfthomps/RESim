@@ -277,6 +277,11 @@ class InjectIO():
                 self.top.stopDebug()
                 self.lgr.debug('injectIO call debugTidGroup')
                 self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+
+            clib_ok = self.so_map.checkClibAnalysis(self.tid)
+            if not clib_ok:
+                print('*********** MISSING analysis for one or more clib-type libraries; tracking may fail')
+
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
             if not self.no_page_faults:
