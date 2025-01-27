@@ -20,12 +20,14 @@ import setAddrString
 def getHex(s):
     retval = None
     if s is not None:
+        s = s.replace(" ","")
         hs = s
         if not hs.startswith('0x'):
             hs = '0x'+s
         try:
             retval = int(hs, 16)
         except:
+            print('failed highighted %s' % hs)
             pass
     return retval
 
