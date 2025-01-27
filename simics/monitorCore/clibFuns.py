@@ -151,10 +151,11 @@ def adjustFunName(frame, fun_mgr, lgr):
                 #lgr.debug('is QT')
                 ''' QTCore5 '''
                 fun = fun.split('Q')[1]
-                q_suffix = ['EP', 'ER', 'E5']
+                q_suffix = ['EP', 'aSER', 'ER', 'E5', 'Ev']
                 for suf in q_suffix:
                     if suf in fun:
                         fun = fun.split(suf)[0]
+                        break
             elif fun.startswith('Z') and 'QString' in fun and 'Hash' in fun:
                 fun = 'QStringHash'
 
