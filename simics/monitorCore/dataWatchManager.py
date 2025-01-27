@@ -30,6 +30,7 @@ class DataWatchManager():
 
     def createNewDataWatch(self):
         dum_cpu, comm, tid = self.task_utils.curThread()
+        self.lgr.debug('dataWatchManager createNewDataWatch comm %s' % (comm))
         full_path = self.top.getFullPath(fname=comm)
         if full_path is None:
             self.lgr.debug('dataWatchManager createNewDataWatch for comm %s but did not find any prog for it' % comm)
