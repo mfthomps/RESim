@@ -34,7 +34,7 @@ import resimUtils
 import aflPath
 import findTrack
 class InjectToWM():
-    def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=False):
+    def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=False, ws=None):
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
         self.top = top
@@ -47,7 +47,10 @@ class InjectToWM():
             self.lgr.error('injectToWM called with target_prog, but no target FD')
             return
         here = os.getcwd()
-        self.afl_target = os.path.basename(here)
+        if ws is None:
+            self.afl_target = os.path.basename(here)
+        else:
+            self.afl_target = ws
         #print('afl target is %s' % self.afl_target)
         self.lgr.debug('InjectToWM addr: 0x%x target is %s target_prog %s max_marks %s' % (addr, self.afl_target, target_prog, max_marks))
         result = self.findOneTrack()
