@@ -19,6 +19,7 @@ class IDAFuns():
         self.lgr = lgr
         self.offset = offset
         self.did_paths = []
+        self.have_funs_for = []
         self.lgr.debug('IDAFuns for path %s offset 0x%x' % (path, offset))
         self.mangle = {}
         self.unwind = {}
@@ -105,7 +106,9 @@ class IDAFuns():
 
         if os.path.isfile(funfile):
             with open(funfile) as fh:
-                #self.lgr.debug('IDAFuns add for path %s offset 0x%x' % (path, offset))
+                fname = os.path.basename(funfile)[:-5]
+                self.have_funs_for.append(fname)
+                self.lgr.debug('IDAFuns add for path %s offset 0x%x fname %s' % (path, offset, fname))
                 newfuns = json.load(fh) 
                 for f in newfuns:
                     fun_int = int(f)
@@ -287,3 +290,9 @@ class IDAFuns():
                 if 'adjust_sp' in self.funs[fun]:
                     retval = self.funs[fun]['adjust_sp']
         return retval
+
+    def haveFuns(self, fname):
+        if fname in self.have_funs_for:
+            return True
+        else:
+            return False

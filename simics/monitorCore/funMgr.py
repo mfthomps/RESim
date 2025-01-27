@@ -542,3 +542,7 @@ class FunMgr():
             retval = self.call_reg_funs[comm][addr]
             self.lgr.debug('funMgr getBlr addr 0x%x return %s' % (addr, retval))
         return retval
+
+    def haveFuns(self, fname):
+        comm = self.top.getComm(target=self.cell_name)
+        return self.ida_funs[comm].haveFuns(fname)
