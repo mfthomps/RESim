@@ -891,15 +891,15 @@ class StackTrace():
         if self.soMap.isFunNotLibc(eip):
             been_above_clib = True
             if self.cpu.architecture not in ['arm', 'arm64']:
-                self.lgr.debug('stackTrace starting in function that is not libc.  set prev_ip to eip: 0x%x' %eip)
+                #self.lgr.debug('stackTrace starting in function that is not libc.  set prev_ip to eip: 0x%x' %eip)
                 prev_ip = eip
             else:
                 lr = self.reg_frame['lr']
-                self.lgr.debug('stackTrace arm lr is 0x%x should we set prev_ip, i.e., should we see if we should check isCallToMe?' % lr)
-                if self.soMap.isMainText(self.reg_frame['lr']):
-                    self.lgr.debug('stackTrace arm lr 0x%x is in Main' % lr)
-                else:
-                    self.lgr.debug('stackTrace arm lr 0x%x is NOT in Main' % lr)
+                #self.lgr.debug('stackTrace arm lr is 0x%x should we set prev_ip, i.e., should we see if we should check isCallToMe?' % lr)
+                #if self.soMap.isMainText(self.reg_frame['lr']):
+                #    self.lgr.debug('stackTrace arm lr 0x%x is in Main' % lr)
+                #else:
+                #    self.lgr.debug('stackTrace arm lr 0x%x is NOT in Main' % lr)
         #prev_ip = eip
         if self.fun_mgr is None:
             self.lgr.warning('stackTrace has no ida functions')
@@ -912,26 +912,26 @@ class StackTrace():
         instruct = self.fun_mgr.resolveCall(instruct_tuple, eip)
         first_fun_addr = self.fun_mgr.getFun(eip)
         first_fun_name = self.fun_mgr.getFunName(first_fun_addr)
-        #if first_fun_addr is None:
-        #    first_fun_addr = eip
-        #    self.lgr.debug('stackTrace first eip 0x%x not in funs name the fun the eip' % eip)
-        #if first_fun_addr is not None:
-        #    self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr 0x%x fun name %s' % (self.tid, eip, esp, instruct, fname, self.skip_recurse, first_fun_addr, first_fun_name))
-        #else:
-        #    self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr is none' % (self.tid, eip, esp, instruct, fname, self.skip_recurse))
         frame, adjust_sp = self.genFrame(eip, instruct, ptr, None, None, None, None, msg='first frame')
-        #ptr = ptr + adjust_sp + self.word_size
-        #self.lgr.debug('stackTrace first added frame %s' % frame.dumpString())
+        if first_fun_addr is not None:
+            #self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr 0x%x fun name %s' % (self.tid, eip, esp, instruct, fname, self.skip_recurse, first_fun_addr, first_fun_name))
+            pass
+        else:
+            if self.fun_mgr.haveFuns(fname) and self.top.isWindows():
+                ''' obscure avoidance of ghost retval at top of stack '''
+                self.lgr.debug('stackTrace doTrace no fun name though we have funs for %s, obscure avoidance of ghost retval at top of stack' % fname)
+                ptr = ptr + self.word_size
+            #self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr is none' % (self.tid, eip, esp, instruct, fname, self.skip_recurse))
         ''' TBD *********** DOES this prev_ip assignment break frames that start in libs? '''
         if prev_ip is None and self.cpu.architecture in ['arm', 'arm64']:
             prev_ip, adjust_sp = self.isCallToMe(fname, eip, ptr)
             if prev_ip is not None:
                 # TBD need explaination of why we put the word back here that was subtracted in addFrame.
                 ptr = ptr + adjust_sp + self.word_size
-                self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
-            else:
-                self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
-                pass
+                #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
+            #else:
+            #    self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
+            #    pass
         
         only_module = False
         cur_fun = None
@@ -1353,7 +1353,7 @@ class StackTrace():
                                             # fix call instruction and force function name on called function if it is generic
                                             fun_name = called_fun_name
                                             instruct_str = '%s   %s' % (self.callmn, fun_name)
-                                            if self.frames[-1].fun_of_ip.startswith('sub_'):
+                                            if self.frames[-1].fun_of_ip is not None and self.frames[-1].fun_of_ip.startswith('sub_'):
                                                 self.frames[-1].fun_of_ip = fun_name
                                         if self.soMap.isMainText(call_to):
                                             #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail. call-to is 0x%x' % call_to)
