@@ -151,7 +151,7 @@ def adjustFunName(frame, fun_mgr, lgr):
                 #lgr.debug('is QT')
                 ''' QTCore5 '''
                 fun = fun.split('Q')[1]
-                q_suffix = ['EP', 'aSER', 'ER', 'E5', 'Ev']
+                q_suffix = ['EP', 'SER', 'ER', 'E5', 'Ev', 'Ei']
                 for suf in q_suffix:
                     if suf in fun:
                         fun = fun.split(suf)[0]

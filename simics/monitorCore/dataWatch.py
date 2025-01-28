@@ -56,14 +56,14 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp',
             'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
-            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'String4leftEi', 'str', 'ostream_insert', 'regcomp', 
+            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 'String14compare_helper',
-            'String6toUtf8', 'JsonObject5value', 'JsonObjectix', 'JsonValueRef']
+            'String6toUtf8', 'String3mid', 'String4leftEi', 'Stringa', 'JsonObject5value', 'JsonObjectix', 'JsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
-no_stop_funs = ['xml_element_free', 'JsonObject5value', 'JsonObjectix', 'JsonValueRef']
+no_stop_funs = ['xml_element_free', 'JsonObject5value', 'JsonObjectix', 'JsonValueRefa']
 ''' made up functions that could not have ghost frames?'''
 no_ghosts = ['charLookup', 'charLookupX', 'charLookupY']
 ''' TBD confirm end_cleanup is a good choice for free'''
@@ -73,6 +73,7 @@ allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
 mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
 reg_return_funs = ['win_streambuf_getc']
+missed_deallocate = ['String6toUtf8', 'String16fromAscii_helper']
 class MemSomething():
     def __init__(self, fun, fun_addr, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -1504,7 +1505,7 @@ class DataWatch():
                 self.setBreakRange()
                 #self.watchStackObject(obj_ptr)
 
-        elif self.mem_something.fun == 'String4leftEi':
+        elif self.mem_something.fun in ['String4leftEi', 'String3mid', 'Stringa']:
             ''' QTCore '''
             # eax + 0x10 is where return string starts
             returned = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -2459,7 +2460,7 @@ class DataWatch():
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
                  self.mem_something.count))
 
-        elif self.mem_something.fun == 'String4leftEi':
+        elif self.mem_something.fun in ['String4leftEi', 'String3mid', 'Stringa']:
             src_struct, count, dumb2 = self.getCallParams(sp, word_size)
             self.mem_something.count = count * 2
             self.mem_something.src = self.mem_utils.readAppPtr(self.cpu,  src_struct)+0x10
@@ -2895,7 +2896,7 @@ class DataWatch():
                 addr += 1
         return addr - src
 
-    def handleMemStuff(self, dumb):
+    def handleMemStuff(self, op_type):
         '''
         We are within a memcpy type function for which we believe we know the calling conventions (or a user-defined iterator).  However those values have been
         lost to the vagaries of the implementation by the time we hit the breakpoint.  We need to stop; Reverse to the call; record the parameters;
@@ -2911,13 +2912,19 @@ class DataWatch():
         
         if self.mem_something.fun in self.mem_fun_entries and self.mem_something.fun_addr in self.mem_fun_entries[self.mem_something.fun] \
                and self.mem_something.fun not in funs_need_addr and self.mem_fun_entries[self.mem_something.fun][self.mem_something.fun_addr].disabled != True:
-            self.lgr.warning('dataWatch handleMemStuff but entry for fun %s already in mem_fun_entires addr 0x%x' % (self.mem_something.fun, self.mem_something.fun_addr))
+ 
+            if op_type is not None and op_type != Sim_Trans_Load and self.mem_something.fun in missed_deallocate:
+                self.rmRange(self.mem_something.addr) 
+                self.lgr.debug('dataWatch handleMemStuff fun %s already in mem_fun_entries, but is not a load and in missed_deallocate, remove range and bail' % (self.mem_something.fun))
+            else:
 
-            # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.memstuffStopHap, None)
-            self.lgr.debug('handleMemStuff fun in mem_fun_entries now stop')
-            SIM_break_simulation('handle memstuff')
+                self.lgr.warning('dataWatch handleMemStuff but entry for fun %s already in mem_fun_entires addr 0x%x' % (self.mem_something.fun, self.mem_something.fun_addr))
+
+                # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?
+                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
+            	     self.memstuffStopHap, None)
+                self.lgr.debug('handleMemStuff fun in mem_fun_entries now stop')
+                SIM_break_simulation('handle memstuff')
 
         elif self.mem_something.fun not in mem_funs or self.mem_something.fun in no_stop_funs: 
             ''' assume it is a user iterator '''
@@ -4576,7 +4583,7 @@ class DataWatch():
                     self.lgr.debug('DataWatch lookForMemstuff is reg_return_fun %s addr 0x%x' % (mem_stuff.fun, addr))
                     #self.runToReturn()
                 else:
-                    SIM_run_alone(self.handleMemStuff, None)
+                    SIM_run_alone(self.handleMemStuff, op_type)
                 retval = True
         else:
             #self.lgr.debug('DataWatch lookForMemstuff not memsomething, reset the watch ')
