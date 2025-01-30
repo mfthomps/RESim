@@ -384,7 +384,7 @@ def findListFrom(pattern, from_dir):
     return retval
 
 def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
-    lgr.debug('getfileInsensitve path %s' % path)
+    lgr.debug('resimUtils getfileInsensitve path %s' % path)
     got_it = False
     retval = root_prefix
     cur_dir = root_prefix
@@ -400,7 +400,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():
