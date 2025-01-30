@@ -63,14 +63,19 @@ def isParallel():
 def getIdaDataFromIni(prog, ini, lgr=None):
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
+    root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
     if resim_ida_data is None:
         print('ERROR: RESIM_IDA_DATA not defined')
+    elif root_fs is None:
+        print('ERROR: RESIM_ROOT_PREFIX not defined')
     else:
-        root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
         if '/' in prog:
             prog_relative = prog
         else:
             full_prog = getFullPath(prog, ini, lgr=lgr)
+            if full_prog is None:
+                print('ERROR no path found for prog %d' % prog)
+                return retval
             prog_relative = full_prog[len(root_fs)+1:]
         base = os.path.basename(root_fs)
         #retval = os.path.join(resim_ida_data, base, prog, prog)
