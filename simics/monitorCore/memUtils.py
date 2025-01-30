@@ -794,7 +794,9 @@ class MemUtils():
             elif reg.endswith('H'):
                 h_l = 1
             if h_l is None:
-                self.lgr.error('memUtils getRegValue xmm register but no High/Low suffix %s' % reg)
+                index = int(reg[3:])
+                reg_value = cpu.xmm[index][0]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
             else:
                 index = int(reg[3:-1])
                 reg_value = cpu.xmm[index][h_l]
