@@ -84,6 +84,7 @@ def dumpFuns(fname=None):
             except KeyError:
                 print('failed getting attribute for 0x%x' % function_ea)
                 pass
+
     
     with open(fname+'.funs', "w") as fh:
         json.dump(funs, fh)
@@ -91,6 +92,7 @@ def dumpFuns(fname=None):
     demangle(fname)
     #unwind(fname)
     dumpImports(fname)
+    dumpExports(fname, funs)
 
 def dumpBlocks():
     ''' create a file with one line per function containing a list of each of the function's 
@@ -285,6 +287,30 @@ def dumpImports(fname):
     import_names.dumpit(fname)
     import_names.armBlrXrefs(fname)
     import_names.x86RegCallXrefs(fname)
+
+def dumpExports(fname, funs):
+    # TBD, for now intended use is to catch export names that map to library functions.
+    # Does not yet handle exports whose addresses do not appear in functions list.
+    exports = {}
+    export_list = list(idautils.Entries())
+    for exp_i, exp_ord, exp_ea, exp_name in export_list:
+        if exp_ea not in funs or funs[exp_ea]['name'] != exp_name:
+            exports[exp_name] = {}
+            fun_end = idc.get_func_attr(exp_ea, idc.FUNCATTR_END)-1
+            exports[exp_name]['start'] = exp_ea
+            exports[exp_name]['end'] = fun_end
+            #print('try adjustStack fun %s fun ea 0x%x' % (function_name, function_ea))
+            #adjust_sp = adjustStack(exp_ea)
+            #if adjust_sp is not None:
+            #    #print('function %s function_ea 0x%x will adjust 0x%x' % (exp_name, exp_ea, adjust_sp))
+            #    exports[exp_ea]['adjust_sp'] = adjust_sp
+        else:
+            #print('funs NOT missing exported %s addr 0x%x' % (exp_name, exp_ea))
+            pass
+    with open(fname+'.exports', "w") as fh:
+        json.dump(exports, fh)
+        print('Wrote functions to %s.exports' % fname)
+
 
 def getString(ea):
     string_type = idc.get_str_type(idaapi.get_item_head(ea))
