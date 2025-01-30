@@ -2121,10 +2121,10 @@ class WinSyscall():
         if prog is None:
             self.lgr.error('winSyscall doRecordLoad failed to get pending prog for %s (%s)' % (tid, comm))
             return
-        full_path = self.top.getFullPath(prog)
+        full_path = self.top.getFullPath(fname=prog)
         size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
         if size is None:
-            self.lgr.error('winSyscall doRecordLoad unable to get size.  Is path to executable defined in the ini file RESIM_root_prefix?')
+            self.lgr.debug('winSyscall doRecordLoad unable to get size.  Maybe executable is not in the local file system.  Otherwise, is path to executable defined in the ini file RESIM_root_prefix? Useing full_path %s')
             return 
         text_addr = load_addr + text_offset
         self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x%x' % size)
