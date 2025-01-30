@@ -60,11 +60,11 @@ class TargetFS():
             #if lgr is not None:
             #    lgr.debug('getFull look at %s' % path) 
             path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
-            self.lgr.debug('winTargetFS root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
+            self.lgr.debug('winTargetFS getFull root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
             retval = self.checkExecDict(path)
             if retval is None:
                 full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
-                self.lgr.debug('full_insenstive is %s' % full_insensitive)
+                self.lgr.debug('winTargetFS getFull full_insenstive is %s' % full_insensitive)
                 if full_insensitive is None or not os.path.isfile(full_insensitive):
                     pattern = path
                     if self.root_subdirs is None or len(self.root_subdirs) == 0:
