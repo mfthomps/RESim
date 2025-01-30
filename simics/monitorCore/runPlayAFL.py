@@ -213,6 +213,9 @@ def main():
         full = args.program
     else:
         full_with_prefix = resimUtils.getFullPath(args.program, args.ini, lgr=lgr)
+        if full_with_prefix is None:
+            print('ERROR failed to get full path for program %s' % args.program)
+            exit(1)
         full = full_with_prefix[len(root_prefix)+1:]
     print('Using analysis for program: %s' % full)   
     runPlay(args, lgr, hits_prefix, full, args.workspace)
