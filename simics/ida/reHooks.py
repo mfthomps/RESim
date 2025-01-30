@@ -618,6 +618,7 @@ class Hooks(UI_Hooks):
                         if addr is not None or regFu.isHighlightedEffective():
                             idaapi.attach_action_to_popup(form, popup, "showPtr:action", 'RESim/data/')
                             idaapi.attach_action_to_popup(form, popup, "showAsciiMap:action", 'RESim/data/')
+                            idaapi.attach_action_to_popup(form, popup, "showAddr:action", 'RESim/data/')
                             idaapi.attach_action_to_popup(form, popup, "rev:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "dataWatch:action", 'RESim/')
                             idaapi.attach_action_to_popup(form, popup, "addDataWatch:action", 'RESim/')
