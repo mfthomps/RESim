@@ -431,6 +431,8 @@ class InjectIO():
                     if not did_origin_reset:
                         self.top.resetOrigin(cpu=self.cpu)
                     self.top.runToIO(self.fd, linger=True, break_simulation=False, run=self.run)
+            else:
+                self.lgr.debug('injectIO stay is true')
         else:
             ''' target is not current process.  go to target then callback to injectCalback'''
             self.lgr.debug('injectIO using target %s' % self.target_prog)
@@ -465,6 +467,9 @@ class InjectIO():
         if not self.stay:
             if not self.no_rop:
                 self.top.watchROP(callback=self.callback)
+        else:
+            self.lgr.debug('trackIO commonGo stay is true, make sure tracking is off''')
+            self.top.stopTracking()
 
     def injectCallback(self):
         ''' called at the end of the debug hap chain, meaning we are in the target process. 
