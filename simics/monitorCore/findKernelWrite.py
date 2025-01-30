@@ -247,7 +247,11 @@ class findKernelWrite():
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
         else:
-            value = SIM_get_mem_op_value_le(memory)
+            if memory.size <= 8:
+                value = SIM_get_mem_op_value_le(memory)
+            else:
+                self.lgr.debug('revWriteCallBack, memory transaction size > 8, addr 0x%x' % memory.logical_address)
+                value = 0xbaaabaaabaaabaaa
             my_memory = self.MyMemoryTransaction(memory.logical_address, memory.physical_address, memory.size, value)
             if self.cpu.cycles == self.start_cycles:
                 self.lgr.debug('revWriteCallBack, is at starting cycles.  some kind of rep instruction?')
@@ -807,7 +811,7 @@ class findKernelWrite():
                 src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
                 dst_addr = self.mem_utils.getRegValue(self.cpu, 'edi')
                 ecx = self.mem_utils.getRegValue(self.cpu, 'ecx')
-                self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x addr 0x%x' % (src_addr, dst_addr, ecx, self.addr))
+                self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x ecx: 0x%x addr 0x%x' % (src_addr, dst_addr, ecx, self.addr))
                 if self.prev_buffer:
                     # we are just looking for the previous buffer, e.g., to backtrack to a kernel buffer.
                     self.k_buffer_addrs.append(src_addr)
