@@ -1,11 +1,15 @@
 import os
 import glob
 class TargetFS():
-    def __init__(self, top, root_prefix, root_subdirs):
+    def __init__(self, top, root_prefix, root_subdirs, lgr=None):
         self.top = top
         self.root_prefix = root_prefix
-        self.root_subdirs = root_subdirs
-        self.lgr = None
+        if root_subdirs is None:
+            self.root_subdirs = []
+        else:
+            self.root_subdirs = root_subdirs
+       
+        self.lgr = lgr
         self.file_cache = {}
 
     def find(self, name):
@@ -75,6 +79,8 @@ class TargetFS():
                 return self.file_cache[path] 
 
             full = os.path.join(self.root_prefix, path)
+            if lgr is not None:
+                lgr.debug('TargetFS full is %s' % full)
             if os.path.islink(full):
                 real = os.readlink(full)
                 if lgr is not None:
@@ -90,16 +96,17 @@ class TargetFS():
                     retval = os.path.join(os.path.dirname(full), real)
             elif not os.path.isfile(full):
                 if lgr is not None:
-                    lgr.debug('TargetFS getFull not relative no file at %s -- use glob' % full)
+                    lgr.debug('TargetFS getFull not relative no file at %s -- use glob.  path is %s' % (full, path))
                 flist = glob.glob(full+'*')
                 if len(flist) > 0:
                     retval = flist[0]
-                elif not '/' in full:
+                elif not '/' in path:
                     # TBD, avoid finding a program that would fail execve
                     if lgr is not None:
                         lgr.debug('TargetFS getFull, not relative no glob at %s' % (full+'*'))
                     ''' try basename '''
-                    retval = self.find(base)
+                    retval = self.find(path)
+                    base = os.path.basename(retval)
                     if path == base and retval is not None and path not in self.file_cache:
                         self.file_cache[path] = retval
                     if lgr is not None:
