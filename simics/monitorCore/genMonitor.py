@@ -3640,7 +3640,10 @@ class GenMonitor():
 
     # TBD redo all these runTo's to not rely on subcalls
     def runToSend(self, substring):
-        call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
+        if not self.isWindows():
+            call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
+        else:
+            call = ['SEND']
         call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
         self.lgr.debug('runToSend to %s' % substring)
         self.runTo(call, call_params, name='send')
