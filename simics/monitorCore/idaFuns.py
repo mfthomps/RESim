@@ -254,7 +254,7 @@ class IDAFuns():
                 print('fun entry 0x%x size %d' % (fun, size))
 
     def getFunEntry(self, fun_name):
-        ''' get the entry of a given function name, with preference to the largest function '''
+        ''' get the loaded address of the entry of a given function name, with preference to the largest function '''
         big = 0
         retval = None
         for fun in self.funs:
@@ -262,7 +262,14 @@ class IDAFuns():
                 size = self.funs[fun]['end'] - self.funs[fun]['start'] 
                 if size > big:
                     big = size
-                    retval = fun
+                    retval = self.funs[fun]['start']
+        return retval
+ 
+    def getFunLoaded(self, fun_addr):
+        ''' get the loaded function entry for a given analysis function address '''
+        retval = None
+        if fun_addr in self.funs:
+            retval = self.funs[fun_addr]['start']
         return retval
 
     def getFunWithin(self, fun_name, start, end):
