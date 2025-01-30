@@ -94,6 +94,7 @@ class SOMap():
         self.so_watch_callback = {}
 
         self.prog_base_map = {}
+        self.root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
 
         # NO declarations below here
         if run_from_snap is not None:
@@ -131,13 +132,12 @@ class SOMap():
                 if version < 23:
                     self.lgr.debug('soMap loadPickle version %d less than 23, hack backward compat' % version)
                     old_prog_info = so_pickle['prog_info']
-                    root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
                     for prog in old_prog_info: 
                          if prog.startswith('/'):
                              use_prog = prog[1:]
                          else:
                              use_prog = prog
-                         prog_path = os.path.join(root_prefix, use_prog)
+                         prog_path = os.path.join(self.root_prefix, use_prog)
                          elf_info = elfText.getText(prog_path, self.lgr)
                          if elf_info is not None:
                              self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
@@ -402,8 +402,7 @@ class SOMap():
         self.prog_end[tid] = None
 
     def getAnalysisPath(self, fname):
-        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
-        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=root_prefix, lgr=self.lgr)
+        return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=self.root_prefix, lgr=self.lgr)
             
     def setFunMgr(self, fun_mgr, tid_in):
         if fun_mgr is None:
