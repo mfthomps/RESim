@@ -188,7 +188,7 @@ def main():
     parser.add_argument('-C', '--count', action='store', default='1', help='Used with targetFD to advance to nth read before tracking coverage. Defaults to 1.')
     parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when neeed, will miss SEGV.')
     parser.add_argument('-s', '--search_list', action='store', help='Name of file containing search criteria, e.g., to find writes to a range')
-    parser.add_argument('-w', '--workspace', action='store', help='Name of the workspace that originated the AFL artifacts.')
+    parser.add_argument('-w', '--workspace', action='store', help='Name of the workspace that originated the AFL artifacts (if other than current workspace).')
     try:
         os.remove('/tmp/resim_restart.txt')
     except:
