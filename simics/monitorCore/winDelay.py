@@ -200,9 +200,9 @@ class WinDelay():
                 trace_msg = trace_msg + ' '+sock_string+'\n'
                 self.lgr.debug('winDelay RECV_DATAGRAM socket addr %s' % sock_string)
                 #SIM_break_simulation(trace_msg)
-            if self.call_name in ['RECV_DATAGRAM', 'RECV']:
+            if self.call_name in ['RECV_DATAGRAM', 'RECV', 'SEND', 'SEND_DATAGRAM']:
                 for call_param in self.exit_info.call_params:
-                    if call_param.match_param is not None and call_param.name == 'runToReceive':
+                    if call_param.match_param is not None and call_param.name in ['runToReceive', 'runToSend']:
                         if call_param.match_param in read_data:
                             self.lgr.debug('winDelay got match of matched_param.')  
                             call_param.match_param = None
