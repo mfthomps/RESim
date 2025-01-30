@@ -2054,6 +2054,9 @@ class WinSyscall():
             elif call_param.name == 'runToReceive' and op_cmd in ['RECV', 'RECV_DATAGRAM']:
                 self.lgr.debug('winSyscall parse socket call %s is runToReceive append call_param.match_param %s' % (op_cmd, call_param.match_param))
                 exit_info.call_params.append(call_param)
+            elif call_param.name == 'runToSend' and op_cmd in ['SEND', 'SEND_DATAGRAM']:
+                self.lgr.debug('winSyscall parse socket call %s is runToReceive append call_param.match_param %s' % (op_cmd, call_param.match_param))
+                exit_info.call_params.append(call_param)
             elif call_param.name == 'runToIO' and type(call_param.match_param) is int:
                 exit_info = None
             elif call_param.name == 'runToCall':
