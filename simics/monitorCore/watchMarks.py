@@ -242,9 +242,15 @@ class CompareMark():
         self.ours = ours    
         self.theirs = theirs    
         self.count = count    
+        our_delta = abs(ours - buf_start)
+        theirs_delta = abs(theirs - buf_start)
         if buf_start is not None:
-            offset = ours - buf_start
-            self.msg = '%s 0x%08x %s (%d bytes into buffer at 0x%08x) to %s (at 0x%08x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dest_str, theirs, count)
+            if our_delta < theirs_delta:
+                offset = ours - buf_start
+                self.msg = '%s 0x%08x %s (%d bytes into buffer at 0x%08x) to %s (at 0x%08x, %d bytes)' % (fun, ours, src_str, offset, buf_start, dest_str, theirs, count)
+            else:
+                offset = theirs - buf_start
+                self.msg = '%s 0x%08x %s (%d bytes into buffer at 0x%08x) to %s (at 0x%08x, %d bytes)' % (fun, theirs, dest_str, offset, buf_start, src_str, ours, count)
         else:
             self.msg = '%s 0x%08x %s (unknown buffer) to %s (at 0x%08x, %d bytes)' % (fun, ours, src_str, dest_str, theirs, count)
     def getMsg(self):
