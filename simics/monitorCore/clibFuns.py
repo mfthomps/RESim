@@ -156,6 +156,8 @@ def adjustFunName(frame, fun_mgr, lgr):
                     if suf in fun:
                         fun = fun.split(suf)[0]
                         break
+            elif fun.startswith('Zeq') and 'Q' in fun[:9]:
+                fun = fun.split('Q')[1]+'eq'
             elif fun.startswith('Z') and 'QString' in fun and 'Hash' in fun:
                 fun = 'QStringHash'
 
