@@ -35,6 +35,7 @@ from simics import *
 class FunMgr():
     def __init__(self, top, cpu, cell_name, mem_utils, lgr):
         self.relocate_funs = {}
+        self.export_funs = {}
         self.ida_funs = {}
         self.cpu = cpu
         self.cell_name = cell_name
@@ -101,6 +102,7 @@ class FunMgr():
             
             self.setRelocateFuns(path, offset=use_offset)
             self.setArmBLR(path, offset=use_offset)
+            self.loadExports(path)
         else:
             self.lgr.debug('funMgr add called with no IDA funs defined')
             
@@ -116,6 +118,13 @@ class FunMgr():
        
         retval = self.ida_funs[comm].inFun(prev_ip, call_to)
         if not retval and call_ip is not None:
+            prev_ip_name = self.ida_funs[comm].getFunName(prev_ip)
+            call_to_name = self.ida_funs[comm].getFunName(call_to)
+            self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s' % (prev_ip_name, call_to_name))
+            if prev_ip_name == call_to_name:
+                retval = True
+            elif not retval and call_ip is not None:
+               self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
                f1 = self.top.getSOFile(prev_ip) 
                f2 = self.top.getSOFile(call_to) 
                f_from = self.top.getSOFile(call_ip)
@@ -450,11 +459,16 @@ class FunMgr():
         self.ida_funs[comm].showFunEntries(fun_name)
 
     def getFunEntry(self, fun_name):
+        ''' get the loaded entry address for the named funtion.  If not in the fun list, check the exports.'''
         comm = self.top.getComm(target=self.cell_name)
         if comm in self.ida_funs:
-            return self.ida_funs[comm].getFunEntry(fun_name)
+            retval =  self.ida_funs[comm].getFunEntry(fun_name)
+            if retval is None:
+                if comm in self.export_funs and fun_name in self.export_funs[comm]:
+                   retval = self.ida_funs[comm].getFunLoaded(self.export_funs[comm][fun_name]) 
         else:
             self.lgr.error('funMgr called but no IDA functions defined')
+        return retval
 
     def getFunWithin(self, fun_name, start, end):
         comm = self.top.getComm(target=self.cell_name)
@@ -546,3 +560,22 @@ class FunMgr():
     def haveFuns(self, fname):
         comm = self.top.getComm(target=self.cell_name)
         return self.ida_funs[comm].haveFuns(fname)
+
+    def loadExports(self, full_path):
+        self.lgr.debug('funMgr loadExports for %s' % full_path)
+        comm = self.top.getComm(target=self.cell_name)
+        if comm not in self.export_funs:
+            self.export_funs[comm] = {}
+        if full_path.endswith('.funs'):
+            full_path = full_path[:-5]
+        export_path = full_path+'.exports'
+        if os.path.isfile(export_path):
+            with open(export_path) as fh:
+                exports = json.load(fh)
+                for fname in exports:
+                    fun_name = idaFuns.rmPrefix(fname)
+                    self.export_funs[comm][fun_name] = exports[fname]['start']
+                    #self.lgr.debug('\t%s - 0x%x' % (fun_name, exports[fname]['start']))
+        else:
+            self.lgr.debug('funMgr loadExports failed to find %s' % full_path)
+                
