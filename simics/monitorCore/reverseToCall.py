@@ -757,6 +757,9 @@ class reverseToCall():
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
         self.reg_val = self.mem_utils.getRegValue(self.cpu, reg)
+        if self.reg_val is None:
+            self.lgr.error('doRevToModReg failed to get value for reg %s' % reg)
+            return
         self.prev_reg_val = self.reg_val
         self.lgr.debug('doRevToModReg starting at PC %x, looking for %s change from 0x%x' % (eip, reg, self.reg_val))
         done = False
