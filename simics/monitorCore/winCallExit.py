@@ -123,6 +123,7 @@ class WinCallExit():
         ''' who taught bill about error codes? '''
         #if eax == STATUS_IMAGE_NOT_AT_BASE:  this one if for NtMapViewOfSection
         not_ready = False
+        async_was_ready = True
         if eax == 0x103:
             not_ready = True
             eax = 0
@@ -210,8 +211,8 @@ class WinCallExit():
             else:
                 # TBD hack to let prepInject get the exit info
                 self.matching_exit_info = exit_info
-                was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
-                if not was_ready:
+                async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                if not async_was_ready:
                     self.lgr.debug('winCallExit ReadFile: not ready ')
                     trace_msg = trace_msg+' - Device not ready'
 
@@ -354,12 +355,12 @@ class WinCallExit():
                         # hack to avoid duplicate call names
                         trace_msg = trace_msg.rsplit(' ', 1)[0]
                         self.lgr.debug('winCallExit %s call exitingKernel with trace_msg %s' % (exit_info.socket_callname, trace_msg))
-                        was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
+                        async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
 
                         ''' Call params satisfied in winDelay'''
                         #exit_info.call_params = None
-                        self.lgr.debug('winCallExit asynch_handler was ready? %r' % was_ready)
-                        if not was_ready:
+                        self.lgr.debug('winCallExit asynch_handler was ready? %r' % async_was_ready)
+                        if not async_was_ready:
                             not_ready = True
                     else:
                         trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
@@ -413,15 +414,20 @@ class WinCallExit():
         if exit_info.matched_param is not None and exit_info.matched_param.break_simulation:
             self.lgr.debug('winCallExit found matching call parameter %s' % str(exit_info.matched_param.match_param))
             self.matching_exit_info = exit_info
+            if  exit_info.asynch_handler is not None and exit_info.asynch_handler.trace_msg is not None:
+                trace_msg = exit_info.asynch_handler.trace_msg
             self.context_manager.setIdaMessage(trace_msg)
+            print(trace_msg)
+            self.lgr.debug(trace_msg)
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
             my_syscall = exit_info.syscall_instance
-            async_waiting = False
-            if  exit_info.asynch_handler is not None and exit_info.asynch_handler.exit_info is not None:
-                async_waiting = True
-                self.lgr.debug('winCallExit think async still waiting so do not stop')
-            if not async_waiting and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
+            #async_waiting = False
+            #if  exit_info.asynch_handler is not None and exit_info.asynch_handler.exit_info is not None:
+            #    async_waiting = True
+            #    self.lgr.debug('winCallExit think async still waiting so do not stop')
+            #if not async_waiting and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
+            if async_was_ready and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
                 if my_syscall is None:
