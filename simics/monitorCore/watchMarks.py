@@ -31,7 +31,7 @@ class CallMark():
         return self.msg
 
 class CopyMark():
-    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None, truncated=None, fun_name=None):
+    def __init__(self, src, dest, length, buf_start, op_type, strcpy=False, sp=None, truncated=None, fun_name=None, copy_start=None):
         self.src = src
         self.dest = dest
         self.length = length
@@ -51,7 +51,7 @@ class CopyMark():
                 offset = src - buf_start
                 trunc_string = ''
                 if truncated is not None:
-                    trunc_string = ' (trucated from %d)' % truncated        
+                    trunc_string = ' (trucated from %d original start 0x%x)' % (truncated, copy_start)        
                 self.msg = '%s %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%08x)' % (fun_name, length, trunc_string, src, dest, offset, buf_start)
             else:
                 self.msg = '%s %d bytes from 0x%08x to 0x%08x . (Source buffer starts before known buffers!)' % (fun_name, length, src, dest)
@@ -1084,13 +1084,13 @@ class WatchMarks():
         return sp, base
 
 
-    def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None, fun_name=None):
+    def copy(self, src, dest, length, buf_start, op_type, strcpy=False, truncated=None, fun_name=None, copy_start=None):
         #sp, base = self.getStackBase(dest)
         sp = self.isStackBuf(dest)
         if src is None or dest is None:
             self.lgr.error('watchMarks copy called with None for src, dest or buf_start?')
             return
-        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated, fun_name=fun_name)
+        cm = CopyMark(src, dest, length, buf_start, op_type, strcpy, sp=sp, truncated=truncated, fun_name=fun_name, copy_start=copy_start)
         self.lgr.debug('watchMarks copy %s' % (cm.getMsg()))
         #self.removeRedundantDataMark(dest)
         wm = self.addWatchMark(cm)
@@ -1113,12 +1113,15 @@ class WatchMarks():
         self.addWatchMark(km)
         self.lgr.debug('watchMarks kernelMod %s' % (km.getMsg()))
 
-    def compare(self, fun, dest, src, count, buf_start):
+    def compare(self, fun, dest, src, count, buf_start, two_bytes=False):
         if count > 0:
             if fun == 'strcmp':
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
             else:
-                dst_str = self.mem_utils.readString(self.cpu, dest, count)
+                if two_bytes:
+                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
+                else:
+                    dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
@@ -1126,7 +1129,10 @@ class WatchMarks():
             if fun == 'strcmp':
                 src_str = self.mem_utils.readString(self.cpu, src, 100)
             else:
-                src_str = self.mem_utils.readString(self.cpu, src, count)
+                if two_bytes:
+                    src_str = self.mem_utils.readWinString(self.cpu, src, count*2)
+                else:
+                    src_str = self.mem_utils.readString(self.cpu, src, count)
             if src_str is not None:
                 if (sys.version_info < (3,0)):
                     self.lgr.debug('watchMarks compare, do decode')
