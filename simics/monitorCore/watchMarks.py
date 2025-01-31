@@ -51,7 +51,10 @@ class CopyMark():
                 offset = src - buf_start
                 trunc_string = ''
                 if truncated is not None:
-                    trunc_string = ' (trucated from %d original start 0x%x)' % (truncated, copy_start)        
+                    if copy_start is not None:
+                        trunc_string = ' (trucated from %d original start 0x%x)' % (truncated, copy_start)        
+                    else:
+                        trunc_string = ' (trucated from %d)' % (truncated)        
                 self.msg = '%s %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%08x)' % (fun_name, length, trunc_string, src, dest, offset, buf_start)
             else:
                 self.msg = '%s %d bytes from 0x%08x to 0x%08x . (Source buffer starts before known buffers!)' % (fun_name, length, src, dest)
