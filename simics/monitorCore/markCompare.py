@@ -60,7 +60,7 @@ class MarkCompare():
         next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
         cmp_eip = next_eip + instruct[0]
         cmp_instruct = SIM_disassemble_address(self.cpu, cmp_eip, 1, 0)
-        self.lgr.debug('MarkCompare armCompareOurRegNextLoad, next_eip 0x%x next_instruct %s should be cmp eip 0x%x %s' % (next_eip, next_instruct[1], cmp_eip, cmp_instruct[1]))
+        #self.lgr.debug('MarkCompare armCompareOurRegNextLoad, next_eip 0x%x next_instruct %s should be cmp eip 0x%x %s' % (next_eip, next_instruct[1], cmp_eip, cmp_instruct[1]))
         if next_instruct[1].startswith('ldrb'):
             if cmp_instruct[1].startswith('cmp') and our_reg in cmp_instruct[1]:
                 op2, op1 = self.decode.getOperands(next_instruct[1])
@@ -161,7 +161,7 @@ class MarkCompare():
                         break
                         
                     else:
-                        self.lgr.debug('markCompare findCompare is our_reg %s in instruct %s' % (our_reg, instruct[1]))
+                        #self.lgr.debug('markCompare findCompare is our_reg %s in instruct %s' % (our_reg, instruct[1]))
                         if our_reg is not None and self.decode.isRegInInstruct(our_reg, instruct[1]):
                             relevent = True
                         eip = eip + instruct[0]
