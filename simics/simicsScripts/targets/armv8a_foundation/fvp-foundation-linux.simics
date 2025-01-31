@@ -1,0 +1,24 @@
+decl {
+    ! ARMv8-A Foundation FVP - Linux start script.
+
+    params from "%simics%/targets/armv8a-fvp/fvp-system.include"
+        default create_sata_disk = FALSE
+        result system : string
+
+    params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+        except system
+        default system_info = "ARMv8-A Foundation FVP Linux"
+        default bl1_image = "%simics%/targets/armv8a-fvp/images/foundation/bl1.bin"
+        default fip_image = "%simics%/targets/armv8a-fvp/images/foundation/fip.bin"
+        default kernel_image = "%simics%/targets/armv8a-fvp/images/foundation/Image"
+        default initrd_image = "%simics%/targets/armv8a-fvp/images/foundation/ramdisk.img"
+        default auto_config_network = FALSE
+        result service_node : string or nil
+        result eth_link : string or nil
+}
+
+run-command-file "%simics%/targets/armv8a-fvp/fvp-system.include"
+instantiate-components
+run-command-file "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+
+

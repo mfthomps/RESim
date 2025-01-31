@@ -1,0 +1,29 @@
+decl {
+    ! ARMv8-A Base RevC FVP - Linux start script.
+
+    params from "%simics%/targets/armv8a-fvp/fvp-system.include"
+        default create_sata_disk = TRUE
+        default board_type = "base-revc"
+        default num_clusters = 2
+        default num_cores = 4
+        default sec_num_cores = 4
+        default cpu_class = "arm-cortex-a72"
+        default sec_cpu_class = "arm-cortex-a72"
+        default memory_megs = 32768
+        result system : string
+
+    params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+        except system, console
+        default system_info = "ARMv8-A Base RevC FVP Linux"
+        default bl1_image = "%simics%/targets/armv8a-fvp/images/base-revc/bl1.bin"
+        default fip_image = "%simics%/targets/armv8a-fvp/images/base-revc/fip.bin"
+        default kernel_image = "%simics%/targets/armv8a-fvp/images/base-revc/Image"
+        default initrd_image = "%simics%/targets/armv8a-fvp/images/base-revc/ramdisk.img"
+        default auto_config_network = FALSE
+        result service_node : string or nil
+        result eth_link : string or nil
+}
+
+run-command-file "%simics%/targets/armv8a-fvp/fvp-system.include"
+instantiate-components
+run-command-file "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
