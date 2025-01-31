@@ -547,7 +547,7 @@ are then referenced when injecting data into the kernel as described in \ref{pre
 Use an optional {\tt run=False} to prevent RESim from continuing the simulation, e.g., so that you can run commands such as ptime.
 
 Use an optional {\tt commence=string} to delay data tracking until the received data starts with a given string.  This can be useful when a socket receives a lot of traffic and you
-wish to focus on traffic that you are sending.
+wish to focus on traffic that you are sending.  Do not use this along with kbuf.
 
 Use {\tt max\_marks} to stop the simulation after a given number of watch marks are generated.
 
@@ -747,8 +747,9 @@ IOFile data size (padding with nulls) until a minimum is found.  The final file 
 if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
 
 \item{\tt playAFL(dfile, afl\_mode=False, trace\_all=False, fname=None, target=None, targetFD=None)} -- Play data input files discovered by AFL.  The {\tt dfile} parameter 
-is a single file, or names a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
-If a directory, each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new coverage files generated in the {\tt AFL\_DATA} 
+is a single file, a relative directory, or names a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
+If a relative directory, then each file in that directory is played and coverage output files are created in local directory named coverage.
+If a directory relative to AFL\_DATA then each file in the target's {\tt queue} subdirectory(ies) will be played with code coverage tracked with new coverage files generated in the {\tt AFL\_DATA} 
 coverage subdirectory.  If a single file, the coverage will be stored in the /tmp directory.
 \textbf{Note:} While this command is running, you may see a static {\tt simics>} prompt.  That does not mean that Simics is not running -- it is an artifact of the implementation.  When running the command, you'll know it has finished when it displays where it stored the hits file.
 Tail the log if you suspect it has hung.  Provide a library name as {\tt fname}, e.g., libc.so.6, to record coverage of a library.  Note if if afl\_mode is set, no hits file is generated.
@@ -1996,6 +1997,8 @@ the use of {\tt injectIO} since each injection into application memory resets th
 TCP applications such as web servers that use large reads expecting the results to contain a single transaction, e.g., GET or POST command are typically
 not suitable for injecting data into kernel buffers.  If you inject multiple transactions into the kernel buffer, the read will return them all and the
 application would ignore everything past the first transaction.  Inject data into application buffers for such applications.
+In short, if the requested number of bytes on a RECV on a TCP connection is larger than the expected data, inject your data into user application buffers
+and not into the kernel.
 
 The application whose consumption of data is to be tracked may not be the application that initially ingests the data.  For example, one
 process may read from a network port and perform some data validation or transformation whose analysis is completed or otherwise not of interest.
