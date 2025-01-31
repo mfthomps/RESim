@@ -59,7 +59,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp',
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 'String14compare_helper',
-            'String6toUtf8', 'String3mid', 'String4left', 'Stringa', 'StringS1_eq', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
+            'String6toUtf8', 'String3mid', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -1528,7 +1528,7 @@ class DataWatch():
                 self.setBreakRange()
                 ''' catch deallocate '''
                 self.watchStackObject(addr_addr)
-        elif self.mem_something.fun == 'StringS1_eq':
+        elif self.mem_something.fun in ['StringS1_eq', 'Stringeq']:
             ''' some kind of compare '''
             buf_start, buf_length = self.findBufForRange(self.mem_something.src, self.mem_something.length)
             if buf_start is None:
@@ -2503,6 +2503,15 @@ class DataWatch():
             self.mem_something.length = self.mem_utils.readWord32(self.cpu, src_addr+word_size)
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, dest: 0x%x count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
                  self.mem_something.dest, self.mem_something.length))
+
+        elif self.mem_something.fun == 'Stringeq':
+            this = self.mem_utils.getRegValue(self.cpu, 'this')
+            self.mem_something.src = self.mem_utils.readAppPtr(self.cpu, this, size=word_size)
+            dst_addr_addr, dumb, dumb2 = self.getCallParams(sp, word_size)
+            dst_addr = self.mem_utils.readAppPtr(self.cpu, dst_addr_addr, size=word_size) 
+            self.mem_something.dest = dst_addr + 0x10
+            self.mem_something.length = self.mem_utils.readWord32(self.cpu, dst_addr+word_size)
+            self.lgr.debug('dataWatch getMemParams %s this 0x%x src 0x%x dest 0x%x length %d' % (self.mem_something.fun, this, self.mem_something.src, self.mem_something.dest, self.mem_something.length))
 
         elif self.mem_something.fun == 'replace_std':
             self.mem_something.ret_addr_addr, self.mem_something.pos, self.mem_something.length, src_addr = self.get4CallParams(sp)
