@@ -120,16 +120,16 @@ class FunMgr():
         if not retval and call_ip is not None:
             prev_ip_name = self.ida_funs[comm].getFunName(prev_ip)
             call_to_name = self.ida_funs[comm].getFunName(call_to)
-            self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s' % (prev_ip_name, call_to_name))
+            #self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s' % (prev_ip_name, call_to_name))
             if prev_ip_name == call_to_name:
                 retval = True
             elif not retval and call_ip is not None:
-               self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
+               #self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
                f1 = self.top.getSOFile(prev_ip) 
                f2 = self.top.getSOFile(call_to) 
                f_from = self.top.getSOFile(call_ip)
                if f1 == f2 and f_from != f1:
-                   self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
+                   #self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
                    retval = True
         return retval
 
