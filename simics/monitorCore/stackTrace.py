@@ -820,11 +820,11 @@ class StackTrace():
         call_to = None
         instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
         op2, op1 = self.decode.getOperands(instruct)
-        self.lgr.debug('stackTrace getCallTo call_ip 0x%x instruct %s op1 %s' % (call_ip, instruct, op1))
+        #self.lgr.debug('stackTrace getCallTo call_ip 0x%x instruct %s op1 %s' % (call_ip, instruct, op1))
         if instruct.startswith('blr') or (instruct.startswith('call') and self.decode.isReg(op1)):
-            self.lgr.debug('stackTrace getCallTo is blr call_ip 0x%x %s' % (call_ip, instruct))
+            #self.lgr.debug('stackTrace getCallTo is blr call_ip 0x%x %s' % (call_ip, instruct))
             fun_name = self.fun_mgr.getBlr(call_ip) 
-            self.lgr.debug('stackTrace getCallTo fun name from getblr is %s' % fun_name)
+            #self.lgr.debug('stackTrace getCallTo fun name from getblr is %s' % fun_name)
             if fun_name is not None:
                 call_to = self.fun_mgr.getFunEntry(fun_name)
                 if call_to is None:
@@ -1114,7 +1114,7 @@ class StackTrace():
                     if call_to is not None:
                         if called_fun_name is not None:
                             fun_name = called_fun_name
-                        self.lgr.debug('stackTrace call_to 0x%x called_fun_name %s' % (call_to, called_fun_name))
+                        #self.lgr.debug('stackTrace call_to 0x%x called_fun_name %s' % (call_to, called_fun_name))
                              
                     #else:
                     #    self.lgr.debug('stackTrace call_to None')
