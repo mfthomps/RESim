@@ -564,7 +564,7 @@ def isClib(in_lib_file):
     lib_file = os.path.basename(in_lib_file) 
     if lib_file is not None:
         lf = lib_file.lower()
-        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr.dll' in lf or 'msvcp.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
+        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr.dll' in lf or 'msvcp.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf or'qt5core' in lf:
             retval = True
         elif lf.endswith('.dll'):
             if 'msvcr' in lf or 'msvcp' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
