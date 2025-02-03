@@ -31,6 +31,7 @@ import os
 import json
 import decode
 import decodeArm
+import clibFuns
 from simics import *
 class FunMgr():
     def __init__(self, top, cpu, cell_name, mem_utils, lgr):
@@ -118,18 +119,27 @@ class FunMgr():
        
         retval = self.ida_funs[comm].inFun(prev_ip, call_to)
         if not retval and call_ip is not None:
-            prev_ip_name = self.ida_funs[comm].getFunName(prev_ip)
-            call_to_name = self.ida_funs[comm].getFunName(call_to)
-            #self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s' % (prev_ip_name, call_to_name))
+            prev_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(prev_ip), self, self.lgr)
+            call_to_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_to), self, self.lgr)
+            call_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_ip), self, self.lgr)
+            self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
             if prev_ip_name == call_to_name:
                 retval = True
-            elif not retval and call_ip is not None:
-               #self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
+            elif call_to_name == call_ip_name:
+               f1 = self.top.getSOFile(prev_ip) 
+               f2 = self.top.getSOFile(call_to) 
+               f_from = self.top.getSOFile(call_ip)
+               if f1 == f2 and f_from == f1:
+                   self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
+                   retval = True
+            else:
+               ''' hack it ok if prev_ip and call_to are in same so file and is called from outside the so '''
+               self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
                f1 = self.top.getSOFile(prev_ip) 
                f2 = self.top.getSOFile(call_to) 
                f_from = self.top.getSOFile(call_ip)
                if f1 == f2 and f_from != f1:
-                   #self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
+                   self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
                    retval = True
         return retval
 
