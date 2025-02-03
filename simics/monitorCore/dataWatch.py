@@ -4572,7 +4572,7 @@ class DataWatch():
             max_index = len(self.frames)-1
             for i in range(max_index, -1, -1):
                 frame = self.frames[i]
-                fun = clibFuns.adjustFunName(frame, self.fun_mgr, self.lgr)
+                fun = clibFuns.adjustFunName(frame.fun_name, self.fun_mgr, self.lgr)
                 self.lgr.debug('dataWatch checkFree fun is %s' % fun)
                 if fun in free_funs:
                     # avoid killing data buffer containing size to malloc some other buffer
@@ -5393,7 +5393,7 @@ class DataWatch():
                 #if self.top.isWindows():
                 #    fun = None
                 #else:
-                fun = clibFuns.adjustFunName(frame, self.fun_mgr, self.lgr)
+                fun = clibFuns.adjustFunName(frame.fun_name, self.fun_mgr, self.lgr)
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
