@@ -559,17 +559,28 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
     return retval
 
+clib_dep = {'libc': 0,  'libstdc': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr.dll': 0, 'msvcp.dll': 0, 'kernel32': 0, 'ucrtbase': 0, 'mswsock.dll': 2, 
+             'ws2_32.dll':2, 'qt5core': 5, 'qt5network':4}
+
+def getClibIndex(fname):
+    retval = None
+    fname = fname.lower()
+    for lib_file in clib_dep:
+        if fname.startswith(lib_file):
+            retval = clib_dep[lib_file]
+            break
+    return retval
+    
 def isClib(in_lib_file):
     retval = False
     lib_file = os.path.basename(in_lib_file) 
     if lib_file is not None:
         lf = lib_file.lower()
-        if 'libc' in lf or 'libstdc' in lf or 'kernelbase' in lf or 'ws2_32' in lf or 'msvcr.dll' in lf or 'msvcp.dll' in lf or 'kernel32' in lf or 'ucrtbase' in lf or'qt5core' in lf:
-            retval = True
-        elif lf.endswith('.dll'):
-            if 'msvcr' in lf or 'msvcp' in lf or 'kernel32' in lf or 'ucrtbase' in lf:
+        for libname in clib_dep:
+            if lf.startswith(libname):
                 retval = True
-        elif lf.startswith('ld-'):
+                break
+        if not retval and lf.startswith('ld-'):
             # loader as libc
             retval = True
     return retval
