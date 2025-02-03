@@ -26,19 +26,19 @@ std_prefixes = ['.__', '___', '__', '._', '_', '.', 'isoc99_', 'j_', 'stdio_comm
 opc_prefixes = ['UaBase_P_', 'OpcUa_P_String_', 'OpcUa_']
 mem_prefixes = std_prefixes + opc_prefixes
 
-def adjustFunName(frame, fun_mgr, lgr): 
+def adjustFunName(fun_name, fun_mgr, lgr): 
         fun = None
-        if frame.fun_name is not None:
-            fun = frame.fun_name.strip()
+        if fun_name is not None:
+            fun = fun_name.strip()
             #lgr.debug('clibFuns adjustFunName fun starts as %s' % fun)
-            if '@' in frame.fun_name:
-                fun = frame.fun_name.split('@')[0]
+            if '@' in fun_name:
+                fun = fun_name.split('@')[0]
                 try:
                     ''' an ida function name reflecting original address (not rebased) '''
                     fun_hex = int(fun, 16) 
                     if fun_mgr is not None:
                         fun_name = fun_mgr.getName(fun_hex)
-                        lgr.debug('clibFuns adjustFunName looked for fun for 0x%x got %s from fun_name %s' % (fun_hex, fun_name, frame.fun_name))
+                        lgr.debug('clibFuns adjustFunName looked for fun for 0x%x got %s from fun_name %s' % (fun_hex, fun_name, fun_name))
                         if fun_name is not None:
                             fun = fun_name
                     else:
