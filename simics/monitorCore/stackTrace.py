@@ -429,6 +429,11 @@ class StackTrace():
             if fun1 == 'strchr' and fun2 == 'strstr':
                 # well, true for Windows mvscrt.dll anyway
                 retval = True
+        if not retval:
+            fun1_entry = self.fun_mgr.getFunEntry(fun1)
+            fun2_entry = self.fun_mgr.getFunEntry(fun2)
+            if fun1_entry == fun2_entry:
+                retval = True
         return retval
 
     def doX86(self):
