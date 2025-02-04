@@ -59,7 +59,7 @@ mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp',
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 'String14compare_helper',
-            'String6toUtf8', 'String3mid', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
+            'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
 #no_stop_funs = ['xml_element_free', 'xml_element_name']
@@ -281,6 +281,8 @@ class DataWatch():
 
         ''' optimization to avoid rechecking for ad-hoc copies on same addresses '''
         self.not_ad_hoc_copy = []
+        ''' and to avoid stack trace '''
+        self.is_ad_hoc_move = []
 
         ''' most recent frames from check for memsomething '''
         self.frames = []
@@ -1493,7 +1495,7 @@ class DataWatch():
                 self.setBreakRange()
                 #self.watchStackObject(obj_ptr)
 
-        elif self.mem_something.fun in ['String4left', 'String3mid', 'Stringa']:
+        elif self.mem_something.fun in ['String4left', 'String3mid', 'Stringa', 'String3arg']:
             ''' QTCore '''
             # eax + 0x10 is where return string starts
             returned = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -2500,13 +2502,14 @@ class DataWatch():
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d' % (eip, self.mem_something.fun, self.mem_something.src, 
                  self.mem_something.length))
 
-        elif self.mem_something.fun in ['String4left', 'String3mid', 'Stringa']:
+        elif self.mem_something.fun in ['String4left', 'String3mid', 'Stringa', 'String3arg']:
             src_addr_addr, count, dumb2 = self.getCallParams(sp, word_size)
             src_addr = self.mem_utils.readAppPtr(self.cpu,  src_addr_addr)
             count = self.mem_utils.readWord32(self.cpu, src_addr+word_size)
             start, length = self.findBufForRange(src_addr, count)
             if start is None:
                 self.lgr.debug('dataWatch getMemParams %s failed to find buf for addr 0x%x count %d' % (self.mem_something.fun, src_addr, count))
+                skip_it = True
             else:
                 self.mem_something.src = start
                 self.mem_something.length = length
@@ -3915,6 +3918,10 @@ class DataWatch():
                         hap = self.finish_check_move_hap
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.finish_check_move_hap = None
+        else:
+            ''' was ad hoc, do not bother to stack trace on next hit '''
+            if eip not in self.is_ad_hoc_move:
+                self.is_ad_hoc_move.append(eip)
 
     def checkReWatch(self, tid, eip, instruct, addr, start, length, trans_size):
         retval = False
@@ -4450,6 +4457,9 @@ class DataWatch():
                 self.trackPush(sp, instruct, addr, start, length, eip)
             elif fun in self.not_mem_something:
                 self.lgr.debug('DataWatch userSpaceRef fun 0x%x in not_mem_something call finishReadHap memory.size %d' % (fun, trans_size))
+                self.finishReadHap(op_type, trans_size, eip, addr, length, start, tid, index=index)
+            elif eip in self.is_ad_hoc_move:
+                self.lgr.debug('DataWatch userSpaceRef eip 0x%x in is_ad_hoc_move call finishReadHap memory.size %d' % (eip, trans_size))
                 self.finishReadHap(op_type, trans_size, eip, addr, length, start, tid, index=index)
             else:
                 ''' Get the stack frame so we can look for memsomething or frees '''
