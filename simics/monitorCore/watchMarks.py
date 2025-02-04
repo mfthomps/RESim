@@ -104,7 +104,7 @@ class DataMark():
         ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
-            size = self.end_addr - self.addr
+            size = self.end_addr - self.addr + 1
             self.lgr.debug('watchMarks DataMark ad_hoc end_addr is now 0x%08x size of move now %d' % (self.end_addr, size))
         else:
             self.end_addr = None
@@ -167,7 +167,9 @@ class DataMark():
             mark_msg = 'Iterate %d times over 0x%08x-0x%08x (%d bytes) starting offset %4d into 0x%8x (buf size %4d) %s' % (self.loop_count, self.addr, 
                  self.end_addr, copy_length, self.offset, self.start, self.length, self.mark_compare.toString())
         return mark_msg
-
+    def getSize(self):
+        size = self.end_addr - self.addr + 1
+        return size
     def addrRange(self, addr, ip=None):
         if self.end_addr is not None or addr > self.addr:
             self.end_addr = addr
@@ -197,6 +199,11 @@ class DataMark():
         else:
             self.loop_compares += 1
         return self.loop_compares
+
+    def extendByteCompare(self, addr, instruct, trans_size):
+        # TBD do something with addr and trans size?
+        self.loopCompare(instruct)
+        
 
 class KernelMark():
     def __init__(self, addr, count, callnum, call, fd, fname, buffer_start):
@@ -843,12 +850,19 @@ class WatchMarks():
                     self.lgr.debug('watchMarks previous ad_hoc had end addr one greather than addr')
                     skip_this = False
                     if dest is not None:
-                        self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
-                        cur_len = pm.mark.end_addr - pm.mark.addr
+                        cur_len = pm.mark.getSize()
                         ok_dest = pm.mark.dest + cur_len + 1
-                        self.lgr.debug('watchMarks dataRead cur_len 0x%x  ok_dest would be 0x%x' % (cur_len, ok_dest))
+                        self.lgr.debug('watchMarks dataRead addr: 0x%x dest: 0x%x previous_dest: 0x%x  prev_addr: 0x%x cur_len (pm.getSize()) 0x%x  ok_dest would be 0x%x trans_size %d' % (addr, 
+                                      dest, pm.mark.dest, pm.mark.addr, cur_len, ok_dest, trans_size))
                         if dest != ok_dest:
+                            ''' does it look like a copy of 2-byte chars to string of 1byte chars '''
                             skip_this = True
+                            ok_off = (dest - pm.mark.dest) + 1
+                            if trans_size == 2 and dest == (ok_dest-ok_off): 
+                                second_byte = self.mem_utils.readByte(self.cpu, addr+1)
+                                #self.lgr.debug('watchMarks dataRead byte at addr+1 is 0x%x' % second_byte)
+                                if second_byte == 0:
+                                    skip_this = False
                     else:
                         self.lgr.debug('watchMarks dest is None')
                     if not skip_this:
@@ -895,9 +909,10 @@ class WatchMarks():
             #self.lgr.debug('watchMarks dataRead with note ip: 0x%x %s' % (ip, dm.getMsg()))
         else:
             # looking for multiple iterations over data range at same instruction
-            #self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
+            self.lgr.debug('watchMarks dataRead last else prev_ip %s' % str(self.prev_ip))
             if len(self.prev_ip) > 0:
                 pm = self.recent_ad_hoc
+                mark_compare = self.getCmp(addr, trans_size)
                 #self.lgr.debug('pm class is %s' % pm.mark.__class__.__name__)
                 if pm is not None and pm.ip == ip and not (pm.mark.mark_compare is not None and pm.mark.mark_compare.noIterate()):
                     pm.mark.addrRange(addr, ip=ip)
@@ -907,10 +922,13 @@ class WatchMarks():
                         self.lgr.debug('watchMarks was add-hoc, but this is not, so reset it')
                         pm.mark.noAdHoc()
                     self.lgr.debug('watchMarks dataRead eip 0x%x range 0x%x cycles: 0x%x mark_list len %d' % (ip, addr, self.cpu.cycles, len(self.mark_list)))
+                elif ip == mark_compare.compare_eip and ip == self.prev_ip[-1] and trans_size <= 2:
+                    self.lgr.debug('watchMarks same compare as last one at 0x%x cmp_instruct %s' % (ip, mark_compare.compare_instruction)) 
+                    prev_mark = self.getRecentMark()
+                    prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
-                    mark_compare = self.getCmp(addr, trans_size)
                     dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
                     wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
                     self.lgr.debug('watchMarks dataRead followed something other than DataMark 0x%x %s  mark_list len %d' % (ip, dm.getMsg(), len(self.mark_list)))
