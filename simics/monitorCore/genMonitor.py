@@ -136,6 +136,7 @@ import vxKModules
 import findRefs
 import findText
 import recordEntry
+import reverseMgr
 
 #import fsMgr
 import json
@@ -355,6 +356,8 @@ class GenMonitor():
         self.max_marks = None
         self.no_reset = False
         self.record_entry = {}
+        self.reverse_mgr = {}
+
         ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
         self.genInit(comp_dict)
@@ -935,6 +938,7 @@ class GenMonitor():
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self, cpu, self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
@@ -6789,6 +6793,17 @@ class GenMonitor():
             self.record_entry[self.target].watchSysenter()
         else:
             print('Reverse execution is not enabled.')
+
+    def enableReverse(self):
+        self.reverse_mgr[self.target].enableReverse()
+
+    def skipTo(self, cycle):
+        self.reverse_mgr[self.target].skipToCycle(cycle)
+
+    def reverse(self):
+        self.reverse_mgr[self.target].reverse()
+    def revOne(self):
+        self.reverse_mgr[self.target].revOne()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
