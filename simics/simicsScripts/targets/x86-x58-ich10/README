@@ -1,2 +1,4 @@
+Files for RESim x86 platform.
+Not used for Free simics, see x58-ich10 for that
 NOTE genx86.simics in the ini file will be replaced by
 genx86_6.simics by launchRESim for Simics 6.
