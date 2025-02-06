@@ -53,7 +53,7 @@ class LinkObject():
 def doEthLink(target, eth):
     name = '$%s_%s' % (target, eth)
     cmd = '%s = $%s' % (name, eth)
-    #print('doEthLinc cmd %s' % cmd)
+    print('doEthLinc cmd %s' % cmd)
     run_command(cmd)
     link_object = LinkObject(name)
     if link_object.obj == 'None':
@@ -109,7 +109,7 @@ def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
     return link_names
 
 def doConnect(switch, eth, switch_map, index):
-    #print('do connect switch %s eth %s' % (switch, eth))
+    print('do connect switch %s eth %s' % (switch, eth))
     #cmd = '$%s' % eth
     #dog = run_command(cmd)
     #print('dog is %s' % dog)
@@ -126,18 +126,18 @@ def doConnect(switch, eth, switch_map, index):
             cmd = '%s.get-free-connector %d' % (switch, group)
     else:
         cmd = '%s.get-free-connector' % switch
-    #print('doConect cmd is %s' % cmd)
+    print('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
     eth_name = run_command('$%s' % eth)
-    #print('eth name %s' % eth_name)
+    print('eth name %s' % eth_name)
     if 'i82546bg' in eth_name:
         eth_name = eth_name+'[0]'
-    #cmd = 'connect $%s cnt1 = %s' % (eth, con)
+    cmd = 'connect $%s cnt1 = %s' % (eth, con)
     cmd = 'connect %s cnt1 = %s' % (eth_name, con)
-    #print('doConnect cmd: %s' % cmd)
+    print('doConnect cmd: %s' % cmd)
     run_command(cmd)
     switch_n = 'switch%d' % index
-    #print('adding %s to map as %s' % (switch_n, con))
+    print('adding %s to map as %s' % (switch_n, con))
     switch_map[switch_n] = con
 
 def linkSwitches(target, comp_dict, link_names):
@@ -297,7 +297,10 @@ class LaunchRESim():
             run_command('read-configuration %s' % ADD_FROM_SNAP)
 
         if RUN_FROM_SNAP is None and INIT_FROM_SNAP is None:
+            print('will create switches')
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
+            # seems needed by simics7 ?
+            run_command('instantiate-components')
             checkVLAN(self.config)
             if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
                 print('Will create RESim parameters')
@@ -305,6 +308,8 @@ class LaunchRESim():
             run_command('set-min-latency min-latency = 0.01')
             interact = None
             if self.config.has_section('driver'):
+                cmd = '$machine_name="driver"' 
+                run_command (cmd)
                 run_command('$eth_dev=i82543gc')
                 for name in self.comp_dict['driver']:
                     value = self.comp_dict['driver'][name]
@@ -415,13 +420,13 @@ class LaunchRESim():
                 run_command('$eth_dev=i82543gc')
                 run_command('$mac_address_3=None')
             
-            cmd = '$machine_name=%s' % section
+            cmd = '$machine_name="%s"' % section
             run_command (cmd)
-
             params=''
             script = self.getSimicsScript(section)
             did_net_create = False
             #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
+            #sim7_params = ['disk0_image'] 
             if platform in ['arm', 'arm5']:
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
@@ -436,12 +441,19 @@ class LaunchRESim():
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
+                        #if self.SIMICS_VER.startswith('7'):
+                        #    if name[1:] in sim7_params:
+                        #        cmd = '%s=%s' % (name, value)
+                        #        run_command(cmd)
                         if platform is None or not platform.startswith('arm'):
                             if 'create_network' in name:
                                 did_net_create = True
                                 cmd = 'create_network=TRUE eth_link=%s' % value
                             else:     
-                                cmd = '%s=%s' % (name[1:], value)
+                                if False and self.SIMICS_VER.startswith('7') and name[1:] == 'disk_image':
+                                    cmd = 'disk0_image=%s' % (value)
+                                else: 
+                                    cmd = '%s=%s' % (name[1:], value)
                             params = params + " "+cmd
                             if self.SIMICS_VER.startswith('4'):
                                run_command('$'+cmd)
