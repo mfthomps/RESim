@@ -334,6 +334,7 @@ class bookmarkMgr():
                             self.lgr.error('goToDebugBookmark, 2nd simicsError skipped to cycle %x eip: %x, BUT WE wanted %x eip: 0x%x' % (current, eip, cycle, self.__bookmarks[mark].eip))
             else:
                 self.lgr.error('goToDebugBookmark failed skipToTest')
+                eip = self.top.getEIP(cpu)
 
         self.context_mgr.setExitBreaks()
         self.context_mgr.resetBackStop()
@@ -344,16 +345,6 @@ class bookmarkMgr():
     def goToOrigin(self):
         self.goToDebugBookmark(self.__origin_bookmark)
         return self.__mark_msg[self.__origin_bookmark]
-
-    def skipToOrigin(self):
-        dum, cpu = self.context_mgr.getDebugTid() 
-        origin = self.__bookmarks[self.__origin_bookmark].cycles
-        SIM_run_command('pselect %s' % cpu.name)
-        SIM_run_command('skip-to cycle=%d' % origin)
-        current = SIM_cycle_count(cpu)
-        eip = self.top.getEIP(cpu)
-        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-        self.lgr.debug('skipToOrigin skip %x landed at %x, eip: %x %s' % (origin, current, eip, instruct[1]))
 
     def getFirstCycle(self):
         if 'origin' in self.__bookmarks:

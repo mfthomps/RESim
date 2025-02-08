@@ -116,7 +116,7 @@ class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
     def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, 
-                 back_stop, compat32, comp_dict, so_map, lgr):
+                 back_stop, compat32, comp_dict, so_map, reverse_mgr, lgr):
         ''' data watch structures reflecting what we are watching '''
         self.rev_to_call = rev_to_call
         self.top = top
@@ -132,6 +132,7 @@ class DataWatch():
         self.back_stop = back_stop
         self.comp_dict = comp_dict
         self.so_map = so_map
+        self.reverse_mgr = reverse_mgr
         self.run_from_snap = run_from_snap
         self.buffer_offset = None
         self.buffer_length = None
@@ -2885,20 +2886,22 @@ class DataWatch():
         #cell = self.top.getCell()
         #self.call_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.called_from_ip, 1, 0)
 
-        self.call_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
+        self.call_break = self.reverse_mgr.SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
 
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
         #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call_hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
         #   self.mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
         prev_mark_cycle = self.watchMarks.latestCycle()
         delta = None
+        reverse_to = False
         if prev_mark_cycle is not None and self.mem_something.ret_addr_addr is not None and not self.top.isVxDKM(cpu=self.cpu):
             delta = self.cpu.cycles - prev_mark_cycle
-            rev_cmd = 'reverse-to cycle = %d' % prev_mark_cycle 
+            reverse_to = True
+            #rev_cmd = 'reverse-to cycle = %d' % prev_mark_cycle 
             self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d). Delta cycles is %d ret_addr_addr 0x%x, now reverse' % (self.call_break, 
                self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle, delta, self.mem_something.ret_addr_addr))
         else:
-            rev_cmd = 'reverse' 
+            #rev_cmd = 'reverse' 
             self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d). No previous cycle, so just now reverse' % (self.call_break, 
                 self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle))
         #self.lgr.debug('cell is %s  cpu context %s' % (cell, self.cpu.current_context))
@@ -2913,7 +2916,10 @@ class DataWatch():
         #    print('would run this: %s' % rev_cmd)
         #else:
         #    SIM_run_command(rev_cmd)
-        SIM_run_command(rev_cmd)
+        if reverse_to:
+            self.reverse_mgr.reverseTo(cycle)
+        else:
+            self.reverse_mgr.reverse()
 
 
     def ghostStopHap(self, dumb, one, exception, error_string):
@@ -4987,7 +4993,7 @@ class DataWatch():
             mark_ip = self.watchMarks.getIP(index)
             if eip != mark_ip:
                 self.lgr.warning('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x mark cycle: 0x%x' % (index, eip, mark_ip, cycle))
-                cli.quiet_run_command('rev 1')
+                self.reverse_mgr.revOne()
                 eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
                     self.top.skipToCycle(cycle, cpu=self.cpu)
@@ -5708,7 +5714,7 @@ class DataWatch():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
             #self.rmCallHap()
             if self.call_break is not None:
-                RES_delete_breakpoint(self.call_break)
+                self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
             self.call_stop_hap = None
         else:
             return
@@ -5917,7 +5923,7 @@ class DataWatch():
              
             else:
                 #SIM_break_simulation('max marks exceeded')
-                self.lgr.debug('dataWatch max marks exceeded, use stopAndGot to call  callback %s' % str(use_callback))
+                self.lgr.debug('dataWatch max marks exceeded, use stopAndGo to call  callback %s' % str(use_callback))
                 self.clearWatches(leave_backstop=True)
                 self.top.stopAndGo(use_callback)
                 #self.callback()

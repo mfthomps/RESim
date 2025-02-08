@@ -81,12 +81,13 @@ class RegisterToTrack():
 
 class reverseToCall():
     def __init__(self, top, cell_name, param, task_utils, mem_utils, page_size, context_manager, name, 
-                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap, record_entry):
+                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap, record_entry, reverse_mgr):
             #print('call getLogger')
             logname = '%s-%s' % (name, cell_name)
             self.lgr = resimUtils.getLogger(logname, logdir)
             self.context_manager = context_manager 
             self.record_entry = record_entry 
+            self.reverse_mgr = reverse_mgr 
             #sys.stderr = open('err.txt', 'w')
             self.top = top 
             self.cpu = None
@@ -290,7 +291,8 @@ class reverseToCall():
         #for item in self.x_pages:
         #    self.setBreakRange(self.cell_name, tid, item.address, item.length, self.cpu, comm, True)
         self.lgr.debug('doUncall, set break range')
-        SIM_run_alone(SIM_run_command, 'reverse')
+        
+        self.reverse_mgr.reverse()
         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
         self.lgr.debug('doUncall, did reverse')
 
@@ -307,11 +309,11 @@ class reverseToCall():
         call_addr = self.findCallBehind(my_args.eip)
         if call_addr is not None:
             cell = self.top.getCell()
-            self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
+            self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
             self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
     	        self.tryBackToCallStopped, my_args)
             self.lgr.debug('tryBackToCall from cycle 0x%x' % my_args.cpu.cycles)
-            SIM_run_command('rev')
+            self.reverse_mgr.reverse()
         else:
             self.lgr.error('tryBackToCall failed to find call behind 0x%x' % my_args.eip)
 
@@ -322,7 +324,7 @@ class reverseToCall():
         if tid != my_args.tid:
             self.lgr.debug('tryBackToCallStopped tid:%s but expected %s' % (tid, my_args.tid))
             return 
-        RES_delete_breakpoint(self.uncall_break)
+        self.reverse_mgr.SIM_delete_breakpoint(self.uncall_break)
         self.uncall_break = None
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap) 
@@ -641,12 +643,12 @@ class reverseToCall():
                 self.lgr.debug('jumpOverKernel simply returned to previous know user space.')
             else:
                 cell = self.top.getCell()
-                self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
+                self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
                 self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.kernInterruptHap, None)
                 self.lgr.debug('jumpOverKernel, NOT syscall or page fault, try runnning backwards to eip-4, ug.  break %d set at 0x%x now do rev' % (self.uncall_break, rev_to-4))
                 self.top.removeDebugBreaks()
                 self.context_manager.showHaps()
-                SIM_run_alone(SIM_run_command, 'rev')
+                self.reverse_mgr.reverse()
                 retval = None
         return retval
 
@@ -1027,13 +1029,13 @@ class reverseToCall():
                                     self.lgr.debug('cycleRegisterMod try uncalling pc_addr 0x%x  pc 0x%x' % (pc_addr, pc))
                                     cell = self.top.getCell()
                                     pre_call = pc - 4
-                                    self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, pre_call, 1, 0)
+                                    self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, pre_call, 1, 0)
                                     self.uncall_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.uncallHap, None)
                                     retval = RegisterModType(None, RegisterModType.BAIL)
                                     self.lgr.debug('cycleRegisterMod set break number %d stop hap, now rev to 0x%x' % (self.uncall_break, pre_call))
                                     self.save_cycle = self.cpu.cycles
                                     self.save_reg_mod = RegisterModType(addr, RegisterModType.ADDR)
-                                    SIM_run_alone(SIM_run_command,'rev')
+                                    self.reverse_mgr.reverse()
                                 else:
                                     self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr 0x%x' % (eip, addr))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)

@@ -27,7 +27,7 @@ from simics import *
 from resimHaps import *
 import resimUtils
 class reverseToAddr():
-    def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, lgr, extra_back=0):
+    def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, reverse_mgr, lgr, extra_back=0):
         self.top = top
         self.lgr = lgr
         self.context_manager = context_manager
@@ -38,6 +38,7 @@ class reverseToAddr():
         cpu, comm, tid  = task_utils.curThread()
         self.cpu = cpu
         self.tid = tid
+        self.reverse_mgr = reverse_mgr
         #resim = self.top.getRESimContext()
         #default = self.top.getDefaultContext()
         #self.the_break = SIM_breakpoint(default, Sim_Break_Linear, Sim_Access_Execute, 
@@ -47,7 +48,7 @@ class reverseToAddr():
         phys_block = cpu.iface.processor_info.logical_to_physical(address, mode)
         if phys_block.address != 0:
             pcell = cpu.physical_memory
-            self.the_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, 
+            self.the_break = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, 
                     phys_block.address, 1, 0)
         else:
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
@@ -57,7 +58,8 @@ class reverseToAddr():
         self.one_stop_hap = None
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	     self.stopHap, cpu)
-        SIM_run_command('reverse')
+        self.lgr.debug('reverseToAddr now call reverse')
+        self.reverse_mgr.reverse()
 
     def goBackAlone(self, dumb):
         backone = self.cpu.cycles - 1 
@@ -67,7 +69,7 @@ class reverseToAddr():
             first = self.top.getFirstCycle()
             self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
         else:
-            SIM_run_command('rev')
+            self.reverse_mgr.reverse()
 
     def rmStopHap(self, hap):
         RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
@@ -86,7 +88,7 @@ class reverseToAddr():
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap)
         self.stop_hap = None 
-        RES_delete_breakpoint(self.the_break)
+        self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         self.the_break = None
         origin = self.top.getFirstCycle()
         if cpu.cycles == origin:
@@ -100,8 +102,7 @@ class reverseToAddr():
             self.lgr.debug('stopHap asked to go back extra %d' % self.extra_back)
             self.one_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	        self.backOneStopped, cpu)
-            cmd = 'rev 1'
-            SIM_run_alone(SIM_run_command, cmd)
+            self.reverse_mgr.revOne()
         else:
             # ignore cycles, unless new ida refresh strategy fails
             self.is_monitor_running.setRunning(False)

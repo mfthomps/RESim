@@ -137,6 +137,7 @@ import findRefs
 import findText
 import recordEntry
 import reverseMgr
+import skipToMgr
 
 #import fsMgr
 import json
@@ -357,6 +358,8 @@ class GenMonitor():
         self.no_reset = False
         self.record_entry = {}
         self.reverse_mgr = {}
+        self.skip_to_mgr = {}
+        self.SIMICS_VER = os.getenv('SIMICS_VER')
 
         ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -882,8 +885,9 @@ class GenMonitor():
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
                                            self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
 
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self, cpu, self.lgr)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
-                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name])
+                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
@@ -902,7 +906,7 @@ class GenMonitor():
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
-                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.soMap[cell_name], self.lgr)
+                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.soMap[cell_name], self.reverse_mgr[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -938,7 +942,7 @@ class GenMonitor():
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
             self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
-            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self, cpu, self.lgr)
+            self.skip_to_mgr[cell_name] = skipToMgr.SkipToMgr(self.reverse_mgr[cell_name], cpu, self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
@@ -1217,7 +1221,7 @@ class GenMonitor():
         self.lgr.debug('revToSyscal got cycles 0x%x' % cycles)
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         prev = cycles-1
-        resimSimicsUtils.skipToTest(cpu, prev, self.lgr)
+        self.skip_to_mgr[self.target].skipToTest(prev)
         print('Reversed to previous syscall:') 
         self.lgr.debug('Reversed to previous syscall:') 
         call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
@@ -1393,7 +1397,6 @@ class GenMonitor():
             self.lgr.debug('setDebugBookmark')
             if not self.rev_execution_enabled:
                 self.lgr.warning('setDebugBookmark called, but reverse not enabled, will ignore')
-                #SIM_run_command('enable-reverse-execution')
             else:
                 tid, cpu = self.context_manager[self.target].getDebugTid() 
                 self.bookmarks.setDebugBookmark(mark, cpu=cpu, cycles=cycles, eip=eip, steps=steps, msg=self.context_manager[self.target].getIdaMessage())
@@ -1494,8 +1497,7 @@ class GenMonitor():
             if not self.rev_execution_enabled:
                 self.lgr.debug('debug enable reverse execution')
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
-                cmd = 'enable-reverse-execution'
-                SIM_run_command(cmd)
+                self.reverse_mgr[self.target].enableReverse()
                 self.rev_execution_enabled = True
                 #self.setDebugBookmark('origin', cpu)
                 self.bookmarks.setOrigin(cpu)
@@ -1996,8 +1998,7 @@ class GenMonitor():
             debug_group = True
 
         ''' enable reversing now so we can rev to events prior to scheduling, e.g., arrival of data at kernel '''
-        cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
+        self.reverse_mgr[self.target].enableReverse()
         self.rev_execution_enabled = True
         if self.full_path is None:
             self.lgr.debug('debugTidList full_path is None, set it')
@@ -2347,7 +2348,7 @@ class GenMonitor():
             self.removeDebugBreaks(immediate=True)
             self.stopTrackIO(immediate=True)
             reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
-                           self.lgr, extra_back=extra_back)
+                           self.reverse_mgr[self.target], self.lgr, extra_back=extra_back)
             self.lgr.debug('back from reverseToAddr')
         else:
             print('reverse execution disabled')
@@ -2570,7 +2571,8 @@ class GenMonitor():
             if True:
                 if self.find_kernel_write is None:
                     self.find_kernel_write = findKernelWrite.findKernelWrite(self, cpu, cell, addr, self.task_utils[self.target], self.mem_utils[self.target],
-                        self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.lgr, rev_to_call=rev_to_call, 
+                        self.context_manager[self.target], self.param[self.target], self.bookmarks, self.dataWatch[self.target], self.reverse_mgr[self.target], 
+                        self.lgr, rev_to_call=rev_to_call, 
                         num_bytes=num_bytes, satisfy_value=satisfy_value, kernel=kernel, prev_buffer=prev_buffer, track=track)
                 else:
                     self.lgr.debug('stopAtKernelWrite Address found existing find_kernel_write, use it for addr 0x%x num_bytes %d' % (addr, num_bytes))
@@ -2985,8 +2987,7 @@ class GenMonitor():
         ''' stop all debugging.  called by injectIO and debugProc (with new=True) and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
         if not rev and self.rev_execution_enabled:
-            cmd = 'disable-reverse-execution'
-            SIM_run_command(cmd)
+            self.reverse_mgr[self.target].disableReverse()
             self.rev_execution_enabled = False
         self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         self.sharedSyscall[self.target].setDebugging(False)
@@ -3000,8 +3001,7 @@ class GenMonitor():
 
     def restartDebug(self):
         self.lgr.debug('restartDebug')
-        cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
+        self.reverse_mgr[self.target].enableReverse()
         self.rev_execution_enabled = True
         self.restoreDebugBreaks(was_watching=True)
         self.sharedSyscall[self.target].setDebugging(True)
@@ -3144,8 +3144,7 @@ class GenMonitor():
         return retval
        
     def noReverse(self, watch_enter=True):
-        cmd = 'disable-reverse-execution'
-        SIM_run_command(cmd)
+        self.reverse_mgr[self.target].disableReverse()
         if not watch_enter:
             self.noWatchSysEnter()
         self.rev_execution_enabled = False
@@ -3155,8 +3154,7 @@ class GenMonitor():
         if self.rev_execution_enabled:
             print('Reverse execution already enabled')
             return
-        cmd = 'enable-reverse-execution'
-        cli.quiet_run_command(cmd)
+        self.reverse_mgr[self.target].enableReverse()
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         prec = Prec(cpu, None, tid)
         if tid is not None:
@@ -4040,11 +4038,9 @@ class GenMonitor():
         self.lgr.debug('resetOrigin')
         if cpu is None:
             tid, cpu = self.context_manager[self.target].getDebugTid() 
-        cmd = 'disable-reverse-execution'
-        SIM_run_command(cmd)
+        self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
-        cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
+        self.reverse_mgr[self.target].enableReverse()
         self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
         if self.bookmarks is not None:
@@ -4529,9 +4525,14 @@ class GenMonitor():
         # TBD Simics VT_revexec_active is broken.  Often gives the wrong answer
         #return True
         if self.disable_reverse: 
+            self.lgr.debug('reverseEnabled disable_reverse is True')
             return False
         else:
-            return VT_revexec_active()
+            self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
+            if self.SIMICS_VER.startswith('7'):
+                return self.reverse_mgr[self.target].reverseEnabled()
+            else:
+                return VT_revexec_active()
         ''' 
         cmd = 'sim.status'
         #cmd = 'sim.info.status'
@@ -4620,7 +4621,7 @@ class GenMonitor():
 
     def resetTrackIOBackstop(self):
         self.dataWatch[self.target].rmBackStop()
-        print('Track IO has stopped at a backstop.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
+        print('Track IO has stopped at a backstop or max marks.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None, commence_offset=0):
@@ -6206,7 +6207,9 @@ class GenMonitor():
         self.snap_warn_hap = None
 
     def warnSnapshot(self):
-        self.snap_warn_hap = RES_hap_add_callback("Core_Continuation", self.warnSnapshotHap, None)
+        #self.snap_warn_hap = RES_hap_add_callback("Core_Continuation", self.warnSnapshotHap, None)
+        # TBD RESTORE THIS
+        pass
 
     def overrideBackstopCallback(self, callback):
         self.lgr.debug('overrideBackstopCallback with %s' % str(callback))
@@ -6458,7 +6461,7 @@ class GenMonitor():
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
         self.context_manager[self.target].setReverseContext()
-        retval = resimSimicsUtils.skipToTest(cpu, cycle, self.lgr)
+        retval = self.skip_to_mgr[self.target].skipToTest(cycle)
         self.context_manager[self.target].clearReverseContext()
         return retval
 

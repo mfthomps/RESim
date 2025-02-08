@@ -33,6 +33,7 @@ import decodeArm
 import procInfo
 import resimUtils
 import time
+import os
 '''
     Catch the kernel writing to a memory breakpoint and bring the eip to the return from the syscall.
     If the memory is written by user space, stop there.  If track is set, then continue back tracing
@@ -40,7 +41,7 @@ import time
 '''
 class findKernelWrite():
     def __init__(self, top, cpu, cell, addr, task_utils, mem_utils, context_manager, param, 
-                 bookmarks, dataWatch, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False, track=False):
+                 bookmarks, dataWatch, reverse_mgr, lgr, rev_to_call=None, num_bytes = 1, satisfy_value=None, kernel=False, prev_buffer=False, track=False):
         self.stop_write_hap = None
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -49,6 +50,7 @@ class findKernelWrite():
         self.param = param
         self.context_manager = context_manager
         self.dataWatch = dataWatch
+        self.reverse_mgr = reverse_mgr
         self.cpu = cpu
         self.found_kernel_write = False
         self.rev_to_call = rev_to_call
@@ -78,6 +80,7 @@ class findKernelWrite():
         self.prev_value = None
         self.prev_delta = None
         self.iter_count = None
+        self.SIMICS_VER = os.getenv('SIMICS_VER')
 
         ''' kernel buffer addresses used for x86 kernel buffer injection '''
         self.k_buffer_addrs = []
@@ -131,20 +134,22 @@ class findKernelWrite():
         dumb, comm, tid = self.task_utils.curThread() 
         self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys, self.num_bytes))
         pcell = self.cpu.physical_memory
-        self.kernel_write_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
+        self.kernel_write_break = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys, self.num_bytes, 0)
 
-        self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
-        self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
-        #SIM_run_command('list-breakpoints')
-
-        self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
+        if self.SIMICS_VER.startswith('7'):
+            self.reverse_mgr.setCallback(self.revWriteCallback)
+        else:
+            self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
+            self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
+            self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
 
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
         self.future_count = 0
         self.best_cycle = 0
         # TBD does this nonsense mask a simics bug in which the reverse never returns?
+        '''
         now = self.cpu.cycles
         prev = now - 1
         if not self.top.skipToCycle(prev, cpu=self.cpu):
@@ -152,7 +157,8 @@ class findKernelWrite():
         if not self.top.skipToCycle(now, cpu=self.cpu):
             self.top.quit()
         #SIM_run_alone(SIM_run_command, 'reverse')
-        SIM_run_command('reverse')
+        '''
+        self.reverse_mgr.reverse()
 
     def checkInitialBufferAlone(self, addr):
         self.lgr.debug('findKernelWrite checkInitialBufferAlone 0%x' % addr)
@@ -297,6 +303,9 @@ class findKernelWrite():
                 
 
     def addStopHapForWriteAlone(self, offset):
+        '''
+        Called by VT_handler
+        '''
         self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
 		    self.stopToCheckWriteCallback, offset)
         #SIM_run_command('reverse')
@@ -876,4 +885,8 @@ class findKernelWrite():
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.forward_hap)
             self.forward_hap = None
                 
+    def revWriteCallback(self, memory):
+        self.lgr.debug('findKernelWrite revWriteCallback memory 0x%x, call vt_handler' % memory.logical_address)
 
+        SIM_run_alone(self.cleanup, False)
+        self.vt_handler(memory)
