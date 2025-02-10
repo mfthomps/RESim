@@ -359,7 +359,7 @@ class GenMonitor():
         self.record_entry = {}
         self.reverse_mgr = {}
         self.skip_to_mgr = {}
-        self.SIMICS_VER = os.getenv('SIMICS_VER')
+        self.SIMICS_VER = resimSimicsUtils.version()
 
         ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -885,7 +885,7 @@ class GenMonitor():
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
                                            self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
 
-            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self, cpu, self.lgr)
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(cpu, self.lgr, top=self)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
                  self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
@@ -6807,6 +6807,10 @@ class GenMonitor():
         self.reverse_mgr[self.target].reverse()
     def revOne(self):
         self.reverse_mgr[self.target].revOne()
+    def timer(self, cycles):
+        time = resimSimicsUtils.timer(cycles)
+        storage = self.reverse_mgr[self.target].snapSize()
+        print('Timer 0x%x cycles in %f.3 seconds; %s storage' % (cycles, time, f"{storage:,}"))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

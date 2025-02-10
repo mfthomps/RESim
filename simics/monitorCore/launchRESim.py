@@ -11,6 +11,7 @@ if CORE not in sys.path:
 import genMonitor
 import getKernelParams
 import resimUtils
+import resimSimicsUtils
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -282,7 +283,7 @@ class LaunchRESim():
         RUN_FROM_SNAP = os.getenv('RUN_FROM_SNAP')
         ADD_FROM_SNAP = os.getenv('ADD_FROM_SNAP')
         INIT_FROM_SNAP = os.getenv('INIT_FROM_SNAP')
-        self.SIMICS_VER = os.getenv('SIMICS_VER')
+        self.SIMICS_VER = resimSimicsUtils.version()
         if self.SIMICS_VER is not None:
             cmd = "$simics_version=%s" % (self.SIMICS_VER)
             #print('cmd is %s' % cmd)

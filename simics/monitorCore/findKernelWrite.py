@@ -32,6 +32,7 @@ import decode
 import decodeArm
 import procInfo
 import resimUtils
+import resimSimicsUtils
 import time
 import os
 '''
@@ -80,7 +81,7 @@ class findKernelWrite():
         self.prev_value = None
         self.prev_delta = None
         self.iter_count = None
-        self.SIMICS_VER = os.getenv('SIMICS_VER')
+        self.SIMICS_VER = resimSimicsUtils.version()
 
         ''' kernel buffer addresses used for x86 kernel buffer injection '''
         self.k_buffer_addrs = []
@@ -191,13 +192,13 @@ class findKernelWrite():
     def cleanUp(self):
         self.deleteBrokenHap()
         if self.kernel_write_break is not None: 
-            RES_delete_breakpoint(self.kernel_write_break)
+            self.reverse_mgr.SIM_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None 
-            self.lgr.debug('vt_handler deleted kernel_write_break')
+            self.lgr.debug('findKernelWrite cleanUp deleted kernel_write_break')
         if self.rev_write_hap is not None:
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.rev_write_hap)
             self.rev_write_hap = None 
-            self.lgr.debug('vt_handler deleted rev_write_hap')
+            self.lgr.debug('findKernelWrite cleanUp deleted rev_write_hap')
 
     def vt_handler(self, memory):
         if self.rev_write_hap is None:
@@ -369,7 +370,7 @@ class findKernelWrite():
         if self.forward is not None and eip == self.forward_eip:
             self.lgr.error('stopToCheckWriteCallback going forward hit our original eip')
             if self.stop_write_hap is not None:
-                RES_delete_breakpoint(self.kernel_write_break)
+                self.reverse_mgr.SIM_delete_breakpoint(self.kernel_write_break)
                 SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
                 self.stop_write_hap = None
                 self.kernel_write_break = None
@@ -427,8 +428,7 @@ class findKernelWrite():
        
     def skipAlone(self, cycles):
         self.lgr.debug('findKernelWrite skipAlone to cycle 0x%x' % cycles)
-        cmd = 'skip-to cycle=%d' % cycles
-        SIM_run_command(cmd)
+        self.reverse_mgr.skipToCycle(cycles)
         eip = self.top.getEIP(self.cpu)
         ida_message = 'skipAlone?'
         if self.memory_transaction is None:
@@ -493,7 +493,7 @@ class findKernelWrite():
         if self.stop_exit_hap is None:
             return
         eip = self.top.getEIP(self.cpu)
-        self.lgr.debug('findKernelWrite stopExit eip 0x%x' % eip)
+        self.lgr.debug('findKernelWrite stopExit eip 0x%x, given cycles: 0x%x' % (eip, cycles))
         self.lgr.debug('findKernelWrite one %s  exce %s  err %s' % (str(one), str(exception), str(error_string)))
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_exit_hap)
         self.stop_exit_hap = None
@@ -867,7 +867,7 @@ class findKernelWrite():
         self.found_kernel_write = False
         if self.kernel_write_break is not None:
             self.lgr.debug('findKernelWrite cleanup deleting hap and breakpoint %d' % self.kernel_write_break)
-            RES_delete_breakpoint(self.kernel_write_break)
+            self.reverse_mgr.SIM_delete_breakpoint(self.kernel_write_break)
             self.kernel_write_break = None
         if self.stop_write_hap is not None:
             self.lgr.debug('findKernelWrite cleanup delete stop_write_hap')
@@ -886,7 +886,10 @@ class findKernelWrite():
             self.forward_hap = None
                 
     def revWriteCallback(self, memory):
-        self.lgr.debug('findKernelWrite revWriteCallback memory 0x%x, call vt_handler' % memory.logical_address)
-
+        self.lgr.debug('findKernelWrite revWriteCallback memory 0x%x' % memory.logical_address)
         SIM_run_alone(self.cleanup, False)
-        self.vt_handler(memory)
+        self.memory_transaction = memory
+        SIM_run_alone(self.context_manager.enableAll, None)
+        #self.vt_handler(memory)
+        self.stop_cycles = self.cpu.cycles
+        SIM_run_alone(self.thinkWeWrote, 0)

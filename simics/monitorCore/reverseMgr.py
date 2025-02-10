@@ -198,7 +198,7 @@ class ReverseMgr():
             self.runToCycle(cycle) 
         else:
             if cycle > self.latest_span_end:
-                print('Cycle 0x%x is after last recorded cycle of 0x%x, will just run ahead' % (cycle, self.latest_span_end))
+                #print('Cycle 0x%x is after last recorded cycle of 0x%x, will just run ahead' % (cycle, self.latest_span_end))
                 self.lgr.debug('Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (cycle, self.latest_span_end))
                 cycle_mark = 'cycle_%x' % self.latest_span_end
                 SIM_restore_snapshot(cycle_mark)
@@ -252,27 +252,35 @@ class ReverseMgr():
             return
         else:
             self.lgr.debug('reverseMgr reverse, bp list %s' % self.bp_list)
-            self.tryForwardFrom(self.reverse_from)
+            self.skipBackAndRunForward(True)
 
-    def tryForwardFrom(self, cycle):
-        # skip back to previous snapshot and run forward
-        self.lgr.debug('reverseMgr tryForwardFrom given cycle 0x%x current cycle 0x%x' % (cycle, self.cpu.cycles))
-        self.current_span_end = cycle
-        self.current_span_start = self.getMasked(cycle)
-        if self.current_span_start == cycle:
-            self.current_span_start = self.current_span_start - self.cycle_span
+    def skipBackAndRunForward(self, first_skip):
+        '''
+         Skip back to previous snapshot and run forward to see if we hit a breakpoint.
+
+         Parameter first_skip: If false, we need to skip back two cycle spans.  Otherwise, we just skip back to previous span
+        '''
+        self.lgr.debug('reverseMgr skipBackAndRunForward first_skip %r, current cycle 0x%x' % (first_skip, self.cpu.cycles))
+        # Where should we stop running forward?
+        self.current_span_end = self.cpu.cycles
+        # Where do we skip back to before running forward?
+        if first_skip:
+            self.current_span_start = self.getMasked(self.cpu.cycles)
+        else:
+            # Assume we are on a span boundary and must go back 2 spans
+            self.current_span_start = self.cpu.cycles - (2 *  self.cycle_span)
         if self.current_span_start < self.origin_cycle:
-            self.lgr.debug('reverseMgr tryForwardFrom current_span start was less than origin, set it to origin')
+            self.lgr.debug('reverseMgr skipBackAndRunForward current_span start was less than origin, set it to origin')
             self.current_span_start = self.origin_cycle
         cycle_mark = 'cycle_%x' % self.current_span_start
         #self.disableAll()
         was_at = self.cpu.cycles
         SIM_restore_snapshot(cycle_mark)
-        self.lgr.debug('reverseMgr tryForwardFrom was at 0x%x skipped back to 0x%x' % (was_at, self.current_span_start))
+        self.lgr.debug('reverseMgr skipBackAndRunForward was at 0x%x skipped back to 0x%x' % (was_at, self.current_span_start))
         #self.enableAll()
         self.setBreakHaps()
         self.setSpanEndCycle()
-        self.lgr.debug('reverseMgr tryForwardFrom now continue')
+        self.lgr.debug('reverseMgr skipBackAndRunForward now continue')
         self.rmContinuationHap()
         SIM_continue(0)
         self.setContinuationHap()
@@ -287,7 +295,7 @@ class ReverseMgr():
         self.lgr.debug('reverseMgr stopHap')
         if self.stop_hap is None:
             return
-        self.lgr.debug('reverseMgr stopHap would do stuff len of break cycles is %d' % len(self.break_cycles))
+        self.lgr.debug('reverseMgr stopHap len of break cycles is %d current_cycle 0x%x' % (len(self.break_cycles), self.cpu.cycles))
         for hap in self.break_haps:
             SIM_run_alone(self.rmBreakHap, hap)
         self.break_haps = []
@@ -297,9 +305,8 @@ class ReverseMgr():
         SIM_run_alone(self.cancelSpanEndCycle, None)
 
         if len(self.break_cycles) == 0:
-            next_span = self.current_span_start - self.cycle_span - 1
-            self.lgr.debug('reverseMgr stopHap Failed to find any breaks, try forward from next span 0x%x' % next_span)
-            SIM_run_alone(self.tryForwardFrom, next_span)
+            self.lgr.debug('reverseMgr stopHap Failed to find any breaks, try forward from span prior to previous span ')
+            SIM_run_alone(self.skipBackAndRunForward, False)
         else:
             cycle_list = list(self.break_cycles.keys())
             sorted_list = sorted(cycle_list)
@@ -308,13 +315,14 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr stopHap latest cycle 0x%x bp %d' % (latest_cycle, latest_bp))
             SIM_run_alone(self.skipAndCallback, latest_cycle)
 
-    def skipAndCallback(self, latest_cycle):
-        self.skipToCycle(latest_cycle)
+    def skipAndCallback(self, skip_to_cycle):
+        self.lgr.debug('reverseMgr skipAndCallback current cycle 0x%x, call skipToCycle for 0x%x' % (self.cpu.cycles, skip_to_cycle))
+        self.skipToCycle(skip_to_cycle)
         if self.callback is None:
-            print('Reversing hit breakpoint %d at cycle 0x%x' % (latest_bp, latest_cycle))
+            print('Reversing hit breakpoint %d at cycle 0x%x' % (latest_bp, skip_to_cycle))
             SIM_run_command('disassemble')
         else:
-            memory = self.break_cycles[latest_cycle]
+            memory = self.break_cycles[skip_to_cycle]
             self.callback(memory)
             self.lgr.debug('reverseMgr skipAndCallback done, called callback with memory') 
 
@@ -365,6 +373,7 @@ class ReverseMgr():
             self.bp = bp
             self.logical_address = memory.logical_address
             self.physical_address = memory.physical_address
+            self.size = memory.size
 
     def breakCallback(self, param, the_obj, the_break, memory):
         # TBD record the_object and its cycles for breaks on cells other than self.cpu
@@ -431,6 +440,10 @@ class ReverseMgr():
         if bp is not None:
             if bp in self.sim_breakpoints:
                 self.sim_breakpoints.remove(bp)
+                self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_brekpoints' % bp)
+                if bp in self.bp_list:
+                    self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from bp_list' % bp)
+                    self.bp_list.remove(bp)
             else:
                 self.lgr.error('reverseMgr SIM_delete_breakpoint %d not in sim_breakpoints')
 
@@ -493,7 +506,11 @@ class ReverseMgr():
         self.continuation_hap = SIM_hap_add_callback("Core_Continuation", self.continuationHap, None)
 
     def continuationHap(self, dumb, one):
+        self.lgr.debug('reverseMgr continuationHap')
         if not self.recording:
+            self.lgr.debug('reverseMgr continuationHap not recording, set recording end')
             self.setRecordingEndCycle()
+        else:
+            self.lgr.debug('reverseMgr continuationHap am recording')
 
 

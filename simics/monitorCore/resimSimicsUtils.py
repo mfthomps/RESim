@@ -116,3 +116,17 @@ def cutRealWorld():
     except:
         pass
 
+def timer(cycles):
+    parts = cli.quiet_run_command('date -t')
+    start_time = parts[0]
+    SIM_continue(cycles)
+    parts = cli.quiet_run_command('date -t')
+    end_time = parts[0]
+    delta = end_time - start_time
+    #print('timer ran 0x%x cycles in %f.2 seconds' % (cycles, delta))
+    return delta
+
+def version():
+    parts = cli.quiet_run_command('version')
+    version = parts[0][0][2]
+    return version
