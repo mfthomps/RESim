@@ -57,64 +57,9 @@ class MagicOrigin():
             RES_hap_delete_callback_id("Core_Magic_Instruction", self.magic_hap)
             self.magic_hap = None
 
-    def disconnectServiceNode(self, name):
-        cmd = '%s.status' % name
-        try:
-            dumb,result = cli.quiet_run_command(cmd)
-        except:
-            self.lgr.debug('magicOrigin disconnectService node failed')
-            return
-       
-        ok = False 
-        for line in result.splitlines():
-            if 'connector_link0' in line:
-                parts = line.split(':')
-                node_connect = parts[0].strip()
-                switch = parts[1].strip()
-                cmd = '%s.status' % switch
-                dumb,result = cli.quiet_run_command(cmd)
-                for line in result.splitlines():
-                    if name in line:
-                        switch_device = line.split(':')[0].strip()
-                        cmd = 'disconnect %s.%s %s.%s' % (name, node_connect, switch, switch_device)
-                        dumb,result = cli.quiet_run_command(cmd)
-                        cmd = '%s.disable-service -all' % name
-                        dumb,result = cli.quiet_run_command(cmd)
-                        #cmd = '%s.delete' % name
-                        #dumb,result = cli.quiet_run_command(cmd)
-                        #cmd = 'default_service_node0.delete' 
-                        #dumb,result = cli.quiet_run_command(cmd)
-                        ok = True
-                        break
-                break
-        if ok:
-            self.lgr.debug('MagicOrigin real network disconnected %s along with connection to switch, set origin' % name)
-        else:
-            self.lgr.debug('Did not find a service node %s to disconnect.' % name)
-
-    def disconnect(self, run=True):
-        self.lgr.debug('MagicOrigin disconnect')
-        self.deleteMagicHap()
-        driver_service_node = 'driver_service_node'
-        dhcp_service_node = 'dhcp_service_node'
-        cmd = 'disconnect-real-network'
-        SIM_run_command(cmd)
-        cmd = 'switch0.disconnect-real-network'
-        SIM_run_command(cmd)
-        cmd = 'switch1.disconnect-real-network'
-        SIM_run_command(cmd)
-        self.disconnectServiceNode(driver_service_node)
-        try:
-            self.disconnectServiceNode(dhcp_service_node)
-        except:
-            pass
-        if run:
-            self.lgr.debug('MagicOrigin continue')
-            SIM_continue(0)
-        
-
     def setOrigin(self, dumb=None):
-        self.disconnect(run=False)
+        #self.disconnect(run=False)
+        self.top.cutRealWorld()
         #cmd = 'default_service_node0.status'
         cmd = 'disable-reverse-execution'
         SIM_run_command(cmd)
