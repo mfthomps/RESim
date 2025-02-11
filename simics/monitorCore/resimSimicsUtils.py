@@ -2,6 +2,8 @@ import memUtils
 import cli
 from simics import *
 import time
+import subprocess
+import shlex
 def fdString(fd):
     if memUtils.isNull(fd):
         return 'NULL'
@@ -79,7 +81,7 @@ def disconnectServiceNode(name):
         try:
             dumb,result = cli.quiet_run_command(cmd)
         except:
-            print('resimUtils disconnectService node failed')
+            print('resimSimicsUtils disconnectService node failed')
             return
        
         ok = False 
@@ -116,17 +118,52 @@ def cutRealWorld():
     except:
         pass
 
-def timer(cycles):
+def getFrequencyc(cpu):
+    name = cpu.name
+    cmd = '%s.status' % name
+    result = cli.quiet_run_command(cmd)[1]
+    pparts = result.split(':')
+    freq_s = pparts[1].split()[0]
+    #print('freq: %s' % freq_s)
+    freq = float(freq_s) 
+    #print('freq is %f.2 mhz' % freq)
+    return freq
+
+def getMemoryUsed():
+    pid = cli.quiet_run_command('pid')[0]
+    
+    retval = None
+    cmd = 'cat /proc/%s/statm' % pid
+    with subprocess.Popen(shlex.split(cmd), stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
+        output = ps.communicate()[0]
+        out_string = output.split()[0]
+        retval = int(out_string) * 4096 
+
+    return retval
+
+
+def timer(cpu, cycles):
+    mem_start = getMemoryUsed()
+    print('mem_start  %s' % f"{mem_start:,}")
+
+    frequency = getFrequencyc(cpu)
     parts = cli.quiet_run_command('date -t')
     start_time = parts[0]
+    start_cycle = cpu.cycles
     SIM_continue(cycles)
     parts = cli.quiet_run_command('date -t')
     end_time = parts[0]
-    delta = end_time - start_time
+    end_cycle = cpu.cycles
+    delta_time = end_time - start_time
     #print('timer ran 0x%x cycles in %f.2 seconds' % (cycles, delta))
-    return delta
+    delta_sim_time = cycles / (frequency * 1000000)
+    mem_end = getMemoryUsed()
+    ram_use = mem_end - mem_start
+    print('sim time is %f' % delta_sim_time)
+    return delta_time, delta_sim_time, ram_use
 
 def version():
     parts = cli.quiet_run_command('version')
     version = parts[0][0][2]
     return version
+            
