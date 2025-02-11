@@ -61,7 +61,8 @@ class ReverseMgr():
         self.top = top
         #self.cycle_span = 0x100000
         if span is None:
-            self.cycle_span = 0x10000
+            #self.cycle_span = 0x10000
+            self.cycle_span = 0x100000
         else:
             self.cycle_span = span
         self.callback = None
@@ -80,6 +81,7 @@ class ReverseMgr():
         self.break_cycles = {}
         self.stop_hap = None
         self.continuation_hap = None
+        self.recording_end_event_set = False
         self.SIMICS_VER = resimSimicsUtils.version()
         self.lgr.debug('reverseMgr simics version %s' % self.SIMICS_VER)
 
@@ -129,7 +131,7 @@ class ReverseMgr():
         cycle_mark = 'cycle_%x' % self.latest_span_end 
         SIM_take_snapshot(cycle_mark)
         size = self.snapSize()
-        self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x at handler were 0x%x eip now 0x%x snapshot size 0x%x' % (self.cpu.cycles, self.latest_span_end, eip, size))
+        self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x at handler were 0x%x eip now 0x%x snapshot size %s' % (self.cpu.cycles, self.latest_span_end, eip, f"{size:,}"))
         self.setNextCycle()
 
     def snapSize(self):
@@ -142,11 +144,11 @@ class ReverseMgr():
 
     def enableReverse(self):
         print('SIMICS_VER is %s' % self.SIMICS_VER)
-        self.setContinuationHap()
         if not self.SIMICS_VER.startswith('7'):
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
         else:
+            self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
             SIM_take_snapshot('origin')
             size = self.snapSize()
@@ -232,8 +234,10 @@ class ReverseMgr():
         else:
             self.disableAll()
             self.setDeltaCycle(cycle)
-            self.lgr.debug('reverseMgr runToCycle  0x%x now continue from cpu cycles 0x%x' % (cycle, self.cpu.cycles))
+            delta = cycle - self.cpu.cycles
+            self.lgr.debug('reverseMgr runToCycle  0x%x. Now continue from cpu cycles 0x%x delta 0x%x' % (cycle, self.cpu.cycles, delta))
             SIM_continue(0)
+            #SIM_continue(delta)
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, self.cpu.cycles))
             self.enableAll()
 
@@ -381,8 +385,8 @@ class ReverseMgr():
             return
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        value = SIM_get_mem_op_value_le(memory)
-        self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x value: 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, value, self.cpu.cycles, eip, instruct[1]))
+        #value = SIM_get_mem_op_value_le(memory)
+        self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, self.cpu.cycles, eip, instruct[1]))
         
         self.break_cycles[self.cpu.cycles] = self.BreakInfo(the_break, memory)
         #SIM_break_simulation('breakCallback')
@@ -465,6 +469,7 @@ class ReverseMgr():
 
     def cancelRecordingEndCycle(self, dumb):
         SIM_event_cancel_time(self.cpu, self.recording_end_cycle_event, self.cpu, None, None)
+        self.recording_end_event_set = True
 
     def setRecordingEndCycle(self):
         # TBD breaks if cycles now past span end.  cancel it and set fresh?
@@ -473,15 +478,21 @@ class ReverseMgr():
 
         Intended to be called when from a continuation hap when we are not recording or reversing/skipping
         '''
-        delta = self.latest_span_end - self.cpu.cycles
-        if delta > 0:
-            self.lgr.debug('reverseMgr setRecordingEndCycle  latest_span_end 0x%x  current cycles 0x%x delta 0x%x' % (self.latest_span_end, self.cpu.cycles, delta))
-            if self.recording_end_cycle_event is None:
-                self.recording_end_cycle_event = SIM_register_event("recording end cycle", SIM_get_class("sim"), Sim_EC_Notsaved, self.recording_end_cycle_handler, None, None, None, None)
+        if self.latest_span_end is not None:
+            delta = self.latest_span_end - self.cpu.cycles
+            if delta > 0:
+                self.lgr.debug('reverseMgr setRecordingEndCycle  latest_span_end 0x%x  current cycles 0x%x delta 0x%x' % (self.latest_span_end, self.cpu.cycles, delta))
+                if self.recording_end_cycle_event is None:
+                    self.recording_end_cycle_event = SIM_register_event("recording end cycle", SIM_get_class("sim"), Sim_EC_Notsaved, self.recording_end_cycle_handler, None, None, None, None)
+                else:
+                    self.cancelRecordingEndCycle(None)
+                SIM_event_post_cycle(self.cpu, self.recording_end_cycle_event, self.cpu, delta, delta)
+                self.recording_end_event_set = True
             else:
-                self.cancelRecordingEndCycle(None)
-            SIM_event_post_cycle(self.cpu, self.recording_end_cycle_event, self.cpu, delta, delta)
+                self.lgr.debug('reverseMgr setRecordingEndCycle  latest_span_end 0x%x  current cycles 0x%x match, just setNext cycle' % (self.latest_span_end, self.cpu.cycles))
+                self.setNextCycle()
         else:
+            self.lgr.debug('reverseMgr setRecordingEndCycle  NO latest span end. current cycles 0x%x, just setNext cycle' % (self.cpu.cycles))
             self.setNextCycle()
 
     def recording_end_cycle_handler(self, obj, cycles):
@@ -502,15 +513,25 @@ class ReverseMgr():
         SIM_hap_delete_callback_id("Core_Continuation", hap)
 
     def setContinuationHap(self):
-        self.lgr.debug('reverseMgr setContinuationHap')
+        self.lgr.debug('reverseMgr setContinuationHap cycle 0x%x' % self.cpu.cycles)
         self.continuation_hap = SIM_hap_add_callback("Core_Continuation", self.continuationHap, None)
 
     def continuationHap(self, dumb, one):
-        self.lgr.debug('reverseMgr continuationHap')
-        if not self.recording:
-            self.lgr.debug('reverseMgr continuationHap not recording, set recording end')
-            self.setRecordingEndCycle()
-        else:
-            self.lgr.debug('reverseMgr continuationHap am recording')
+        
+        if not self.recording_end_event_set:
+            self.lgr.debug('reverseMgr continuationHap cycles: 0x%x' % self.cpu.cycles)
+            if not self.recording:
+                self.lgr.debug('reverseMgr continuationHap not recording, set recording end')
+                self.setRecordingEndCycle()
+            else:
+                self.lgr.debug('reverseMgr continuationHap am recording')
 
+    def getSpan(self):
+        '''
+        Return the cycle span
+        '''
+        return self.cycle_span
 
+    def skipToOrigin(self):
+        self.lgr.debug('reverseMgr skipToOrigin')
+        SIM_restore_snapshot('origin')
