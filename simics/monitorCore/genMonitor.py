@@ -1872,6 +1872,9 @@ class GenMonitor():
             self.lgr.debug('genMonitor debugProc is new, stop debug and stop tracking')
             self.stopDebug()
             self.stopTracking()
+        if self.target not in self.magic_origin:
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s proc: %s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid(), proc))
             if proc.startswith('/') and self.target in self.soMap:
@@ -2995,6 +2998,7 @@ class GenMonitor():
         #self.stopTrace()
         if self.target in self.magic_origin:
             del self.magic_origin[self.target]
+            self.lgr.debug('stopDebug deleted magic origin ')
         self.noWatchSysEnter()
         self.context_manager[self.target].stopDebug()
         # DO NOT call stopTracking here, breaks restoreDebug function.
@@ -6807,10 +6811,15 @@ class GenMonitor():
         self.reverse_mgr[self.target].reverse()
     def revOne(self):
         self.reverse_mgr[self.target].revOne()
+
     def timer(self, cycles):
-        time = resimSimicsUtils.timer(cycles)
+        target_cpu = self.cell_config.cpuFromCell(self.target)
+        delta_time, delta_sim_time, ram_use = resimSimicsUtils.timer(target_cpu, cycles)
+        slowdown = delta_time / delta_sim_time
         storage = self.reverse_mgr[self.target].snapSize()
-        print('Timer 0x%x cycles in %f.3 seconds; %s storage' % (cycles, time, f"{storage:,}"))
+        span = self.reverse_mgr[self.target].getSpan()
+        print('Timer 0x%x cycles in %f.3 seconds; slowdown %f.2  snapshot storage: %s ram use: %s span 0x%x' % (cycles, delta_time, 
+              slowdown, f"{storage:,}", f"{ram_use:,}", span))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
