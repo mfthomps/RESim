@@ -1,0 +1,130 @@
+decl {
+! Script that boots Clear Linux image with UEFI.
+ 
+ params from "resim-x86.include"
+  # Do not expose all advanced options to the end user
+  except use_acpi, enable_break_on_reboot, vga_bios_image,
+         lan_bios_image, spi_flash_image, bios_image
+  default show_con0 = TRUE
+  default serial_console_fg_color = "#80ff80"
+  default disk0_size = NIL
+  default disk1_size = 8Gi
+  default rtc_time = "auto"
+  default create_usb_tablet = TRUE
+
+# params from "qsp-uefi.include"
+#  except enable_efi
+
+ params from "%simics%/targets/qsp-x86/rw-state.include"
+  except system
+
+ group "Networking"
+ param ip_address : string = "auto"
+ ! The board IP address.
+ params from "%simics%/targets/common/ethernet-setup.include"
+  except eth_connector
+
+ group "Simulation"
+ param create_tracker : bool = TRUE
+ ! Creates the Linux tracker object.
+ param tracker_params : file("*.params") or nil = NIL
+ ! OS awareness parameter file for the Linux kernel running on the machine.
+ param auto_login : bool = TRUE
+ ! Automatically log in as a "simics" user on the serial console.
+ param auto_login_root : bool = FALSE
+ ! Automatically log in as a "root" user on the serial console. When
+ ! the parameter is set it overrides the "auto_login" parameter.
+
+ result system : string
+ result eth_link : string or nil
+ result service_node : string or nil
+ result eth0 : string
+ result eth1 : string
+ result eth2 : string
+ result eth3 : string
+}
+# RESIM
+#$bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-ata-1.11-20180508.bin"
+$bios_image="targets/x58-ich10/images/seabios-simics-x58-ich10-sata-1.11-20180508.bin"
+$vga_bios_image="targets/x58-ich10/images/seavgabios-simics-x58-ich10-1.11-20180508.bin"
+$disk0_image=$disk_image
+
+## This check avoids low-memory issues that are very difficult to diagnose.
+## See SIMICS-17854
+if $memory_megs < 4096 {
+  interrupt-script -error (("*** The value of memory_megs (%d) is lower than "
+                            + "the minimum of 4096") % [$memory_megs])
+}
+
+## Use a Clear Linux OS image if disk0_image was not set. If no Clear Linux OS
+## image is found we signal an error with an instruction how to get the image.
+if ($disk0_image == NIL) {
+    # img_bases should contain a list of all released CL images with newer
+    # images going first. The first found image will be used.
+    $img_bases = ["%simics%/targets/qsp-x86/images/cl-b28910-v2",
+                  "%simics%/targets/qsp-x86/images/cl-b28910",
+                  "%simics%/targets/qsp-x86/images/cl-lite-b27930"]
+    foreach $img_base in $img_bases {
+        if (file-exists $img_base + ".craff") {
+            $disk0_size = NIL  # to use disk size of the image
+            $disk0_image = $img_base + ".craff"
+            $tracker_params = $img_base + ".params"
+            break-loop
+        }
+    }
+    if ($disk0_image == NIL) {
+        interrupt-script (
+            "*** Image with Clear Linux OS is missing." +
+            " Please install the QSP Clear Linux (4094) package" +
+            " or specify disk image to use with the disk0_image" +
+            " target script parameter. ***")
+    }
+}
+## Set up base system
+run-script "%script%/resim-x86.include"
+instantiate-components $system
+## Name system
+$system->system_info = "Clear Linux with UEFI"
+
+## Set a time quantum that provides reasonable performance
+set-time-quantum cell = $system.cell seconds = 0.0001
+
+if ($create_osa and $create_tracker) {
+    local $lx_tracker = ($system.software.insert-tracker
+                         tracker = "linux_tracker_comp")
+    if $tracker_params != NIL {
+        $lx_tracker.load-parameters $tracker_params
+    }
+}
+
+## Set up Ethernet
+if $create_network {
+    $eth_connector = $system.mb.sb.eth_slot
+    #run-script "%simics%/targets/common/ethernet-setup.include"
+    # Use our ethernet-setup to set the name to dhcp_service_node
+    run-command-file "%script%/../x86-x58-ich10/ethernet-setup6.include"
+
+}
+
+run-script "%simics%/targets/common/sn-setup.include"
+
+if $auto_login or $auto_login_root {
+    script-branch "autologin" {
+        local $login_con = $system.serconsole
+        local $auto_login_user = "simics"
+        local $prompt_string = "$ "
+        if $auto_login_root {
+            # $auto_login_root wins over $auto_login
+            $auto_login_user = "root"
+            $prompt_string = "# "
+        }
+        bp.console_string.wait-then-write $login_con.con "cl-qsp login: " ("%s\n" % $auto_login_user)
+        bp.console_string.wait-for $login_con.con $prompt_string
+        local $msg = "Autologin as \"%s\"" % $auto_login_user
+        $msg += " was done on \"%s\"." % $login_con->title
+        echo $msg
+        add-session-comment $msg
+    }
+}
+
+run-script "%simics%/targets/qsp-x86/rw-state.include"

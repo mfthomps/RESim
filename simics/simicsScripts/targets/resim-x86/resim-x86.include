@@ -1,0 +1,493 @@
+decl {
+ ! Sets up the hardware and BIOS for a QSP-x86 virtual machine, exposing many
+ ! configuration options as Simics parameters. This include file is used by
+ ! other scripts to setup a complete virtual machine.
+ ! Supports PC BIOS (legacy BIOS) and EFI BIOS.
+ ! Adds two disks to the machine. If disk image and disk size are NIL, no disk
+ ! will be added.
+ ! Also adds a CD-ROM to the machine.
+
+ group "CPU"
+ param cpu_comp_class : string = "x86QSP1"
+ ! CPU model. It should be specified as CPU component class without
+ ! the "processor_" prefix and with underscores replaced with hyphens,
+ ! e.g. x86-intel64. Tip: to obtain the list of CPU component classes
+ ! please use the "list-classes substr = processor_" Simics command.
+ param num_cpus : int = 1
+ ! Number of physical processors in the machine.
+ param num_cores : int = 1
+ ! Number of cores per physical processor in the machine. Allowed values are
+ ! 1 - 128.
+ param num_cores_small : int = 0
+ ! Number of small cores per physical processor in the machine (only applicable
+ ! if the processor class specified by the cpu_comp_class parameter supports
+ ! heterogeneous setups).
+ param num_threads : {1, 2, 4} = 1
+ ! Number of threads per processor core in the machine.
+ param num_threads_small : {0, 1, 2, 4} = 0
+ ! Number of threads per small core in the machine (only applicable
+ ! if the processor class specified by the cpu_comp_class parameter supports
+ ! heterogeneous setups).
+
+ param cpi : int = 1
+ ! Clock cycles per executed instruction for the processors.
+ param freq_mhz : int = 2000
+ ! Processor frequency in MHz.
+ param apic_freq_mhz : int = 133
+ ! APIC frequency in MHz.
+
+ group "Consoles"
+ param show_con0 : bool = FALSE
+ ! Automatically display the text console on the first serial port.
+ param show_con1 : bool = FALSE
+ ! Automatically display the text console on the second serial port.
+ param show_gfx_con : bool = TRUE
+ ! Automatically display the graphics console.
+ param hide_consoles : bool = FALSE
+ ! Do not display any console windows at startup.
+ param serial_console_fg_color : string = "white"
+ ! The foreground color of the serial console, or RGB in #12ab89 format.
+ param serial_console_bg_color : string = "black"
+ ! The background color of the serial console, or RGB in #12ab89 format.
+
+ group "Disks"
+ param create_disk0 : {"sata", "ide"} or nil = "sata"
+ ! Create and connect to the target machine a virtual hard disk of type SATA
+ ! or IDE. Simics object <param>machine_name</param>.disk0 is created and
+ ! connected to the target machine.
+ param disk0_image : file("*") or nil = NIL
+ ! Disk image file for the <param>machine_name</param>.disk0 virtual disk. Files
+ ! in craff (Simics own file format), VHDX, and raw formats are supported.
+ param disk0_size : int or nil = NIL
+ ! Size of the <param>machine_name</param>.disk0 virtual disk in bytes.
+ ! If <tt>NIL</tt>, the size of <param>disk0_image</param> is used.
+ param create_disk1 : {"sata", "ide"} or nil = "sata"
+ ! Create and connect to the target machine an additional virtual hard disk
+ ! of type SATA or IDE. Simics object <param>machine_name</param>.disk1
+ ! is created and connected to the target machine. The type should be the same
+ ! as <param>create_disk0</param>.
+ param disk1_image : file("*") or nil = NIL
+ ! Disk image file for the <param>machine_name</param>.disk1 virtual disk. Files
+ ! in craff (Simics own file format), VHDX, and raw formats are supported.
+ param disk1_size : int or nil = NIL
+ ! Size of the <param>machine_name</param>.disk1 virtual disk. If <tt>NIL</tt>,
+ ! the size of <param>disk1_image</param> is used.
+
+ group "DVD/CD-ROM"
+
+ param create_cdrom : {"sata", "ide"} or nil = "sata"
+ ! Create and connect to the target machine a virtual CD-ROM drive
+ ! of type SATA or IDE. Simics object <param>machine_name</param>.cdrom
+ ! is created and connected to the target machine. The type should be the same
+ ! as <param>create_disk0</param>.
+
+ group "System"
+ param machine_name : string = "board"
+ ! Name of the machine. Used for the top level component.
+ param memory_megs : int = 8192
+ ! Amount of RAM in the machine, in MiB. The highest supported value is
+ ! 65536 (64 GiB). More than 64 GiB is not supported since the x86QSP1
+ ! processor is limited to a 36-bit physical address space.
+ param rtc_time : string = "2021-06-10 10:41:54" # UTC of max solar eclipse
+ ! The date and time of the simulated real-time clock set when the configuration
+ ! is created. The format is "YYYY-MM-DD HH:MM:SS". Can also be set to "auto"
+ ! to use the current host time.
+ param use_acpi : bool = TRUE
+ ! Enables ACPI in the BIOS.
+ param create_usb_tablet : bool = FALSE
+ ! Connects a USB tablet device for input using absolute positioning that
+ ! provides better user experience than a mouse.
+ param apic_bus_class : string = "auto_apic_bus"
+ ! APIC bus class. It should be the apic bus class that comes with the same
+ ! module as the apic used in the CPU model. If set to "auto_apic_bus" the script
+ ! will attempt to find the correct apic bus class automatically. If that fails
+ ! the apic-bus class will be used.
+
+ group "Networking"
+ param mac_address : string = "auto"
+ ! MAC address of the primary Ethernet adapter.
+ ! The format is "XX:XX:XX:XX:XX:XX".
+
+ group "Simulation"
+ param use_vmp : bool = TRUE
+ ! Enables host virtualization (VMP) for better simulation performance. This
+ ! option affects simulated time. See the performance chapter in the
+ ! <em>Simics User's Guide</em> for more information about VMP.
+ param enable_break_on_reboot : bool = FALSE
+ ! Interrupts the simulation if the machine is rebooted.
+ param enable_system_clock : bool = FALSE
+ ! Enables a configuration with a separate clock to which devices are bound
+ ! instead of to the first CPU.
+ param system_clock_class : string = "clock"
+ ! The class used for the system clock if the
+ ! <param>enable_system_clock</param> parameter is true.
+ param create_osa : bool = TRUE
+ ! Create OS awareness framework.
+
+ params from "%simics%/targets/qsp-x86/qsp-images.include"
+  except enable_efi
+
+ group "Deprecated"
+ param cpu_class : string or nil = NIL
+ ! CPU component class. Deprecated: use the cpu_comp_class parameter instead.
+
+    param use_disk2 : bool = FALSE
+    param use_disk3 : bool = FALSE
+    param disk_image : string
+    param disk2_image : string = ""
+    param disk3_image : string = ""
+    param disk_size : int
+    param disk2_size : int = 0
+    param disk3_size : int = 0
+    param mac_address_0 : string
+    param mac_address_1 : string
+    param mac_address_2 : string
+    param mac_address_3 : string
+
+    param eth_dev : string = "i82543gc"
+
+    param host_name       : string
+
+    result southbridge : string
+    result northbridge : string
+    result motherboard : string
+
+ result system : string
+ result mac_address : string
+ result eth0 : string
+ result eth1 : string
+ result eth2 : string
+ result eth3 : string
+}
+
+### RESim
+$disk0_image = $disk_image
+$eth1 = "None"
+$eth2 = "None"
+$eth3 = "None"
+
+#$disk0_size = $disk_size
+if $use_disk2{
+    $disk1_image = $disk2_image
+    $disk1_size = $disk2_size
+}
+
+
+
+@from deprecation import DEPRECATED
+@DEPRECATED(SIM_VERSION_7, "decl scripts are deprecated.",
+            "Use YAML based targets instead.")
+
+if sim->build_id < 7035 {
+        interrupt-script -error (
+                "*** The QSP-x86 package requires Simics-Base"
+                + " version 7.19.0 or newer.")
+}
+
+### bios
+if not $bios_image {
+        interrupt-script "The $bios_image variable has not been set"
+}
+
+load-module pci-comp
+load-module std-comp
+
+if $cpu_class != NIL {
+        echo ("The cpu_class parameter is deprecated."
+              + " Use the cpu_comp_class parameter instead.")
+        $cpu_comp_class = $cpu_class
+}
+local $cpu_class_arg = "processor-" + $cpu_comp_class
+
+# Load correct component to create the processor component
+load-module class = $cpu_class_arg
+
+load-module x58-ich10-comp
+load-module memory-comp
+load-module textcon
+load-module graphcon
+load-module console-components
+
+if object-exists $machine_name {
+        interrupt-script -error (
+                ("*** It looks like the machine '%s' already exists. Please"
+                 + " specify a different machine name with"
+                 + " the 'machine_name' paramater.")
+                % [$machine_name])
+}
+$system = (create-chassis-qsp-x86 name = $machine_name)
+
+if not $lan_bios_image {
+    $lan_bios_image = ""
+}
+
+if $mac_address == "auto" {
+    $mac_address = (get-auto-mac-address)
+}
+
+@import time
+
+## Use current host time: bad for repeatability, good for usability
+if $rtc_time == "auto" {
+    $rtc_time = `time.strftime("%Y-%m-%d %H:%M:%S")`
+}
+
+run-script "%simics%/targets/qsp-x86/apic_bus_helper.py"
+
+
+# SIMICS-21732
+local $lvl = sim->deprecation_level
+sim->deprecation_level = 0
+### motherboard
+$motherboard = (create-motherboard-x58-ich10
+                $system.mb
+                rtc_time = $rtc_time
+                acpi = $use_acpi
+                break_on_reboot = $enable_break_on_reboot
+                bios = $bios_image
+                lan_bios = $lan_bios_image
+                mac_address = $mac_address
+                spi_flash = $spi_flash_image
+                system_clock = $enable_system_clock
+                system_clock_class = $system_clock_class
+                apic_bus_class = $apic_bus_class)
+$southbridge = $motherboard.sb
+sim->deprecation_level = $lvl
+
+$eth0=$motherboard.sb.eth_slot
+$northbridge=$motherboard.nb
+### processors
+$create_processor = "create-" + $cpu_class_arg
+$heterogenous = (in-list "n_cores_big" (get-command-args $create_processor))
+local $detected_apic_bus_class = NIL
+local $cpu = NIL
+
+foreach $count in (range $num_cpus) {
+	if $heterogenous  {
+                if $num_threads_small == 0 {
+                        $num_threads_small = 1
+                }
+		$cpu = (exec $create_processor
+			+ " $motherboard.cpu + $count"
+			+ " freq_mhz = $freq_mhz"
+			+ " apic_freq_mhz = $apic_freq_mhz"
+			+ " use_vmp = $use_vmp"
+			+ " cpi = $cpi"
+			+ " n_cores_big = $num_cores"
+			+ " n_cores_small = $num_cores_small"
+			+ " n_threads_big = $num_threads"
+			+ " n_threads_small = $num_threads_small")
+	} else {
+                if $num_cores_small > 0 or $num_threads_small > 0 {
+                        interrupt-script -error (
+                                ("*** The cpu component class %s is not"
+                                 + " heterogenous and hence does not support"
+                                 + " positive values for the num_cores_small"
+                                 + " (%d) and num_threads_small (%d)"
+                                 + " parameters.") % [$cpu_comp_class,
+                                                      $num_cores_small,
+                                                      $num_threads_small])
+                }
+		$cpu = (exec $create_processor
+			+ " $motherboard.cpu + $count"
+			+ " freq_mhz = $freq_mhz"
+			+ " apic_freq_mhz = $apic_freq_mhz"
+			+ " use_vmp = $use_vmp"
+			+ " cpi = $cpi"
+			+ " n_cores = $num_cores"
+			+ " n_threads = $num_threads")
+	}
+
+    if $apic_bus_class == "auto_apic_bus" {
+        local $next_detected_apic_bus_class = (python "extract_needed_apic_bus_class(simenv.cpu)")
+        if $detected_apic_bus_class {
+            if $next_detected_apic_bus_class != $detected_apic_bus_class {
+                echo ("Error: Processors in '" + $motherboard + "' require different apic bus classes.")
+                echo ("       Previously detected bus class is " + $detected_apic_bus_class)
+                echo ("       bus class detected on " + $cpu + " is " + $next_detected_apic_bus_class)
+                interrupt-script
+            }
+        } else {
+            # set apic bus class to what the first apic told us
+            @SIM_get_object(simenv.motherboard).iface.component.get_slot_value('apic_bus').__class_name__ =  simenv.next_detected_apic_bus_class
+        }
+        $detected_apic_bus_class = $next_detected_apic_bus_class
+    }
+    connect $motherboard.socket[$count] $cpu.socket
+}
+
+### memory
+$dimm = (create-simple-memory-module $motherboard.memory
+                                     memory_megs = $memory_megs)
+connect $motherboard.dimm[0] $dimm.mem_bus
+
+### GPU
+$vga = (create-pci-accel-vga-comp
+        name = $motherboard.gpu bios = ($vga_bios_image or ""))
+connect $motherboard.nb.gpu $vga.pci_bus
+
+### consoles
+$console = (create-gfx-console-comp $system.console
+                       visible = ($show_gfx_con and (not $hide_consoles)))
+connect $console.mouse $southbridge.mse_console
+connect $console.keyboard $southbridge.kbd_console
+connect $console.device $vga.console
+
+(create-txt-console-comp $system.serconsole
+                         visible = ($show_con0 and (not $hide_consoles))
+                         bg_color = $serial_console_bg_color
+                         fg_color = $serial_console_fg_color)
+connect $system.serconsole.serial $southbridge.serial[0]
+(create-txt-console-comp $system.serconsole1
+                         visible = ($show_con1 and (not $hide_consoles))
+                         bg_color = $serial_console_bg_color
+                         fg_color = $serial_console_fg_color)
+connect $system.serconsole1.serial $southbridge.serial[1]
+
+### Primary disk
+$disk0 = NIL
+if $create_disk0 == "ide" {
+    if $disk0_image != NIL and $disk0_size != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 file = $disk0_image
+                                                     size = $disk0_size)
+    } else if $disk0_image != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 file = $disk0_image)
+    } else if $disk0_size != NIL {
+        $disk0 = (create-ide-disk-comp $system.disk0 size = $disk0_size)
+    }
+    if $disk0 {
+        connect $southbridge.ide_slot[0] $disk0.ide_slot
+    }
+}
+if $create_disk0 == "sata" {
+    if $disk0_image != NIL and $disk0_size != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 file = $disk0_image
+                                                      size = $disk0_size)
+    } else if $disk0_image != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 file = $disk0_image)
+    } else if $disk0_size != NIL {
+        $disk0 = (create-sata-disk-comp $system.disk0 size = $disk0_size)
+    }
+    if $disk0 {
+        connect $southbridge.sata_slot[0] $disk0.sata_slot
+    }
+}
+
+### CD-ROM
+if $create_cdrom == "ide" {
+     $cdrom = (create-ide-cdrom-comp $system.cdrom)
+    connect $southbridge.ide_slot[1] $cdrom.ide_slot
+}
+if $create_cdrom == "sata" {
+    $cdrom = (create-sata-cdrom-comp $system.cdrom)
+    connect $southbridge.sata_slot[1] $cdrom.sata_slot
+}
+
+### Second disk
+$disk1 = NIL
+if $create_disk1 == "ide" {
+    if $disk1_image != NIL and $disk1_size != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image
+                                                     size = $disk1_size)
+    } else if $disk1_image != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 file = $disk1_image)
+    } else if $disk1_size != NIL {
+        $disk1 = (create-ide-disk-comp $system.disk1 size = $disk1_size)
+    }
+    if $disk1 {
+        connect $southbridge.ide_slot[2] $disk1.ide_slot
+    }
+}
+if $create_disk1 == "sata" {
+    if $disk1_image != NIL and $disk1_size != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image
+                                                      size = $disk1_size)
+    } else if $disk1_image != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 file = $disk1_image)
+    } else if $disk1_size != NIL {
+        $disk1 = (create-sata-disk-comp $system.disk1 size = $disk1_size)
+    }
+    if $disk1 != NIL {
+            connect $southbridge.sata_slot[2] $disk1.sata_slot
+    }
+}
+if $mac_address_1 != "None"    {
+      echo "mac addr 1 is "+$mac_address_1
+      if $eth_dev == "i82559"{
+          $eth_comp = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+          #$eth_comp = (create-pci-dec21140a-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev mac_address = $mac_address_1)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "northbridge pci_slot[0] gets mac address "+ $mac_address_1
+      connect $motherboard.nb.pci_slot[0] $eth_comp.pci_bus
+      $eth1 = $motherboard.nb.$eth_dev.eth
+}
+if $mac_address_2 != "None"{
+      echo "mac addr 2 is "+$mac_address_2
+      if $eth_dev == "i82559"{
+          $eth_comp2 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp2 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp2 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp2 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+2 mac_address = $mac_address_2)
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      echo "northbridge pci_slot[1] gets mac address "+ $mac_address_2
+      connect $motherboard.nb.pci_slot[1] $eth_comp2.pci_bus
+      $eth2 = $motherboard.nb.$eth_dev+2.eth
+}
+$eth_comp3 = "None"
+if $mac_address_3 != "None"{
+      echo "mac addr 3 is "+$mac_address_3
+      if $eth_dev == "i82559"{
+          $eth_comp3 = (create-pci-i82559-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82546bg" {
+          $eth_comp3 = (create-pci-i82546bg-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82543gc" {
+          $eth_comp3 = (create-pci-i82543gc-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+      }else if $eth_dev == "i82574_v2" {
+          $eth_comp3 = (create-i82574-v2-comp name = $motherboard.nb.$eth_dev+3 mac_address = $mac_address_3)
+          echo "eth_comp3 is "+$eth_comp3
+      }else{
+          echo "Unknown ethernet device "+$eth_dev
+      }
+      # TBD simics error  "AttributeError: 'pre_obj' object has no attribute 'pci_devices'"
+   if $eth_dev == "i82574_v2" {
+          instantiate-components
+          echo "pci express pcie_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.nb.pcie_slot[0] $eth_comp3.pci_bus
+          echo "connect "+$motherboard+".nb.pcie_slot[0] "+$eth_comp3+".pci_bus"
+   }else{
+          echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
+          connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
+   }
+}
+
+
+
+
+
+
+if $create_osa {
+    ### process tracker
+    load-module os-awareness
+    create-os-awareness name = $system + ".software"
+}
+
+### USB Tablet
+if $create_usb_tablet {
+    load-module usb-comp
+    $tablet = (create-usb-tablet-component $system.tablet)
+    $tablet.connect-to $system.mb.sb
+    $tablet.connect-to $console
+}
