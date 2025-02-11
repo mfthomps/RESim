@@ -582,7 +582,7 @@ class GenMonitor():
         ''' run the PRE_INIT_SCRIPT and the one_done module, if any '''
         init_script = os.getenv('PRE_INIT_SCRIPT')
         if init_script is not None:
-            cmd = 'run-command-file %s' % init_script
+            cmd = 'run-script %s' % init_script
             SIM_run_command(cmd)
             self.lgr.debug('ran PRE_INIT_SCRIPT %s' % init_script)
 
@@ -592,7 +592,7 @@ class GenMonitor():
         init_script = os.getenv('INIT_SCRIPT')
         if init_script is not None:
             self.lgr.debug('run INIT_SCRIPT %s' % init_script)
-            cmd = 'run-command-file %s' % init_script
+            cmd = 'run-script %s' % init_script
             SIM_run_command(cmd)
             self.lgr.debug('ran INIT_SCRIPT %s' % init_script)
         if self.one_done_module is not None:
@@ -5244,7 +5244,7 @@ class GenMonitor():
         self.real_script = script
     def realScript(self):
         if self.real_script is not None:
-            cmd = ('run-command-file %s' % self.real_script)
+            cmd = ('run-script %s' % self.real_script)
             SIM_run_command(cmd)
         else:
             self.lgr.debug('real script, no script to run')
@@ -5642,7 +5642,7 @@ class GenMonitor():
         ''' If debugging thread is in the kernel on this FD, roll back to precall '''
         self.preCallFD(fd)
         ''' modify the configuration '''
-        cmd = 'run-command-file %s' % fname
+        cmd = 'run-script %s' % fname
         SIM_run_command(cmd)
         ''' Establish a new origin since the above has messed up reverse execution state '''
         self.resetOrigin()

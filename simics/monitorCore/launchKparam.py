@@ -50,12 +50,12 @@ run_command('add-directory -prepend /mnt/simics/eemsWorkspace')
 run_command('log-level 0 -all')
 if RUN_FROM_SNAP is None:
     if SIMICS_SCRIPT is not None:
-        run_command('run-command-file %s' % SIMICS_SCRIPT)
+        run_command('run-script %s' % SIMICS_SCRIPT)
     else:
         print('No SIMICS_SCRIPT defined')
         exit(1)
 else:
     print('run from checkpoint %s' % RUN_FROM_SNAP)
     run_command('read-configuration %s' % RUN_FROM_SNAP)
-run_command('run-python-file getKernelParams.py')
+run_command('run-script getKernelParams.py')
 

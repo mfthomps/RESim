@@ -299,7 +299,7 @@ class LaunchRESim():
 
         if RUN_FROM_SNAP is None and INIT_FROM_SNAP is None:
             print('will create switches')
-            run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
+            run_command('run-script ./targets/x86-x58-ich10/create_switches.simics')
             # seems needed by simics7 ?
             run_command('instantiate-components')
             checkVLAN(self.config)
@@ -328,7 +328,7 @@ class LaunchRESim():
                 else:
                     print('WARNIG, starting driver but missing driver-script.sh script! *****************************')
                 lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
-                run_command('run-command-file ./targets/%s' % driver_script)
+                run_command('run-script ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 run_command('driver.mb.log-level 0 -r')
                 done = False
@@ -336,9 +336,9 @@ class LaunchRESim():
                 if interact is not None:
                     print('Will run interact %s' % interact)
                     if interact.endswith('.simics'):
-                        run_command('run-command-file %s' % interact)
+                        run_command('run-script %s' % interact)
                     elif interact.endswith('.py'):
-                        run_command('run-python-file %s' % interact)
+                        run_command('run-script %s' % interact)
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
@@ -366,7 +366,7 @@ class LaunchRESim():
             if RUN_FROM_SNAP is not None:
                 print('run from checkpoint %s' % RUN_FROM_SNAP)
                 run_command('read-configuration %s' % RUN_FROM_SNAP)
-                #run_command('run-command-file ./targets/x86-x58-ich10/switches.simics')
+                #run_command('run-script ./targets/x86-x58-ich10/switches.simics')
             elif INIT_FROM_SNAP is not None:
                 print('init from checkpoint %s (hold the pickles)' % INIT_FROM_SNAP)
                 run_command('read-configuration %s' % INIT_FROM_SNAP)
@@ -470,9 +470,9 @@ class LaunchRESim():
                        
             if script.lower() != 'none': 
                 if self.SIMICS_VER.startswith('4'):
-                    cmd='run-command-file "./targets/%s"' % (script)
+                    cmd='run-script "./targets/%s"' % (script)
                 else:
-                    cmd='run-command-file "targets/%s" %s' % (script, params)
+                    cmd='run-script "targets/%s" %s' % (script, params)
                 #print('cmd is %s' % cmd)
                 lgr.debug('cmd is %s' % cmd)
                 run_command(cmd)
@@ -488,16 +488,16 @@ class LaunchRESim():
                     interact = self.comp_dict[section][name]
                     print('Will run interact %s for target %s' % (interact, section))
                     if interact.endswith('.simics'):
-                        run_command('run-command-file %s' % interact)
+                        run_command('run-script %s' % interact)
                     elif interact.endswith('.py'):
-                        run_command('run-python-file %s' % interact)
+                        run_command('run-script %s' % interact)
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
             PRE_INIT_SCRIPT = os.getenv('PRE_INIT_SCRIPT')
             if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES' and PRE_INIT_SCRIPT is not None:
                 print('Will create resim params, run pre_init_script %s' % PRE_INIT_SCRIPT)
-                cmd = 'run-command-file %s' % PRE_INIT_SCRIPT
+                cmd = 'run-script %s' % PRE_INIT_SCRIPT
                 run_command(cmd)
  
     def doAlways(self):
@@ -510,9 +510,9 @@ class LaunchRESim():
                     always = self.comp_dict[section][name]
                     print('Will run always %s for target %s' % (always, section))
                     if always.endswith('.simics'):
-                        run_command('run-command-file %s' % always)
+                        run_command('run-script %s' % always)
                     elif always.endswith('.py'):
-                        run_command('run-python-file %s' % always)
+                        run_command('run-script %s' % always)
                     else:
                         lgr.error('Did not know what to do with ALWAYS_SCRIPT %s' % always)
                         return
