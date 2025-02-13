@@ -142,6 +142,8 @@ class WinCallExit():
                 trace_msg = trace_msg+' BIND on Handle 0x%x' % exit_info.old_fd
                 #self.top.rmSyscall(exit_info.matched_param.name, cell_name=self.cell_name)
             else:
+                if exit_info.old_fd is not None:
+                    trace_msg = trace_msg + " handle: 0x%x" % exit_info.old_fd  
                 #trace_msg = trace_msg+ ' with error: 0x%x' % (eax)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
             exit_info.matched_param = None
