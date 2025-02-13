@@ -395,7 +395,7 @@ class LaunchRESim():
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
                     lgr.debug('genMonitor for target %s' % RESIM_TARGET)
-                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file)
+                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf)
                     cgc.doInit()
     
     def getSimicsScript(self, section):    
