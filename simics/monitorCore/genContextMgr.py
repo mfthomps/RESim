@@ -1,6 +1,7 @@
 from simics import *
 from resimHaps import *
 import winProg
+import resimSimicsUtils
 import os
 '''
 Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
@@ -64,7 +65,7 @@ class GenBreakpoint():
         SIM_enable_breakpoint(self.break_num)
 
 class GenHap():
-    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, immediate=True):
+    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, conf, immediate=True):
         ''' breakpoint_start and breakpont_end are GenBreakpoint types '''
         self.hap_type = hap_type
         self.callback = callback
@@ -78,6 +79,7 @@ class GenHap():
         self.hap_num = None
         self.handle = handle
         self.name = name
+        self.conf = conf
         self.disable_forward = disable_forward
         self.set(immediate)
         self.disabled = False
@@ -110,8 +112,9 @@ class GenHap():
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
                 if bp.prefix is not None:
-                    command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
-                    SIM_run_alone(SIM_run_command, command)
+                    resimSimicsUtils.setBreakpointPrefix(self.conf, bp.break_num, bp.prefix)
+                    #command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                    #SIM_run_alone(SIM_run_command, command)
                     #self.lgr.debug('contextManager prefix cmd: %s' % command)
 
                 #self.lgr.debug('GenHap breakpoint created for hap_handle %d  assigned breakpoint num %d cell %s' % (self.handle, bp.break_num, bp.cell))
@@ -138,9 +141,10 @@ class GenHap():
             bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
             #self.lgr.debug('GenHap set back from call breakpoint')
             if bp.prefix is not None:
-                command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
+                resimSimicsUtils.setBreakpointPrefix(self.conf, bp.break_num, bp.prefix)
+                #command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
-                SIM_run_alone(SIM_run_command, command)
+                #SIM_run_alone(SIM_run_command, command)
                 #self.lgr.debug('contextManager prefix cmd: %s' % command)
             #self.lgr.debug('GenHap set hap_handle %s name: %s on breakpoint %s (0x%x) break_handle %s cell %s ' % (str(self.handle), 
             #              self.name, str(bp.break_num), bp.addr, str(bp.handle), bp.cell))
@@ -421,7 +425,7 @@ class GenContextMgr():
         for bp in self.breakpoints:
             if bp.handle == handle:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name, disable_forward)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name, disable_forward, self.top.conf)
                 self.haps.append(hap)
                 retval = hap.handle
                 break
@@ -438,7 +442,7 @@ class GenContextMgr():
                 bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, disable_forward, immediate=True)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, disable_forward, self.top.conf, immediate=True)
                 #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
