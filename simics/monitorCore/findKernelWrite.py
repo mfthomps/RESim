@@ -139,7 +139,7 @@ class findKernelWrite():
             phys, self.num_bytes, 0)
 
         if self.SIMICS_VER.startswith('7'):
-            self.reverse_mgr.setCallback(self.revWriteCallback)
+            self.reverse_mgr.setCallback(self.revWriteCallbackSim7)
         else:
             self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
             self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
@@ -885,8 +885,8 @@ class findKernelWrite():
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.forward_hap)
             self.forward_hap = None
                 
-    def revWriteCallback(self, memory):
-        self.lgr.debug('findKernelWrite revWriteCallback memory 0x%x' % memory.logical_address)
+    def revWriteCallbackSim7(self, memory, dumb, dum1, dumb2):
+        self.lgr.debug('findKernelWrite revWriteCallbackSim7 memory 0x%x' % memory.logical_address)
         SIM_run_alone(self.cleanup, False)
         self.memory_transaction = memory
         SIM_run_alone(self.context_manager.enableAll, None)
