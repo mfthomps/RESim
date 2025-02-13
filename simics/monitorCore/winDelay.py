@@ -191,9 +191,9 @@ class WinDelay():
                 self.lgr.debug('winDelay getIOData already did exit so log the trace message %s' % trace_msg)
             else:
                 trace_msg = self.call_name+' handle: 0x%x return count: 0x%x request: 0x%x address: 0x%x data: %s\n' % (self.fd, return_count, self.exit_info.count, self.exit_info.retval_addr, repr(read_data))
-                self.lgr.debug('winDelay getIOData have not yet done exit so log SAVE the trace message %s' % trace_msg)
+                self.lgr.debug('winDelay tid:%s getIOData have not yet done exit so log SAVE the trace message %s' % (self.tid, trace_msg))
             if self.call_name == 'RECV_DATAGRAM':
-                self.lgr.debug('winDelay get sock struct from addr 0x%x' % self.sock_addr)
+                self.lgr.debug('winDelay tid:%s get sock struct from addr 0x%x' % (self.tid, self.sock_addr))
                 self.exit_info.sock_addr = self.sock_addr
                 sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
                 sock_string = sock_struct.getString()
@@ -237,14 +237,16 @@ class WinDelay():
                 self.lgr.debug('winDelay writeCountHap for self.tid %s, but current tid is %s' % (self.tid, tid))
             else:
                 self.lgr.debug('winDelay writeCountHap tid:%s module %s' % (self.tid, str(self)))
-            self.getIOData(return_count, memory.logical_address)
+            # TBD ?
+            #self.getIOData(return_count, memory.logical_address)
+            self.getIOData(return_count, self.exit_info.delay_count_addr)
             #SIM_break_simulation('WinDelay')
             # we are in the kernel at some arbitrary place.  run to user space
             if (self.data_watch is not None or self.stop_action is not None or (self.exit_info.matched_param is not None and self.exit_info.matched_param.break_simulation)) and self.did_exit:
                 SIM_run_alone(self.toUserAlone, None)
             ''' Remove the break/hap '''
             hap = self.count_write_hap
-            self.lgr.debug('winDelay writeCountHap return_count was %d from address 0x%x, removing count_write_hap %d' % (return_count, memory.logical_address, hap))
+            self.lgr.debug('winDelay writeCountHap tid:%s return_count was %d from address 0x%x, removing count_write_hap %d' % (self.tid, return_count, memory.logical_address, hap))
             SIM_run_alone(self.rmHap, hap) 
             self.count_write_hap = None
             #if self.did_exit and self.exit_info.syscall_instance is not None:
