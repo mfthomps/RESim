@@ -1985,21 +1985,26 @@ class WinSyscall():
                     #self.lgr.debug('winSyscall sock %s' % to_string)
                     #frame_string = taskUtils.stringFromFrame(frame)
                     #SIM_break_simulation(trace_msg+' '+to_string+ ' '+frame_string)
+
                 # TBD count_addr vs delay_count_addr
+                # REMOVE THIS
                 exit_info.count_addr = frame['param5'] + 8
+                exit_info.delay_count_addr = exit_info.count_addr
+                '''
                 if word_size == 4:
                     param_val = self.paramOffPtr(5, [0], frame, word_size) 
                     if param_val is None:
-                        self.lgr.debug('winSyscall failed to get delay_count_addr from stack2, count_addr is 0x%x set delay_count to none' % (exit_info.count_addr))
+                        self.lgr.debug('winSyscall tid:%s failed to get delay_count_addr from stack2, count_addr is 0x%x set delay_count to none' % (tid, exit_info.count_addr))
                         exit_info.delay_count_addr = None
                     else:
                         exit_info.delay_count_addr = param_val + word_size
                 else:
                     exit_info.delay_count_addr = self.stackParam(1, frame) + word_size
+                '''
                 if exit_info.delay_count_addr is not None:
-                    self.lgr.debug('winSyscall %s returned delay_count_addr 0x%x' % (op_cmd, exit_info.delay_count_addr))
+                    self.lgr.debug('winSyscall tid:%s %s returned delay_count_addr 0x%x' % (tid, op_cmd, exit_info.delay_count_addr))
                 else:
-                    self.lgr.debug('winSyscall %s returned delay count addr is None' % (op_cmd))
+                    self.lgr.debug('winSyscall tid:%s %s returned delay count addr is None' % (tid, op_cmd))
                 if exit_info.retval_addr is None:
                     self.lgr.error('winSyscall retval_addr None')
                 elif exit_info.count is None:
