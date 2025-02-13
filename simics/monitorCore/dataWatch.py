@@ -35,6 +35,7 @@ import memUtils
 import watchMarks
 import backStop
 import resimUtils
+import resimSimicsUtils
 import readLibTrack
 import net
 import os
@@ -193,7 +194,6 @@ class DataWatch():
         self.callback = None
         self.last_byteswap = 0
         self.stopped = False
-
         # TBD multithread?
         self.strtok_ptr = None
 
@@ -339,7 +339,7 @@ class DataWatch():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
             #self.rmCallHap()
             if self.call_break is not None:
-                RES_delete_breakpoint(self.call_break)
+                self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
             self.call_stop_hap = None
         else:
             return
@@ -2748,13 +2748,13 @@ class DataWatch():
     def undoAlone(self, dumb):
             #oneless = self.save_cycle -1
             oneless = self.save_cycle 
-            self.lgr.debug('undoAlone skip back to 0x%x' % oneless)
+            self.lgr.debug('dataWatch undoAlone skip back to 0x%x' % oneless)
             if not self.top.skipToCycle(oneless, cpu=self.cpu):
-                self.lgr.error('undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
+                self.lgr.error('dataWatch undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
                 return
             eip = self.top.getEIP(self.cpu)
             dum_cpu, comm, tid = self.task_utils.curThread()
-            self.lgr.debug('skip done eip 0x%x tid %s cycle 0x%x' % (eip, tid, self.cpu.cycles))
+            self.lgr.debug('dataWatch skip done eip 0x%x tid %s cycle 0x%x' % (eip, tid, self.cpu.cycles))
             self.watch(i_am_alone=True)
             '''
             addr = self.mem_something.src
@@ -2773,16 +2773,17 @@ class DataWatch():
 
     def rmCallHap(self):
         if self.call_hap is not None:
-            RES_delete_breakpoint(self.call_break)
+            self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.call_hap)
             self.call_hap = None
             self.call_break = None
 
-    def hitCallStopHap(self, prev_mark_cycle, one, exception, error_string):
+    def hitCallStopHap(self, called_from_reverse_mgr, one, exception, error_string):
         #self.lgr.debug('dataWatch hitCallStopHap execption %s  error_string %s cycle: 0x%x' % (exception, error_string, self.cpu.cycles))
-        SIM_run_alone(self.hitCallStopHapAlone, prev_mark_cycle)
+        if self.call_stop_hap is not None or called_from_reverse_mgr is not None:
+            SIM_run_alone(self.hitCallStopHapAlone, called_from_reverse_mgr)
  
-    def hitCallStopHapAlone(self, prev_mark_cycle):
+    def hitCallStopHapAlone(self, called_from_reverse_mgr):
         self.context_manager.enableAll()
         SIM_run_command('enable-vmp') 
         
@@ -2790,39 +2791,37 @@ class DataWatch():
         eip = self.top.getEIP(self.cpu)
         first_cycle = self.top.getFirstCycle()
         self.lgr.debug('DataWatch hitCallStopHap eip 0x%x cycles: 0x%x first_cycle: 0x%x' % (eip, self.cpu.cycles, first_cycle))
-        if self.call_stop_hap is not None:
-            cycle_dif = self.cycles_was - self.cpu.cycles
-            #self.lgr.debug('hitCallStopHap will delete call_stop_hap %d cycle_dif 0x%x' % (self.call_stop_hap, cycle_dif))
+        cycle_dif = self.cycles_was - self.cpu.cycles
+        #self.lgr.debug('hitCallStopHap will delete call_stop_hap %d cycle_dif 0x%x' % (self.call_stop_hap, cycle_dif))
+        if called_from_reverse_mgr is None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
-            self.call_stop_hap = None
-            #self.rmCallHap()
-            #self.lgr.debug('hitCallStopHap remove call_break %d' % self.call_break)
-            RES_delete_breakpoint(self.call_break)
-            self.call_break = None
-        else:
-            return
+        self.call_stop_hap = None
+        #self.rmCallHap()
+        #self.lgr.debug('hitCallStopHap remove call_break %d' % self.call_break)
+        self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
+        self.call_break = None
         ''' TBD dynamically adjust cycle_dif limit?  make exceptions for some calls, e.g., xmlparse? '''
         #if eip != self.mem_something.called_from_ip or cycle_dif > 300000:
         if self.cpu.cycles == first_cycle:
             self.lgr.debug('hitCallStopHap stopped at original bookmark, assume a ghost frame')
             self.undo_pending = True
             SIM_run_alone(self.undoAlone, self.mem_something)
-        if self.cpu.cycles == prev_mark_cycle:
+        if self.cpu.cycles == self.prev_mark_cycle:
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
             if self.top.isVxDKM(cpu=self.cpu) and sp < self.mem_something.ret_addr_addr:
-                self.lgr.debug('hitCallStopHap stopped at previous watchmark, but is vxworks and stack frame still good, assume all is well and delete prev watch mark')
+                self.lgr.debug('dataWatch hitCallStopHap stopped at previous watchmark, but is vxworks and stack frame still good, assume all is well and delete prev watch mark')
                 self.watchMarks.rmLast(1)
                 SIM_run_alone(self.getMemParams, True)
             else:
-                self.lgr.debug('hitCallStopHap stopped at previous watchmark, assume a ghost frame sp is 0x%x' % sp)
+                self.lgr.debug('dataWatch hitCallStopHap stopped at previous watchmark, assume a ghost frame sp is 0x%x' % sp)
                 self.undo_pending = True
                 SIM_run_alone(self.undoAlone, self.mem_something)
 
         elif eip != self.mem_something.called_from_ip or cycle_dif > 0xF000000:
             if eip != self.mem_something.called_from_ip:
-                self.lgr.debug('hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x assume a ghost frame' % (self.mem_something.called_from_ip, eip))
+                self.lgr.debug('dataWatch hitCallStopHap not stopped on expected call. Wanted 0x%x got 0x%x assume a ghost frame' % (self.mem_something.called_from_ip, eip))
             else:
-                self.lgr.debug('hitCallStopHap stopped too far back cycle_dif 0x%x, assume a ghost frame' % cycle_dif)
+                self.lgr.debug('dataWatch hitCallStopHap stopped too far back cycle_dif 0x%x, assume a ghost frame' % cycle_dif)
             self.undo_pending = True
             SIM_run_alone(self.undoAlone, self.mem_something)
         else:
@@ -2832,20 +2831,20 @@ class DataWatch():
                     # TBD better way to know this is our stack frame 
                     sp = self.mem_utils.getRegValue(self.cpu, 'sp') - 0x10
                     if self.mem_something.ret_addr_addr is not None:
-                        self.lgr.debug('dataWatch histCallStopHap cycle past latest.  sp is 0x%x ret_addr_addr 0x%x' % (sp, self.mem_something.ret_addr_addr))
+                        self.lgr.debug('dataWatch dataWatch histCallStopHap cycle past latest.  sp is 0x%x ret_addr_addr 0x%x' % (sp, self.mem_something.ret_addr_addr))
                     if self.mem_something.ret_addr_addr is None or (self.top.isVxDKM(cpu=self.cpu) and sp < self.mem_something.ret_addr_addr):
-                        self.lgr.debug('hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, no ret_addr_addr or sp retval still good, so assume recent watch mark is a subfunction of the memsomething.  Remove the subfunction' % (self.cpu.cycles, latest_cycle))
+                        self.lgr.debug('dataWatch hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, no ret_addr_addr or sp retval still good, so assume recent watch mark is a subfunction of the memsomething.  Remove the subfunction' % (self.cpu.cycles, latest_cycle))
                         self.watchMarks.rmLast(1)
                         SIM_run_alone(self.getMemParams, True)
                     else:
-                        self.lgr.debug('hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, assume a ghost frame' % (self.cpu.cycles, latest_cycle))
+                        self.lgr.debug('dataWatch hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, assume a ghost frame' % (self.cpu.cycles, latest_cycle))
                         self.undo_pending = True
                         SIM_run_alone(self.undoAlone, self.mem_something)
                 else:
                     self.lgr.debug('dataWatch hitCallStopHap function %s call getMemParams at eip 0x%x' % (self.mem_something.fun, eip))
                     SIM_run_alone(self.getMemParams, True)
             else:
-                self.lgr.error('hitCallStopHap, latest_cycle is None')
+                self.lgr.error('dataWatch hitCallStopHap, latest_cycle is None')
 
     def revAlone(self, alternate_callback=None):
         is_running = self.top.isRunning()
@@ -2891,13 +2890,13 @@ class DataWatch():
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
         #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call_hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
         #   self.mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
-        prev_mark_cycle = self.watchMarks.latestCycle()
+        self.prev_mark_cycle = self.watchMarks.latestCycle()
         delta = None
         reverse_to = False
-        if prev_mark_cycle is not None and self.mem_something.ret_addr_addr is not None and not self.top.isVxDKM(cpu=self.cpu):
-            delta = self.cpu.cycles - prev_mark_cycle
+        if self.prev_mark_cycle is not None and self.mem_something.ret_addr_addr is not None and not self.top.isVxDKM(cpu=self.cpu):
+            delta = self.cpu.cycles - self.prev_mark_cycle
             reverse_to = True
-            #rev_cmd = 'reverse-to cycle = %d' % prev_mark_cycle 
+            #rev_cmd = 'reverse-to cycle = %d' % self.prev_mark_cycle 
             self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and save_cycle 0x%x (%d). Delta cycles is %d ret_addr_addr 0x%x, now reverse' % (self.call_break, 
                self.mem_something.called_from_ip, phys_block.address, self.save_cycle, self.save_cycle, delta, self.mem_something.ret_addr_addr))
         else:
@@ -2907,17 +2906,22 @@ class DataWatch():
         #self.lgr.debug('cell is %s  cpu context %s' % (cell, self.cpu.current_context))
         #SIM_run_command('list-breakpoints')
         if alternate_callback is None:
-            callback = self.hitCallStopHap
+            if not self.reverse_mgr.nativeReverse()
+                self.reverse_mgr.setCallback(self.hitCallStopHap)
+            else:
+                self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.hitCallStopHap, None)
         else:
-            callback = alternate_callback
+            if not self.reverse_mgr.nativeReverse()
+                self.reverse_mgr.setCallback(alternate_callback)
+            else:
+                self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", alternate_callback, None)
         SIM_run_command('disable-vmp') 
-        self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", callback, prev_mark_cycle)
         #if delta > 1000:
         #    print('would run this: %s' % rev_cmd)
         #else:
         #    SIM_run_command(rev_cmd)
         if reverse_to:
-            self.reverse_mgr.reverseTo(cycle)
+            self.reverse_mgr.reverseTo(self.prev_mark_cycle)
         else:
             self.reverse_mgr.reverse()
 
@@ -5701,23 +5705,25 @@ class DataWatch():
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry2 eip 0x%x already in mem_fun_entries' % eip)
             self.runToReturnAlone(False)
 
-    def memcpyCheck(self, prev_mark_cycle, one, exception, error_string):
+    def memcpyCheck(self, called_from_reverse_mgr, one, exception, error_string):
+        if self.call_stop_hap is not None or called_from_reverse_mgr is not None:
+            self.memcpyCheckBody(called_from_reverse_mgr)
+
+    def memcpyCheckBody(self, called_from_reverse_mgr):
         ''' We are at the call to what looks like an obscure memcpy.  We are stopped, but in a hap.
             Determine if this is in fact an obscure memcpy (one with no analysis signature).
         '''
         self.lgr.debug('dataWatch memcpyCheck cycle: 0x%x' % self.cpu.cycles)
         SIM_run_alone(self.context_manager.enableAll, None)
         SIM_run_command('enable-vmp') 
-        if self.call_stop_hap is not None:
-            cycle_dif = self.cycles_was - self.cpu.cycles
-            #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
+        cycle_dif = self.cycles_was - self.cpu.cycles
+        #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
+        if called_from_reverse_mgr is None:
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
-            #self.rmCallHap()
-            if self.call_break is not None:
-                self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
-            self.call_stop_hap = None
-        else:
-            return
+        #self.rmCallHap()
+        if self.call_break is not None:
+            self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
+        self.call_stop_hap = None
         self.lgr.debug('dataWatch memcpyCheck.  now what?')
         buf_index = self.findRangeIndex(self.mem_something.src)
         got_it = False
