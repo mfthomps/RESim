@@ -198,31 +198,35 @@ class reverseToCall():
             # Set exectution breakpoints for "call" and "ret" instructions
             #call_break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, 
             #   Sim_Access_Execute, range_start, size, 0)
-            call_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
+            self.lgr.debug('reverseToCall doBreaks will do prefix')
+            call_break_num = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, 
                Sim_Access_Execute, range_start, size, 0)
             self.the_breaks.append(call_break_num)
             if self.cpu.architecture.startswith('arm'):
-                command = 'set-prefix %d "bl"' % call_break_num
+                prefix = 'bl' 
             else:
-                command = 'set-prefix %d "call"' % call_break_num
-            SIM_run_alone(SIM_run_command, command)
+                prefix = 'call' 
+            resimSimicsUtils.setBreakpointPrefix(self.top.conf, call_break_num, prefix)
             if self.cpu.architecture.startswith('arm'):
-                ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
+                ret_break_num = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, 
                    Sim_Access_Execute, range_start, size, 0)
                 self.the_breaks.append(ret_break_num)
-                command = 'set-substr %d "PC"' % ret_break_num
-                SIM_run_alone(SIM_run_command, command)
-                ret_break_num = SIM_breakpoint(pcell, Sim_Break_Physical, 
+                #command = 'set-substr %d "PC"' % ret_break_num
+                #SIM_run_alone(SIM_run_command, command)
+                resimSimicsUtils.setBreakpointSubstring(self.top.conf, ret_break_num, 'PC')
+                ret_break_num = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, 
                    Sim_Access_Execute, range_start, size, 0)
                 self.the_breaks.append(ret_break_num)
-                command = 'set-substr %d "LR"' % ret_break_num
-                SIM_run_alone(SIM_run_command, command)
+                resimSimicsUtils.setBreakpointSubstring(self.top.conf, ret_break_num, 'LR')
+                #command = 'set-substr %d "LR"' % ret_break_num
+                #SIM_run_alone(SIM_run_command, command)
             else:
-                ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                ret_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                    Sim_Access_Execute, range_start, size, 0)
                 self.the_breaks.append(ret_break_num)
-                command = 'set-prefix %d "ret"' % ret_break_num
-                SIM_run_alone(SIM_run_command, command)
+                resimSimicsUtils.setBreakpointPrefix(self.top.conf, ret_break_num, 'ret')
+                #command = 'set-prefix %d "ret"' % ret_break_num
+                #SIM_run_alone(SIM_run_command, command)
             self.lgr.debug('done setting breakpoints for call and ret addr: 0x%x len: 0x%x' % (range_start, size))
         else:
             break_num = self.context_manager.genBreakpoint(pcell, Sim_Break_Physical, Sim_Access_Execute, 
@@ -344,27 +348,33 @@ class reverseToCall():
         self.lgr.debug('would jump to 0x%x' % cycle)
         #self.jump_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
 	#        self.jumpStopped, None)
-        cmd = 'skip-to cycle = %d ' % cycle
-        SIM_run_command(cmd)
+        self.skipToTest(cycle)
         self.top.skipAndMail()
 
     def skipToTest(self, cycle):
-        while SIM_simics_is_running():
-            self.lgr.error('skipToTest but simics running')
-            time.sleep(1)
         retval = True
-        SIM_run_command('pselect %s' % self.cpu.name)
-        cmd = 'skip-to cycle = %d ' % cycle
-        SIM_run_command(cmd)
-        now = self.cpu.cycles
-        if now != cycle:
-            self.lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
-            time.sleep(1)
+        if not self.reverseMgr.nativeReverse():
+            self.reverseMgr.skipToCycle(cycle)
+        else:
+            count = 0 
+            while SIM_simics_is_running():
+                self.lgr.error('skipToTest but simics running')
+                time.sleep(1)
+                if count > 10:
+                    self.lgr.error('too much, bail')
+                    break 
+            SIM_run_command('pselect %s' % self.cpu.name)
+            cmd = 'skip-to cycle = %d ' % cycle
             SIM_run_command(cmd)
             now = self.cpu.cycles
             if now != cycle:
-                self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
-                retval = False
+                self.lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
+                time.sleep(1)
+                SIM_run_command(cmd)
+                now = self.cpu.cycles
+                if now != cycle:
+                    self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
+                    retval = False
         return retval
     
     def isExit(self, instruct, eip):
@@ -518,7 +528,7 @@ class reverseToCall():
                 self.uncall = False
                 self.pageTableBreaks(False)
                 self.lgr.debug('tryOneStopped, set break range')
-            SIM_run_alone(SIM_run_command, 'reverse')
+            SIM_run_alone(self.reverse_mgr.reverse, None)
             #self.lgr.debug('reverseToCall, did reverse-step-instruction')
             self.lgr.debug('tryOneStopped, did reverse')
 
@@ -802,8 +812,7 @@ class reverseToCall():
                         #for item in self.x_pages:
                         #    self.setBreakRange(self.cell_name, tid, item.address, item.length, self.cpu, comm, False, reg)
                         self.lgr.debug('doRevToModReg, set break range')
-                        #SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
-                        SIM_run_alone(SIM_run_command, 'reverse')
+                        SIM_run_alone(self.reverse_mgr.reverse, None)
                         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
                         self.lgr.debug('reverseToModReg, did reverse')
                         done=True
@@ -862,7 +871,7 @@ class reverseToCall():
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
         for breakpt in self.the_breaks:
-            RES_delete_breakpoint(breakpt)
+            self.reverse_mgr.SIM_delete_breakpoint(breakpt)
         self.the_breaks = []
 
     def conditionalMet(self, mn):
@@ -1317,8 +1326,6 @@ class reverseToCall():
         if self.stop_hap is None:
             self.lgr.error('stoppedReverseToCall invoked though hap is none')
             return
-        #cmd = 'reverse-step-instruction'
-        cmd = 'reverse'
         dum_cpu, comm, tid = self.task_utils.curThread()
         current = SIM_cycle_count(cpu)
         self.lgr.debug('stoppedReverseToCall, entered %s (%s) cycle: 0x%x' % (tid, comm, current))
@@ -1346,7 +1353,7 @@ class reverseToCall():
                     self.cleanup(None)
                 else:
                    self.lgr.debug('stoppedReverseToCall 0x%x got call %s   got_calls %d, need %d' % (eip, instruct[1], self.got_calls, self.need_calls))
-                   SIM_run_alone(SIM_run_command, cmd)
+                   SIM_run_alone(self.reverse_mgr.reverse, None)
             elif self.isRet(instruct[1], eip):
                 self.need_calls += 1
                 self.lgr.debug('stoppedReverseToCall 0x%x got ret %s  need: %d' % (eip, instruct[1], self.need_calls))
@@ -1355,20 +1362,20 @@ class reverseToCall():
                     ''' TBD fix this? '''
                     for item in self.x_pages:
                         self.setBreakRange(self.cell_name, tid, item.address, item.length, cpu, comm, True)
-                SIM_run_alone(SIM_run_command, cmd)
+                SIM_run_alone(self.reverse_mgr.reverse, None)
             else:
                 self.lgr.debug('stoppedReverseToCall Not call or ret at %x, is %s' % (eip, instruct[1]))
-                SIM_run_alone(SIM_run_command, cmd)
+                SIM_run_alone(self.reverse_mgr.reverse, None)
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong tid (%s) or in kernel, try again' % tid)
-            SIM_run_alone(SIM_run_command, cmd)
+            SIM_run_alone(self.reverse_mgr.reverse, None)
         self.first_back = False
    
     def setOneBreak(self, address, cpu):
         self.lgr.debug('setOneBreak at 0x%x' % address)
         phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         cell = cpu.physical_memory
-        call_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+        call_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, 1, 0)
         self.the_breaks.append(call_break_num)
 
@@ -1389,36 +1396,32 @@ class reverseToCall():
             if phys_block.address != 0:
                 if call_ret:
                     # Set exectution breakpoints for "call" and "ret" instructions
-                    call_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
-                       Sim_Access_Execute, phys_block.address, self.page_size, 0)
+                    call_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     self.the_breaks.append(call_break_num)
                     if self.cpu.architecture.startswith('arm'):
-                        command = 'set-prefix %d "bl"' % call_break_num
+                        prefix = 'bl' 
                     else:
-                        command = 'set-prefix %d "call"' % call_break_num
-                    SIM_run_alone(SIM_run_command, command)
+                        prefix = 'call' 
+                    resimSimicsUtils.setBreakpointPrefix(self.top.conf, call_break_num, prefix)
                  
                     if self.cpu.architecture.startswith('arm'):
                         ''' TBD much too ugly'''
-                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                        ret_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
                         self.the_breaks.append(ret_break_num)
-                        command = 'set-substr %d "PC"' % ret_break_num
-                        SIM_run_alone(SIM_run_command, command)
-                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                        resimSimicsUtils.setBreakpointSubstring(self.top.conf, ret_break_num, 'PC')
+                        ret_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
                         self.the_breaks.append(ret_break_num)
-                        command = 'set-substr %d "LR"' % ret_break_num
-                        SIM_run_alone(SIM_run_command, command)
+                        resimSimicsUtils.setBreakpointSubstring(self.top.conf, ret_break_num, 'LR')
                     else:
-                        ret_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                        ret_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                            Sim_Access_Execute, phys_block.address, self.page_size, 0)
                         self.the_breaks.append(ret_break_num)
-                        command = 'set-prefix %d "ret"' % ret_break_num
-                        SIM_run_alone(SIM_run_command, command)
+                        resimSimicsUtils.setBreakpointPrefix(self.top.conf, ret_break_num, 'ret')
                     self.lgr.debug('done setting breakpoints for call and ret addr: %x', phys_block.address)
                 elif reg is not None:
-                    all_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                    all_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     # TBD substr only applies to mnemonic?
                     #command = 'set-substr %d "%s"' % (all_break_num, reg)
@@ -1426,7 +1429,7 @@ class reverseToCall():
                     self.the_breaks.append(all_break_num)
                     self.lgr.debug('done setting breakpoints for reg substring %s addr: %x' % (reg, phys_block.address))
                 else:
-                    all_break_num = SIM_breakpoint(cell, Sim_Break_Physical, 
+                    all_break_num = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Physical, 
                        Sim_Access_Execute, phys_block.address, self.page_size, 0)
                     self.lgr.debug('setBreakRange set phys addr 0x%x linear 0x%x' % (phys_block.address, start))
                     self.the_breaks.append(all_break_num)
