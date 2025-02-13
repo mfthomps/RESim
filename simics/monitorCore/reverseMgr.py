@@ -218,7 +218,16 @@ class ReverseMgr():
             return False
 
     def skipToCycle(self, our_cycles, use_cell=None, object_cycles=None):
-        '''  Skip to a given cycle.
+        '''  
+        Skip to a given cycle.   
+        Parameter our_cycles: cycle on this cpu to skip to, unless use_cell is set as per below.
+        Parameter use_cell: Not intended for external use.  Names a sell other than the cell of this cpu.
+        Parameter object_cycles: The cycles on the use_cell cpu to be skipped to.
+
+        The use_cell / object_cycles are intended for use internal to the module for skipping to the cycle
+        of the most recent breakpoint when that breakpoint is not on our cell.  In such a case, the ReverseMgr
+        will restore the span prior to our_cycles and then run forward to the object_cycles on the use_cell.
+        NOTE: TBD not fully implemented for case where object_cycles is less than the previous span cycle.
         '''
         if self.top is not None:
              eip = self.top.getEIP()
@@ -293,6 +302,9 @@ class ReverseMgr():
             
           
     def runToCycle(self, cycle, use_cell=None):
+        '''
+        Run forward to the given cycle.  Internal only, will disable breakpoints before running forward.  Uses a event hap.
+        '''
         if use_cell is None:
             use_cpu = self.cpu
         else:
@@ -321,6 +333,10 @@ class ReverseMgr():
             self.enableAll()
 
     def reverse(self, dumb=None):
+        '''
+        Reverse until either a breakpoint is hit, or we hit the origin.  If multiple breakpoionts are set, execution
+        is set at the most recent.
+        '''
         if self.nativeReverse():
             SIM_run_command('reverse')
         else:
@@ -481,12 +497,18 @@ class ReverseMgr():
         SIM_break_simulation('span cycle handler')
 
     def setBreakHaps(self):
+        '''
+        Set haps on all breakpoints so we can record their cycles
+        '''
         for bp in self.bp_list:
             self.lgr.debug('reverseMgr setBreakHaps set hap for bp %d' % bp)
             the_hap = SIM_hap_add_callback_index('Core_Breakpoint_Memop', self.breakCallback, None, bp)
             self.break_haps.append(the_hap) 
 
     class BreakInfo():
+        '''
+        Internal class used to skip to the point at which a breakpoint occurred.
+        '''
         def __init__(self, the_object, bp, memory, object_cycles=None):
             self.the_object = the_object
             self.bp = bp
@@ -496,13 +518,17 @@ class ReverseMgr():
             self.object_cycles = object_cycles
 
     def breakCallback(self, param, the_obj, the_break, memory):
-        # TBD record the_object and its cycles for breaks on cells other than self.cpu
+        '''
+        HAP invoked when breakpoints are hit while reversing.  We record the cycle for use in identifying
+        the most recent hap.  If the breakpoint is a bp.memory.breakpoint; then we force a continue since Simics
+        will stop on those even if there is a HAP to handle it.
+        ''' 
         if len(self.break_haps) == 0:
             return
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         #value = SIM_get_mem_op_value_le(memory)
         if self.top is not None:
             eip = self.top.getEIP()
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, self.cpu.cycles, eip, instruct[1]))
         object_cycles = None 
         object_cell = the_obj.name.split('.')[0]
@@ -518,9 +544,15 @@ class ReverseMgr():
             SIM_run_alone(self.addCliStopHap, None)
 
     def addCliStopHap(self, dumb):
+        ''' 
+        Used with bp.memory.break breakpoints so we can keep going.
+        '''
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.cliStopHap, None)
 
     def cliStopHap(self, param, one, exception, error_string):
+        ''' 
+        Hit when a bp.memory.break causes Simics to stop (even though there is a HAP!)
+        '''
         self.lgr.debug('cliStopHap')
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap)
@@ -528,9 +560,11 @@ class ReverseMgr():
         SIM_run_alone(SIM_continue, 0)
 
     def rmStopHap(self, hap):
+        ''' Remove a stop hap.  Intended to be called from SIM_run_alone '''
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     def revOne(self):
+        ''' Reverse a single cycle '''
         if self.nativeReverse():
             cli.quiet_run_command('rev 1')
         else:
@@ -543,6 +577,9 @@ class ReverseMgr():
         SIM_event_cancel_time(use_cpu, self.delta_cycle_event, use_cpu, None, None)
 
     def setDeltaCycle(self, use_cpu, cycles):
+        '''
+        Used by runToCycle to enter a hap when cycles have been executed.
+        '''
         delta = cycles - use_cpu.cycles
         self.lgr.debug('reverseMgr setDeltaCycle delta 0x%x' % delta)
         if self.delta_cycle_event is None:
@@ -589,18 +626,30 @@ class ReverseMgr():
                 self.lgr.error('reverseMgr SIM_delete_breakpoint %d not in sim_breakpoints')
 
     def disableAll(self):
+        '''
+        Disable all breakpoints
+        '''
         self.rmContinuationHap()
         for bp in self.bp_list:
             #print('bp is %s' % bp)
             SIM_disable_breakpoint(bp)
 
     def enableAll(self):
+        '''
+        Enable all breakpoints
+        '''
         self.setContinuationHap()
         for bp in self.bp_list:
             self.lgr.debug('reverseMgr enableAll bp is %s' % bp)
             SIM_enable_breakpoint(bp)
 
     def setCallback(self, callback):
+        '''
+        Set a callback to be invoked after reverse finds a breakpoint.  The calling convention of the 
+        callback should match a Core_Simulation_Stopped HAP.  Use this instead of setting a stop hap.
+        The user parameter passed to the callback will be the memory value from the breakpoint hap.
+        Use that to determine if your HAP is called by this module, or by Simics 6. 
+        '''
         self.callback = callback
 
     def cancelRecordingEndCycle(self, dumb):
@@ -649,11 +698,16 @@ class ReverseMgr():
         SIM_hap_delete_callback_id("Core_Continuation", hap)
 
     def setContinuationHap(self):
+        '''
+        Catch a continue so that we can record snapshots as we move past the latest span.
+        '''
         self.lgr.debug('reverseMgr setContinuationHap cycle 0x%x' % self.cpu.cycles)
         self.continuation_hap = SIM_hap_add_callback("Core_Continuation", self.continuationHap, None)
 
     def continuationHap(self, dumb, one):
-        
+        '''
+        Restart recording of snapshots if needed.
+        '''
         if not self.recording_end_event_set:
             self.lgr.debug('reverseMgr continuationHap cycles: 0x%x' % self.cpu.cycles)
             if not self.recording:
@@ -673,6 +727,9 @@ class ReverseMgr():
         SIM_restore_snapshot('origin')
 
     def reverseTo(self, cycle):
+        '''
+        Restore the backstop cycle.
+        '''
         self.lgr.debug('reverseMgr reverseTo cycle 0x%x' % cycle)
         self.reverse_to =  cycle
         self.reverse()
@@ -685,6 +742,10 @@ class ReverseMgr():
            return False
 
     def mapCPUsToCell(self):
+        '''
+        Populate the cpu map for use when the most recent breakpoint is not tied to our cell.
+        Call this if cells are added or removed.
+        '''
         for cell in self.conf.sim.cell_list:
             object_cell = cell.name.split('.')[0]
             self.lgr.debug('reverseMgr mapCPUsToCell cell %s' % object_cell)
