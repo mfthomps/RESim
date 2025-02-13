@@ -167,3 +167,24 @@ def version():
     version = parts[0][0][2]
     return version
             
+def setBreakpointPrefix(conf, bp, prefix):
+    retval = False
+    index = 0
+    for item in conf.sim.breakpoints:
+        if item[0] == bp:
+            retval = True
+            conf.sim.attr.breakpoints[index][7] = prefix
+            break
+        index = index + 1
+    return retval
+
+def setBreakpointSubstring(conf, bp, substring):
+    retval = False
+    index = 0
+    for item in conf.sim.breakpoints:
+        if item[0] == bp:
+            retval = True
+            conf.sim.attr.breakpoints[index][8] = substring
+            break
+        index = index + 1
+    return retval
