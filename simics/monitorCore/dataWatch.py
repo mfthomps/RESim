@@ -2906,12 +2906,12 @@ class DataWatch():
         #self.lgr.debug('cell is %s  cpu context %s' % (cell, self.cpu.current_context))
         #SIM_run_command('list-breakpoints')
         if alternate_callback is None:
-            if not self.reverse_mgr.nativeReverse()
+            if not self.reverse_mgr.nativeReverse():
                 self.reverse_mgr.setCallback(self.hitCallStopHap)
             else:
                 self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.hitCallStopHap, None)
         else:
-            if not self.reverse_mgr.nativeReverse()
+            if not self.reverse_mgr.nativeReverse():
                 self.reverse_mgr.setCallback(alternate_callback)
             else:
                 self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", alternate_callback, None)
