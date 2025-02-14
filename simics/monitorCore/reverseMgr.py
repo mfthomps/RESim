@@ -58,7 +58,7 @@ invoke native Simics reversing functions if running on Simics 6.
 from simics import *
 import os
 import cli
-import resimSimicsUtils
+import logging
 class ReverseMgr():
     '''
     Initialize the ReverseMgr.
@@ -103,8 +103,7 @@ class ReverseMgr():
         self.continuation_hap = None
         self.recording_end_event_set = False
         self.reverse_to =  None
-        self.SIMICS_VER = resimSimicsUtils.version()
-        self.lgr.debug('reverseMgr simics version %s' % self.SIMICS_VER)
+        self.lgr.debug('reverseMgr simics version %s' % self.version())
 
         # map cell names to cpu's for use if reverse finds break on some other cell
         self.our_cell = cpu.name.split('.')[0]
@@ -736,7 +735,7 @@ class ReverseMgr():
 
     def nativeReverse(self):
         ''' Does Simics itself support reversing? '''
-        if not self.SIMICS_VER.startswith('7'):
+        if not self.version().startswith('7'):
            return True
         else:
            return False
@@ -753,3 +752,53 @@ class ReverseMgr():
             proclist = SIM_run_command(cmd)
             cpu = SIM_get_object(proclist[0])
             self.cpu_map[object_cell] = cpu
+
+    def version(self):
+        parts = cli.quiet_run_command('version')
+        version = parts[0][0][2]
+        return version
+
+'''
+Everything below is for use running directly from the Simics command prompt, e.g., for testing.
+Typically this module would be instantiated from some other Python module.
+'''
+
+def getLogger(name, logdir, level=None):
+    os.umask(000)
+    try:
+        os.makedirs(logdir)
+    except:
+        pass
+
+    log_level = logging.DEBUG
+    lgr = logging.getLogger(name)
+    lgr.setLevel(log_level)
+    fh = logging.FileHandler(logdir+'/%s.log' % name)
+    fh.setLevel(log_level)
+    frmt = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    fh.setFormatter(frmt)
+    lgr.addHandler(fh)
+    lgr.info('Start of log from %s.py' % name)
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.ERROR)
+    ch.setFormatter(frmt)
+    lgr.addHandler(ch)
+    return lgr
+
+def getCPU(conf):
+    cell = conf.sim.cell_list[0]
+    object_cell = cell.name.split('.')[0]
+    print('Loading ReverseMgr module for cell %s' % object_cell)
+    cmd = '%s.get-processor-list' % object_cell
+    proclist = SIM_run_command(cmd)
+    cpu = SIM_get_object(proclist[0])
+    return cpu
+if __name__ == '__main__':
+    lgr = getLogger('reverseMgr', '/tmp/')
+    cpu = getCPU(conf)
+    rev = ReverseMgr(conf, cpu, lgr)
+    print('Usage: @rev.enableReverse() to enable reverse execution.')
+    print('       @rev.reverse() to reverse to a breakpoint that you have separately set.')
+    print('       @rev.skipToCycle(cycle) to skip to a cycle.')
+    print('       @rev.disableReverse() disable reverse execution.')
+    print('Logging to  /tmp/reverseMgr.log')
