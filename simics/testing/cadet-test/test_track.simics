@@ -1,2 +1,2 @@
 @cgc.injectIO('dumb.io')
-quit
+@cgc.quit()

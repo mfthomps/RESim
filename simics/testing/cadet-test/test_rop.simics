@@ -1,0 +1,9 @@
+#
+# run drive driver in the background
+!./background.sh "drive-driver rop.directive" 4
+@cgc.debugSnap()
+@cgc.watchROP()
+# Now run the simulation
+c 50000000000
+@cgc.quitWhenDone()
+@cgc.revTaintSP()

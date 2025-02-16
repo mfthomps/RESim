@@ -1,1 +1,2 @@
-client.py
+SESSION=COMMAND
+COMMAND=$HOME/client.py

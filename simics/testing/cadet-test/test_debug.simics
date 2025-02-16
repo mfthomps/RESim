@@ -1,0 +1,10 @@
+#
+#  test debugProc and writeConfig
+#
+echo "starting test_debug.simics"
+@cgc.runToCycle(0x8d17abac4)
+@cgc.debugProc('cadet01')
+c 900000000
+@cgc.writeConfig('cadet')
+echo "wrote config"
+@cgc.quit()

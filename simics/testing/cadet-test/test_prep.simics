@@ -1,0 +1,5 @@
+!./background.sh "drive-driver z.directive -d" 4
+@cgc.debugSnap()
+@cgc.setCommandCallback(cgc.runCommandFile)
+@cgc.setCommandCallbackParam('xprep.simics')
+@cgc.trackIO(4, kbuf=True, callback='skipAndMail')
