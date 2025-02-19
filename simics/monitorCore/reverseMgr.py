@@ -78,15 +78,28 @@ class ReverseMgr():
         #self.cycle_span = 0x100000
         if span is None:
             #self.cycle_span = 0x10000
-            self.cycle_span = 0x100000
+            self.cycle_span =  0x1000000
         else:
             self.cycle_span = span
-        self.callback = None
-        # catch passing of cycle_span cycles
+        self.lgr.debug('reverseMgr simics version %s' % self.version())
+
+        # map cell names to cpu's for use if reverse finds break on some other cell
+        self.our_cell = cpu.name.split('.')[0]
+        self.cpu_map = {}
+        self.mapCPUsToCell()
         self.cycle_event = None
         self.span_end_cycle_event = None
         self.delta_cycle_event = None
         self.recording_end_cycle_event = None
+
+        self.reset()
+        # breakpoints set via SIM_breakpoint
+        self.sim_breakpoints = []
+
+
+    def reset(self):
+        self.callback = None
+        # catch passing of cycle_span cycles
         self.origin_cycle = None
         self.recording = False
         self.latest_span_end = None
@@ -94,8 +107,6 @@ class ReverseMgr():
         self.bp_list = []
         # list of breakpoints at the start of a reverse that were created with the bp.memory.break
         self.bp_cli_list = []
-        # breakpoints set via SIM_breakpoint
-        self.sim_breakpoints = []
         self.reverse_from = None
         self.break_haps = []
         self.break_cycles = {}
@@ -103,12 +114,8 @@ class ReverseMgr():
         self.continuation_hap = None
         self.recording_end_event_set = False
         self.reverse_to =  None
-        self.lgr.debug('reverseMgr simics version %s' % self.version())
-
-        # map cell names to cpu's for use if reverse finds break on some other cell
-        self.our_cell = cpu.name.split('.')[0]
-        self.cpu_map = {}
-        self.mapCPUsToCell()
+        # for debugging storage/performance
+        self.test_cycles = 0
 
     def cancelSpanCycle(self):
         '''
@@ -148,19 +155,22 @@ class ReverseMgr():
         Entered when the next span is reached during recording.
         '''
         self.latest_span_end = self.cpu.cycles
-        if self.top is not None:
-            eip = self.top.getEIP()
-            self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
+        #if self.top is not None:
+        #    eip = self.top.getEIP()
+        #    self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
         SIM_run_alone(self.cycleHandlerAlone, cycles)
 
     def cycleHandlerAlone(self, cycles):
-        self.latest_span_end = self.cpu.cycles
+        if self.latest_span_end != self.cpu.cycles:
+            self.lgr.error('reverseMgr cycleHandlerAlone drifted cycles now 0x%x expected 0x%x' % (self.cpu.cycles, self.latest_span_end))
         cycle_mark = 'cycle_%x' % self.latest_span_end 
         SIM_take_snapshot(cycle_mark)
-        size = self.snapSize()
-        if self.top is not None:
+        if self.top is not None and self.test_cycles > 100:
             eip = self.top.getEIP()
+            size = self.snapSize()
             self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x at handler were 0x%x eip now 0x%x snapshot size %s' % (self.cpu.cycles, self.latest_span_end, eip, f"{size:,}"))
+            self.test_cycles = 0
+        self.test_cycles = self.test_cycles + 1
         self.setNextCycle()
 
     def snapSize(self):
@@ -181,15 +191,18 @@ class ReverseMgr():
         if self.nativeReverse():
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
-        else:
+        elif not self.reverseEnabled():
             self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
             SIM_take_snapshot('origin')
             size = self.snapSize()
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x size 0x%x' % (self.origin_cycle, size))
             # TBD Simics bug?
-            SIM_restore_snapshot('origin')
+            #SIM_restore_snapshot('origin')
             self.setNextCycle()
+        else:
+            self.lgr.error('reverseMgr enableReverse, already enabled')
+
 
     def disableReverse(self):
         '''
@@ -206,6 +219,7 @@ class ReverseMgr():
                 SIM_delete_snapshot(snap)
             self.lgr.debug('reverseMgr deleted %d snapshots' % len(snap_list))
             self.rmContinuationHap()
+            self.reset()
 
     def reverseEnabled(self):
         ''' Return True if reverse execution is enabled on Simics 7 '''
@@ -265,6 +279,10 @@ class ReverseMgr():
                 self.lgr.debug('reverseMgr Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (our_cycles, self.latest_span_end))
                 cycle_mark = 'cycle_%x' % self.latest_span_end
                 SIM_restore_snapshot(cycle_mark)
+                #self.lgr.debug('reverseMgr after restore %s cycle now 0x%x' % (cycle_mark, self.cpu.cycles))
+                if self.cpu.cycles != self.latest_span_end:
+                    self.lgr.error('reverseMgr did restore to %s, but now at 0x%x' % (cycle_mark, self.cpu.cycles))
+                    return False
                 if use_cell is not None:
                     current_cycle = self.cpu_map[use_cell].cycles
                     self.lgr.debug('ReverseMgr skipToCycle different cell is %s, and his cycles are now 0x%x' % (use_cell, current_cycle))
