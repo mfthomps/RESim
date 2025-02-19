@@ -51,28 +51,29 @@ class LinkObject():
         self.obj = SIM_run_command(cmd)
         #print('self.name is %s self.obj is %s' % (self.name, self.obj))
 
-def doEthLink(target, eth):
+def doEthLink(target, eth, lgr):
     name = '$%s_%s' % (target, eth)
     cmd = '%s = $%s' % (name, eth)
-    print('doEthLinc cmd %s' % cmd)
+    lgr.debug('doEthLink cmd %s' % cmd)
     run_command(cmd)
     link_object = LinkObject(name)
     if link_object.obj == 'None':
+        lgr.debug('doEthLink object None for name %s' % name)
         return None
     return link_object
     
-def doSwitch(target, switch, device):
+def doSwitch(target, switch, device, lgr):
     ''' TBD test on Simics 4 '''
     #return None
     name = '$%s_%s' % (target, switch)
     #cmd = '%s = $%s_con' % (name, switch)
     cmd = '%s = %s' % (name, device)
-    #print('doswitch cmd %s' % cmd)
+    lgr.debug('doswitch cmd %s' % cmd)
     run_command(cmd)
     link_object = LinkObject(name)
     return link_object
     
-def assignLinkNames(target, comp_dict):
+def assignLinkNames(target, comp_dict, lgr):
     class LinkInfo():
         def __init__(self, index):
             self.eth = 'eth%d' % index
@@ -85,14 +86,19 @@ def assignLinkNames(target, comp_dict):
     link_names = {}
     for link in links:
         if link.mac not in comp_dict:
+            lgr.debug('*************** assingLinkNames link.mac %s not in comp_dict' % comp_dict)
             continue
         if comp_dict[link.mac] != 'None':
-            obj = doEthLink(target, link.eth)
+            obj = doEthLink(target, link.eth, lgr)
             if obj is not None: 
                 link_names[link.eth] = obj
+            else:
+                lgr.debug('*******assingLinkNames got None object from doEthLink for %s' % str(link.eth))
+        else:
+            lgr.debug('*******assingLinkNames link.mac is None for %s' % str(link))
     return link_names
 
-def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
+def addSwitchLinkNames(target, comp_dict, link_names, switch_map, lgr):
     class LinkInfo():
         def __init__(self, index):
             self.eth = 'eth%d' % index
@@ -104,13 +110,16 @@ def addSwitchLinkNames(target, comp_dict, link_names, switch_map):
     index = 0 
     for link in links:
         if link.mac in comp_dict and link.sw in switch_map:
-            obj = doSwitch(target, link.sw, switch_map[link.sw])
+            obj = doSwitch(target, link.sw, switch_map[link.sw], lgr)
             if obj is not None: 
                 link_names[link.sw] = obj
+        else:
+            if link.mac not in comp_dict:
+                lgr.debug('Link mac %s not in comp dict *******************' % link.mac)
     return link_names
 
-def doConnect(switch, eth, switch_map, index):
-    print('do connect switch %s eth %s' % (switch, eth))
+def doConnect(switch, eth, switch_map, index, lgr):
+    lgr.debug('do connect switch %s eth %s' % (switch, eth))
     #cmd = '$%s' % eth
     #dog = run_command(cmd)
     #print('dog is %s' % dog)
@@ -127,30 +136,31 @@ def doConnect(switch, eth, switch_map, index):
             cmd = '%s.get-free-connector %d' % (switch, group)
     else:
         cmd = '%s.get-free-connector' % switch
-    print('doConect cmd is %s' % cmd)
+    lgr.debug('doConect cmd is %s' % cmd)
     con  = run_command(cmd)
     eth_name = run_command('$%s' % eth)
-    print('eth name %s' % eth_name)
+    lgr.debug('eth name %s' % eth_name)
     if 'i82546bg' in eth_name:
         eth_name = eth_name+'[0]'
     cmd = 'connect $%s cnt1 = %s' % (eth, con)
     cmd = 'connect %s cnt1 = %s' % (eth_name, con)
-    print('doConnect cmd: %s' % cmd)
+    lgr.debug('doConnect cmd: %s' % cmd)
     run_command(cmd)
     switch_n = 'switch%d' % index
-    print('adding %s to map as %s' % (switch_n, con))
+    lgr.debug('adding %s to map as %s' % (switch_n, con))
     switch_map[switch_n] = con
 
-def linkSwitches(target, comp_dict, link_names):
+def linkSwitches(target, comp_dict, link_names, lgr):
+    lgr.debug('linkSwitches link_names are %s' % str(link_names))
     switch_map = {} 
     if comp_dict['ETH0_SWITCH'] != 'NONE' and 'eth0' in link_names:
-        doConnect(comp_dict['ETH0_SWITCH'], 'eth0', switch_map, 0)
+        doConnect(comp_dict['ETH0_SWITCH'], 'eth0', switch_map, 0, lgr)
     if comp_dict['ETH1_SWITCH'] != 'NONE' and 'eth1' in link_names:
-        doConnect(comp_dict['ETH1_SWITCH'], 'eth1', switch_map, 1)
+        doConnect(comp_dict['ETH1_SWITCH'], 'eth1', switch_map, 1, lgr)
     if comp_dict['ETH2_SWITCH'] != 'NONE' and 'eth2' in link_names:
-        doConnect(comp_dict['ETH2_SWITCH'], 'eth2', switch_map, 2)
+        doConnect(comp_dict['ETH2_SWITCH'], 'eth2', switch_map, 2, lgr)
     if comp_dict['ETH3_SWITCH'] != 'NONE' and 'eth3' in link_names:
-        doConnect(comp_dict['ETH3_SWITCH'], 'eth3', switch_map, 3)
+        doConnect(comp_dict['ETH3_SWITCH'], 'eth3', switch_map, 3, lgr)
     return switch_map
 
 def expandValue(value): 
@@ -301,7 +311,9 @@ class LaunchRESim():
             print('will create switches')
             run_command('run-command-file ./targets/x86-x58-ich10/create_switches.simics')
             # seems needed by simics7 ?
+            print('instantiate them')
             run_command('instantiate-components')
+            print('did instantiate')
             checkVLAN(self.config)
             if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
                 print('Will create RESim parameters')
@@ -322,15 +334,18 @@ class LaunchRESim():
 
                 run_command('$create_network=FALSE')
         
-                driver_script = self.getSimicsScript('driver')
+                driver_script = self.getSimicsScript('driver',lgr)
                 if os.path.isfile('./driver-script.sh'):
                     print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                    lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 else:
-                    print('WARNIG, starting driver but missing driver-script.sh script! *****************************')
+                    print('WARNING, starting driver but missing driver-script.sh script! *****************************')
+                    lgr.debug('WARNING, starting driver but missing driver-script.sh script! *****************************')
                 lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 run_command('driver.mb.log-level 0 -r')
+
                 done = False
                 count = 0
                 if interact is not None:
@@ -351,9 +366,10 @@ class LaunchRESim():
                         done = True 
                     count += 1
                     #print(count)
-                self.link_dict['driver'] = assignLinkNames('driver', self.comp_dict['driver'])
-                switch_map = linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'])
-                addSwitchLinkNames('driver', self.comp_dict['driver'], self.link_dict['driver'], switch_map)
+                lgr.debug('assign link names and create map for driver')
+                self.link_dict['driver'] = assignLinkNames('driver', self.comp_dict['driver'], lgr)
+                switch_map = linkSwitches('driver', self.comp_dict['driver'], self.link_dict['driver'], lgr)
+                addSwitchLinkNames('driver', self.comp_dict['driver'], self.link_dict['driver'], switch_map, lgr)
                 if DRIVER_WAIT:
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
             ''' NOTE RETURN ABOVE '''
@@ -391,20 +407,25 @@ class LaunchRESim():
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-                    gkp = getKernelParams.GetKernelParams(self.comp_dict, RUN_FROM_SNAP)
+                    gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
                     lgr.debug('genMonitor for target %s' % RESIM_TARGET)
                     cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf)
                     cgc.doInit()
     
-    def getSimicsScript(self, section):    
+    def getSimicsScript(self, section, lgr):    
         script = self.config.get(section,'SIMICS_SCRIPT')
         if 'genx86' in script:
             if self.SIMICS_VER.startswith('5'):
                 script = script.replace('genx86.simics', 'genx86_5.simics')
+                lgr.debug('Simics 5 Modified SIMICS_SCRIPT to be %s' % script)
             elif self.SIMICS_VER.startswith('6'):
                 script = script.replace('genx86.simics', 'genx86_6.simics')
+                lgr.debug('Simics 6 Modified SIMICS_SCRIPT to be %s' % script)
+            elif self.SIMICS_VER.startswith('7'):
+                script = script.replace('x86-x58-ich10/genx86.simics', 'resim-x86/resim-x86.simics')
+                lgr.debug('Simics 7 Modified SIMICS_SCRIPT to be %s' % script)
         return script
           
     def doSections(self, lgr):
@@ -424,7 +445,7 @@ class LaunchRESim():
             cmd = '$machine_name="%s"' % section
             run_command (cmd)
             params=''
-            script = self.getSimicsScript(section)
+            script = self.getSimicsScript(section,lgr)
             did_net_create = False
             #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
             #sim7_params = ['disk0_image'] 
@@ -477,11 +498,11 @@ class LaunchRESim():
                 lgr.debug('cmd is %s' % cmd)
                 run_command(cmd)
             #print('assign eth link names')
-            self.link_dict[section] = assignLinkNames(section, self.comp_dict[section])
+            self.link_dict[section] = assignLinkNames(section, self.comp_dict[section], lgr)
             #print('link the switches')
-            switch_map = linkSwitches(section, self.comp_dict[section], self.link_dict[section])
+            switch_map = linkSwitches(section, self.comp_dict[section], self.link_dict[section], lgr)
             #print('assign switch link names')
-            addSwitchLinkNames(section, self.comp_dict[section], self.link_dict[section], switch_map)
+            addSwitchLinkNames(section, self.comp_dict[section], self.link_dict[section], switch_map, lgr)
 
             for name in self.comp_dict[section]:
                 if name == 'INTERACT_SCRIPT':
