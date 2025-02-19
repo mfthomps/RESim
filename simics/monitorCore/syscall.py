@@ -1011,11 +1011,10 @@ class Syscall():
                     base = os.path.basename(prog_string)
                 #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
                 if base.startswith(cp.match_param):
-                    ''' is program file we are looking for.  do we care if it is a binary? '''
                     self.lgr.debug('syscall checkExecve matches base')
                     wrong_type = False
                     missing_file = False
-                    if self.traceProcs is not None:
+                    if self.traceProcs is not None and 'any_exec' not in cp.param_flags:
                         ftype = self.traceProcs.getFileType(tid)
                         if ftype is None:
                             full_path = self.targetFS.getFull(prog_string, self.lgr)
@@ -1028,6 +1027,7 @@ class Syscall():
                                 self.lgr.debug('syscall checkExecve failed to find file for %s, assume target will fail execve' % prog_string)
                                 print('Warning, program file for %s not found relative to Root Prefix.' % prog_string)
                                 missing_file = True
+                        # is program file we are looking for.  do we care if it is a binary? 
                         if ftype is not None and 'binary' in cp.param_flags and 'elf' not in ftype.lower():
                             wrong_type = True
                     if not wrong_type and not missing_file:
