@@ -419,6 +419,9 @@ class GenMonitor():
                     fh.write(driver_version) 
                     self.lgr.debug('genInit wrote %s to %s' % (driver_version, current_version_file))
                     fh.close()
+            else:
+                # assume the snapshot was not created by RESim
+                self.recordDriverServerVersion()
             connector_file = os.path.join('./', self.run_from_snap, 'connector.json')
             if os.path.isfile(connector_file):
                 self.connectors.loadJson(connector_file)
@@ -447,10 +450,7 @@ class GenMonitor():
                 else:
                     self.lgr.debug('No param pickle at %s' % param_file)
         else:                 
-            resim_dir = os.getenv('RESIM_DIR')
-            driver_version = os.path.join(resim_dir, 'simics', 'bin', 'driver_server_version')
-            current_version = os.path.join('./', '.driver_server_version')
-            shutil.copyfile(driver_version, current_version)
+            self.recordDriverServerVersion()
         self.lgr.debug('genInit each target in comp_dict (%d targets)' % len(comp_dict))
         for cell_name in comp_dict:
             self.lgr.debug('genInit for cell %s' % (cell_name))
@@ -588,7 +588,7 @@ class GenMonitor():
             self.lgr.debug('ran PRE_INIT_SCRIPT %s' % init_script)
 
     def runScripts(self):
-        ''' run the INIT_SCRIPT and the one_done module, if iany '''
+        ''' run the INIT_SCRIPT and the one_done module, if any '''
         self.lgr.debug('runScripts')
         init_script = os.getenv('INIT_SCRIPT')
         if init_script is not None:
@@ -1829,14 +1829,6 @@ class GenMonitor():
             self.run_to[self.target].toRunningProc(proc, plist, flist)
         else:
             cpu = self.cell_config.cpuFromCell(self.target)
-            '''
-            prec = Prec(cpu, proc, None)
-            phys_current_task = self.task_utils[self.target].getPhysCurrentTask()
-            self.proc_break = SIM_breakpoint(cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
-                             phys_current_task, self.mem_utils[self.target].WORD_SIZE, 0)
-            self.lgr.debug('toProc  set break at 0x%x' % (phys_current_task))
-            self.proc_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.runToProc, prec, self.proc_break)
-            '''
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
             if self.isWindows():
@@ -1844,7 +1836,7 @@ class GenMonitor():
                 self.winMonitor[self.target].toCreateProc(comm=proc, run=run)
             else:
                 self.lgr.debug('toProc no process %s found, run until execve' % proc)
-                self.toExecve(prog=proc, flist=[], binary=binary)
+                self.toExecve(prog=proc, flist=[], binary=binary, any_exec=True)
 
         
     def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False, not_to_user=False):
@@ -2106,8 +2098,7 @@ class GenMonitor():
             if previous > start:
                 count = 0
                 while current != previous:
-                    SIM_run_command('pselect %s' % cpu.name)
-                    SIM_run_command('skip-to cycle=%d' % previous)
+                    self.skipToCyle(previous)
                     eip = self.getEIP(cpu)
                     current = cpu.cycles
                     instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -2669,8 +2660,7 @@ class GenMonitor():
         self.lgr.debug('rev1NoMail')
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         new_cycle = cpu.cycles - 1
-        SIM_run_command('pselect %s' % cpu.name)
-        SIM_run_command('skip-to cycle = %d' % new_cycle)
+        self.skipToCycle(new_cycle)
         self.lgr.debug('rev1NoMail skipped to 0x%x  cycle is 0x%x' % (new_cycle, cpu.cycles))
         SIM_run_command('disassemble')
 
@@ -2683,12 +2673,13 @@ class GenMonitor():
             start_cycles = self.getStartCycle()
             if new_cycle >= start_cycles:
                 self.is_monitor_running.setRunning(True)
-                try:
-                    result = SIM_run_command('skip-to cycle=0x%x' % new_cycle)
-                except: 
-                    print('Reverse execution disabled?')
-                    self.skipAndMail()
-                    return
+                self.skipToCycle(new_cycle)
+                #try:
+                #    result = SIM_run_command('skip-to cycle=0x%x' % new_cycle)
+                #except: 
+                #    print('Reverse execution disabled?')
+                #    self.skipAndMail()
+                #    return
                 self.lgr.debug('rev1 result from skip to 0x%x  is %s cycle now 0x%x' % (new_cycle, result, cpu.cycles))
                 self.skipAndMail()
             else:
@@ -3039,12 +3030,14 @@ class GenMonitor():
         
         self.traceProcs[self.target].showAll()
  
-    def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False):
+    def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False):
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
             params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
             if binary:
                 params.param_flags.append('binary')
+            if any_exec:
+                params.param_flags.append('any_exec')
             call_params = [params]
         else:
             call_params = []
@@ -4662,6 +4655,9 @@ class GenMonitor():
         self.restoreDebugBreaks()
         if callback is None:
             done_callback = self.resetTrackIOBackstop
+        elif callback == 'skipAndMail':
+            # we want to do command callback.
+            done_callback = self.stopAndMail
         else:
             done_callback = callback
         self.lgr.debug('trackIO stopped track and cleared watches current context %s' % str(cpu.current_context))
@@ -5211,9 +5207,7 @@ class GenMonitor():
                 did_remove = self.removeDebugBreaks()
                 SIM_run_command('pselect %s' % cpu.name)
                 previous = prev_cycle-1
-                cmd='skip-to cycle=0x%x' % previous
-                self.lgr.debug('precall cmd: %s' % cmd)
-                SIM_run_command(cmd)
+                self.skipToCycle(previous)
                 eip = self.getEIP()
                 self.lgr.debug('precall skipped to cycle 0x%x eip: 0x%x' % (cpu.cycles, eip))
                 if cpu.cycles != previous:
@@ -5223,9 +5217,8 @@ class GenMonitor():
                     if cpl == 0: 
                         # TBD Simics edge case?
                         previous = prev_cycle-2
-                        cmd='skip-to cycle=0x%x' % previous
-                        self.lgr.debug('precall landed in kernel, try going back 1 more cmd: %s' % cmd)
-                        SIM_run_command(cmd)
+                        self.lgr.debug('precall landed in kernel, try going back 1 more to 0x%x' % previous)
+                        self.skipToCycle(previous)
                         cpl = memUtils.getCPL(cpu)
                         if cpl == 0: 
                             self.lgr.error('precall ended up in kernel, quit')
@@ -5572,6 +5565,11 @@ class GenMonitor():
     def setCommandCallbackParam(self, param):
         self.command_callback_param = param 
 
+    def doCommandCallback(self):
+        if self.command_callback is not None:
+            self.lgr.debug('doCommandCallback')
+            self.command_callback(self.command_callback_param)
+
     def setDebugCallback(self, callback):
         self.lgr.debug('setDebugCallback to %s' % str(callback))
         self.debug_callback = callback 
@@ -5781,6 +5779,9 @@ class GenMonitor():
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
         	     self.stopHap, stop_action)
         SIM_continue(0)
+
+    def stopAndMail(self):
+        self.stopAndGo(self.skipAndMail)
 
     def stopAndGo(self, callback):
         ''' Will stop simulation and invoke the given callback once stopped.
@@ -6028,6 +6029,7 @@ class GenMonitor():
         delta = cycle - cpu.cycles
         print('will run forward 0x%x cycles' % delta)
         cmd = 'run count = 0x%x unit = cycles' % (delta)
+        self.lgr.debug('runToCycle 0x%x cmd %s' % (cycle, cmd))
         SIM_run_command(cmd)
 
     def runToSeconds(self, seconds):
@@ -6805,6 +6807,9 @@ class GenMonitor():
     def enableReverse(self):
         self.reverse_mgr[self.target].enableReverse()
 
+    def disableReverse(self):
+        self.reverse_mgr[self.target].disableReverse()
+
     def skipTo(self, cycle):
         self.reverse_mgr[self.target].skipToCycle(cycle)
 
@@ -6825,6 +6830,23 @@ class GenMonitor():
     def snapSize(self):
         storage = self.reverse_mgr[self.target].snapSize()
         print('Snapshot storage using %s bytes' % f"{storage:,}")
+
+    def recordDriverServerVersion(self):
+        resim_dir = os.getenv('RESIM_DIR')
+        driver_version = os.path.join(resim_dir, 'simics', 'bin', 'driver_server_version')
+        current_version = os.path.join('./', '.driver_server_version')
+        shutil.copyfile(driver_version, current_version)
+
+    def runCommandFile(self, fname):
+        cmd = 'run-command-file %s' % fname
+        SIM_run_command(cmd)
+
+    def shutUpConsole(self):
+        for cell in self.conf.sim.cell_list:
+            object_cell = cell.name.split('.')[0]
+            self.lgr.debug('shutUpConsole cell %s' % object_cell)
+            cmd = '%s.serconsole.con.disable-cmd-line-output' % object_cell
+            SIM_run_command(cmd)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
