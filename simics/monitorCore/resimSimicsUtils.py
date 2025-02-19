@@ -81,7 +81,7 @@ def disconnectServiceNode(name):
         try:
             dumb,result = cli.quiet_run_command(cmd)
         except:
-            print('resimSimicsUtils disconnectService node failed')
+            #print('resimSimicsUtils disconnectService node failed on cmd %s' % cmd)
             return
        
         ok = False 
