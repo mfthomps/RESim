@@ -61,10 +61,8 @@ class MagicOrigin():
         #self.disconnect(run=False)
         self.top.cutRealWorld()
         #cmd = 'default_service_node0.status'
-        cmd = 'disable-reverse-execution'
-        SIM_run_command(cmd)
-        cmd = 'enable-reverse-execution'
-        SIM_run_command(cmd)
+        self.top.disableReverse()
+        self.top.enableReverse()
         self.did_magic = True
         self.lgr.debug('MagicOrigin to tid and then set origin')
         if self.top.isRunningTo():
