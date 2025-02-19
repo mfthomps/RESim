@@ -40,13 +40,15 @@ import pickle
 import decode
 import decodeArm
 import pageUtils
+import reverseMgr
+import skipToMgr
 import os
 
 import w7Params
 import winKParams
 
 class GetKernelParams():
-    def __init__(self, comp_dict, run_from_snap):
+    def __init__(self, conf, comp_dict, run_from_snap):
         #self.cpu = SIM_current_processor()
         self.log_dir = './logs'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
@@ -178,6 +180,9 @@ class GetKernelParams():
  
         # yah to avoid mode change haps while skipping around 
         self.ignore_mode = False
+
+        self.reverse_mgr = reverseMgr.ReverseMgr(conf, self.cpu, self.lgr, top=self)
+        self.skip_to_mgr = skipToMgr.SkipToMgr(self.reverse_mgr, self.cpu, self.lgr)
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -363,7 +368,7 @@ class GetKernelParams():
             self.deleteHaps(None)
             self.delCurrentTaskStopHap(None)
             self.delTaskModeAlone(None)
-            SIM_run_command('enable-reverse-execution')
+            self.reverse_mgr.enableReverse()
 
             self.fs_start_cycle = self.cpu.cycles
             self.lgr.debug('fsEnableReverse, , now continue %d cycles' % self.fs_cycles)
@@ -375,7 +380,7 @@ class GetKernelParams():
             self.deleteHaps(None)
             self.delCurrentTaskStopHap(None)
             self.delTaskModeAlone(None)
-            SIM_run_command('enable-reverse-execution')
+            self.reverse_mgr.enableReverse()
 
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             self.gs_start_cycle = self.cpu.cycles
@@ -413,11 +418,15 @@ class GetKernelParams():
             self.findSwapper()
             SIM_run_alone(self.continueAhead, None)
 
+    def getEIP(self):
+        eip = self.mem_utils.getRegValue(self.cpu, 'eip')
+        return eip
+
     def fsFindAlone(self):
         self.lgr.debug('fsFindAlone, fs_cycles is %d' % self.fs_cycles)
         gotit = False
         for i in range(1,self.fs_cycles):
-            resimSimicsUtils.skipToTest(self.cpu, self.fs_start_cycle+i, self.lgr)
+            self.skip_to_mgr.skipToTest(self.fs_start_cycle+i)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'fs:' in instruct[1]:
@@ -432,7 +441,7 @@ class GetKernelParams():
                 phys = self.fs_base + (self.param.current_task-self.param.kernel_base)
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
                 self.current_task_phys = phys
-                SIM_run_command('disable-reverse-execution')
+                self.reverse_mgr.disableReverse()
                 gotit = True
                 self.findSwapper()
                 break
@@ -444,7 +453,8 @@ class GetKernelParams():
         self.lgr.debug('gsFindAlone, gs_cycles is %d' % self.gs_cycles)
         did_offset = []
         for i in range(1,self.gs_cycles):
-            resimSimicsUtils.skipToTest(self.cpu, self.gs_start_cycle+i, self.lgr)
+            want = self.gs_start_cycle + i
+            self.skip_to_mgr.skipToTest(want)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'gs:' in instruct[1]:
@@ -492,7 +502,7 @@ class GetKernelParams():
                     continue
 
                 self.current_task_phys = phys
-                SIM_run_command('disable-reverse-execution')
+                self.reverse_mgr.disableReverse()
                 retval = True
                 if self.os_type == 'WIN7':
                     next_eip = eip + instruct[0]
@@ -1538,7 +1548,7 @@ class GetKernelParams():
             self.ignore_mode = True
             here = self.cpu.cycles 
             prev = self.cpu.cycles - 1
-            resimSimicsUtils.skipToTest(self.cpu, prev, self.lgr)
+            self.skip_to_mgr.skipToTest(prev)
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             self.lgr.debug('entryStopHapARM went back one eip now 0x%x caller %s' % (eip, caller))
             prev_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -1549,7 +1559,7 @@ class GetKernelParams():
                 return
             else:
                 self.lgr.debug('etnryStopHapARM prev_instruct is %s' % prev_instruct[1])
-                resimSimicsUtils.skipToTest(self.cpu, here, self.lgr)
+                self.skip_to_mgr.skipToTest(here)
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 if caller == 'aarch32':
                     self.param.arm_entry = eip 
@@ -1998,9 +2008,8 @@ class GetKernelParams():
         self.deleteHaps(None)
         self.delCurrentTaskStopHap(None)
         self.delTaskModeAlone(None)
-        SIM_run_command('enable-reverse-execution')
         done = False
-        SIM_run_command('enable-reverse-execution')
+        self.reverse_mgr.enableReverse()
         bailat = 1000
         i = 0
         our_reg = None
@@ -2028,7 +2037,7 @@ class GetKernelParams():
                 print('never found sp_el0 ref')
                 return
             prev = self.cpu.cycles - 1
-            resimSimicsUtils.skipToTest(self.cpu, prev, self.lgr)
+            self.skip_to_mgr.skipToTest(prev)
             pc = self.mem_utils.getRegValue(self.cpu, 'pc')
             instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             if isinstance(instruct, tuple):
