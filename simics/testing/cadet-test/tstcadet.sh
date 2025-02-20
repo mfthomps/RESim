@@ -7,8 +7,9 @@ if [[ -z "$RESIM_DIR" ]]; then
     echo "RESIM_DIR not defined."
     exit
 fi
-# use free simics so multiple afls can run
-export SIMDIR=/mnt/resim_eems/resim/archive/simics6/free_install/simics-6.0.157
+
+echo "Running cadet test using Simics $SIMDIR"
+
 TD="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 rm -fr cadet-tst
 mkdir cadet-tst
