@@ -2311,19 +2311,24 @@ class DataWatch():
 
             ''' recalculate buf_start and buf_length per new param_length '''
             buf_start, buf_length = self.findBufForRange(param_src, param_length)
-            self.mem_something.src = buf_start
-            self.mem_something.length = buf_length
-            if buf_length < orig_param_length:
-                self.mem_something.truncated = orig_param_length
-                self.mem_something.start = param_src
-            if buf_start >= param_src:
-                offset = buf_start - param_src
+            if buf_start is not None:
+
+                self.mem_something.src = buf_start
+                self.mem_something.length = buf_length
+                if buf_length < orig_param_length:
+                    self.mem_something.truncated = orig_param_length
+                    self.mem_something.start = param_src
+                if buf_start >= param_src:
+                    offset = buf_start - param_src
+                else:
+                    self.lgr.error('dataWatch getMemParms %s  buf_start 0x%x  is less than param_src 0x%x' % (self.mem_something.fun, buf_start, param_src))
+                    return True
+                self.mem_something.dest = param_dest + offset
+                self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d dest 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, 
+                     self.mem_something.length, self.mem_something.dest))
             else:
-                self.lgr.error('dataWatch getMemParms %s  buf_start 0x%x  is less than param_src 0x%x' % (self.mem_something.fun, buf_start, param_src))
-                return True
-            self.mem_something.dest = param_dest + offset
-            self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d dest 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, 
-                 self.mem_something.length, self.mem_something.dest))
+                self.lgr.debug('dataWatch getMemParms %s  buf_start None for param_src 0x%x' % (self.mem_something.fun, param_src))
+                retval = True
         return skip_fun
 
     def gatherCallParams(self, sp, eip, word_size, data_hit):
