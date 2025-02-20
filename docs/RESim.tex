@@ -132,8 +132,9 @@ It is implemented in Python, primarily using Simics breakpoints and callbacks, a
 Simics “OS Awareness” or Eclipse-based interfaces.   
 \begin{itemize}
 \item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
-\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}  RESim has be exended to work with this
-free version.
+\url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}  RESim has be extended to work with this
+free version.  RESim requires Simics 6.  Preliminary support for Simics 7 has been implemented along with our own module for managing
+reverse execution, which was deprecated in Simics 7.
 
 \item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
 \url{https://github.com/mfthomps/RESim/simics/ida}  
@@ -1020,7 +1021,8 @@ i82543gc
 \end{verbatim}
 
 If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
-Note that device changes ethernet names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
+Note the 82559 device changes ethernet names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
+Also, Simics 7 has trouble with the i82543gc, but seems to work with the 82559.
 
 Simics CLI variables are assigned to each computer ethernet link using the convention {\tt \$TARGET\_eth0} where {\tt TARGET}
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
@@ -1035,7 +1037,8 @@ the network topology using the Simics {\tt disconnect} command, e.g.,
     disconnect $box1_eth0 $box1_switch0
 \end{verbatim}
 
-Each i82546bg device has two ethernet connections that share the same MAC address.  RESim only connects to one of them.
+Each i82546bg device has two ethernet connections, with the 2nd having a MAC address one greater than the first.  Currently, RESim only connects to the first one,
+though this should be fixed to allow both to be use (see simicsScripts/targets/x86...
 
 \subsubsection{Real network connections}
 Refer to the Simics \textit{Ethernet Networking Technology Guide} for details on connecting the simulation to real networks.
@@ -3292,6 +3295,8 @@ Usually, if you disable debugging or whatever is causing RESim to watch context 
 Try doing what you can without causing RESim to watch context switches.  For example, if you want to run forward until some process accepts
 on an FD, do so without setting debug.  Then, once the accept is done, you can switch to debug.
 
+Simics 6.0.157 snapshots were about 30\% faster than more recent versions, including Simics 7.
+
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
 the file, and run with realtime enabled.  After the install, use save-persistent-state, and then rename the resulting craff as
@@ -4074,7 +4079,7 @@ entry within the ReverseToCall module for purposes of skipping backwards out of 
 many kernel entry points, and functions call other funtions that are also entry points.  If all such functions have clean BL calls, then we could filter out function
 calls made from within the kernel.  A downside is the possibility that a large numbers of breakpoints being hit will affect performance -- but that is unknown.
 
-\subsection{Performance}
+\subsection{VxWroks Performance}
 Starting the zynqmp platform for VxWorks can be extremely slow if any other components, e.g., a driver, are defined.  Altering time quantums and the frequency of
 the driver cpu does not seem to significantly speed this up.  As a work-around, the ADD\_FROM\_SNAPSHOT will load a snapshot and then add other components to it.
 First start only the zynqmp platform, without starting any application on it.  Create a snapshot and then run a ini file that includes a driver and names the snapshot
@@ -4085,6 +4090,10 @@ We find the location of the loaded text segment by looking at entry point of the
 at which we return from execve, (which we assume is the loader entry), and set a break from zero to the base of the loader.  This assumes that no libraries are
 executed before the program start is hit.  If that turns out to be wrong, we can track the libraries and set holes in the break range.
 
+\section{Simics 7}
+Simics 7 deprecated reverse execution.  RESim replaces much of the lost reversing functions with its "reverseMgr" module.
+Simics 7 will not run on pre-Haswell CPUs, e.g., Dell R620.  However it should run on more recent servers.
+There seem to be issues with the i82543gc, leading to kernel errors requiring the board to be "reseated".  Use a different nic.
 
 \end{appendices}
 %\printIndex
