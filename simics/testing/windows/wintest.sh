@@ -13,6 +13,14 @@ resim-ws.sh
 cp $RESIM_DIR/simics/examples/windows/* .
 chmod 400 id_rsa
 cp $RESIM_DIR/simics/testing/windows/* .
+sim7=$(echo $SIMDIR | grep simics7)
+if [[ -z $sim7 ]]; then
+    echo not
+else
+    echo is sim7
+    sed -i 's/10.10.0.101/10.10.0.100/g' move_from_driver.sh
+    sed -i 's/10.10.0.101/10.10.0.100/g' simple.directive
+fi
 
 $HOME/bin/set-title "wintest"
 echo "run-python-file run-to-boot.py" | resim wintest.ini -n || exit
