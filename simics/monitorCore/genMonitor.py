@@ -6848,6 +6848,8 @@ class GenMonitor():
             cmd = '%s.serconsole.con.disable-cmd-line-output' % object_cell
             SIM_run_command(cmd)
 
+    def version(self):
+        return self.reverse_mgr[self.target].version()
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
