@@ -1,4 +1,5 @@
 #!/bin/bash
+echo "testDedupe begin"
 dedupCoverage.py ubuntu_driver.ini cadet-tst
 ufile=$HOME/afl/output/cadet-tst/cadet-tst.unique
 if [ -f $ufile ]; then

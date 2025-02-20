@@ -1,6 +1,7 @@
 #!/bin/bash
 hitfile=$RESIM_IDA_DATA/cadet_fs/cadet01/cadet01.cadet-tst.hits
 rm -f $hitfile
+echo "testPlay begin"
 runPlay ubuntu_driver.ini cadet01
 if [ -f $hitfile ]; then
     gotit=$( grep 134514820 $hitfile )
