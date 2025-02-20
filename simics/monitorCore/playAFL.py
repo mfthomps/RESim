@@ -350,10 +350,14 @@ class PlayAFL():
 
     def disableReverse(self):
         self.lgr.debug('playAFL disabling reverse execution and enabling internals')
-        cli.quiet_run_command('disable-reverse-execution')
-        self.top.setDisableReverse()
-        cli.quiet_run_command('enable-unsupported-feature internals')
-        cli.quiet_run_command('save-snapshot name = origin')
+        if self.top.version().startswith('7'): 
+            self.top.disableReverse()
+            SIM_take_snapshot('origin')
+        else:
+            cli.quiet_run_command('disable-reverse-execution')
+            #VT_take_snapshot('origin')
+            cli.quiet_run_command('enable-unsupported-feature internals')
+            cli.quiet_run_command('save-snapshot name = origin')
 
     def finishInit(self):
         self.lgr.debug('playAFL finishInit')
@@ -524,7 +528,11 @@ class PlayAFL():
             if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             if self.dfile != 'oneplay' or self.repeat:
-                cli.quiet_run_command('restore-snapshot name = origin')
+                if self.top.version().startswith('7'): 
+                    SIM_restore_snapshot('origin')
+                else:
+                    cli.quiet_run_command('restore-snapshot name=origin')
+            #VT_restore_snapshot('origin')
             if self.commence_after_exits is not None:
                 self.lgr.debug('playAFL goAlone set counter hap')
                 self.setCounterHap()
@@ -672,7 +680,10 @@ class PlayAFL():
                     if item not in self.exit_list:
                         print(item)
             if self.dfile != 'oneplay' or self.repeat:
-                cli.quiet_run_command('restore-snapshot name = origin')
+                if self.top.version().startswith('7'): 
+                    SIM_restore_snapshot('origin')
+                else:
+                    cli.quiet_run_command('restore-snapshot name=origin')
             else:
                 self.top.stopCoverage() 
                

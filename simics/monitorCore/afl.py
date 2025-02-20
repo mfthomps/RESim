@@ -302,7 +302,7 @@ class AFL():
             self.finishCallback()
 
     def finishCallback(self, dumb=None):
-        ''' restore origin and go '''
+        ''' Setup complete, ready to restore origin and go '''
         #self.lgr.debug('afl finishCallback call finishInit')
         self.finishInit()
         #cmd = 'skip-to bookmark = bookmark0'
@@ -316,9 +316,14 @@ class AFL():
         self.goN(0)
 
     def disableReverse(self):
-        cli.quiet_run_command('disable-reverse-execution')
-        cli.quiet_run_command('enable-unsupported-feature internals')
-        cli.quiet_run_command('save-snapshot name = origin')
+        if self.top.version().startswith('7'): 
+            self.top.disableReverse()
+            SIM_take_snapshot('origin')
+        else:
+            cli.quiet_run_command('disable-reverse-execution')
+            #VT_take_snapshot('origin')
+            cli.quiet_run_command('enable-unsupported-feature internals')
+            cli.quiet_run_command('save-snapshot name = origin')
 
     def finishInit(self, dumb=None):
             if len(self.tid_list) == 0:
@@ -432,8 +437,15 @@ class AFL():
                 #self.top.quit()
                 #return
             if self.test_file is not None:
-                self.lgr.debug('afl test file, found %d unique hits, bail' % self.total_hits)
-                print('afl test file %s, found %d unique hits' % (self.test_file, self.total_hits))
+                if status == AFL_CRASH:
+                    self.lgr.debug('afl test file, found %d unique hits, CRASHED.  Done.' % self.total_hits)
+                    print('afl test file %s, found %d unique hits crashed !! ' % (self.test_file, self.total_hits))
+                elif status == AFL_HANG:
+                    self.lgr.debug('afl test file, found %d unique hits, HUNG. Done' % self.total_hits)
+                    print('afl test file %s, found %d unique hits hung ' % (self.test_file, self.total_hits))
+                else:
+                    self.lgr.debug('afl test file, found %d unique hits. Done' % self.total_hits)
+                    print('afl test file %s, found %d unique hits' % (self.test_file, self.total_hits))
                 return
 
             if self.one_done:
@@ -546,7 +558,11 @@ class AFL():
             self.coverage.disableAll()
             #self.lgr.debug('afl goN disabled coverage breakpoints')
         #self.lgr.debug('afl goN restore snapshot')
-        cli.quiet_run_command('restore-snapshot name=origin')
+        if self.top.version().startswith('7'): 
+            SIM_restore_snapshot('origin')
+        else:
+            cli.quiet_run_command('restore-snapshot name=origin')
+            #VT_restore_snapshot('origin')
         if not self.linear and self.context_manager.isDebugContext():
             SIM_run_alone(self.context_manager.restoreDefaultContext, None)
         #self.top.restoreRESimContext()
