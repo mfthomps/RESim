@@ -353,8 +353,8 @@ class reverseToCall():
 
     def skipToTest(self, cycle):
         retval = True
-        if not self.reverseMgr.nativeReverse():
-            self.reverseMgr.skipToCycle(cycle)
+        if not self.reverse_mgr.nativeReverse():
+            self.reverse_mgr.skipToCycle(cycle)
         else:
             count = 0 
             while SIM_simics_is_running():
