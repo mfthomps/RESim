@@ -1269,11 +1269,12 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles 0x%x less than when we read the data 0x%x' % (eip, self.cpu.cycles, self.cycles_was))
                 SIM_run_alone(self.startUndoAlone, None)
                 return
-        self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x' % (eip, self.cpu.cycles))
+        self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x skip_this %r' % (eip, self.cpu.cycles, skip_this))
         hap = self.return_hap
         self.pending_call = False
         SIM_run_alone(self.top.restoreDebugBreaks, True)
         if skip_this:
+            self.lgr.debug('dataWatch returnHap skip_this, bail')
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
         word_size = self.top.wordSize(tid, target=self.cell_name)
@@ -2312,7 +2313,7 @@ class DataWatch():
             ''' recalculate buf_start and buf_length per new param_length '''
             buf_start, buf_length = self.findBufForRange(param_src, param_length)
             if buf_start is not None:
-
+                self.lgr.debug('dataWatch getMemParams found buffer intersect start 0x%x length %d' % (buf_start, buf_length))
                 self.mem_something.src = buf_start
                 self.mem_something.length = buf_length
                 if buf_length < orig_param_length:
@@ -2321,8 +2322,9 @@ class DataWatch():
                 if buf_start >= param_src:
                     offset = buf_start - param_src
                 else:
-                    self.lgr.error('dataWatch getMemParms %s  buf_start 0x%x  is less than param_src 0x%x' % (self.mem_something.fun, buf_start, param_src))
-                    return True
+                    offset = 0
+                    #self.lgr.error('dataWatch getMemParms %s  buf_start 0x%x  is less than param_src 0x%x param_length %d buf_length %d' % (self.mem_something.fun, buf_start, param_src, param_length, buf_length))
+                    #return True
                 self.mem_something.dest = param_dest + offset
                 self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src is 0x%x, count: %d dest 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, 
                      self.mem_something.length, self.mem_something.dest))
@@ -3021,7 +3023,7 @@ class DataWatch():
                 #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
                 self.back_stop.clearCycle()
                 #SIM_break_simulation('handle memstuff')
-                self.runToReturnAlone(False)
+                self.runToReturnAlone(skip_this=False)
             else:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
@@ -4931,9 +4933,35 @@ class DataWatch():
                     return index
         return None
 
+    def inRange(self, addr, start, end):
+        if addr >= start and addr <= end:
+            return True
+        else:
+            return False
+
+    def getIntersect(self, start1, length1, start2, length2):
+        ''' get the intersection (overlap) of two ranges '''
+        ret_start = None
+        ret_length = None
+        end1 = start1 + length1 - 1
+        end2 = start2 + length2 - 1
+        if self.inRange(start1, start2, end2):
+            ret_start = start1
+            ret_end = min(end1, end2)
+            ret_length = ret_end - ret_start + 1
+        elif self.inRange(start2, start1, end1):
+            ret_start = start2
+            ret_end = min(end1, end2)
+            ret_length = ret_end - ret_start + 1
+        else:
+            #self.lgr.debug('dataWatch getIntersect no overlap in 0x%x %d 0x%x %d' % (start1, length1, start2, length2))
+            pass
+ 
+        return ret_start, ret_length
+            
     def findBufForRange(self, addr, length):
         '''
-        Given a buffer address and length, find a data watch and return the lowest address
+        Given a buffer address and length (e.g., the address and count from a memcpy call), find a data watch and return the lowest address
         of the watch buffer that is within the input buffer, and the number of bytes within
         the watch buffer that are within the input buffer.
         '''
@@ -4947,27 +4975,13 @@ class DataWatch():
                 #TBD what if given length outside of call buffer?
                 ret_start = recv_addr
                 ret_length = recv_length
+                ret_start, ret_length = self.getIntersect(addr, length, recv_addr, recv_length)
                 if ret_length is None:
                     self.lgr.debug('dataWatch findbufForRange ret_length None for addr 0x%x' % addr)
             else:
                 for index in reversed(range(len(self.start))):
                     if self.start[index] is not None:
-                        end = self.start[index] + (self.length[index]-1)
-                        #self.lgr.debug('findRange is 0x%x between 0x%x and 0x%x?' % (addr, self.start[index], end))
-                        if addr >= self.start[index] and addr <= end:
-                            ret_start = addr
-                            if self.length[index] < length:
-                                ret_length = self.length[index] - (addr - self.start[index])
-                            else:
-                                ret_length = length
-                        elif addr < self.start[index] and range_end <= end and range_end >= self.start[index]:
-                            ret_start = self.start[index]
-                            ret_length = length - (self.start[index] - addr)
-                        elif addr <= self.start[index] and range_end >= end:
-                            ret_start = self.start[index]
-                            ret_length = self.length[index]
-                            if ret_length is None:
-                                self.lgr.debug('dataWatch findbufForRange ret_length None for addr 0x%x index %d' % (addr, index))
+                        ret_start, ret_length = self.getIntersect(addr, length, self.start[index], self.length[index])
                         if ret_start is not None:
                             break            
         return ret_start, ret_length
@@ -5680,7 +5694,7 @@ class DataWatch():
                 self.added_mem_fun_entry = True
             else:
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry eip 0x%x already in mem_fun_entries' % eip)
-            self.runToReturnAlone(False)
+            self.runToReturnAlone(skip_this=False)
 
     def recordObscureMemcpyEntry2(self, src_dest_count):
             src_ptr, dest_ptr, count = src_dest_count
