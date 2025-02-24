@@ -1135,6 +1135,8 @@ class WatchMarks():
         self.lgr.debug('watchMarks kernelMod %s' % (km.getMsg()))
 
     def compare(self, fun, dest, src, count, buf_start, two_bytes=False):
+        if buf_start is None:
+            return None
         if count > 0:
             if fun == 'strcmp':
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
@@ -1588,6 +1590,9 @@ class WatchMarks():
         return retval
 
     def origBuffer(self, addr):
+        '''
+        Return the address and length of the original buffer containing addr.
+        '''
         retval = None, None, None
         read_count = 0
         for mark in self.mark_list:
