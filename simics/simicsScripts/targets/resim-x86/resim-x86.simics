@@ -9,7 +9,8 @@ decl {
   default serial_console_fg_color = "#80ff80"
   default disk0_size = NIL
   default disk1_size = 8Gi
-  default rtc_time = "auto"
+  #default rtc_time = "auto"
+  default rtc_time = "2008-06-05 23:52:01 UTC"
   default create_usb_tablet = TRUE
 
 # params from "qsp-uefi.include"

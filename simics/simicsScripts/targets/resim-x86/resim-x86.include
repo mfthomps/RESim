@@ -253,6 +253,7 @@ $motherboard = (create-motherboard-x58-ich10
                 apic_bus_class = $apic_bus_class)
 $southbridge = $motherboard.sb
 sim->deprecation_level = $lvl
+echo "motherboard mac address 0 is "+$mac_address
 
 $eth0=$motherboard.sb.eth_slot
 $northbridge=$motherboard.nb
@@ -471,10 +472,11 @@ if $mac_address_3 != "None"{
           echo "southbridge pci_slot[0] gets mac address "+ $mac_address_3
           connect $motherboard.sb.pci_slot[0] $eth_comp3.pci_bus
    }
+   # NOTE may not be nb!
+   $eth3 = $motherboard.nb.$eth_dev+3.eth
+}else{
+    echo "MAC addr 3 is None"
 }
-
-
-
 
 
 
