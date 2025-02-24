@@ -233,7 +233,7 @@ if $lan_bios_image == NIL {
     $lan_bios_image = ""
 }
 $mac_address = $mac_address_0
-echo "mac_address for mb is "+$mac_address
+echo "mac_address for mb (mac addr 0) is "+$mac_address
 ### motherboard
 $motherboard = (create-motherboard-x58-ich10
                 $system.mb
