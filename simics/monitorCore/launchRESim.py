@@ -498,6 +498,7 @@ class LaunchRESim():
                 lgr.debug('cmd is %s' % cmd)
                 run_command(cmd)
             #print('assign eth link names')
+            lgr.debug('Assign link names for section %s' % section)
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section], lgr)
             #print('link the switches')
             switch_map = linkSwitches(section, self.comp_dict[section], self.link_dict[section], lgr)

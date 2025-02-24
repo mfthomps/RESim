@@ -1297,6 +1297,11 @@ class DataWatch():
         elif self.mem_something.fun in ['strcmp', 'strncmp', 'strnicmp', 'strcasecmp', 'strncasecmp', 'xmlStrcmp', 'strpbrk', 'strspn', 'strcspn','wcscmp', 
                                         'mbscmp','mbscmp_l', 'strtok', 'buffer_caseless_compare', 'strstr', 'string_strncmp']: 
             buf_start = self.findRange(self.mem_something.dest)
+            if buf_start is None:
+                buf_start = self.findRange(self.mem_something.src)
+                if buf_start is None:
+                    self.lgr.error('dataWatch returnHap failed to find a buf_start')
+                    return
             if self.mem_something.fun == 'strtok':
                 self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
                        self.mem_something.src, self.mem_something.dest, self.mem_something.length))
