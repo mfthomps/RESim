@@ -142,6 +142,7 @@ class DataWatch():
         back_stop_string = os.getenv('BACK_STOP_CYCLES')
         if back_stop_string is None:
             self.back_stop_cycles = 5000000
+            self.lgr.debug('dataWatch using default back_stop_cycles of %d' % self.back_stop_cycles)
         else:
             self.back_stop_cycles = int(back_stop_string)
         read_loop_string = os.getenv('READ_LOOP_MAX')
@@ -2262,7 +2263,7 @@ class DataWatch():
             ''' sanity check '''
             if buf_start is None:
                 skip_fun = True
-                self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (param_fun, 
+                self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (self.mem_something.fun,
                         param_src, param_length, self.mem_something.addr))
             else:
                 buf_end = buf_start + buf_length-1
