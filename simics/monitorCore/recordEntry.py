@@ -24,6 +24,7 @@
 '''
 
 from simics import *
+import syscall
 import net
 import os
 import pickle
