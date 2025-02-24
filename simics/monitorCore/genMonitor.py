@@ -4625,7 +4625,7 @@ class GenMonitor():
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None, commence_offset=0):
         if max_marks is None:
             max_marks = self.max_marks
-        self.lgr.debug('trackIO max_marks %s' % max_marks) 
+        self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
         if self.bookmarks is None:
             self.lgr.error('trackIO called but no debugging session exists.')
             return
