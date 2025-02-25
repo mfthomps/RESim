@@ -170,9 +170,9 @@ class GenHap():
             self.disabled = True
 
     def enable(self):
-        #self.lgr.debug('GenHap enable %s' % self.name)
+        self.lgr.debug('GenHap enable %s cycles: 0x%x' % (self.name, self.cpu.cycles))
         for bp in self.breakpoint_list:       
-            #self.lgr.debug('GenHap enable bp %d' % bp.break_num)
+            #self.lgr.debug('GenHap enable bp %d cycles: 0x%x' % (bp.break_num, self.cpu.cycles))
             bp.enable()
         self.disabled = False
 
