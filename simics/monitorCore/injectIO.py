@@ -36,6 +36,7 @@ import sys
 import pickle
 from resimHaps import *
 import resimUtils
+import defaultConfig
 class InjectIO():
     def __init__(self, top, cpu, cell_name, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
@@ -63,14 +64,8 @@ class InjectIO():
         self.count = count
         self.break_on = break_on
         self.in_data = None
-        self.backstop_cycles =   9000000
-        bsc = os.getenv('BACK_STOP_CYCLES')
-        if bsc is not None:
-            self.backstop_cycles = int(bsc)
-        hang_cycles = 90000000
-        hang = os.getenv('HANG_CYCLES')
-        if hang is not None:
-            hang_cycles = int(hang)
+        self.backstop_cycles = defaultConfig.backstopCycles()
+        hang_cycles = defaultConfig.hangCycles() 
         if callback is not None:
             hang_callback = callback
         else:

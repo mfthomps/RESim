@@ -50,6 +50,7 @@ import disableAndRun
 import functionNoWatch
 import dataWatchManager
 import nullTestLoop
+import defaultConfig
 MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp', 'strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
             'strcasecmp', 'strncpy', 'strlcpy', 'strtoul', 'String5toInt', 'string_strncmp', 'string_strnicmp', 'string_strlen',
@@ -139,11 +140,8 @@ class DataWatch():
         self.buffer_length = None
         self.finish_check_move_hap = None
         self.watchMarks = watchMarks.WatchMarks(top, mem_utils, cpu, cell_name, run_from_snap, lgr)
-        back_stop_string = os.getenv('BACK_STOP_CYCLES')
-        if back_stop_string is None:
-            self.back_stop_cycles = 5000000
-        else:
-            self.back_stop_cycles = int(back_stop_string)
+        self.back_stop_cycles = defaultConfig.backstopCycles()
+        self.lgr.debug('dataWatch back_stop_cycles %s' % self.back_stop_cycles)
         read_loop_string = os.getenv('READ_LOOP_MAX')
         if read_loop_string is None:
             self.read_loop_max = 10000
@@ -857,8 +855,8 @@ class DataWatch():
             return
         self.stopped = False
         ''' set the data watches, e.g., after a reverse execution is complete.'''
-        self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d' % (show_cmp, self.cpu.name, 
-           len(self.start), len(self.read_hap)))
+        self.lgr.debug('DataWatch watch show_cmp: %r cpu: %s length of watched buffers is %d length of read_hap %d cycles: 0x%x' % (show_cmp, self.cpu.name, 
+           len(self.start), len(self.read_hap), self.cpu.cycles))
         retval = False
         self.show_cmp = show_cmp         
         if break_simulation is not None:
@@ -925,7 +923,7 @@ class DataWatch():
         if self.disabled:
             return
         self.stopped = True
-        #self.lgr.debug('dataWatch stopWatch immediate: %r len of start is %d len of read_hap: %d' % (immediate, len(self.start), len(self.read_hap)))
+        self.lgr.debug('dataWatch stopWatch immediate: %r len of start is %d len of read_hap: %d cycle: 0x%x' % (immediate, len(self.start), len(self.read_hap), self.cpu.cycles))
         for index in range(len(self.start)):
             if self.start[index] is None:
                 continue
@@ -2267,7 +2265,7 @@ class DataWatch():
             ''' sanity check '''
             if buf_start is None:
                 skip_fun = True
-                self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (param_fun, 
+                self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (self.mem_something.fun,
                         param_src, param_length, self.mem_something.addr))
             else:
                 buf_end = buf_start + buf_length-1
@@ -4660,9 +4658,9 @@ class DataWatch():
             ''' cause this hit to be skipped while we look for memcpy '''
             retval = True 
         elif mem_stuff is not None and not skip_this:
-            if mem_stuff.fun in allocators and op_type == Sim_Trans_Store:
+            if (mem_stuff.fun in allocators or mem_stuff.fun in missed_deallocate) and op_type == Sim_Trans_Store:
                 self.rmRange(addr)
-                self.lgr.debug('DataWatch lookForMemstuff buffer mod in allocator, assume we missed a free and remove it 0x%x' % addr)
+                self.lgr.debug('DataWatch lookForMemstuff buffer mod in allocator or missed deallocate, assume we missed a free and remove it 0x%x' % addr)
                 retval = True
             else:
                 if mem_stuff.ret_addr is not None and mem_stuff.called_from_ip is not None:
@@ -5468,7 +5466,7 @@ class DataWatch():
                 elif fun in local_mem_funs or self.fun_mgr.isIterator(frame.fun_addr):
                     if fun in local_mem_funs:
                         fun_precidence = self.funPrecidence(fun)
-                        self.lgr.debug('fun in local_mem_funs %s, set fun_precidence to %d' % (fun, fun_precidence))
+                        self.lgr.debug('dataWatch memsomething fun in local_mem_funs %s, set fun_precidence to %d' % (fun, fun_precidence))
                         # TBD tune this, maybe by clib?  sscanf is at level 4 sometimes.
                         if fun_precidence == 0 and i > 4:
                             ''' Is it some clib calling some other clib?  ghosts?'''
