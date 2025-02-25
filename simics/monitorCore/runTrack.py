@@ -56,12 +56,13 @@ def oneTrack(file_list, resim_path, resim_ini, only_thread, no_page_faults, max_
             #os.chdir(here)
             lgr.debug('oneTrack, f: %s' % f)
             now_here = os.getcwd()
-            #lgr.debug('oneTrack, here: %s, cwd says %s' % (here, now_here))
+            lgr.debug('oneTrack, here: %s, cwd says %s' % (here, now_here))
             os.environ['ONE_DONE_PATH'] = f
             base = os.path.basename(f)
             pdir = os.path.dirname(f)
             tdir = os.path.dirname(pdir)
             ntdir  = os.path.dirname(tdir)
+            lgr.debug('tdir %s ntdir %s' % (tdir, ntdir))
             if os.path.basename(pdir) == 'manual_queue':
                 if trace_all:
                     trackdir = os.path.join(tdir, 'manual_trace')
@@ -71,7 +72,7 @@ def oneTrack(file_list, resim_path, resim_ini, only_thread, no_page_faults, max_
                 if trace_all:
                     trackdir = os.path.join(tdir, 'trace')
                 else:
-                    trackdir = os.path.join(ntdir, 'trackio')
+                    trackdir = os.path.join(tdir, 'trackio')
             try:
                 #trackdir=os.path.join(here,"watch_script/trackio")
                 os.mkdir(trackdir)
