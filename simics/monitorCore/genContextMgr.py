@@ -65,7 +65,7 @@ class GenBreakpoint():
         SIM_enable_breakpoint(self.break_num)
 
 class GenHap():
-    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, conf, immediate=True):
+    def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, conf, cpu, immediate=True):
         ''' breakpoint_start and breakpont_end are GenBreakpoint types '''
         self.hap_type = hap_type
         self.callback = callback
@@ -80,6 +80,7 @@ class GenHap():
         self.handle = handle
         self.name = name
         self.conf = conf
+        self.cpu = cpu
         self.disable_forward = disable_forward
         self.set(immediate)
         self.disabled = False
@@ -425,7 +426,7 @@ class GenContextMgr():
         for bp in self.breakpoints:
             if bp.handle == handle:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name, disable_forward, self.top.conf)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, [bp], name, disable_forward, self.top.conf, self.cpu)
                 self.haps.append(hap)
                 retval = hap.handle
                 break
@@ -442,7 +443,7 @@ class GenContextMgr():
                 bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
-                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, disable_forward, self.top.conf, immediate=True)
+                hap = GenHap(hap_type, callback, parameter, hap_handle, self.lgr, bp_list, name, disable_forward, self.top.conf, self.cpu, immediate=True)
                 #self.lgr.debug('contextManager genHapRange set hap %s on %d breaks' % (name, len(bp_list)))
                 self.haps.append(hap)
                 return hap.handle
