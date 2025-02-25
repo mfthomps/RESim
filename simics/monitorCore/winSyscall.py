@@ -1989,8 +1989,8 @@ class WinSyscall():
                 # TBD count_addr vs delay_count_addr
                 # REMOVE THIS
                 exit_info.count_addr = frame['param5'] + 8
-                exit_info.delay_count_addr = exit_info.count_addr
-                '''
+                #exit_info.delay_count_addr = exit_info.count_addr
+                
                 if word_size == 4:
                     param_val = self.paramOffPtr(5, [0], frame, word_size) 
                     if param_val is None:
@@ -2000,7 +2000,7 @@ class WinSyscall():
                         exit_info.delay_count_addr = param_val + word_size
                 else:
                     exit_info.delay_count_addr = self.stackParam(1, frame) + word_size
-                '''
+               
                 if exit_info.delay_count_addr is not None:
                     self.lgr.debug('winSyscall tid:%s %s returned delay_count_addr 0x%x' % (tid, op_cmd, exit_info.delay_count_addr))
                 else:
