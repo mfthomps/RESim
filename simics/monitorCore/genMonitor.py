@@ -3168,7 +3168,7 @@ class GenMonitor():
     def restoreDebugBreaks(self, was_watching=False):
          
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('restoreDebugBreaks cur tid:%s  but may not be the debug tid cycles: 0x%x' % (cur_tid, cpu.cycles)
+        self.lgr.debug('restoreDebugBreaks cur tid:%s  but may not be the debug tid cycles: 0x%x' % (cur_tid, cpu.cycles))
         self.context_manager[self.target].resetWatchTasks() 
         if not self.debug_breaks_set and not self.track_finished:
             self.lgr.debug('restoreDebugBreaks breaks not set and not track finished')
