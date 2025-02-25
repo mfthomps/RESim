@@ -346,8 +346,10 @@ class DataWatch():
         self.lgr.debug('freadCallback call setRange with start 0x%x len %d' % (start, self.mem_something.length))
         msg = 'fread to 0x%x %d bytes' % (start, self.mem_something.length)
         self.setRange(start, self.mem_something.length, msg=msg)
-        self.top.restoreDebugBreaks(was_watching=True)
-        self.watch()
+        #MFTMFT self.top.restoreDebugBreaks(was_watching=True)
+        #MFTMFT self.watch()
+        self.context_manager.enableAll()
+        self.back_stop.setFutureCycle(self.back_stop_cycles)
         SIM_run_alone(SIM_run_command, 'c')
 
     def isCopyMark(self, watch_mark):
@@ -1270,13 +1272,13 @@ class DataWatch():
         self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x skip_this %r' % (eip, self.cpu.cycles, skip_this))
         hap = self.return_hap
         self.pending_call = False
-        SIM_run_alone(self.top.restoreDebugBreaks, True)
+        #MFTMFT SIM_run_alone(self.top.restoreDebugBreaks, True)
+
         if skip_this:
             self.lgr.debug('dataWatch returnHap skip_this, bail')
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
         word_size = self.top.wordSize(tid, target=self.cell_name)
-        #self.top.restoreDebugBreaks(was_watching=True)
         if self.mem_something.fun in mem_copyish_functions:
             self.handleMemCpyReturn()
         elif self.mem_something.fun in 'memcmp':
@@ -1898,8 +1900,9 @@ class DataWatch():
             self.maxMarksExceeded()
         else:
             # TBD experimental
-            #self.context_manager.enableAll()
-            self.watch(i_am_alone=True)
+            self.context_manager.enableAll()
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
+            #self.watch(i_am_alone=True)
             self.lgr.debug('dataWatch returnHap back from call watch')
             
             ''' See if this return should result in deletion of temp stack buffers '''
@@ -2159,7 +2162,7 @@ class DataWatch():
 
             if data_hit: 
                 ''' Assume we have disabled debugging in context manager while fussing with parameters. '''
-                self.top.restoreDebugBreaks(was_watching=True)
+                #MFTMFT self.top.restoreDebugBreaks(was_watching=True)
                 self.lgr.debug('dataWatch getMemParams, back from restore debug')
             elif self.mem_something.src is None:
                 self.lgr.debug('dataWatch getMemParams src is None and data not hit, bail')
@@ -2167,7 +2170,6 @@ class DataWatch():
                 return
 
             ''' NOTE returns above '''
-            #self.context_manager.restoreDefaultContext()
             if not data_hit and not skip_fun and self.mem_something.fun not in ['getenv', 'getopt']:
                 self.lgr.debug('dataWatch not data_hit, find range for buf_start using src 0x%x' % self.mem_something.src)
                 ''' see if src is one of our buffers '''
@@ -2227,9 +2229,9 @@ class DataWatch():
                     self.lgr.error('dataWatch getMemParams ret_ip is zero, bail')
                     self.pending_call = False
                     return
-                # TBD experimental
-                #self.context_manager.disableAll()
-                self.stopWatch(immediate=True)
+                #MFTMFT
+                self.context_manager.disableAll()
+                #self.stopWatch(immediate=True)
                 self.lgr.debug('call runToReturn')
                 self.runToReturn()
                 dum_cpu, comm, tid = self.task_utils.curThread()
@@ -2738,7 +2740,6 @@ class DataWatch():
     def runToReturnAlone(self, skip_this=False):
         cell = self.top.getCell()
         resim_context = self.context_manager.getRESimContext()
-        #self.context_manager.restoreDefaultContext()
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memsomething_return_hap')
@@ -2775,7 +2776,9 @@ class DataWatch():
             self.watchMarks.dataRead(self.mem_something.addr, self.mem_something.start, self.mem_something.length, self.mem_something.trans_size, ip=eip, cycles=self.cpu.cycles)
             self.lgr.debug('dataWatch undoAlone eip: 0x%x would run forward, first restore debug context' % eip)
             self.context_manager.restoreDebugContext()
-            self.top.restoreDebugBreaks()
+            self.context_manager.enableAll()
+            self.back_stop.setFutureCycle(self.back_stop_cycles)
+            #MFTMFT self.top.restoreDebugBreaks()
             #self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, tid)
             self.lgr.debug('dataWatch undoAlone now run forward')
 
@@ -2878,8 +2881,8 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a jump.  TBD sort out multiple entry points', self.mem_something.fun_addr)
 
-        self.top.removeDebugBreaks(immediate=True)
-        self.stopWatch(immediate=True)
+        #MFTMFT self.top.removeDebugBreaks(immediate=True)
+        #MFTMFT self.stopWatch(immediate=True)
         self.context_manager.disableAll(direction='reverse')
 
         self.cycles_was = self.cpu.cycles
@@ -4870,6 +4873,7 @@ class DataWatch():
                         if newlen > 0:
                             self.lgr.debug('dataWatch rmSubRange adding range for new start 0x%x new len %x' % (new_start, newlen))
                             self.setRange(new_start, newlen, no_extend=True)
+                    # redo data watch breaks
                     self.stopWatch()
                     self.watch()
                 else:
@@ -6071,11 +6075,12 @@ class DataWatch():
                     self.setRange(retval_addr_list[i], 1, msg)
                 else:
                     self.lgr.debug('dataWatch fscanf format %s not yet handled' % token_type)
-                self.stopWatch() 
-                self.watch(break_simulation=False, i_am_alone=True)
                 format_index = type_index+1
             else:
                 self.lgr.debug('dataWatch fscanf no percent found in %s' % format_str[format_index:])    
+        # reset data watches
+        self.stopWatch() 
+        self.watch(break_simulation=False, i_am_alone=True)
                      
     def recordOtherProcRead(self, phys_addr, trans_size, addr, index, cur_comm, cur_tid, op_type):
         self.lgr.debug('dataWatch recordOtherProcRead BEGIN')

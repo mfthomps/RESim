@@ -171,7 +171,7 @@ class GenHap():
             self.disabled = True
 
     def enable(self):
-        self.lgr.debug('GenHap enable %s cycles: 0x%x' % (self.name, self.cpu.cycles))
+        #self.lgr.debug('GenHap enable %s cycles: 0x%x' % (self.name, self.cpu.cycles))
         for bp in self.breakpoint_list:       
             #self.lgr.debug('GenHap enable bp %d cycles: 0x%x' % (bp.break_num, self.cpu.cycles))
             bp.enable()
@@ -1707,9 +1707,11 @@ class GenContextMgr():
         self.soMap = soMap
 
     def disableAll(self, direction=None):
+        self.lgr.debug('contextManager disableAll cycle: 0x%x' % self.cpu.cycles)
         for hap in self.haps:
             hap.disable(direction)
     def enableAll(self, dumb=None):
+        self.lgr.debug('contextManager enableAll cycle 0x%x' % self.cpu.cycles)
         for hap in self.haps:
             hap.enable()
 
