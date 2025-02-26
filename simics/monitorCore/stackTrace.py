@@ -918,6 +918,9 @@ class StackTrace():
         first_fun_addr = self.fun_mgr.getFun(eip)
         first_fun_name = self.fun_mgr.getFunName(first_fun_addr)
         frame, adjust_sp = self.genFrame(eip, instruct, ptr, None, None, None, None, msg='first frame')
+        if self.cpu.architecture not in ['arm', 'arm64'] and adjust_sp > 0:
+            self.lgr.debug('stackTrace adjust for first frame 0x%x' % adjust_sp)
+            ptr = ptr + adjust_sp
         if first_fun_addr is not None:
             #self.lgr.debug('stackTrace doTrace begin tid:%s cur eip 0x%x sp: 0x%x instruct %s  fname %s skip_recurse: %r first_fun_addr 0x%x fun name %s' % (self.tid, eip, esp, instruct, fname, self.skip_recurse, first_fun_addr, first_fun_name))
             pass
@@ -1234,12 +1237,12 @@ class StackTrace():
                                     if self.cpu.architecture not in ['arm', 'arm64']:
 
                                         if prev_ip is not None and call_to is not None and self.fun_mgr.inFun(prev_ip, call_to, call_ip=call_ip):
-                                            self.lgr.debug('stackTrace candidate function %s does not match current function %s, BUT we think 0x%x is in the fun' % (fun_name, cur_fun_name, prev_ip))
+                                            #self.lgr.debug('stackTrace candidate function %s does not match current function %s, BUT we think 0x%x is in the fun' % (fun_name, cur_fun_name, prev_ip))
                                             pass
                                         elif been_above_clib or call_to is None or not self.isJumpTable(call_to):
                                             bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
                                             if (bp + self.mem_utils.wordSize(self.cpu)) != ptr:
-                                                self.lgr.debug('stackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun_name, cur_fun_name, bp, ptr))
+                                                #self.lgr.debug('stackTrace candidate <%s> does not match <%s> and bp is 0x%x and  ptr is 0x%x skip it' % (fun_name, cur_fun_name, bp, ptr))
                                                 count += 1
                                                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                                                 cur_fun_name = None
@@ -1250,7 +1253,7 @@ class StackTrace():
                                         else:
                                             self.lgr.debug('stackTrace candidate %s maybe reached %s via jump table.' % (fun_name, cur_fun_name))
                                     else:
-                                        self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun_name, cur_fun_name))
+                                        #self.lgr.debug('stackTrace candidate function %s does not match current function %s, skipit' % (fun_name, cur_fun_name))
                                         ''' don't count this against max frames '''
                                         count += 1
                                         ptr = ptr + self.mem_utils.wordSize(self.cpu)
@@ -1271,7 +1274,7 @@ class StackTrace():
                             pass
                         fun_fname = None
                         if fun_hex is not None:
-                            self.lgr.debug('stackTrace fun_hex 0x%x, fun_name %s instr %s' % (fun_hex, fun_name, instruct_str))
+                            #self.lgr.debug('stackTrace fun_hex 0x%x, fun_name %s instr %s' % (fun_hex, fun_name, instruct_str))
                             ''' TBD fix for windows '''
                             # TBD what use is this?
                             #if not self.top.isWindows():
@@ -1592,9 +1595,12 @@ class StackTrace():
                         self.lgr.debug('stackTrace addFrame vxworks fun_addr 0x%x not a fun, bail' % frame.fun_addr)
             if not skip_this:
                 # adjust is confusing because we adjust on the next frame.  consider ldp x1,x2, [sp], #36  before changing.
-                #adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
-                adjust = self.fun_mgr.stackAdjust(frame.fun_name)
-                self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_name, adjust))
+                if self.cpu.architecture in ['arm', 'arm64']:
+                    adjust = self.fun_mgr.stackAdjust(frame.fun_name)
+                    self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_name, adjust))
+                else:
+                    adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
+                    self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
                 self.frames.append(frame)
                 #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
                 self.prev_frame_sp = frame.sp
