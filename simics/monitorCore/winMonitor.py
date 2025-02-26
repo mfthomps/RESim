@@ -246,7 +246,7 @@ class WinMonitor():
             self.lgr.debug('runToIO already in call_traces, add param')
             self.call_traces['runToIO'].addCallParams([call_params])
         else:
-            self.lgr.debug('runToIO on FD %s' % str(fd))
+            self.lgr.debug('runToIO on FD %s count %s' % (str(fd), count))
 
             if True:
                 skip_and_mail = True
