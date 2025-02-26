@@ -216,22 +216,27 @@ class ImportNames():
             #print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
             for ref in refs:
-                #print('\timports for 0x%x found ref 0x%x' % (ea, ref))
+                print('\timports for fun %s entry 0x%x found ref 0x%x' % (fun, ea, ref))
                 fun_refs = idautils.DataRefsTo(ref)
                 for fr in fun_refs:
-                    next_pc = fr+4
-                    instruct = idc.GetDisasm(next_pc)
-                    limit = 0
-                    while not instruct.startswith('BLR') and not instruct.startswith('BR'):
-                        next_pc = next_pc + 4
-                        limit = limit + 1
-                        if limit > 10:
-                            break
-                        instruct = idc.GetDisasm(next_pc)
-
-                    if (instruct.startswith('BLR') or instruct.startswith('BR')) and next_pc not in arm_blr:
-                        print('\t\timports fun_ref 0x%x next instruct 0x%x %s' % (fr, next_pc, instruct))
-                        arm_blr[next_pc] = fun
+                    fr_instruct = idc.GetDisasm(fr)
+                    if fr_instruct.startswith('LDR'):
+                        insn = idaapi.insn_t()
+                        instruct_len = idaapi.decode_insn(insn, fr)
+                        our_reg = insn.ops[0].reg            
+                        next_pc = fr
+                        print('\t\tfun ref 0x%x %s our_reg = %s' % (fr, fr_instruct, our_reg))
+                        for i in range(8):
+                            next_pc = next_pc + 4
+                            instruct = idc.GetDisasm(next_pc)
+                            if instruct.startswith('BLR') or instruct.startswith('BR'):
+                                next_insn = idaapi.insn_t()
+                                next_instruct_len = idaapi.decode_insn(next_insn, next_pc)
+                                if our_reg == next_insn.ops[0].reg:
+                                    print('\t\t\timports fun_ref 0x%x next instruct 0x%x %s' % (fr, next_pc, instruct))
+                                    if next_pc not in arm_blr:
+                                        arm_blr[next_pc] = fun
+                                    break
         with open(fname+'.arm_blr', "w") as fh:
             json.dump(arm_blr, fh)
 
