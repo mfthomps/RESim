@@ -1608,6 +1608,10 @@ class WinSyscall():
         self.stop_on_exit=True
         self.lgr.debug('syscall stopOnExit')
 
+    def handleExit(self, tid, ida_msg, killed=False, retain_so=False, exit_group=False):
+        self.lgr.debug('winSyscall handleExit tid:%s  TBD, just call handleTerminateProcess for now' % tid)
+        self.handleTerminateProcess(tid, ida_msg)
+
     def handleTerminateProcess(self, tid_in, ida_msg):
         proc_part = tid_in.split('-')[0]
         thread_dict = self.task_utils.findThreads()
