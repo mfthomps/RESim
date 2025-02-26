@@ -986,7 +986,7 @@ class DataWatch():
             self.function_no_watch.rmBreaks(immediate=immediate)
 
     def resetWatch(self):
-        #self.lgr.debug('dataWatch resetWatch')
+        self.lgr.debug('dataWatch resetWatch')
         self.stopWatch(immediate=True)
         self.resetState()
 
@@ -2522,7 +2522,7 @@ class DataWatch():
             start, length = self.findBufForRange(src_addr, count)
             if start is None:
                 self.lgr.debug('dataWatch getMemParams %s failed to find buf for addr 0x%x count %d' % (self.mem_something.fun, src_addr, count))
-                skip_it = True
+                skip_fun = True
             else:
                 self.mem_something.src = start
                 self.mem_something.length = length
@@ -2610,12 +2610,12 @@ class DataWatch():
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is None? data_hit %r, add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr), data_hit))
-                skip_it = True
+                skip_fun = True
             else:
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is unknown? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
-                skip_it = True
+                skip_fun = True
         elif self.mem_something.fun in ['charLookupX', 'charLookupY']:
             r0 = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             end_ptr = r0 + 0x10
@@ -2638,7 +2638,7 @@ class DataWatch():
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s cur_ptr is unknown? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
-                skip_it = True
+                skip_fun = True
         elif self.mem_something.fun == 'UuidToStringA':
             src_addr, this, dumb = self.getCallParams(sp, word_size)
             self.mem_something.src_addr = src_addr
