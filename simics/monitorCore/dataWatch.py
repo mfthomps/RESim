@@ -835,16 +835,17 @@ class DataWatch():
         self.watchMarks.markCall(msg, fd=fd)
        
     def watchFunEntries(self): 
-        #self.lgr.debug('watchFunEntries, %d entries' % len(self.mem_fun_entries))
+        self.lgr.debug('watchFunEntries, %d entries' % len(self.mem_fun_entries))
         for fun in self.mem_fun_entries:
-            #self.lgr.debug('watchFunEntries, fun %s %d entries' % (fun, len(self.mem_fun_entries)))
+            self.lgr.debug('watchFunEntries, fun %s %d entries' % (fun, len(self.mem_fun_entries)))
             for eip in self.mem_fun_entries[fun]:
                 if self.mem_fun_entries[fun][eip].hap is None and not self.mem_fun_entries[fun][eip].disabled:
                     phys_block = self.cpu.iface.processor_info.logical_to_physical(eip, Sim_Access_Execute)
                     if phys_block is None:
                         self.lgr.warning('dataWatch watchFunEntries, code at 0x%x not mapped, will not catch entry' % eip)
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, eip, 1, 0)
-                    hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.memSomethingEntry, fun, proc_break, 'mem_fun_entry') 
+                    name = 'mem_fun_entry_%s' % fun
+                    hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.memSomethingEntry, fun, proc_break, name)
                     self.mem_fun_entries[fun][eip].hap = hap
                     #self.lgr.debug('dataWatch watchFunEntries set fun entry break on 0x%x for fun %s context %s' % (eip, fun, self.cpu.current_context))
         if self.destroy_entry is not None and self.destroy_hap is None:
@@ -2146,6 +2147,7 @@ class DataWatch():
                     else:
                         self.lgr.debug('dataWatch getMemParms eip 0x%x already in mem_fun_entries, enable it' % eip)
                         self.mem_fun_entries[fun][eip].disabled = False 
+                    self.watchFunEntries()
                 #else:
                 #    self.lgr.debug('dataWatch getMemParams, fun %s in mem_fun_entries? will return' % fun)
                 #    return
@@ -2735,6 +2737,7 @@ class DataWatch():
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memcpy_return_hap')
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+            self.lgr.debug('dataWatch runToReturn reset backstop')
             self.back_stop.setFutureCycle(self.back_stop_cycles)
 
     def runToReturnAlone(self, skip_this=False):

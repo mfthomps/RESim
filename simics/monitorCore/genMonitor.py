@@ -4199,10 +4199,10 @@ class GenMonitor():
         ''' compat with CGC version '''
         return False 
 
-    def showHaps(self):
+    def showHaps(self, filter=None):
         for cell_name in self.context_manager:
             print('Cell: %s' % cell_name)
-            self.context_manager[cell_name].showHaps()
+            self.context_manager[cell_name].showHaps(filter=filter)
 
     def addMazeExit(self):
         ''' Intended for use if it seems a maze exit is nested -- will cause the most recent breakout
@@ -6467,6 +6467,8 @@ class GenMonitor():
     def skipToCycle(self, cycle, cpu=None):
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
+            # assumption called by user, so reset watches
+            self.stopTracking()
         self.context_manager[self.target].setReverseContext()
         retval = self.skip_to_mgr[self.target].skipToTest(cycle)
         self.context_manager[self.target].clearReverseContext()

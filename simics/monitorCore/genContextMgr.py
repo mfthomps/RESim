@@ -323,10 +323,14 @@ class GenContextMgr():
                     return hap.name
         return None
 
-    def showHaps(self):
+    def showHaps(self, filter=None):
         self.lgr.debug('contextManager showHaps')
         for hap in self.haps:
-            hap.show()
+            if filter is not None:
+                if filter in hap.name:
+                    hap.show()
+            else:
+                hap.show()
 
     #def getRESimContext(self):
     #    return self.debugging_cell
