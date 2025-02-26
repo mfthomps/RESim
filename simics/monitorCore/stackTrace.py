@@ -276,7 +276,7 @@ class StackTrace():
                         #    self.lgr.debug('stackTrace isCallToMe fun_hex was None for instruct %s at 0x%x' % (instruct[1], call_instr))
                         #    pass
                         #elif cur_fun is not None:
-                        #    self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x' % (fun_hex, fun, cur_fun))
+                        #    self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x call_instr 0x%x' % (fun_hex, fun, cur_fun, call_instr))
                         #    pass
                         if fun_hex is not None and fun_hex == cur_fun:
                             if fun is not None:
@@ -290,9 +290,9 @@ class StackTrace():
                             blr_fun_name = self.fun_mgr.getBlr(call_instr) 
                             if blr_fun_name is not None:
                                if blr_fun_name != fun_name:
-                                   self.lgr.debug('stackTrace isCallToMe is a blr funs do not match, set fun_of_ip of previous frame to %s' % (blr_fun_name))
+                                   self.lgr.debug('stackTrace isCallToMe is a blr funs do not match, fun_name is %s, set fun_of_ip of previous frame to %s' % (fun_name, blr_fun_name))
                                    self.frames[-1].fun_of_ip = blr_fun_name 
-                               #self.lgr.debug('stackTrace isCallToMe is a blr, getBlr got %s, was in fun is 0x%x (name %s)' % (blr_fun_name, cur_fun, fun_name)) 
+                               self.lgr.debug('stackTrace isCallToMe is a blr, getBlr got %s, was in fun is 0x%x (name %s)' % (blr_fun_name, cur_fun, fun_name)) 
                                cur_fun = self.fun_mgr.getFunEntry(blr_fun_name)
                                new_instruct = '%s (%s)' % (instruct[1], blr_fun_name)
                                frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, cur_fun, blr_fun_name, lr, None, msg='isCallToMe is blr')
