@@ -75,7 +75,11 @@ allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
 char_ring_functions = ['ringqPutc']
 mem_copyish_functions = ['memcpy', 'mempcpy', 'j_memcpy', 'memmove', 'memcpy_xmm']
 reg_return_funs = ['win_streambuf_getc']
-missed_deallocate = ['String6toUtf8', 'String16fromAscii_helper']
+#missed_deallocate = ['String6toUtf8', 'String16fromAscii_helper']
+missed_deallocate = []
+for fun in mem_funs:
+    if fun not in mem_copyish_functions:
+        missed_deallocate.append(fun)
 class MemSomething():
     def __init__(self, fun, fun_addr, addr, ret_ip, src, dest, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None, frames=[]):
             self.fun = fun
@@ -987,7 +991,7 @@ class DataWatch():
             self.function_no_watch.rmBreaks(immediate=immediate)
 
     def resetWatch(self):
-        #self.lgr.debug('dataWatch resetWatch')
+        self.lgr.debug('dataWatch resetWatch')
         self.stopWatch(immediate=True)
         self.resetState()
 
@@ -1778,7 +1782,7 @@ class DataWatch():
             range_count = buf_length * 2
             self.mem_something.dest = this_addr + 0x10 + offset
             watch_buf_start = self.findRange(self.mem_something.src)
-            self.lgr.debug('%s returned src 0x%x dest addr 0x%x string length count %d range count %d' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest, count, range_count)) 
+            self.lgr.debug('%s returned src 0x%x dest addr 0x%x string length count %d range count %d this_addr: 0x%x' % (self.mem_something.fun, self.mem_something.src, self.mem_something.dest, count, range_count, this_addr)) 
             wm = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, range_count, watch_buf_start, Sim_Trans_Load, fun_name=self.mem_something.fun, 
                                       truncated=truncate, copy_start=copy_start)
             self.setRange(self.mem_something.dest, range_count, watch_mark=wm)
@@ -2524,7 +2528,7 @@ class DataWatch():
             start, length = self.findBufForRange(src_addr, count)
             if start is None:
                 self.lgr.debug('dataWatch getMemParams %s failed to find buf for addr 0x%x count %d' % (self.mem_something.fun, src_addr, count))
-                skip_it = True
+                skip_fun = True
             else:
                 self.mem_something.src = start
                 self.mem_something.length = length
@@ -2612,12 +2616,12 @@ class DataWatch():
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is None? data_hit %r, add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr), data_hit))
-                skip_it = True
+                skip_fun = True
             else:
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s ret_addr_addr is unknown? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
-                skip_it = True
+                skip_fun = True
         elif self.mem_something.fun in ['charLookupX', 'charLookupY']:
             r0 = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             end_ptr = r0 + 0x10
@@ -2640,7 +2644,7 @@ class DataWatch():
                 self.skip_entries.append(self.mem_something.fun_addr)
                 self.added_mem_fun_entry = True
                 self.lgr.debug('dataWatch getMemParms %s addr %s cur_ptr is unknown? add to skip_entries' % (self.mem_something.fun, str(self.mem_something.addr)))
-                skip_it = True
+                skip_fun = True
         elif self.mem_something.fun == 'UuidToStringA':
             src_addr, this, dumb = self.getCallParams(sp, word_size)
             self.mem_something.src_addr = src_addr
@@ -2875,7 +2879,8 @@ class DataWatch():
             
             instruct = self.top.disassembleAddress(self.cpu, self.mem_something.fun_addr)
             if self.mem_something.op_type != Sim_Trans_Load:
-                self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a store, so ignore?', self.mem_something.fun_addr)
+                self.lgr.debug('dataWatch revAlone, entry 0x%x already in mem_fun_entires, but is a store, so ignore after removing the range', self.mem_something.fun_addr)
+                self.rmRange(self.mem_something.addr) 
                 SIM_continue(0)
                 return
             elif not instruct[1].startswith('jmp'):
@@ -3457,13 +3462,13 @@ class DataWatch():
             #    self.lgr.debug('dataWatch loopAdHoc dest_addr is None')
  
             if dest_addr is not None:
+                adhoc = False
                 if next_instruct[1].startswith('mov') and self.decode.regIsPartList(op2, our_reg_list) and 'sp' in op1:
                     this_sp = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                     #self.lgr.debug('dataWatch loopAdHoc push via mov.  Moved to SP value 0x%x,  hack sp because checkPushedData will subtract word size from it' % this_sp)
                     this_sp = this_sp + word_size
                     adhoc = self.checkPushedData(this_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
-                    break
-                else:
+                if not adhoc:
                     adhoc = self.gotAdHocDest(next_ip, next_instruct, op1, op2, addr, trans_size, dest_addr, start, length, byte_swap, our_reg, our_reg_list, recent_instructs, orig_ip, orig_cycle, (move_cycles+jump_cycles), word_size)
                     break
             elif (next_instruct[1].startswith('mov') or next_instruct[1].startswith('or')) and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list) and self.decode.isReg(op1):
