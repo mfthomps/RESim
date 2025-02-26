@@ -42,4 +42,3 @@ resim ubuntu_driver.ini -c test_track.simics
 ./testPlay.sh || exit
 ./testDedupe.sh || exit
 ./testRunTrack.sh || exit
-

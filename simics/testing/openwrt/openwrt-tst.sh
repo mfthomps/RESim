@@ -10,8 +10,7 @@ resim-ws.sh
 cp $RESIM_DIR/simics/examples/openwrt/fvp.param .
 cp $RESIM_DIR/simics/testing/openwrt/* .
 # Set the init script to run until the odhcpd starts
-sed -i '/PRE_INIT_SCRIPT/a INIT_SCRIPT=start_openwrt.simics' fvp.ini
-resim fvp.ini -n
+resim fvp.ini -c start_openwrt.simics
 # Test debug of uhttpd
 ./test_debug.sh
 ./test_track.sh

@@ -1,7 +1,6 @@
 #!/bin/bash
 sed -i 's/.RUN_FROM_SNAP.*$/RUN_FROM_SNAP=odhcpd/' fvp.ini
-sed -i 's/start_openwrt.simics/test_debug.simics/' fvp.ini
-resim fvp.ini -n
+resim fvp.ini -c test_debug.simics
 line=$(grep "cpu.name is fvp.cluster.0." logs/monitors/resim.log)
 if [ -z "$line" ]; then
     echo "test_debug failed to find show line"
