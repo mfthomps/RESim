@@ -164,7 +164,7 @@ class GenHap():
             #self.lgr.debug('GenHap back from clear ')
             self.hap_num = None
 
-    def disable(self, direction='forward'):
+    def disable(self, direction='forward', filter=None):
         if not (direction == 'forward' and not self.disable_forward):
             for bp in self.breakpoint_list:
                 bp.disable()
@@ -1100,7 +1100,7 @@ class GenContextMgr():
                 return
             leader_tid = self.task_utils.getGroupLeaderTid(tid)
             if leader_tid is None:
-                self.lgr.error('contextManager resetWatchTask got no leader tid for tid %s' % tid)
+                self.lgr.debug('contextManager resetWatchTask got no leader tid for tid %s' % tid)
             else:
                 tid_list = self.task_utils.getGroupTids(leader_tid)
                 for tid in tid_list:
@@ -1710,10 +1710,11 @@ class GenContextMgr():
         ''' ugly dependency loop needed to set text on first schedule ''' 
         self.soMap = soMap
 
-    def disableAll(self, direction=None):
+    def disableAll(self, direction=None, filter=None):
         self.lgr.debug('contextManager disableAll cycle: 0x%x' % self.cpu.cycles)
         for hap in self.haps:
-            hap.disable(direction)
+            if filter is None or filter in hap.name:
+                hap.disable(direction)
     def enableAll(self, dumb=None):
         self.lgr.debug('contextManager enableAll cycle 0x%x' % self.cpu.cycles)
         for hap in self.haps:
