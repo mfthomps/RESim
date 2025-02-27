@@ -75,6 +75,11 @@ class MagicOrigin():
         #self.lgr.debug('MagicOrigin, continue')
         #SIM_run_command('c')
 
+    def justCutReal(self, dumb=None):
+        self.top.cutRealWorld()
+        self.lgr.debug('MagicOrigin justCutReal, now continue')
+        SIM_run_command('c')
+
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
             establish a new origin '''
@@ -92,7 +97,8 @@ class MagicOrigin():
                         self.top.stopAndGo(self.setOrigin)
                     else:
                         self.lgr.debug('MagicOrigin magicHap call to only disconnect')
-                        self.top.stopAndGo(self.disconnect)
+                        self.top.stopAndGo(self.justCutReal)
+
     def didMagic(self):
         return self.did_magic
 
