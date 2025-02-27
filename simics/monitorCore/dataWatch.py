@@ -2735,16 +2735,18 @@ class DataWatch():
         return skip_fun             
 
 
-    def runToReturn(self, skip_this=False):
+    def runToReturnXXXX(self, skip_this=False):
+        # TBD why 2 functions?
         self.lgr.debug('dataWatch runToReturn current context is %s' % str(self.cpu.current_context))
         resim_context = self.context_manager.getRESimContext()
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memcpy_return_hap')
+        self.context_manager.restoreDebugContext()
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
-            self.lgr.debug('dataWatch runToReturn reset backstop')
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+            self.lgr.debug('dataWatch runToReturn clear backstop')
+            self.back_stop.clearCycle()
 
-    def runToReturnAlone(self, skip_this=False):
+    def runToReturn(self, skip_this=False):
         cell = self.top.getCell()
         resim_context = self.context_manager.getRESimContext()
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
@@ -2752,6 +2754,9 @@ class DataWatch():
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memsomething_return_hap')
         self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
         self.context_manager.restoreDebugContext()
+        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+            self.lgr.debug('dataWatch runToReturnAlone clear backstop')
+            self.back_stop.clearCycle()
         if self.mem_something.run:
             SIM_continue(0)
 
@@ -3035,9 +3040,8 @@ class DataWatch():
                 ''' iterator may take  while to return? '''
                 ''' iterator mark will be recorded on return '''
                 #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
-                self.back_stop.clearCycle()
                 #SIM_break_simulation('handle memstuff')
-                self.runToReturnAlone(skip_this=False)
+                self.runToReturn(skip_this=False)
             else:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
@@ -5226,7 +5230,7 @@ class DataWatch():
             self.break_simulation=False
             self.me_trace_malloc = True
             self.top.traceMalloc()
-            SIM_run_alone(self.runToReturnAlone, False)
+            SIM_run_alone(self.runToReturn, False)
         else:
             self.lgr.debug('Failed to get memsomething from stack frames')
 
@@ -5709,7 +5713,7 @@ class DataWatch():
                 self.added_mem_fun_entry = True
             else:
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry eip 0x%x already in mem_fun_entries' % eip)
-            self.runToReturnAlone(skip_this=False)
+            self.runToReturn(skip_this=False)
 
     def recordObscureMemcpyEntry2(self, src_dest_count):
             src_ptr, dest_ptr, count = src_dest_count
@@ -5737,7 +5741,7 @@ class DataWatch():
                 self.added_mem_fun_entry = True
             else:
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry2 eip 0x%x already in mem_fun_entries' % eip)
-            self.runToReturnAlone(False)
+            self.runToReturn(False)
 
     def memcpyCheck(self, called_from_reverse_mgr, one, exception, error_string):
         if self.call_stop_hap is not None or called_from_reverse_mgr is not None:
