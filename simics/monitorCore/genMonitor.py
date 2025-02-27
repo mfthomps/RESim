@@ -2989,6 +2989,7 @@ class GenMonitor():
         self.syscallManager[self.target].rmAllSyscalls()
         #self.stopTrace()
         if self.target in self.magic_origin:
+            self.magic_origin[self.target].deleteMagicHap() 
             del self.magic_origin[self.target]
             self.lgr.debug('stopDebug deleted magic origin ')
         self.noWatchSysEnter()
@@ -6475,6 +6476,8 @@ class GenMonitor():
         return retval
 
     def cutRealWorld(self):
+        if self.target in self.magic_origin:
+            self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
 
     def runTo32(self):
