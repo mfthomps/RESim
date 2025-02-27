@@ -78,6 +78,9 @@ class TargetFS():
             elif '/' not in path and path in self.file_cache:
                 return self.file_cache[path] 
 
+            if self.root_prefix is None or self.root_prefix.lower() == 'none':
+                lgr.debug('TargetFS getFull no root prefix, maybe just the driver')
+                return None
             full = os.path.join(self.root_prefix, path)
             if lgr is not None:
                 lgr.debug('TargetFS full is %s' % full)
