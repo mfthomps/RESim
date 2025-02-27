@@ -829,6 +829,9 @@ class WatchMarks():
         ''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc and not note:
             value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
+            if value is None:
+                self.lgr.error('watchMarks dataRead from addr 0x%x is None' % addr)
+                return None
             mark_compare = self.getCmp(addr, trans_size)
             dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False), ip=ip)
             wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
