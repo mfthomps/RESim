@@ -215,10 +215,10 @@ class DataWatch():
         self.return_break = None
         self.return_hap = None
         self.kernel_return_hap = []
-        ''' for debugging multiple breaks on same address'''
+        # for debugging multiple breaks on same address'''
         self.prev_cycle = None
         self.prev_index = None
-        ''' for guessing if stack buffer is being re-used '''
+        # for guessing if stack buffer is being re-used '''
         self.prev_read_cycle = 0
         self.other_starts = [] # buffer starts that were skipped because they were subranges.
         self.other_lengths = [] 
@@ -227,46 +227,46 @@ class DataWatch():
         self.call_hap = None
         self.call_stop_hap = None
         self.mem_something = None
-        ''' used to guess if we encountered a ghost frame '''
+        # used to guess if we encountered a ghost frame '''
         self.cycles_was = 0
         self.undo_hap = None
-        ''' Do not set backstop until first read, otherwise accept followed by writes will trigger it. '''
+        # Do not set backstop until first read, otherwise accept followed by writes will trigger it. '''
         self.use_back_stop = False
         
         self.malloc_dict = {}
         self.pending_call = False
         self.ghost_stop_hap = None
-        ''' don't set backstop on reads of these addresses, e.g., for ioctl '''
+        # don't set backstop on reads of these addresses, e.g., for ioctl '''
         self.no_backstop = []
-        ''' support deletion of stack buffers after return from function '''
+        # support deletion of stack buffers after return from function '''
         self.stack_buffers = {}
         self.stack_buf_hap = {}
         self.stack_this = {}
         self.stack_this_hap = {}
-        ''' watch for string destroy?'''
+        # watch for string destroy?'''
         self.destroy_entry = None
         self.destroy_hap = None
-        ''' used by writeData when simulating responses from ioctl '''
+        # used by writeData when simulating responses from ioctl '''
         self.total_read = 0
         self.read_limit_trigger = None
         self.read_limit_callback = None
-        ''' skip hit on ad_hoc buffer that was just added, and likely not yet executed.'''
+        # skip hit on ad_hoc buffer that was just added, and likely not yet executed.'''
         self.last_ad_hoc = []
-        ''' sanitiy check for programs run amuck '''
+        # sanitiy check for programs run amuck '''
         self.index_hits = {}
 
         self.disabled = True
-        ''' expect readHap to be hit twice'''
+        # expect readHap to be hit twice'''
         self.undo_pending = False
 
         self.transform_push_hap = None
         self.recent_fgets = None
         self.recent_reused_index=None
 
-        ''' catch c++ string reuse/free '''
+        # catch c++ string reuse/free '''
         self.string_this = {}
 
-        ''' optimization to avoid hunt for memsomething on iterations '''
+        # optimization to avoid hunt for memsomething on iterations '''
         self.not_mem_something = []
 
         self.re_watch_list = []
@@ -275,34 +275,39 @@ class DataWatch():
 
         self.skip_entries = []
 
-        ''' ad-hock clearing of smallish buffers through multiple writes'''
+        # ad-hock clearing of smallish buffers through multiple writes'''
         self.hack_reuse_index = None
         self.hack_reuse = []
 
-        ''' Modules whose haps need to be removed when tracking is stopped.  These will not be recreated '''
+        # Modules whose haps need to be removed when tracking is stopped.  These will not be recreated '''
         self.remove_external_haps = []
 
-        ''' optimization to avoid rechecking for ad-hoc copies on same addresses '''
+        # optimization to avoid rechecking for ad-hoc copies on same addresses '''
         self.not_ad_hoc_copy = []
-        ''' and to avoid stack trace '''
+        # and to avoid stack trace '''
         self.is_ad_hoc_move = []
 
-        ''' most recent frames from check for memsomething '''
+        # most recent frames from check for memsomething '''
         self.frames = []
 
-        ''' recent record during check move for use in creating a watch mark if a potential obscure memcpy does not pan out '''
+        # recent record during check move for use in creating a watch mark if a potential obscure memcpy does not pan out '''
         self.move_stuff = None
 
-        ''' Do not start tracking until this string is read '''
+        # Do not start tracking until this string is read '''
         self.commence_with = None
         self.commence_offset = 0
 
-        ''' Optimization for loopy calls to memcpy from within clibish functions. '''
+        # Optimization for loopy calls to memcpy from within clibish functions. '''
         self.recent_entry_bp = None
 
-        ''' Distinguish multiple instances of dataWatch module, per page mapping '''
+        # Distinguish multiple instances of dataWatch module, per page mapping '''
         self.comm = None
         self.data_watch_manager = None
+
+        # Hack for funs like strnlen that might ref data beyond string end.
+        # strlen 0x48e on string len 2 (3 including null) causes read of 8 bytes starting at 490
+        # our watch buffer is at 494 and thus we think the strlen does not pertain to our buffer, but the breakpoint will be hit
+        self.last_buffer_not_found = None
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
@@ -1266,6 +1271,8 @@ class DataWatch():
         SIM_run_alone(self.deleteReturnHap, hap)
         self.return_hap = None
         eip = self.top.getEIP(self.cpu)
+        self.context_manager.enableAll()
+        self.back_stop.setFutureCycle(self.back_stop_cycles)
         if self.cpu.cycles < self.cycles_was:
             if self.mem_something.addr is None:
                 '''  Not due to a readHap, just restore breaks and continue '''
@@ -1904,9 +1911,6 @@ class DataWatch():
         if self.max_marks is not None and self.watchMarks.markCount() >= self.max_marks:
             self.maxMarksExceeded()
         else:
-            # TBD experimental
-            self.context_manager.enableAll()
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
             #self.watch(i_am_alone=True)
             self.lgr.debug('dataWatch returnHap back from call watch')
             
@@ -2138,7 +2142,7 @@ class DataWatch():
                             pass
                         else:
                             ret_addr_offset = sp - self.mem_something.ret_addr_addr 
-                            self.lgr.debug('dataWatch getMemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomthing ret_ip 0x%x' % (fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
+                            self.lgr.debug('dataWatch getMemParam did step forward would record fun %s at 0x%x ret_addr ofset is %d ret_addr_addr 0x%x read ret_addr 0x%x, memsomething ret_ip 0x%x' % (fun, eip, ret_addr_offset, self.mem_something.ret_addr_addr, ret, self.mem_something.ret_ip))
                     else:
                         self.lgr.debug('dataWatch getMemParam ret_addr_addr is None, did step forward would record fun %s at 0x%x ret_addr ofset is None, assume lr retrun' % (fun, eip))
                     #if fun not in funs_need_addr:
@@ -2185,7 +2189,7 @@ class DataWatch():
                     self.lgr.debug('dataWatch getMemParams count is not none %d' % self.mem_something.length)
                     buf_start, buf_length = self.findBufForRange(self.mem_something.src, self.mem_something.length)
                     if buf_start is None:
-                        self.lgr.debug('dataWatch getMemParams count is not but buf_start is None')
+                        self.lgr.debug('dataWatch getMemParams count is not None but buf_start is None')
                 else:
                     self.lgr.debug('dataWatch getMemParams count is None')
                     buf_index = self.findRangeIndex(self.mem_something.src)
@@ -2197,7 +2201,7 @@ class DataWatch():
                 if buf_start is None:
                     ''' handle ambigous calls such as strcmp '''
                     if self.mem_something.dest is not None:
-                        buf_start = self.findRange(self.mem_something.dest)
+                        buf_start, buf_length = self.findBufForRange(self.mem_something.dest, self.mem_something.length)
                     if buf_start is None:
                         self.lgr.debug('dataWatch getMemParams buf_start none, ambigous call like strcmp')
                         skip_fun = True
@@ -2207,6 +2211,7 @@ class DataWatch():
                         elif self.mem_something.src is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                         no_buffer_found = True
+                        self.last_buffer_not_found = self.mem_something.src
                         #self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
                         self.mem_fun_entries[self.mem_something.fun][eip].skip_count += 1
                         if self.mem_fun_entries[self.mem_something.fun][eip].skip_count > 10:
@@ -2218,7 +2223,13 @@ class DataWatch():
                             self.mem_fun_entries[self.mem_something.fun][eip].hap = None
                             
                     else:
-                        self.lgr.debug('dataWatch getMemParams not via hit, not src, but found dest 0x%x in buf_start of 0x%x' % (self.mem_something.dest, buf_start))
+                        if self.mem_something.fun not in mem_copyish_functions:
+                            self.lgr.debug('dataWatch getMemParams not via hit, not src, but found dest 0x%x in buf_start of 0x%x, swap src/dest' % (self.mem_something.dest, buf_start))
+                            tmp = self.mem_something.src
+                            self.mem_something.src = self.mem_something.dest
+                            self.mem_something.dest = tmp
+                        else:
+                            self.lgr.debug('dataWatch getMemParams not via hit, not src, but found dest 0x%x in buf_start of 0x%x.  is cpyish, do not swap' % (self.mem_something.dest, buf_start))
                 else:
                     if 'cmp' in self.mem_something.fun:
                         self.lgr.debug('dataWatch getMemParams not via hit, is cmp, do not mess with src')
@@ -2772,9 +2783,11 @@ class DataWatch():
             #oneless = self.save_cycle -1
             oneless = self.save_cycle 
             self.lgr.debug('dataWatch undoAlone skip back to 0x%x' % oneless)
+            self.context_manager.disableAll()
             if not self.top.skipToCycle(oneless, cpu=self.cpu):
                 self.lgr.error('dataWatch undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
                 return
+    
             eip = self.top.getEIP(self.cpu)
             dum_cpu, comm, tid = self.task_utils.curThread()
             self.lgr.debug('dataWatch skip done eip 0x%x tid %s cycle 0x%x' % (eip, tid, self.cpu.cycles))
@@ -2810,6 +2823,7 @@ class DataWatch():
  
     def hitCallStopHapAlone(self, called_from_reverse_mgr):
         self.context_manager.enableAll()
+        self.context_manager.clearReverseContext()
         SIM_run_command('enable-vmp') 
         
         ''' we are at the call to a memsomething, get the parameters '''
@@ -2888,6 +2902,10 @@ class DataWatch():
                 self.rmRange(self.mem_something.addr) 
                 SIM_continue(0)
                 return
+            elif self.mem_something.fun in ['strlen'] and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
+                # very obscure, see declaration of last_buffer_not_found
+                SIM_continue(0)
+                return
             elif not instruct[1].startswith('jmp'):
                 self.lgr.error('dataWatch revAlone but entry 0x%x already in mem_fun_entires', self.mem_something.fun_addr)
                 return
@@ -2942,10 +2960,16 @@ class DataWatch():
             else:
                 self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", alternate_callback, None)
         SIM_run_command('disable-vmp') 
+        self.context_manager.setReverseContext()
         #if delta > 1000:
         #    print('would run this: %s' % rev_cmd)
         #else:
         #    SIM_run_command(rev_cmd)
+
+        #if self.mem_something.called_from_ip == 0x7f9732f2ac:
+        #    print('remove this')
+        #    return
+
         if reverse_to:
             self.reverse_mgr.reverseTo(self.prev_mark_cycle)
         else:
@@ -2998,8 +3022,7 @@ class DataWatch():
                 done = True
             if v == 0:
                 done = True
-            else:
-                addr += 1
+            addr += 1
         return addr - src
 
     def handleMemStuff(self, op_type):
@@ -3026,7 +3049,7 @@ class DataWatch():
 
                 self.lgr.warning('dataWatch handleMemStuff but entry for fun %s already in mem_fun_entires addr 0x%x' % (self.mem_something.fun, self.mem_something.fun_addr))
 
-                # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?
+                # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?  Usually due to bad stack frame generation.
                 self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
             	     self.memstuffStopHap, None)
                 self.lgr.debug('handleMemStuff fun in mem_fun_entries now stop')
@@ -4973,7 +4996,7 @@ class DataWatch():
             ret_end = min(end1, end2)
             ret_length = ret_end - ret_start + 1
         else:
-            #self.lgr.debug('dataWatch getIntersect no overlap in 0x%x %d 0x%x %d' % (start1, length1, start2, length2))
+            #self.lgr.debug('dataWatch getIntersect no overlap in start1 0x%x length1 %d start2 0x%x lenght2 %d' % (start1, length1, start2, length2))
             pass
  
         return ret_start, ret_length
