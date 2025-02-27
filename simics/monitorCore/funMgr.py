@@ -470,6 +470,7 @@ class FunMgr():
 
     def getFunEntry(self, fun_name):
         ''' get the loaded entry address for the named funtion.  If not in the fun list, check the exports.'''
+        retval = None
         comm = self.top.getComm(target=self.cell_name)
         if comm in self.ida_funs:
             retval =  self.ida_funs[comm].getFunEntry(fun_name)
