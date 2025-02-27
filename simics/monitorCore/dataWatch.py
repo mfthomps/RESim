@@ -2247,7 +2247,7 @@ class DataWatch():
                     self.pending_call = False
                     return
                 #MFTMFT
-                self.context_manager.disableAll()
+                self.context_manager.disableAll(filter='dataWatch')
                 #self.stopWatch(immediate=True)
                 self.lgr.debug('call runToReturn')
                 self.runToReturn()
@@ -2757,6 +2757,11 @@ class DataWatch():
             self.lgr.debug('dataWatch runToReturn clear backstop')
             self.back_stop.clearCycle()
 
+    def runToReturnAndGo(self, skip_this=False):
+        self.runToReturn(skip_this=skip_this)
+        if self.mem_something.run:
+            SIM_continue(0)
+    
     def runToReturn(self, skip_this=False):
         cell = self.top.getCell()
         resim_context = self.context_manager.getRESimContext()
@@ -2768,8 +2773,6 @@ class DataWatch():
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
             self.lgr.debug('dataWatch runToReturnAlone clear backstop')
             self.back_stop.clearCycle()
-        if self.mem_something.run:
-            SIM_continue(0)
 
     def undoHap(self, dumb, one, exception, error_string):
         
@@ -3064,7 +3067,7 @@ class DataWatch():
                 ''' iterator mark will be recorded on return '''
                 #self.watchMarks.iterator(self.mem_something.fun, self.mem_something.src, self.mem_something.src)
                 #SIM_break_simulation('handle memstuff')
-                self.runToReturn(skip_this=False)
+                self.runToReturnAndGo(skip_this=False)
             else:
                 self.lgr.debug('handleMemStuff assume iterator or function that need not reverse to call, IS a modify,  Just return and come back on read')
                 return
@@ -4038,7 +4041,7 @@ class DataWatch():
                 if self.mem_something.fun == 'ostream_insert':
                     self.mem_something.src = src
                 self.lgr.debug('dataWatch checkReWatch tid:%s is re watch, we already gathered ret_addr_addr on our way in at fun entry 0x%x.  Do not need to reverse. cycles: 0x%x ' %(tid, self.mem_something.fun_addr, self.cpu.cycles))
-                self.runToReturn()
+                self.runToReturnAndGo()
             else:
                 if self.mem_something.fun_addr is None:
                     self.lgr.debug('dataWatch checkReWatch tid:%s is re watch, funs do not match, fun addr NONE' % (tid)) 
@@ -4716,7 +4719,6 @@ class DataWatch():
                       frames=mem_stuff.frames)
                 if mem_stuff.fun in reg_return_funs:
                     self.lgr.debug('DataWatch lookForMemstuff is reg_return_fun %s addr 0x%x' % (mem_stuff.fun, addr))
-                    #self.runToReturn()
                 else:
                     SIM_run_alone(self.handleMemStuff, op_type)
                 retval = True
@@ -5253,7 +5255,7 @@ class DataWatch():
             self.break_simulation=False
             self.me_trace_malloc = True
             self.top.traceMalloc()
-            SIM_run_alone(self.runToReturn, False)
+            SIM_run_alone(self.runToReturnAndGo, False)
         else:
             self.lgr.debug('Failed to get memsomething from stack frames')
 
@@ -5736,7 +5738,7 @@ class DataWatch():
                 self.added_mem_fun_entry = True
             else:
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry eip 0x%x already in mem_fun_entries' % eip)
-            self.runToReturn(skip_this=False)
+            self.runToReturnAndGo(skip_this=False)
 
     def recordObscureMemcpyEntry2(self, src_dest_count):
             src_ptr, dest_ptr, count = src_dest_count
@@ -5764,7 +5766,7 @@ class DataWatch():
                 self.added_mem_fun_entry = True
             else:
                 self.lgr.debug('dataWatch recordObscureMemcpyEntry2 eip 0x%x already in mem_fun_entries' % eip)
-            self.runToReturn(False)
+            self.runToReturnAndGo(False)
 
     def memcpyCheck(self, called_from_reverse_mgr, one, exception, error_string):
         if self.call_stop_hap is not None or called_from_reverse_mgr is not None:
