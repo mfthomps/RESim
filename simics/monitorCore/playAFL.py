@@ -869,7 +869,7 @@ class PlayAFL():
                     self.exit_list.append(self.afl_list[self.index])
                     self.recordExits(self.afl_list[self.index])
 
-                if self.top.hasPendingPageFault(self.target_tid):
+                if self.top.hasPendingPageFault(self.target_tid, target=self.target_cell):
                     print('TID %s has pending page fault' % self.target_tid)
                     self.lgr.debug('TID %s has pending page fault' % self.target_tid)
             elif self.search_list is not None:

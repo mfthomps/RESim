@@ -6085,10 +6085,12 @@ class GenMonitor():
             
         return retval
 
-    def isCode(self, addr, tid=None):
+    def isCode(self, addr, tid=None, target=None):
+        if target is None:
+            target = self.target
         if tid is None:
             tid = self.getTID()
-        return self.soMap[self.target].isCode(addr, tid)
+        return self.soMap[target].isCode(addr, tid)
 
     def getTargetPlatform(self):
         platform = None
@@ -6115,14 +6117,16 @@ class GenMonitor():
             print('%s  -- %s' % (call, self.call_traces[self.target][call].name))
 
     # also see pendingFault
-    def hasPendingPageFault(self, tid):
+    def hasPendingPageFault(self, tid, target=None):
+        if target is None:
+            target = self.target
         if tid is None:
             self.lgr.error('hasPendingFault called with tid of None')
             return
-        tid_list = self.task_utils[self.target].getGroupTids(tid)
+        tid_list = self.task_utils[target].getGroupTids(tid)
         self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
         for t in tid_list:
-            fault = self.page_faults[self.target].hasPendingPageFault(t)
+            fault = self.page_faults[target].hasPendingPageFault(t)
         
             if fault:
                 return True
