@@ -2018,12 +2018,16 @@ can include a prefix (followed by a colon) to identify the computer upon which t
 There also may be situations in which you wish to inject data directly into the driver computer.  Consider an example target application that consumes
 multiple UDP packets that each change the system state in a manner that affects processing of subsequent packets.  While the {\tt injectIO} function
 supports injecting multiple UDP packets, doing so causes the reverse execution bookmarks to be reset on each packet injection.  Also, the injectIO
-support for multiple UDP packets assumes all packets are received into the same buffer.  Injecting data into the driver is performed in the same
+support for multiple UDP packets assumes all packets are received into the same buffer.  TCP conversations may also benefit from injecting data into the
+driver, e.g., to replace one portion of the conversation.  Injecting data into the driver is performed in the same
 manner as injecting data into a target application.  The {\tt drive-driver} utility includes a {\tt UDP\_JSON} opion in the directive file to send UDP packets from a
-JSON file.  
+JSON file and a {\tt TCP\_JSON} for TCP conversations that cannot be easily injected into the kernel buffer. The driver receives these JSON files from the 
+host and uses them as input sources when sending data to the target. 
+The JSON files are created using the genJson.py utility.  Injection requires use of a filter that replaces a portion of the JSON file with your crafted data (or data from AFL).
 
-Your ini file must first be adjusted to make the driver the target.  Get the driver.param file from the RESIM\_DIR/simics/workspace directory and
-refer to that driver.ini file for driver component parameters.  Add those parmeters to your ini file.   The snapshot should be whatever snapshot you were using.
+Your ini file must first be modified to make the driver the target.  Get the driver.param file from the RESIM\_DIR/simics/workspace directory and
+refer to that driver.ini file for driver component parameters.  Add those parmeters to your ini file.   The snapshot should be whatever snapshot you were using to send
+data to your target for use with trackIO.
 Do not boot your simulation from scratch with the driver as the target, or it may not stop before the target processes have been created.
 
 Create a json file as large as any you expect to inject using genJson.py.
@@ -2032,17 +2036,17 @@ to direct RESim to debug the program even though it does not find the program fi
 Then use {\tt runToOpen} to catch the opening of the JSON file (provide the full path, e.g., /tmp/foo.json), to see its FD.  You can then use prepInject on that FD
 to create a snapshot for use with injecting json data into the driver.  
 
-There is also a {\tt TCP\_JSON} option that runs a clientTCPJson program.  This is intended for TCP conversations that cannot be easily injected into the kernel buffer.
-It is also intended for protocols that use ioctl to determine how much data to
-read from the socket on each recieve.  In particular, some applications will call ioctl for a zero result prior to completing processing of input.  
-That would reset the origin if data were injected into the target and RESim had to alter the ioctl return value.  Injecting into the driver avoids the
-origin reset.  
-
 The genJson.py utility will combine multiple input data files into a json file for use with drive-driver.  For TCP connectins, if 
 you provide host and port options to that utlity the resulting JSON will include those parameters and will be suitable for direct injection.
 This allows the same driver snapshot to be used for multile target processes.
 
+Use an AFL filter when injecting data.  The filter should replace a portion of the JSON with your data.
+
 Another potential advantage of injecting into the driver is the ability to generate multiple traces from the same starting cycle.  
+It is also intended for TCP-based protocols that use ioctl to determine how much data to
+read from the socket on each recieve.  In particular, some applications will call ioctl for a zero result prior to completing processing of input.  
+That would reset the origin if data were injected into the target and RESim had to alter the ioctl return value.  Injecting into the driver avoids the
+origin reset.  
 
 NOTE:  You may end up working from two checkpoints, one for injecting JSON data into the driver and another for injecting data into the target application.
 The former is useful when analyzing watch marks because it is not subject to origin resets.  The latter is may be more efficient for TCP connections.
