@@ -120,7 +120,7 @@ def createNewJson(host, port, infile, hang, lgr):
 
     
 def main():
-    parser = argparse.ArgumentParser(prog='clientTCPJson', description='Send JSON file content via TCP to a target. Note ip, port and hang will be ignored if the JSON contains a dictionary element named "data".'
+    parser = argparse.ArgumentParser(prog='clientTCPJson', description='Send JSON file content via TCP to a target. Note ip, port and hang will be ignored if the JSON contains a dictionary element named "data".')
     parser.add_argument('-i', '--ip', action='store', help='IP address.')
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-f', '--file', action='store', help='Json file.')
