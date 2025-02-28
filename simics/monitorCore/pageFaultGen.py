@@ -268,7 +268,7 @@ class PageFaultGen():
         if self.mem_utils.isKernel(self.user_eip):
             # record cycle and eip for reversing back to user space    
             self.recordFault(tid, self.user_eip)
-        if self.top.isCode(fault_addr, tid):
+        if self.top.isCode(fault_addr, tid, target=self.target):
             #self.lgr.debug('pageFaultHap 0x%x is code, bail' % fault_addr)
             return
         if tid not in self.faulted_pages:
