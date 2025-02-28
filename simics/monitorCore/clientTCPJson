@@ -54,7 +54,11 @@ def sendTCP(lgr):
         #for item in data:
         while True:
             if get_next:
-                item = next(data_iter)
+                try:
+                    item = next(data_iter)
+                except:
+                    lgr.debug('Got exception from data iterator, break')
+                    break
                 if item is None:
                     lgr.debug('Got none from data iterator, break')
                     break
