@@ -298,6 +298,8 @@ class InjectIO():
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
+        elif self.trace_all and self.target_prog is None:
+            self.backstop.setFutureCycle(self.backstop_cycles)
 
         self.bookmarks = self.top.getBookmarksInstance()
         if self.bookmarks is None:
@@ -479,6 +481,7 @@ class InjectIO():
             self.top.stopWatchPageFaults()
         self.top.stopThreadTrack(immediate=True)
         if self.trace_all:
+            self.backstop.setFutureCycle(self.backstop_cycles)
             self.top.traceAll(trace_file=self.save_json)
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
