@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-#
-#  Send a file to a given host/port using tcp
-#
+'''
+  Send the content of an input JSON to a target.  If the input JSON is just a list of data,
+  then parameters such as host and port are taken from input parameters.  If the JSON
+  is a dictionary with a 'data' field, then the input parameters are ignored and the values
+  are expected to be in the JSON as dictionary elements.
+'''
 import sys
 import time
 import os
@@ -107,13 +110,17 @@ def createNewJson(host, port, infile, hang, lgr):
     jdict['hang'] = hang
     with open (infile, 'r') as fh:
         tcp_json = json.load(fh)
-        jdict['data']=tcp_json
+        if 'data' in tcp_json:
+            # json created with parameters for injectO
+            jdict = tcp_json
+        else:
+            jdict['data']=tcp_json
     with open('/tmp/catchme.json', 'w') as fh:
         fh.write(json.dumps(jdict))
 
     
 def main():
-    parser = argparse.ArgumentParser(prog='clientTCP3', description='Send file content as TCP to a target.')
+    parser = argparse.ArgumentParser(prog='clientTCPJson', description='Send JSON file content via TCP to a target. Note ip, port and hang will be ignored if the JSON contains a dictionary element named "data".'
     parser.add_argument('-i', '--ip', action='store', help='IP address.')
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-f', '--file', action='store', help='Json file.')
