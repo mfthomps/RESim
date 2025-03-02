@@ -382,7 +382,6 @@ class PlayAFL():
                 self.lgr.error('playAFL finishInit failed getting coverage')
  
 
-        self.physical=False
         if self.coverage is not None:
             full_path = None
             analysis_path = None
@@ -408,13 +407,11 @@ class PlayAFL():
                afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
                fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
             self.lgr.debug('playAFL backfrom enableCoverage')
-            self.physical = True
             if self.linear:
-                self.physical = False
                 self.lgr.debug('playAFL, linear use context manager to watch tasks')
                 self.context_manager.restoreDebugContext()
             #self.context_manager.watchTasks()
-            self.coverage.doCoverage(no_merge=True, physical=self.physical)
+            self.coverage.doCoverage(no_merge=True)
             if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             else:
