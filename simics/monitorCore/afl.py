@@ -39,6 +39,7 @@ import cli
 import stopFunction
 import writeData
 import resimUtils
+import defaultConfig
 #import tracemalloc
 from simics import *
 RESIM_MSG_SIZE=80
@@ -113,12 +114,8 @@ class AFL():
         if stop_on_read:
             self.backstop_cycles = 0
         else:
-            if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
-                self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
-                self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
-            else:
-                self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-                self.backstop_cycles =   1000000
+            self.backstop_cyles = defaultConfig.aflBackstopCycles()
+            self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
 
         if os.getenv('BACK_STOP_DELAY') is not None:
             self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
