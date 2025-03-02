@@ -1073,10 +1073,14 @@ class Coverage():
             self.trace_bits = bytearray(self.map_size)
         if self.run_from_snap is not None:
             dead_file = '%s.dead' % self.run_from_snap
+            if not os.path.isfile(dead_file):
+                prog_base = os.path.basename(self.top.getFullPath()) 
+                dead_file = '%s.dead' % prog_base
+                self.lgr.debug('coverage enableCoverage, program dead file would be %s' % dead_file)
             if os.path.isfile(dead_file):
                 with open(dead_file) as fh:
-                    self.lgr.debug('coverage enableCoverage, loaded dead file from %s' % dead_file)
                     self.dead_map = json.load(fh)
+                    self.lgr.debug('coverage enableCoverage, loaded %d from dead file from %s' % (len(self.dead_map), dead_file))
                     #for addr in self.dead_map:
                     #    self.lgr.debug('dead spot: 0x%x' % addr)
 
