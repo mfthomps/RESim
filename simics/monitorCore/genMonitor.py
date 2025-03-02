@@ -138,6 +138,7 @@ import findText
 import recordEntry
 import reverseMgr
 import skipToMgr
+import defaultConfig
 
 #import fsMgr
 import json
@@ -5105,18 +5106,18 @@ class GenMonitor():
         if self.target in self.ropCop:
             self.ropCop[self.target].watchROP(watching=watching, callback=callback)
 
-    def enableCoverage(self, fname=None, physical=False, backstop_cycles=None):
+    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
             analysis_path = self.getAnalysisPath(fname)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles)
-            self.coverage.doCoverage(physical=physical)
+            self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, report_coverage=report_coverage)
+            self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
-    def mapCoverage(self, fname=None):
+    def mapCoverage(self, fname=None, backstop=False):
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
@@ -5134,8 +5135,10 @@ class GenMonitor():
                    cell, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, self.lgr)
             else:
                 self.lgr.error('mapCoverage, could not get analysis path from fname %s' % fname)
-              
-        self.enableCoverage(fname=analysis_path)
+        backstop_cycles = None
+        if backstop:
+            backstop_cycles = defaultConfig.backstopCycles()      
+        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop)
 
     def showCoverage(self):
         self.coverage.showCoverage()

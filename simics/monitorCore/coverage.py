@@ -81,8 +81,6 @@ class Coverage():
         self.re_enable_bp = []
         self.tid = None
         self.linear = False
-        # TBD not currently used
-        self.physical = False
         self.addr_map = {}
         ''' offset due to relocation, e.g., of so file '''
         self.offset = 0
@@ -134,6 +132,8 @@ class Coverage():
         self.target_cr3 = None
         ''' optimization '''
         self.last_block_file = None
+
+        self.start_cycle = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -209,12 +209,11 @@ class Coverage():
             bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, Sim_Breakpoint_Temporary)
         return bp
  
-    def cover(self, force_default_context=False, physical=False):
+    def cover(self, force_default_context=False):
         self.force_default_context = force_default_context
         tid = self.top.getTID(target=self.cell_name)
-        self.lgr.debug('coverage: cover physical: %r (afl overrides) linear: %r cpu: %s tid: %s' % (physical, self.linear, self.cpu.name, tid))
+        self.lgr.debug('coverage: cover linear: %r cpu: %s tid: %s' % (self.linear, self.cpu.name, tid))
         self.offset = 0
-        self.physical = physical
         self.target_cr3 = memUtils.getCR3(self.cpu)
         block_file = self.analysis_path+'.blocks'
 
@@ -945,7 +944,7 @@ class Coverage():
         print('Previous data run hit %d new BBs' % new_hits)
  
 
-    def doCoverage(self, no_merge=False, physical=False):
+    def doCoverage(self, no_merge=False):
         '''
         Set coverage haps if not already set
         AFL calls this each iteration, though it only calls cover once below
@@ -957,7 +956,7 @@ class Coverage():
         ''' Reset coverage and merge last with all '''
         #self.lgr.debug('coverage doCoverage')    
         if not self.did_cover:
-            self.cover(physical=physical)
+            self.cover()
             self.lgr.debug('coverage called cover')
             self.did_cover = True
             self.did_missing = []
@@ -1032,7 +1031,7 @@ class Coverage():
             self.lgr.debug('coverage startDataSession with no previous hits')
 
     def enableCoverage(self, tid, fname=None, prog_path=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
-                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True, diag_hits=False):
+                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True, diag_hits=False, report_coverage=False):
         self.enabled = True
         self.tid = tid
         self.create_dead_zone = create_dead_zone
@@ -1060,9 +1059,12 @@ class Coverage():
             self.lgr.debug('cover enableCoverage hits_path is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
         else:
             self.lgr.debug('cover enableCoverage hits_path is %s linear: %r no backstop given' % (self.hits_path, linear))
+        if report_coverage:
+            self.backstop.setCallback(self.reportCoverage)
         # force use of linear breakpoints vice physical memory
         self.linear = linear
         self.afl = afl
+        self.start_cycle = self.cpu.cycles
         if afl:
             map_size_pow2 = 16
             self.map_size = 1 << map_size_pow2
@@ -1317,6 +1319,11 @@ class Coverage():
             self.lgr.error('coverage suspendAddrFromBreakNum failed to find addr for break %d' % break_num)
         return retval
 
-
+    def reportCoverage(self):
+        self.showCoverage()
+        self.saveCoverage(fname='manual')
+        delta_cycles = self.cpu.cycles - self.start_cycle
+        print('Ran 0x%x (%d) cycles' % (delta_cycles, delta_cycles))
+        print('Backstop was 0x%x (%d) cycles' % (self.backstop_cycles, self.backstop_cycles))
 
 
