@@ -11,3 +11,10 @@ def hangCycles():
     if hang is not None:
         hang_cycles = int(hang)
     return hang_cycles
+
+def aflBackstopCycles():
+    backstop_cycles =   1000000
+    backstop = os.getenv('AFL_BACK_STOP_CYCLES') 
+    if backstop is not None:
+        backstop_cycles = int(backstop)
+    return backstop_cycles
