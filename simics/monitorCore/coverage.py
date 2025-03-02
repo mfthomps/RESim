@@ -1061,6 +1061,8 @@ class Coverage():
             self.lgr.debug('cover enableCoverage hits_path is %s linear: %r no backstop given' % (self.hits_path, linear))
         if report_coverage:
             self.backstop.setCallback(self.reportCoverage)
+            print('Will report coverage when backstop is hit; assuming reverse execution is not needed.')
+            self.top.noReverse()
         # force use of linear breakpoints vice physical memory
         self.linear = linear
         self.afl = afl
