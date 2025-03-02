@@ -558,7 +558,11 @@ class TaskUtils():
             return None
         retval = None
         ts_list = self.getTaskStructs()
-        ipid=int(tid)
+        try:
+            ipid=int(tid)
+        except:
+            self.lgr.error('taskUtils failed to get integer from %s.  Is this a Linux target with correct parameters?' % tid)
+            return None
         for ts in ts_list:
             if ts_list[ts].pid == ipid:
                 group_leader = self.mem_utils.readPtr(self.cpu, ts + self.param.ts_group_leader)
