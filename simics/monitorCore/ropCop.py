@@ -168,7 +168,7 @@ class RopCop():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
         if self.is_signal:
-            pending_fault = self.top.pendingFault()
+            pending_fault = self.top.pendingFault(target=self.cell_name)
             bm = "Signal handler eip:0x%x esp:0x%x would return to 0x%x pending_fault %r" % (eip, esp, ret_addr, pending_fault)
         else:
             bm = "ROP eip:0x%x esp:0x%x would return to 0x%x" % (eip, esp, ret_addr)

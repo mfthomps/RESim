@@ -14,6 +14,8 @@ class ReportCrash():
                     target=None, targetFD=None, trackFD=None, report_dir=None):
         self.top = top
         self.cpu = cpu
+        
+        self.cell_name = self.top.getTopComponentName(cpu)
         self.tid = tid
         self.lgr = lgr
         self.report_index = report_index
@@ -228,7 +230,7 @@ class ReportCrash():
                 else:
                     if self.top.hasPendingPageFault(self.tid):
                         self.lgr.debug("reportCrash doneForward sees there is a pending fault, call pendingFault and return")
-                        self.top.pendingFault()
+                        self.top.pendingFault(target=self.cell_name)
                         return
                     else:
                         self.lgr.error('crashReport doneForward did not find a SEGV or ROP')
@@ -313,7 +315,7 @@ class ReportCrash():
 
     def maxMarksCallback(self):
         self.lgr.debug('reportCrash maxMarksCallback, call pendingFault to check for faults') 
-        if not self.top.pendingFault():
+        if not self.top.pendingFault(target=self.cell_name):
             self.lgr.debug('reportCrash maxMarksCallback, just continue') 
             SIM_run_alone(SIM_continue, 0)
         else:

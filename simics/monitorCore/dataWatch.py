@@ -4386,7 +4386,7 @@ class DataWatch():
                 if read_loop is not None and read_loop.lower() == 'quit':
                     self.top.quit()
                 else:
-                    self.top.pendingFault()
+                    self.top.pendingFault(target=self.cell_name)
                 self.stopWatch(leave_backstop=True)
                 return
         ''' watched data has been read (or written) '''

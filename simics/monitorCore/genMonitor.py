@@ -880,10 +880,10 @@ class GenMonitor():
             #    #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
 
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
-        
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
-            self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
-                   self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
+            if cell_name != 'driver': 
+                self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
+                       self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
                                            self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
 
@@ -2451,8 +2451,9 @@ class GenMonitor():
         if target is None:
             target = self.target
         self.lgr.debug('genMonitor stopWatchPageFaults')
-        self.page_faults[target].stopWatchPageFaults(tid, immediate=immediate)
-        self.page_faults[target].stopPageFaults()
+        if target in self.page_faults:
+            self.page_faults[target].stopWatchPageFaults(tid, immediate=immediate)
+            self.page_faults[target].stopPageFaults()
 
     def catchCorruptions(self):
         self.watchPageFaults()
@@ -4690,30 +4691,34 @@ class GenMonitor():
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
-    def pendingFault(self):
+    def pendingFault(self, target=None):
         retval = False
-        thread_tids = self.context_manager[self.target].getThreadTids()
+        if target is None:
+            target = self.target
+        thread_tids = self.context_manager[target].getThreadTids()
         self.lgr.debug('pendingFault got %d thread_tids' % (len(thread_tids)))
         for tid in thread_tids:
-            prec =  self.page_faults[self.target].getPendingFault(tid)
+            prec =  self.page_faults[target].getPendingFault(tid)
             if prec is not None:
-                comm = self.task_utils[self.target].getCommFromTid(tid)
+                comm = self.task_utils[target].getCommFromTid(tid)
                 if prec.page_fault:
                     print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                    leader = self.task_utils[self.target].getGroupLeaderTid(tid)
-                    self.page_faults[self.target].handleExit(tid, leader)
+                    leader = self.task_utils[target].getGroupLeaderTid(tid)
+                    self.page_faults[target].handleExit(tid, leader)
                     retval = True 
                 else:
                     print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
         return retval
 
-    def stopTrackIOAlone(self, immediate=False, check_crash=True):
+    def stopTrackIOAlone(self, immediate=False, check_crash=True, target=None):
+        if target is None:
+            target = self.target
         crashing = False 
         if check_crash:
-            crashing = self.pendingFault()               
-        self.syscallManager[self.target].rmSyscall('runToIO', context=self.context_manager[self.target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
+            crashing = self.pendingFault(target=target)               
+        self.syscallManager[target].rmSyscall('runToIO', context=self.context_manager[target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
@@ -4722,14 +4727,14 @@ class GenMonitor():
         #self.removeDebugBreaks(immediate=immediate)
 
         self.stopDataWatch(immediate=immediate)
-        self.dataWatch[self.target].rmBackStop()
-        self.dataWatch[self.target].setRetrack(False)
-        self.dataWatch[self.target].removeExternalHaps(immediate=immediate)
+        self.dataWatch[target].rmBackStop()
+        self.dataWatch[target].setRetrack(False)
+        self.dataWatch[target].removeExternalHaps(immediate=immediate)
         if self.coverage is not None:
             self.coverage.saveCoverage()
         if self.injectIOInstance is not None:
             SIM_run_alone(self.injectIOInstance.delCallHap, None)
-        self.dataWatch[self.target].pickleFunEntries(self.run_from_snap)
+        self.dataWatch[target].pickleFunEntries(self.run_from_snap)
 
         #self.jumperStop()
         self.lgr.debug('stopTrackIO return')
