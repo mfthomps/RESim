@@ -718,6 +718,7 @@ class WatchMarks():
         self.recent_ad_hoc = None
 
     def saveMarks(self, fpath):
+        self.lgr.debug('watchMarks saveMarks to %s' % fpath)
         with open(fpath, 'w') as fh:
             i = 1
             for mark in self.stale_marks:
