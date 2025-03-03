@@ -5106,18 +5106,19 @@ class GenMonitor():
         if self.target in self.ropCop:
             self.ropCop[self.target].watchROP(watching=watching, callback=callback)
 
-    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False):
+    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, dead_zone=False):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
             analysis_path = self.getAnalysisPath(fname)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, report_coverage=report_coverage)
+            self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, 
+              report_coverage=report_coverage, create_dead_zone=dead_zone)
             self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
-    def mapCoverage(self, fname=None, backstop=False):
+    def mapCoverage(self, fname=None, backstop=False, dead_zone=False):
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
@@ -5138,7 +5139,7 @@ class GenMonitor():
         backstop_cycles = None
         if backstop:
             backstop_cycles = defaultConfig.backstopCycles()      
-        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop)
+        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, dead_zone=dead_zone)
 
     def showCoverage(self):
         self.coverage.showCoverage()
