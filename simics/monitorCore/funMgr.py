@@ -69,20 +69,27 @@ class FunMgr():
 
     def getName(self, addr):
         comm = self.top.getComm(target=self.cell_name)
-        return self.ida_funs[comm].getName(addr)
+        if comm in self.ida_funs:
+            return self.ida_funs[comm].getName(addr)
+        else:
+            return None
 
     def demangle(self, fun):
         comm = self.top.getComm(target=self.cell_name)
-        return self.ida_funs[comm].demangle(fun)
+        if comm in self.ida_funs:
+            return self.ida_funs[comm].demangle(fun)
+        else:
+            return None
 
     def isFun(self, fun):
         ''' given fun value may reflect random load base address '''
         comm = self.top.getComm(target=self.cell_name)
         retval = False
-        if self.ida_funs[comm].isFun(fun):
-            retval = True
-        elif fun in self.relocate_funs[comm]:
-            retval = True
+        if comm in self.ida_funs:
+            if self.ida_funs[comm].isFun(fun):
+                retval = True
+            elif fun in self.relocate_funs[comm]:
+                retval = True
         return retval
  
     ''' TBD extend linux soMap to pass load addr '''
@@ -115,32 +122,33 @@ class FunMgr():
             return False
 
     def inFun(self, prev_ip, call_to, call_ip=None):
+        retval = False
         comm = self.top.getComm(target=self.cell_name)
-       
-        retval = self.ida_funs[comm].inFun(prev_ip, call_to)
-        if not retval and call_ip is not None:
-            prev_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(prev_ip), self, self.lgr)
-            call_to_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_to), self, self.lgr)
-            call_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_ip), self, self.lgr)
-            self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
-            if prev_ip_name == call_to_name:
-                retval = True
-            elif call_to_name == call_ip_name:
-               f1 = self.top.getSOFile(prev_ip) 
-               f2 = self.top.getSOFile(call_to) 
-               f_from = self.top.getSOFile(call_ip)
-               if f1 == f2 and f_from == f1:
-                   self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
-                   retval = True
-            else:
-               ''' hack it ok if prev_ip and call_to are in same so file and is called from outside the so '''
-               self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
-               f1 = self.top.getSOFile(prev_ip) 
-               f2 = self.top.getSOFile(call_to) 
-               f_from = self.top.getSOFile(call_ip)
-               if f1 == f2 and f_from != f1:
-                   self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
-                   retval = True
+        if comm in self.ida_funs: 
+            retval = self.ida_funs[comm].inFun(prev_ip, call_to)
+            if not retval and call_ip is not None:
+                prev_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(prev_ip), self, self.lgr)
+                call_to_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_to), self, self.lgr)
+                call_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_ip), self, self.lgr)
+                self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
+                if prev_ip_name == call_to_name:
+                    retval = True
+                elif call_to_name == call_ip_name:
+                   f1 = self.top.getSOFile(prev_ip) 
+                   f2 = self.top.getSOFile(call_to) 
+                   f_from = self.top.getSOFile(call_ip)
+                   if f1 == f2 and f_from == f1:
+                       self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
+                       retval = True
+                else:
+                   ''' hack it ok if prev_ip and call_to are in same so file and is called from outside the so '''
+                   self.lgr.debug('funMgr inFun prev_ip 0x%x call_to 0x%x, not in fun' % (prev_ip, call_to))
+                   f1 = self.top.getSOFile(prev_ip) 
+                   f2 = self.top.getSOFile(call_to) 
+                   f_from = self.top.getSOFile(call_ip)
+                   if f1 == f2 and f_from != f1:
+                       self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
+                       retval = True
         return retval
 
     def funFromAddr(self, addr):
@@ -365,17 +373,17 @@ class FunMgr():
         retval = False
         comm = self.top.getComm(target=self.cell_name)
         if comm in self.relocate_funs:
-            if addr in self.relocate_funs:
+            if addr in self.relocate_funs[comm]:
                 retval = True
         return retval
 
     def showRelocate(self, search=None):
         comm = self.top.getComm(target=self.cell_name)
         print('showRelocate for comm %s' % comm)
-        if fun in self.relocate_funs:
-            for fun in sorted(self.relocate_funs):
+        if comm in self.relocate_funs and fun in self.relocate_funs[comm]:
+            for fun in sorted(self.relocate_funs[comm]):
                 if search is None or search in self.relocate_funs[comm][fun]:
-                    print('0x%x %s' % (fun, self.relocate_funs[fun]))
+                    print('0x%x %s' % (fun, self.relocate_funs[comm][fun]))
 
     def showFuns(self, search = False):
         comm = self.top.getComm(target=self.cell_name)
@@ -461,6 +469,9 @@ class FunMgr():
 
     def showFunAddrs(self, fun_name):
         comm = self.top.getComm(target=self.cell_name)
+        if comm not in self.ida_funs:
+            print('Comm %s not in ida funs' % comm)
+            return
         print('showFunAddrs for comm %s' % comm)
         ''' given a function name, return its entry points? '''
         for fun in self.relocate_funs[comm]:
@@ -531,7 +542,10 @@ class FunMgr():
 
     def stackAdjust(self, fun):
         comm = self.top.getComm(target=self.cell_name)
-        return self.ida_funs[comm].stackAdjust(fun)
+        retval = 0
+        if comm in self.ida_funs:
+            retval = self.ida_funs[comm].stackAdjust(fun)
+        return retval
 
     def setArmBLR(self, full_path, offset=0):
         comm = self.top.getComm(target=self.cell_name)
@@ -570,7 +584,10 @@ class FunMgr():
 
     def haveFuns(self, fname):
         comm = self.top.getComm(target=self.cell_name)
-        return self.ida_funs[comm].haveFuns(fname)
+        if comm in self.ida_funs:
+            return self.ida_funs[comm].haveFuns(fname)
+        else:
+            return None
 
     def loadExports(self, full_path):
         self.lgr.debug('funMgr loadExports for %s' % full_path)
