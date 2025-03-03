@@ -114,7 +114,7 @@ class AFL():
         if stop_on_read:
             self.backstop_cycles = 0
         else:
-            self.backstop_cyles = defaultConfig.aflBackstopCycles()
+            self.backstop_cycles = defaultConfig.aflBackstopCycles()
             self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
 
         if os.getenv('BACK_STOP_DELAY') is not None:
