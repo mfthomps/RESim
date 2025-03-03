@@ -90,6 +90,8 @@ class PageFaultGen():
             return to the user space without resoving it. 
         '''
         self.pending_double_faults = {}
+        name = 'pageFaultGen_%s' % target
+        self.cycle_event_callback = cycleCallback.CycleCallback(self.cpu, name, self.lgr)
 
     def rmExit(self, tid):
         if tid in self.exit_break:
@@ -291,13 +293,18 @@ class PageFaultGen():
             page_info = pageUtils.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
-            self.pending_faults[tid] = prec
             #self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
             if self.mem_utils.isKernel(fault_addr):
-                self.lgr.debug('pageFaultGen pageFaultHap, faulting address is in kernel, treat as SEGV 0x%x' % fault_addr)
-            elif self.mode_hap is None:
-                #self.lgr.debug('pageFaultGen adding mode hap')
-                self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
+                if not self.top.isWindows(target=self.target):
+                    self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
+                    self.pending_faults[tid] = prec
+                else:
+                    self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address in kernel, addr: 0x%x cycles: 0x%x IGNORE in windows?' % (tid, fault_addr, self.cpu.cycles))
+            else:
+                self.pending_faults[tid] = prec
+                if self.mode_hap is None:
+                    self.lgr.debug('pageFaultGen adding mode hap')
+                    self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
             
@@ -320,11 +327,11 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultGen modeChanged wrong tid  tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
             return
 
-        #self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
+        self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
         if new != Sim_CPU_Mode_Supervisor:
-            #self.lgr.debug('pageFaultGen modeChanged user space')
+            self.lgr.debug('pageFaultGen modeChanged user space')
             if tid in self.pending_faults:
-                #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x cycle: 0x%x' % (self.pending_faults[tid].cr2, self.cpu.cycles))
+                self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x cycle: 0x%x' % (self.pending_faults[tid].cr2, self.cpu.cycles))
                 prec = self.pending_faults[tid]
                 if prec.cr2 is None:
                     self.lgr.error('pageFaultGen modeChanged with no prec.cr2 set. Not expecting this')
@@ -368,7 +375,11 @@ class PageFaultGen():
                         self.lgr.debug('pageFaultHap tid:%s user_eip: 0x%x is kernel.  TBD misses kernel ref to passed pointers' % (tid, self.user_eip))
                         del self.pending_faults[tid]
                     elif tid not in self.pending_double_faults:
-                        self.pending_double_faults[tid] = cycleCallback.CycleCallback(0xfff, self.cycleCallback, self.cpu, tid, self.lgr)
+                        if len(self.pending_double_faults) > 0:
+                            self.lgr.error('pageFaultGen have two pending double faults TBD fix this')
+                            return
+                        self.pending_double_faults[tid] = self.cycle_event_callback
+                        self.cycle_event_callback.setCallback(0xfff, self.cycleCallbackFunction, tid)
                         self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped. Instruct %s.  Watch for double fault cycle now 0x%x' % (prec.cr2, instruct[1], self.cpu.cycles))
                     else:
                         self.lgr.debug('pageFaultGen modeChanged in user space but 0x%x still not mapped, DOUBLE fault. Instruct %s' % (prec.cr2, instruct[1]))
@@ -782,13 +793,13 @@ class PageFaultGen():
                         self.ignore_probes.append(probe)
                         #self.lgr.debug('pageFaultGen added probe 0x%x' % probe)
         
-    def cycleCallback(self, tid):
+    def cycleCallbackFunction(self, tid):
         self.lgr.debug('pageFaultGen cycleCallback assume dump or such')
         if self.afl:
             SIM_run_alone(self.rmModeHapAlone, None) 
-            self.lgr.debug('pageFaultGen cycleCallback afl, stop')
+            self.lgr.debug('pageFaultGen cycleCallbackFunction afl, stop')
             self.handleExit(tid, tid, report_only=True)
-            SIM_break_simulation('cycleCallback')
+            SIM_break_simulation('cycleCallbackFunction')
         else:
             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
             SIM_run_alone(self.rmModeHapAlone, None) 

@@ -25,25 +25,30 @@
 '''
 Provide a callback service invoked after a given number of cycles.
 The given callback is called with the given param.
+Only instantiate one of these per name.
 '''
 from simics import *
 class CycleCallback():
-    def __init__(self, cycles, callback, cpu, param, lgr):
-        self.cycles = cycles
-        self.callback = callback
+    def __init__(self, cpu, name, lgr):
+        self.cycles = None
+        self.callback = None
         self.cpu = cpu
-        self.param = param
+        self.param = None
         self.lgr = lgr
         self.cycle_event = None
+        use_name = '%s_cycle_callback' % name
+        self.lgr.debug('cycleCallback register for name %s' % use_name)
+        self.cycle_event = SIM_register_event(use_name, SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
+
+    def setCallback(self, cycles, callback, param):
+        self.cycles = cycles
+        self.param = param
+        self.callback = callback
         SIM_run_alone(self.setCycleHap, None)
 
     def setCycleHap(self, dumb=None):
-        if self.cycle_event is None:
-            self.cycle_event = SIM_register_event("cycleCallback", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
-            self.lgr.debug('cycleCallback setCycleHap set cycleCallback')
-        else:
-            SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
-            self.lgr.debug('cycleCallback setCycleHap did registercancel')
+        SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
+        self.lgr.debug('cycleCallback setCycleHap did registercancel')
         commence_cycle = self.cpu.cycles + self.cycles
         self.lgr.debug('cycleCallback setCycleHap posted cycle of 0x%x cpu: %s look for cycle 0x%x (%d)' % (self.cycles, self.cpu.name, commence_cycle, commence_cycle))
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, self.cycles, self.cycles)
