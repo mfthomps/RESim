@@ -130,7 +130,7 @@ class FunMgr():
                 prev_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(prev_ip), self, self.lgr)
                 call_to_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_to), self, self.lgr)
                 call_ip_name = clibFuns.adjustFunName(self.ida_funs[comm].getFunName(call_ip), self, self.lgr)
-                self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
+                #self.lgr.debug('funMgr inFun prev_ip_name %s call_to_name %s call_ip_name %s' % (prev_ip_name, call_to_name, call_ip_name))
                 if prev_ip_name == call_to_name:
                     retval = True
                 elif call_to_name == call_ip_name:
@@ -138,7 +138,7 @@ class FunMgr():
                    f2 = self.top.getSOFile(call_to) 
                    f_from = self.top.getSOFile(call_ip)
                    if f1 == f2 and f_from == f1:
-                       self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
+                       #self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
                        retval = True
                 else:
                    ''' hack it ok if prev_ip and call_to are in same so file and is called from outside the so '''
@@ -147,7 +147,7 @@ class FunMgr():
                    f2 = self.top.getSOFile(call_to) 
                    f_from = self.top.getSOFile(call_ip)
                    if f1 == f2 and f_from != f1:
-                       self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
+                       #self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
                        retval = True
         return retval
 
