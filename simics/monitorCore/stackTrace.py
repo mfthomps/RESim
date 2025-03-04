@@ -1379,7 +1379,7 @@ class StackTrace():
                                 #self.lgr.debug('stackTrace ip_of_call_instruct 0x%x OK to call %s' % (ip_of_call_instruct, fname))
                                 #self.lgr.debug('stackTrace fun_of_call_ip %s  fun_name %s  previous fun_of_ip %s' % (fun_of_call_ip, fun_name, self.frames[-1].fun_of_ip)) 
                                 # very tenuous
-                                if fun_of_call_ip.startswith('__') and self.frames[-1].fun_of_ip.startswith('sub_'):
+                                if fun_of_call_ip is not None and fun_of_call_ip.startswith('__') and self.frames[-1].fun_of_ip.startswith('sub_'):
                                     skip_this = True
                                     self.lgr.debug('stackTrace fun_of_call_ip %s  fun_name %s  previous fun_of_ip %s SKIP IT' % (fun_of_call_ip, fun_name, self.frames[-1].fun_of_ip)) 
                             if not skip_this:
