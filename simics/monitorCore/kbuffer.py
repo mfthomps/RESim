@@ -69,16 +69,22 @@ class Kbuffer():
         self.fd = fd
         phys = self.mem_utils.v2p(self.cpu, addr)
         self.tid = self.top.getTID()
+ 
+        # TBD fix this
+        if count == 0:
+            self.lgr.debug('Kbuffer read count is zero.  TBD fix this')
+            count = 100
         if self.watching_addr is None:
             # first buffer
             self.watching_addr = addr
 
             if phys is not None and phys != 0:
                 #proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, count, 0)
+                
                 break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, phys, count, 0)
                 self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, break_num, 'kbuffer_write')
                 self.read_count = count
-                self.lgr.debug('Kbuffer first read set write_hap on 0x%x count 0x%x' % (addr, count))
+                self.lgr.debug('Kbuffer first read set write_hap on 0x%x phys 0x%x, count 0x%x' % (addr, phys, count))
             else:
                  self.lgr.error('Kbuffer read read phys of addr 0x%x is None' % addr)
                  return
@@ -95,7 +101,7 @@ class Kbuffer():
                 break_num = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, phys, count, 0)
                 self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, break_num, 'kbuffer_write')
                 self.read_count = count
-                self.lgr.debug('Kbuffer read, set new hap at new_addr 0x%x read_count %d' % (new_addr, count))
+                self.lgr.debug('Kbuffer read, set new hap at new_addr 0x%x phys 0x%x read_count %d' % (new_addr, phys, count))
                 self.data_watch.registerHapForRemoval(self)
 
     def gotBufferCallback(self, buf_addrs):
@@ -269,8 +275,8 @@ class Kbuffer():
         '''
         eip = self.top.getEIP()
         tid = self.top.getTID()
-        self.lgr.debug('Kbuffer writeHap this tid:%s watching tid:%s addr 0x%x value 0x%x watching_addr: 0x%x eip: 0x%x cycle: 0x%x' % (tid, self.tid, memory.logical_address, 
-                    value, self.watching_addr, eip, self.cpu.cycles))
+        self.lgr.debug('Kbuffer writeHap this tid:%s watching tid:%s addr 0x%x physical 0x%x, value 0x%x watching_addr: 0x%x eip: 0x%x cycle: 0x%x' % (tid, self.tid, 
+                memory.logical_address, memory.physical_address, value, self.watching_addr, eip, self.cpu.cycles))
         self.write_cycle = self.cpu.cycles
         if not self.cpu.architecture.startswith('arm'):
             if self.top.isWindows() and self.hack_count < 1:
@@ -318,7 +324,8 @@ class Kbuffer():
         self.lgr.debug('Kbuffer replaceHap')
         if self.write_hap is not None:
             self.context_manager.genDeleteHap(self.write_hap, immediate=True)
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Write, addr, 1, 0)
+        phys = self.mem_utils.v2p(self.cpu, addr)
+        proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, phys, 1, 0)
         self.write_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.writeHap, None, proc_break, 'kbuffer_write')
         self.lgr.debug('Kbuffer replaceHap set write hap on 0x%x' % addr) 
         self.top.continueForward()
