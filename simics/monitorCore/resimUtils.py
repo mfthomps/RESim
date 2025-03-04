@@ -43,7 +43,7 @@ def getLogger(name, logdir, level=None):
     fh.setFormatter(frmt)
     lgr.addHandler(fh)
     #lgr.removeHandler(lhStdout)
-    lgr.info('Start of log from %s.py' % name)
+    lgr.info('Start of log from %s' % name)
     ch = logging.StreamHandler()
     ch.setLevel(logging.ERROR)
     ch.setFormatter(frmt)

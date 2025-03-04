@@ -354,14 +354,14 @@ class InjectIO():
         eip = self.top.getEIP(self.cpu)
         did_origin_reset = False
 
-        if self.trace_all or self.instruct_trace:
-            self.lgr.debug('injectIO call traceAll')
-            call_params = syscall.CallParams('injectIO', None, self.fd)
-            self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
-            trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
-            self.top.traceWrite(trace_msg)
-
         if self.target_prog is None:
+            if self.trace_all or self.instruct_trace:
+                self.lgr.debug('injectIO call traceAll')
+                call_params = syscall.CallParams('injectIO', None, self.fd)
+                self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
+                trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
+                self.top.traceWrite(trace_msg)
+
             self.commonGo()
             if not self.stay:
                 if not self.trace_all and not self.instruct_trace and not self.no_track:
@@ -481,7 +481,8 @@ class InjectIO():
             self.top.stopWatchPageFaults()
         self.top.stopThreadTrack(immediate=True)
         if self.trace_all:
-            self.backstop.setFutureCycle(self.backstop_cycles)
+            # Would be confusing because there are no events from which to measure a backstop.
+            #self.backstop.setFutureCycle(self.backstop_cycles)
             self.top.traceAll(trace_file=self.save_json)
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
@@ -631,7 +632,10 @@ class InjectIO():
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
-        self.top.stopTrackIO()
+        self.top.stopTrackIOAlone()
+        self.lgr.debug('injectIO saveJson back from call to stopTrackIO callback is %s' % self.callback)
+        if self.callback is not None:
+            self.callback()
 
     def setDfile(self, dfile):
         self.dfile = dfile

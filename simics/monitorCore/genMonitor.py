@@ -1526,8 +1526,6 @@ class GenMonitor():
 
             if not self.isVxDKM(cpu=cpu):
                 self.syscallManager[self.target].rmSyscall('runToText', immediate=True)
-                #if 'open' in self.call_traces[self.target]:
-                #    self.stopTrace(syscall = self.call_traces[self.target]['open'])
                 self.lgr.debug('genMonitor debug removed open/mmap syscall, now track threads')
 
                 if self.track_threads is not None:
@@ -4512,7 +4510,7 @@ class GenMonitor():
             return
         self.target = target  
         print('Target is now: %s' % target)
-        self.lgr.debug('Target is now: %s' % target)
+        self.lgr.debug('setTarget, target is now: %s' % target)
 
     def showTargets(self):
         print('Targets:')
