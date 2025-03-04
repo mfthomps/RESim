@@ -804,13 +804,13 @@ class WinSyscall():
                             if call_param.count >= call_param.nth:
                                 self.lgr.debug('count >= param, set it')
                                 syscall.addParam(exit_info, call_param)
-                                if self.kbuffer is not None:
+                                if self.kbuffer is not None and exit_info.count > 0:
                                     self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                     self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         else:
                             self.lgr.debug('winSyscall read, call_param.nth is none, call it matched')
                             syscall.addParam(exit_info, call_param)
-                            if self.kbuffer is not None:
+                            if self.kbuffer is not None and exit_info.count > 0:
                                 self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                                 self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         break
@@ -2049,14 +2049,14 @@ class WinSyscall():
                     if call_param.count >= call_param.nth:
                         self.lgr.debug('count >= param, set exit_info.call_params to catch return')
                         syscall.addParam(exit_info, call_param)
-                        if self.kbuffer is not None:
+                        if self.kbuffer is not None and exit_info.count > 0:
                             self.lgr.debug('winSyscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                             self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                         break
                 else:
                     self.lgr.debug('call_param.nth is none, call it matched')
                     syscall.addParam(exit_info, call_param)
-                    if self.kbuffer is not None:
+                    if self.kbuffer is not None and exit_info.count > 0:
                         self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
                         self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
                 break
