@@ -38,8 +38,15 @@ def onedone(top):
     max_marks = None 
     if max_marks_s is not None:
         max_marks = int(max_marks_s)
-    fname=os.getenv('ONE_DONE_PARAM5')
+    target=os.getenv('ONE_DONE_PARAM5')
     trace_all_s=os.getenv('ONE_DONE_PARAM6')
+    targetFD = None
+    targetFD_s=os.getenv('ONE_DONE_PARAM7')
+    if targetFD_s is not None:
+        if '0x' in targetFD_s:
+            targetFD = int(targetFD_s, 16)
+        else:
+            targetFD = int(targetFD_s)
     trace_all = False
     run = True
     no_trace_dbg = False
@@ -49,7 +56,7 @@ def onedone(top):
         run = False
 
     myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, 
-                      max_marks=max_marks, target=fname, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=run)
+                      max_marks=max_marks, target=target, targetFD=targetFD, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=run)
     myinject.setExitCallback(reportExit)
     myinject.go()
     if trace_all:
