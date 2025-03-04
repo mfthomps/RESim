@@ -3614,6 +3614,8 @@ class DataWatch():
                     mask = 0x8000 
                 elif reg_size == 4:
                     mask = 0x80000000 
+                else:
+                    mask = 0x8000000000000000
                 if val & mask:
                     self.lgr.debug('dataWatch testCompare signed')
                     retval.append('SF')
