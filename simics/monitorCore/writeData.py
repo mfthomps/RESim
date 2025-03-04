@@ -213,11 +213,11 @@ class WriteData():
                 We are in a read system call, but not at the kernel entry.'''
             if self.user_space_count is None: 
                 self.user_space_addr, self.user_space_count = self.top.getReadAddr()
-            self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
+            #self.lgr.debug('writeData writeKdata, user_space_buffer 0x%x count %d' % (self.user_space_addr, self.user_space_count))
             self.orig_buffer = self.mem_utils.readBytes(self.cpu, self.user_space_addr, self.user_space_count)
-            self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
+            #self.lgr.debug('writeData writeKdata, orig buf len %d' % len(self.orig_buffer))
             if not self.no_call_hap and not self.tracing_io:
-                self.lgr.debug('writeData writeKdata, call setCallHap')
+                #self.lgr.debug('writeData writeKdata, call setCallHap')
                 self.setCallHap()
             while remain > 0:
                  if index >= len(self.k_bufs):
@@ -225,15 +225,15 @@ class WriteData():
                      break
                  count = min(self.k_buf_len[index], remain)
                  end = offset + count
-                 self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d remain: %d count: %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index], remain, count))
+                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d remain: %d count: %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index], remain, count))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
                  remain = remain - count
-                 self.lgr.debug('writeKdata offset %d remain %d' % (offset, remain))
+                 #self.lgr.debug('writeKdata offset %d remain %d' % (offset, remain))
 
             if self.top.isWindows() and self.dataWatch is not None:
-                self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
+                #self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
                 dum, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
                 exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None)
                 exit_info.retval_addr = self.user_space_addr
