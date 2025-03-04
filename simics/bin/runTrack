@@ -15,20 +15,21 @@ import aflPath
 here = os.getcwd()
 cmd_args = ' '.join(sys.argv[1:])
 
-parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions in a target found by AFL.')
+parser = argparse.ArgumentParser(prog='runTrack', description='Run injectIO on all sessions found by AFL.')
+    
 parser.add_argument('ini', action='store', help='The RESim ini file used during the AFL session.')
-parser.add_argument('-d','--directory', action='store', help='The seedfile directory in the workspace')
-parser.add_argument('-w','--target', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc.')
+parser.add_argument('-d','--directory', action='store', help='Optional seedfile directory in the workspace for use in auto generation of seeds based on tracked string comparisons.')
+parser.add_argument('-w','--workspace', action='store', help='The afl output directory relative to AFL_OUTPUT in the ini file, or AFL_DATA in bashrc (often the Simics workspace.) Optionally a single file to be processed for testing.')
 parser.add_argument('-o', '--only_thread', action='store_true', help='Only track references of single thread.')
 parser.add_argument('-n', '--no_page_faults', action='store_true', help='Do not watch page faults.  Only use when needed, will miss SEGV.')
 parser.add_argument('-m', '--max_marks', action='store', help='Optional maximum watch marks to record before stopping simulation.')
-parser.add_argument('-f', '--fname', action='store', help='Optional name of library.')
+parser.add_argument('-T', '--target', action='store', help='Optional name of target process, may have prefix of cell name followed by a colon.')
+parser.add_argument('-F', '--targetFD', action='store', help='File descriptor for use if target is provided.')
 parser.add_argument('-t', '--trace_all', action='store_true', help='Do not track, trace all system calls.')
-    
 args = parser.parse_args()
 target = args.target
 ''' remove any empty or corrupt track jsons '''
-track_list = aflPath.getAFLTrackList(target)
+track_list = aflPath.getAFLTrackList(args.workspace)
 for track_file in track_list:
     if os.path.isfile(track_file):
         with open(track_file) as fh:
