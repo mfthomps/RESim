@@ -347,6 +347,7 @@ class DataWatch():
             #self.rmCallHap()
             if self.call_break is not None:
                 self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
+                self.call_break = None
             self.call_stop_hap = None
         else:
             return
@@ -2120,7 +2121,7 @@ class DataWatch():
                 next_instruct = self.cpu.cycles+1
                 status = SIM_simics_is_running() 
                 self.lgr.debug('dataWatch getMemParams, try skipToTest to get to 0x%x simics running? %r' % (next_instruct, status)) 
-                if not self.top.skipToCycle(next_instruct, cpu=self.cpu):
+                if not self.top.skipToCycle(next_instruct, cpu=self.cpu, disable=True):
                     self.lgr.error('getMemParams, tried going forward, failed')
                     return
                 eip = self.top.getEIP(self.cpu)
@@ -2278,13 +2279,21 @@ class DataWatch():
         skip_fun = False
         #self.mem_something.dest, self.mem_something.src, self.mem_something.length = self.getCallParams(sp, word_size)
         param_dest, param_src, param_length = self.getCallParams(sp, word_size)
+        if param_src is None:
+            self.lgr.error('dataWatch gatherMemCpyParams failed to get param_src for sp 0x%x' % sp)
+            SIM_break_simulation('remove this')
+            return True
         orig_param_length = param_length
         buf_start, buf_length = self.findBufForRange(param_src, param_length)
         if data_hit:
             ''' sanity check '''
             if buf_start is None:
                 skip_fun = True
-                self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (self.mem_something.fun,
+                if self.mem_something.addr is None:
+                    self.lgr.debug('dataWatch gatherCallParams %s BAD FIND on fun entry (no data hit), src 0x%x count %d findBufForRange failed to find buf' % (self.mem_something.fun,
+                        param_src, param_length))
+                else:
+                    self.lgr.debug('dataWatch gatherCallParams %s BAD FIND src 0x%x count %d but addr 0x%x  findBufForRange failed to find buf' % (self.mem_something.fun,
                         param_src, param_length, self.mem_something.addr))
             else:
                 buf_end = buf_start + buf_length-1
@@ -2358,9 +2367,8 @@ class DataWatch():
     def gatherCallParams(self, sp, eip, word_size, data_hit):
         skip_fun = False
         if self.mem_something.fun in mem_copyish_functions:
+            self.lgr.debug('dataWatch gatherCallParams sp 0x%x ip 0x%x call gatherMemCpyCallParams' % (sp, eip))
             skip_fun = self.gatherMemCpyCallParams(sp, eip, word_size, data_hit)
-
-
 
         elif self.mem_something.fun == 'memset':
             self.mem_something.dest, dumb, self.mem_something.length = self.getCallParams(sp, word_size)
@@ -2786,8 +2794,7 @@ class DataWatch():
             #oneless = self.save_cycle -1
             oneless = self.save_cycle 
             self.lgr.debug('dataWatch undoAlone skip back to 0x%x' % oneless)
-            self.context_manager.disableAll()
-            if not self.top.skipToCycle(oneless, cpu=self.cpu):
+            if not self.top.skipToCycle(oneless, cpu=self.cpu, disable=True):
                 self.lgr.error('dataWatch undoAlone unable to skip to save cycle 0x%x, got 0x%x' % (oneless, self.cpu.cycles))
                 return
     
@@ -2839,7 +2846,7 @@ class DataWatch():
             SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
         self.call_stop_hap = None
         #self.rmCallHap()
-        #self.lgr.debug('hitCallStopHap remove call_break %d' % self.call_break)
+        self.lgr.debug('hitCallStopHap remove call_break %d' % self.call_break)
         self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
         self.call_break = None
         ''' TBD dynamically adjust cycle_dif limit?  make exceptions for some calls, e.g., xmlparse? '''
@@ -2935,8 +2942,8 @@ class DataWatch():
         self.call_break = self.reverse_mgr.SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_block.address, 1, 0)
 
         ''' in case we chase ghost frames mimicking memsomething calls  and need to return '''
-        #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) and call_hap %d set save_cycle 0x%x, now reverse' % (self.call_break, 
-        #   self.mem_something.called_from_ip, phys_block.address, self.call_hap, self.save_cycle))
+        #self.lgr.debug('dataWatch revAlone break %d set on IP of call 0x%x (phys 0x%x) d set save_cycle 0x%x, now reverse' % (self.call_break, 
+        #   self.mem_something.called_from_ip, phys_block.address, self.save_cycle))
         self.prev_mark_cycle = self.watchMarks.latestCycle()
         delta = None
         reverse_to = False
@@ -2974,8 +2981,14 @@ class DataWatch():
         #    return
 
         if reverse_to:
+            self.lgr.debug('dataWatch revAlone is reverse_to, cycle 0x%x' % self.prev_mark_cycle)
+
+            if self.prev_mark_cycle == 0x610b4c9943:
+                print('remove this')
+                return
             self.reverse_mgr.reverseTo(self.prev_mark_cycle)
         else:
+            self.lgr.debug('dataWatch revAlone just reverse')
             self.reverse_mgr.reverse()
 
 
@@ -5051,7 +5064,7 @@ class DataWatch():
         #self.lgr.debug('dataWatch goToMark cycle would be 0x%x' % cycle)
         #return
         if cycle is not None:
-            self.top.skipToCycle(cycle, cpu=self.cpu)
+            self.top.skipToCycle(cycle, cpu=self.cpu, disable=True)
             retval = cycle
             if cycle != self.cpu.cycles:
                 self.lgr.error('dataWatch goToMark got wrong cycle, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
@@ -5065,7 +5078,7 @@ class DataWatch():
                 self.reverse_mgr.revOne()
                 eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
-                    self.top.skipToCycle(cycle, cpu=self.cpu)
+                    self.top.skipToCycle(cycle, cpu=self.cpu, disable=True)
                     eip = self.top.getEIP(self.cpu)
                 if eip != mark_ip:
                     self.lgr.error('dataWatch goToMark index %d eip 0x%x does not match mark ip 0x%x mark cycle: 0x%x Second attempt' % (index, eip, mark_ip, cycle))
@@ -5073,7 +5086,7 @@ class DataWatch():
             else:
                 if self.watchMarks.isCall(index):
                     cycle = self.cpu.cycles+1
-                    if not self.top.skipToCycle(cycle, cpu=self.cpu):
+                    if not self.top.skipToCycle(cycle, cpu=self.cpu, disable=True):
                         self.lgr.error('dataWatch goToMark got wrong cycle after adjust for call, asked for 0x%x got 0x%x' % (cycle, self.cpu.cycles))
                         retval = None
                     else:
@@ -5716,7 +5729,7 @@ class DataWatch():
     def recordObscureMemcpyEntry(self, rcx):
             ''' we are at the call.  we need to record the function entry, so step 1 '''
             next_cycle = self.cpu.cycles+1
-            if not self.top.skipToCycle(next_cycle, cpu=self.cpu):
+            if not self.top.skipToCycle(next_cycle, cpu=self.cpu, disable=True):
                 self.lgr.error('recordObscureEntry, tried going forward, failed')
                 return
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
@@ -5746,7 +5759,7 @@ class DataWatch():
             src_ptr, dest_ptr, count = src_dest_count
             ''' we are at the call to a memcpyis whose parameters are on the stack.  we need to record the function entry '''
             next_cycle = self.cpu.cycles+1
-            if not self.top.skipToCycle(next_cycle, cpu=self.cpu):
+            if not self.top.skipToCycle(next_cycle, cpu=self.cpu, disable=True):
                 self.lgr.error('recordObscureEntry, tried going forward, failed')
                 return
             self.lgr.debug('dataWatch recordObscureMemcpyEntry2')
@@ -5788,6 +5801,7 @@ class DataWatch():
         #self.rmCallHap()
         if self.call_break is not None:
             self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
+            self.call_break = None
         self.call_stop_hap = None
         self.lgr.debug('dataWatch memcpyCheck.  now what?')
         buf_index = self.findRangeIndex(self.mem_something.src)
