@@ -103,6 +103,34 @@ def disconnectServiceNode(name):
                         break
                 break
 
+def serviceNodeConnected(name, lgr=None):
+        retval = False
+        cmd = '%s.status' % name
+        #if lgr is not None:
+        #    lgr.debug('resimSimicsUtils serviceNodeConnected cmd: %s' % cmd)
+        try:
+            dumb,result = cli.quiet_run_command(cmd)
+        except:
+            #print('resimSimicsUtils disconnectService node failed on cmd %s' % cmd)
+            return False
+       
+        #lgr.debug('resimSimicsUtils serviceNodeConnected result: %s' % result)
+        ok = False 
+        for line in result.splitlines():
+            if 'connector_link0' in line:
+                parts = line.split(':')
+                node_connect = parts[0].strip()
+                switch = parts[1].strip()
+                cmd = '%s.status' % switch
+                dumb,result = cli.quiet_run_command(cmd)
+                for line in result.splitlines():
+                    if name in line:
+                        #lgr.debug('resimSimicsUtils serviceNodeConnected found name %s' % name)
+                        retval = True
+                        break
+                break
+        return retval
+
 def cutRealWorld():
     driver_service_node = 'driver_service_node'
     dhcp_service_node = 'dhcp_service_node'
