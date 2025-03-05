@@ -71,7 +71,7 @@ def doJson(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(prog='genJsonIO.py', description='Generate a json file from a given set of input files.  Intended for use with drive-driver to send multiple UDP packets or a TCP stream from the driver to the target.  And more importantly, these files can be provided to injectIO when the prep inject snapshot is of the driver.  If drive-driver is to be used, do not include host, port or hang, which should be expressed in the directive file.  These values should be provided to create a JSON for use with injectIO.')
+    parser = argparse.ArgumentParser(prog='genJsonIO.py', description='Generate a json file from a given set of input files.  Intended for use with drive-driver to send multiple UDP packets or a TCP stream from the driver to the target.  Also, the output can be provided to injectIO when the prep inject snapshot is of the driver.  If the host option is provided, the host/port/hang will override values in the directive file.  These option values must be provided when creating a JSON for use with injectIO.')
     parser.add_argument('-n', '--namelist', nargs='+', default=[], action='store', help='List of input files names.')
     parser.add_argument('-o', '--output', action='store', help='Name of output file.')
     parser.add_argument('-i', '--host', action='store', help='IP of host.')
