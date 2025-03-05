@@ -43,12 +43,13 @@ class GenBreakpoint():
         self.lgr = lgr
         self.handle = handle
         self.prefix = prefix
+        self.enabled = True
         if addr is None:
             lgr.error('GenBreakpoint called with addr of None.')
 
     def show(self):
-        print('\tbreak_handle: %s num: %s  add:0x%x' % (str(self.handle), str(self.break_num), self.addr))
-        self.lgr.debug('\tbreak_handle: %s num: %s  add:0x%x' % (str(self.handle), str(self.break_num), self.addr))
+        print('\tbreak_handle: %s num: %s  add:0x%x enabled: %r' % (str(self.handle), str(self.break_num), self.addr, self.enabled))
+        self.lgr.debug('\tbreak_handle: %s num: %s  add:0x%x enabled: %r' % (str(self.handle), str(self.break_num), self.addr, self.enabled))
 
     def clear(self):
         if self.break_num is not None:
@@ -59,10 +60,12 @@ class GenBreakpoint():
 
     def disable(self):
         SIM_disable_breakpoint(self.break_num)
+        self.enabled = False
 
     def enable(self):
         #self.lgr.debug('GenBreakpoint enable break_num %d' % self.break_num)
         SIM_enable_breakpoint(self.break_num)
+        self.enabled = True
 
 class GenHap():
     def __init__(self, hap_type, callback, parameter, handle, lgr, breakpoint_list, name, disable_forward, conf, cpu, immediate=True):
@@ -1715,10 +1718,21 @@ class GenContextMgr():
         for hap in self.haps:
             if filter is None or filter in hap.name:
                 hap.disable(direction)
+        if filter is None:
+            for tid in self.task_rec_bp:
+                SIM_disable_breakpoint(self.task_rec_bp[tid])
+            if self.task_break is not None:
+                SIM_disable_breakpoint(self.task_break)
+
+
     def enableAll(self, dumb=None):
         self.lgr.debug('contextManager enableAll cycle 0x%x' % self.cpu.cycles)
         for hap in self.haps:
             hap.enable()
+        for tid in self.task_rec_bp:
+            SIM_enable_breakpoint(self.task_rec_bp[tid])
+        if self.task_break is not None:
+            SIM_enable_breakpoint(self.task_break)
 
     def watchingExit(self, tid):
         if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
