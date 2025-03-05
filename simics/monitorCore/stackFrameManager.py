@@ -34,7 +34,7 @@ import os
 import pickle
 import json
 class StackFrameManager():
-    def __init__(self, top, cpu, cell_name, task_utils, mem_utils, context_manager, soMap, targetFS, run_from_snap, lgr):
+    def __init__(self, top, cpu, cell_name, task_utils, mem_utils, context_manager, soMap, targetFS, run_from_snap, disassembler, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -44,6 +44,7 @@ class StackFrameManager():
         self.targetFS = targetFS
         self.soMap = soMap
         self.lgr = lgr
+        self.disassembler = disassembler
         self.stack_base = {}
         self.stack_cache = {}
         if run_from_snap is not None:
@@ -74,7 +75,7 @@ class StackFrameManager():
            
             st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                      self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                     reg_frame, self.lgr)
+                     reg_frame, self.disassembler, self.lgr)
             self.stack_cache[cycle] = st
         st.printTrace(verbose)
 
@@ -106,7 +107,7 @@ class StackFrameManager():
             reg_frame = self.task_utils.frameFromRegs()
             st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                     self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                    reg_frame, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
+                    reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
             self.stack_cache[cycle] = st
         return st
 
@@ -140,7 +141,7 @@ class StackFrameManager():
             reg_frame = self.task_utils.frameFromRegs()
             st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                       self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                      reg_frame, self.lgr)
+                      reg_frame, self.disassembler, self.lgr)
             self.stack_cache[cycle] = st
         j = st.getJson() 
         self.lgr.debug(j)

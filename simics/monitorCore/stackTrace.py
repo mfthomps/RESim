@@ -81,7 +81,7 @@ class StackTrace():
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x %s fun_of_ip %s' % (self.ip, self.fname, self.instruct, self.sp, fun_addr, self.fun_of_ip)
 
     def __init__(self, top, cpu, tid, soMap, mem_utils, task_utils, stack_base, fun_mgr, targetFS, 
-                 reg_frame, lgr, max_frames=None, max_bytes=None, skip_recurse=False):
+                 reg_frame, disassembler, lgr, max_frames=None, max_bytes=None, skip_recurse=False):
         self.top = top
         self.cpu = cpu
         if self.cpu.architecture in ['arm', 'arm64']:
@@ -101,6 +101,7 @@ class StackTrace():
         self.reg_frame = reg_frame
         self.max_frames = max_frames
         self.skip_recurse = skip_recurse
+        self.disassembler = disassembler
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
         if cpu.architecture in ['arm', 'arm64']:
@@ -149,37 +150,55 @@ class StackTrace():
                 #self.lgr.debug('followCall arm eip 0x%x' % eip)
                 retval = eip
         else:
-            eip = return_to - 2
-            #self.lgr.debug('followCall return_to is 0x%x  ip 0x%x' % (return_to, eip))
-            # TBD use instruction length to confirm it is a true call
-            # not always 2* word size?
-            count = 0
-            while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s' % (count, eip, instruct[1]))
-                ''' TBD hack.  Fix this by getting bb start and walking forward '''
-                if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1]:
-                    parts = instruct[1].split()
-                    if len(parts) == 2:
-                        try:
-                            dst = int(parts[1],16)
-                        except:
+            fun_addr = self.fun_mgr.getFun(return_to)
+            if fun_addr is not None:
+                retval = self.disassembler.getPrevInstruction(return_to, fun_addr)
+            else:
+                eip = return_to - 2
+                self.lgr.debug('followCall no function found for return_to is 0x%x  ip 0x%x' % (return_to, eip))
+                # TBD use instruction length to confirm it is a true call
+                # not always 2* word size?
+                count = 0
+                while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
+                    instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                    self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s len %d' % (count, eip, instruct[1], instruct[0]))
+                    # TBD hack.  Fix this by getting bb start and walking forward? only if we have the analysis. if not then rely on hack. 
+                    if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1] and (eip + instruct[0]) == return_to:
+                        parts = instruct[1].split()
+                        if len(parts) == 2:
+                            if self.decode.isReg(parts[1]):
+                                reg_size = self.decode.regLen(parts[1])
+                                self.lgr.debug('stackTrace followCall eip: 0x%x reg is %s word size %d reg size %d' % (eip, parts[1], self.word_size, reg_size))
+                                if reg_size == self.word_size:
+                                    retval = eip
+                                    break
+                                else:
+                                    self.lgr.debug('stackTrace followCall word size %d but reg size %d, IGNORE' % (self.word_size, reg_size))
+                                    eip = eip-1
+                            else:
+                                try:
+                                    dst = int(parts[1],16)
+                                except:
+                                    retval = eip
+                                    # TBD break or continue?
+                                    continue
+                                if self.soMap.isCode(dst, self.tid):
+                                    retval = eip
+                                    break 
+                                else:
+                                    self.lgr.debug('stackTrace dst not code 0x%x' % dst)
+                                    eip = eip-1
+                        else:        
                             retval = eip
-                            continue
-                        if self.soMap.isCode(dst, self.tid):
-                            retval = eip
-                        else:
-                            self.lgr.debug('stackTrace dst not code 0x%x' % dst)
-                            eip = eip-1
-                    else:        
-                        retval = eip
-                elif 'illegal memory mapping' in instruct[1]:
-                    break
-                else:
-                    eip = eip-1
-                count = count+1
-        #if retval is not None:
-        #    self.lgr.debug('followCall return 0x%x' % retval)
+                            break 
+                    elif 'illegal memory mapping' in instruct[1]:
+                        break
+                    else:
+                        eip = eip-1
+                    count = count+1
+                # end while
+            #if retval is not None:
+            #    self.lgr.debug('followCall return 0x%x' % retval)
         return retval
 
     def getJson(self):
@@ -671,7 +690,7 @@ class StackTrace():
                 continue
             #self.lgr.debug('stackTrace findReturnFromCall ptr 0x%x val 0x%x  limit 0x%x' % (ptr, val, limit))    
             if self.soMap.isCode(val, self.tid):
-                #self.lgr.debug('stackTrace findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
+                self.lgr.debug('stackTrace findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                     fname = self.soMap.getSOFile(call_ip)
@@ -1111,12 +1130,12 @@ class StackTrace():
                 hacked_bp = False
             if self.soMap.isCode(val, self.tid):
                 ip_of_call_instruct = self.followCall(val)
-                #if ip_of_call_instruct is not None:
-                #   self.lgr.debug('stackTrace is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, ip_of_call_instruct))
-                #   pass
-                #else:
-                #   self.lgr.debug('stackTrace is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
-                #   pass
+                if ip_of_call_instruct is not None:
+                   self.lgr.debug('stackTrace is code: 0x%x from ptr 0x%x   PC of call is 0x%x' % (val, ptr, ip_of_call_instruct))
+                   pass
+                else:
+                   self.lgr.debug('stackTrace is code not follow call: 0x%x from ptr 0x%x   ' % (val, ptr))
+                   pass
                    
                 if been_in_main and not self.soMap.isMainText(val):
                     ''' once been_in_main assume we never leave? what about callbacks?'''
@@ -1224,11 +1243,11 @@ class StackTrace():
                         fun_hex, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, ip_of_call_instruct)
                         if fun_name is None and fun_hex is not None and self.top.isVxDKM(cpu=self.cpu):
                             fun_name = self.task_utils.getGlobalSym(fun_hex)
-                        #self.lgr.debug('stackTrace clean this up, got fun %s for ip_of_call_instruct 0x%x instruct %s cur_fun_name %s ptr 0x%x' % (fun_name, ip_of_call_instruct, instruct_str, cur_fun_name, ptr))
-                        #if prev_ip is not None:
-                        #    self.lgr.debug('stackTrace prev_ip 0x%x, cur_fun_name %s' % (prev_ip, cur_fun_name))
-                        #else:
-                        #    self.lgr.debug('stackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
+                        self.lgr.debug('stackTrace clean this up, got fun %s for ip_of_call_instruct 0x%x instruct %s cur_fun_name %s ptr 0x%x' % (fun_name, ip_of_call_instruct, instruct_str, cur_fun_name, ptr))
+                        if prev_ip is not None:
+                            self.lgr.debug('stackTrace prev_ip 0x%x, cur_fun_name %s' % (prev_ip, cur_fun_name))
+                        else:
+                            self.lgr.debug('stackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
                         if fun_name is not None:
                             if ((not self.top.isVxDKM(cpu=self.cpu) and been_in_main) or only_module) and fun_name in dataWatch.mem_funs:
                                 #self.lgr.debug('stackTrace function %s is a dataWatch memsomething, but we were already in main, so bail on it' % fun_name)
