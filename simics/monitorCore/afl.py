@@ -313,9 +313,9 @@ class AFL():
         self.goN(0)
 
     def disableReverse(self):
-        if self.top.version().startswith('7'): 
+        if not self.top.nativeReverse():
             self.top.disableReverse()
-            SIM_take_snapshot('origin')
+            self.top.takeSnapshot('origin')
         else:
             cli.quiet_run_command('disable-reverse-execution')
             #VT_take_snapshot('origin')
@@ -555,8 +555,8 @@ class AFL():
             self.coverage.disableAll()
             #self.lgr.debug('afl goN disabled coverage breakpoints')
         #self.lgr.debug('afl goN restore snapshot')
-        if self.top.version().startswith('7'): 
-            SIM_restore_snapshot('origin')
+        if not self.top.nativeReverse():
+            self.top.restoreStoreSnapshot('origin')
         else:
             cli.quiet_run_command('restore-snapshot name=origin')
             #VT_restore_snapshot('origin')

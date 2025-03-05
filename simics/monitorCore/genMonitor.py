@@ -928,7 +928,7 @@ class GenMonitor():
             self.run_to[cell_name] = runTo.RunTo(self, cpu, cell, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], self.context_manager[cell_name], 
                                         self.soMap[cell_name], self.traceMgr[cell_name], self.param[cell_name], self.lgr)
             self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
-                                        self.context_manager[cell_name], self.soMap[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+                                        self.context_manager[cell_name], self.soMap[cell_name], self.targetFS[cell_name], self.run_from_snap, self.disassemble_instruct[cell_name], self.lgr)
             ''' TBD compatability remove this'''
             if self.stack_base is not None and cell_name in self.stack_base:
                 self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
@@ -1479,7 +1479,8 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         cell_name = self.getTopComponentName(cpu)
         if self.target not in self.magic_origin:
-            self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
+            if resimSimicsUtils.serviceNodeConnected('driver_service_node', lgr=self.lgr):
+                self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -1865,8 +1866,9 @@ class GenMonitor():
             self.stopDebug()
             self.stopTracking()
         if self.target not in self.magic_origin:
-            cpu = self.cell_config.cpuFromCell(self.target)
-            self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
+            if resimSimicsUtils.serviceNodeConnected('driver_service_node', lgr=self.lgr):
+                cpu = self.cell_config.cpuFromCell(self.target)
+                self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('debugProc plist len %d plist[0] %s  exittid:%s proc: %s' % (len(plist), plist[0], self.task_utils[self.target].getExitTid(), proc))
             if proc.startswith('/') and self.target in self.soMap:
@@ -1973,7 +1975,8 @@ class GenMonitor():
             return
         cpu = self.cell_config.cpuFromCell(self.target)
         if self.target not in self.magic_origin:
-            self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
+            if resimSimicsUtils.serviceNodeConnected('driver_service_node', lgr=self.lgr):
+                self.magic_origin[self.target] = magicOrigin.MagicOrigin(self, cpu, self.bookmarks, self.lgr)
         #if not self.isWindows():
         #    self.soMap[self.target].setContext(tid_list)
         self.lgr.debug('debugTidList cell %s tid_list: %s' % (self.target, str(tid_list)))
@@ -4528,7 +4531,7 @@ class GenMonitor():
             return False
         else:
             self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
-            if self.SIMICS_VER.startswith('7'):
+            if not self.reverse_mgr[self.target].nativeReverse():
                 return self.reverse_mgr[self.target].reverseEnabled()
             else:
                 return VT_revexec_active()
@@ -6476,14 +6479,18 @@ class GenMonitor():
         tid_list = None
         self.run_to[self.target].runToSO(file, threads=threads)
 
-    def skipToCycle(self, cycle, cpu=None):
+    def skipToCycle(self, cycle, cpu=None, disable=False):
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
             # assumption called by user, so reset watches
             self.stopTracking()
         self.context_manager[self.target].setReverseContext()
+        if disable:
+            self.context_manager[self.target].disableAll()
         retval = self.skip_to_mgr[self.target].skipToTest(cycle)
         self.context_manager[self.target].clearReverseContext()
+        if disable:
+            self.context_manager[self.target].enableAll()
         return retval
 
     def cutRealWorld(self):
@@ -6866,6 +6873,18 @@ class GenMonitor():
 
     def version(self):
         return self.reverse_mgr[self.target].version()
+    def nativeReverse(self, target=None):
+        if target is None:
+            target = self.target
+        return self.reverse_mgr[target].nativeReverse()
+    def takeSnapshot(self, name, target=None):
+        if target is None:
+            target = self.target
+        return self.reverse_mgr[target].takeSnapshot(name)
+    def restoreSnapshot(self, name, target=None):
+        if target is None:
+            target = self.target
+        return self.reverse_mgr[target].restoreSnapshot(name)
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()

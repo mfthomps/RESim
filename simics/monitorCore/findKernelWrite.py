@@ -81,7 +81,6 @@ class findKernelWrite():
         self.prev_value = None
         self.prev_delta = None
         self.iter_count = None
-        self.SIMICS_VER = resimSimicsUtils.version()
 
         ''' kernel buffer addresses used for x86 kernel buffer injection '''
         self.k_buffer_addrs = []
@@ -138,7 +137,7 @@ class findKernelWrite():
         self.kernel_write_break = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys, self.num_bytes, 0)
 
-        if self.SIMICS_VER.startswith('7'):
+        if not self.reverse_mgr.nativeReverse():
             self.reverse_mgr.setCallback(self.revWriteCallbackSim7)
         else:
             self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)

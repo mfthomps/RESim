@@ -350,9 +350,9 @@ class PlayAFL():
 
     def disableReverse(self):
         self.lgr.debug('playAFL disabling reverse execution and enabling internals')
-        if self.top.version().startswith('7'): 
+        if not self.top.nativeReverse():
             self.top.disableReverse()
-            SIM_take_snapshot('origin')
+            self.top.takeSnapshot('origin')
         else:
             cli.quiet_run_command('disable-reverse-execution')
             #VT_take_snapshot('origin')
@@ -525,8 +525,8 @@ class PlayAFL():
             if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             if self.dfile != 'oneplay' or self.repeat:
-                if self.top.version().startswith('7'): 
-                    SIM_restore_snapshot('origin')
+                if not self.top.nativeReverse():
+                    self.top.restoreSnapshot('origin')
                 else:
                     cli.quiet_run_command('restore-snapshot name=origin')
             #VT_restore_snapshot('origin')
@@ -677,8 +677,8 @@ class PlayAFL():
                     if item not in self.exit_list:
                         print(item)
             if self.dfile != 'oneplay' or self.repeat:
-                if self.top.version().startswith('7'): 
-                    SIM_restore_snapshot('origin')
+                if not self.top.nativeReverse():
+                    self.top.restoreSnapshot('origin')
                 else:
                     cli.quiet_run_command('restore-snapshot name=origin')
             else:

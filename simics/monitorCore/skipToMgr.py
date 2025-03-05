@@ -35,7 +35,7 @@ class SkipToMgr():
         self.SIMICS_VER = resimSimicsUtils.version()
     
     def reverseEnabled(self):
-        if self.SIMICS_VER.startswith('7'):
+        if not self.reverse_mgr.nativeReverse():
             return self.reverse_mgr.reverseEnabled()
         else:
             cmd = 'sim.status'
@@ -50,7 +50,7 @@ class SkipToMgr():
                 return False
     
     def skipToTest(self, cycle, disable_vmp=False):
-        if self.SIMICS_VER.startswith('7'):
+        if not self.reverse_mgr.nativeReverse():
             retval = self.reverse_mgr.skipToCycle(cycle)
         else:
             limit=100
