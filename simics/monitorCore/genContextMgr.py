@@ -1720,7 +1720,8 @@ class GenContextMgr():
                 hap.disable(direction)
         if filter is None:
             for tid in self.task_rec_bp:
-                SIM_disable_breakpoint(self.task_rec_bp[tid])
+                if self.task_rec_bp[tid] is not None:
+                    SIM_disable_breakpoint(self.task_rec_bp[tid])
             if self.task_break is not None:
                 SIM_disable_breakpoint(self.task_break)
 
@@ -1730,7 +1731,8 @@ class GenContextMgr():
         for hap in self.haps:
             hap.enable()
         for tid in self.task_rec_bp:
-            SIM_enable_breakpoint(self.task_rec_bp[tid])
+            if self.task_rec_bp[tid] is not None:
+                SIM_enable_breakpoint(self.task_rec_bp[tid])
         if self.task_break is not None:
             SIM_enable_breakpoint(self.task_break)
 
