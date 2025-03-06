@@ -34,6 +34,7 @@ sys.path.insert(0,'/usr/local/lib/python3.10/dist-packages')
 try:
     from capstone import *
 except:
+    print('WARNING, failed to import capstone*************************')
     pass
 class Disassemble():
     def __init__(self, top, cpu, so_map, lgr):
@@ -49,7 +50,9 @@ class Disassemble():
                 self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
             else:
                 self.md = Cs(CS_ARCH_X86, CS_MODE_64)
+            self.lgr.debug('disassemble did capstone init for cpu %s' % cpu.name)
         except:
+            self.lgr.error('disassemble failed capstone init for cpu %s' % cpu.name)
             self.md = None
 
     def getPrevInstruction(self, addr, fun_addr):
