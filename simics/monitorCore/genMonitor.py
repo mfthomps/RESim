@@ -5000,6 +5000,11 @@ class GenMonitor():
         ''' User driven identification of an iterating function -- will collapse many watch marks into one '''
         self.dataWatch[self.target].tagIterator(index)
 
+    def addIterator(self, addr):
+        fun_addr = self.fun_mgr.getFun(addr)
+        if fun_addr is not None:
+            self.fun_mgr.addIterator(fun_addr)
+
     def runToKnown(self, go=True):
         self.soMap[self.target].runToKnown()
         if go:

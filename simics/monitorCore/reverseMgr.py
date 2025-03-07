@@ -81,7 +81,9 @@ class ReverseMgr():
             self.cycle_span =  0x1000000
         else:
             self.cycle_span = span
-        self.lgr.debug('reverseMgr simics version %s' % self.version())
+        parts = cli.quiet_run_command('version')
+        self.version_string = parts[0][0][2]
+        self.lgr.debug('reverseMgr simics version %s' % self.version_string)
 
         # map cell names to cpu's for use if reverse finds break on some other cell
         self.our_cell = cpu.name.split('.')[0]
@@ -797,9 +799,7 @@ class ReverseMgr():
             self.cpu_map[object_cell] = cpu
 
     def version(self):
-        parts = cli.quiet_run_command('version')
-        version = parts[0][0][2]
-        return version
+        return self.version_string
 
 '''
 Everything below is for use running directly from the Simics command prompt, e.g., for testing.

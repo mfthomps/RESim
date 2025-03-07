@@ -139,7 +139,7 @@ class StackTrace():
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
         if return_to <= 10 or not self.soMap.isCode(return_to, self.tid):
-            self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
+            #self.lgr.debug('stackTrace followCall 0x%x not code?' % return_to)
             return None
         if self.cpu.architecture in ['arm', 'arm64']:
             #self.lgr.debug('followCall return_to 0x%x' % return_to)
@@ -161,19 +161,19 @@ class StackTrace():
                 count = 0
                 while retval is None and count < 4*self.mem_utils.wordSize(self.cpu) and eip>0:
                     instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                    self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s len %d' % (count, eip, instruct[1], instruct[0]))
+                    #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s len %d' % (count, eip, instruct[1], instruct[0]))
                     # TBD hack.  Fix this by getting bb start and walking forward? only if we have the analysis. if not then rely on hack. 
                     if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1] and (eip + instruct[0]) == return_to:
                         parts = instruct[1].split()
                         if len(parts) == 2:
                             if self.decode.isReg(parts[1]):
                                 reg_size = self.decode.regLen(parts[1])
-                                self.lgr.debug('stackTrace followCall eip: 0x%x reg is %s word size %d reg size %d' % (eip, parts[1], self.word_size, reg_size))
+                                #self.lgr.debug('stackTrace followCall eip: 0x%x reg is %s word size %d reg size %d' % (eip, parts[1], self.word_size, reg_size))
                                 if reg_size == self.word_size:
                                     retval = eip
                                     break
                                 else:
-                                    self.lgr.debug('stackTrace followCall word size %d but reg size %d, IGNORE' % (self.word_size, reg_size))
+                                    #self.lgr.debug('stackTrace followCall word size %d but reg size %d, IGNORE' % (self.word_size, reg_size))
                                     eip = eip-1
                             else:
                                 try:

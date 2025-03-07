@@ -54,7 +54,7 @@ and then ssh to localhost port 4022 (assuming you've put the id\_rsa key
 from RESim/simics/workspace in ~/.ssh).
 
 ## Create a snapshot for injectIO and fuzzing
-Use the poll.io file to create an injectIOWatch snapshot.
+Use the poll.io file to create an prepInjectWatch snapshot.
 
 The poll.io file was created using the traceFD command after selecting 
 Network\_File\_System as the debug process and sending a poll from the driver.

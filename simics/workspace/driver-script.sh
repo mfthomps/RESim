@@ -4,9 +4,10 @@
 # This allows you to easily change the content of the driver on each boot.
 # 
 # This instance of the script is intended to support the CADET01 example
-# by uploading the client.py script to the driver.
+# by uploading the client.py script to the driver.  A better approach would be
+# to send the client script via drive-driver.
 #
-#/usr/bin/simics-agent --executable --overwrite --download server --to /usr/bin
+# add the mike user and ssh keys for that user
 usermod -aG sudo mike
 echo "mike ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 /usr/bin/simics-agent  --overwrite --download client.py --to /home/mike
@@ -19,12 +20,12 @@ chown -R mike:mike /home/mike/.ssh
 /usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
 nohup /tmp/driver-server.py &
 
-# NOTE: default driver image has 10.0.0.91 as IP, redefine that.
+# Delete default driver IP addresses and set the ones we'll use
 ip addr del 10.0.0.91/24 dev ens25
 ip addr add 10.0.0.140/24 dev ens25
-#ip addr add 192.168.31.52 dev ens12
-#ip addr add 172.31.16.13 dev ens12
-#ip addr add 172.31.16.101 dev ens12
+ip addr del 10.20.200.91/24 dev ens11
+ip addr add 10.20.200.91/24 dev ens11f0
+ip link set ens11f0 up
 #ethtool -K ens11 rx off tx off
 #ethtool -K ens12 rx off tx off
 #ethtool -K ens25 rx off tx off
