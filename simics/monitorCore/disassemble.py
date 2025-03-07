@@ -69,23 +69,24 @@ class Disassemble():
         fun_addr_orig = fun_addr_orig + 0x400 - 0x1000
         prev = fun_addr
         prev_mnemonic = None
-        self.lgr.debug('disassemble getPrevInstruction for addr 0x%x fun_addr 0x%x adjusted to 0x%x fname %s, load_addr 0x%x' % (addr, 
-               fun_addr, fun_addr_orig, fname, load_addr))
+        #self.lgr.debug('disassemble getPrevInstruction for addr 0x%x fun_addr 0x%x adjusted to 0x%x fname %s, load_addr 0x%x' % (addr, 
+        #       fun_addr, fun_addr_orig, fname, load_addr))
         for (address, size, mnemonic, op_str) in self.md.disasm_lite(self.prog_bytes[fname][fun_addr_orig:], fun_addr, count=max_instructs):
             #self.lgr.debug("disassemble getPrevInstruction 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
             if address == addr:
                 if prev_mnemonic == 'call':
                     retval = prev 
                 else:
-                    self.lgr.debug('disassemble getPrevInstruction reached address 0x%x, but not a call, was %s' % (addr, prev_mnemonic))
+                    #self.lgr.debug('disassemble getPrevInstruction reached address 0x%x, but not a call, was %s' % (addr, prev_mnemonic))
+                    pass
                 break
             prev = address 
             prev_mnemonic = mnemonic 
-        if retval is None:
-            # could be odd data on stack that would fall in this function
-            self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
-        else:
-            self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
+        #if retval is None:
+        #    # could be odd data on stack that would fall in this function
+        #    self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
+        #else:
+        #    self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
         return retval
 
     def getProgBytes(self, addr):
