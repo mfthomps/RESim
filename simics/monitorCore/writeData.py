@@ -329,12 +329,12 @@ class WriteData():
         if self.top.isWindows():
             word_size = self.top.getWordSize()
             if word_size == 4:
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                #self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                 self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=4)
             else: 
-                self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
+                #self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
                 self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=8)
-            #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
+            self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
             #self.lgr.debug('writeData wrote count value %d to reg num  %d' % (count, self.len_reg_num))
@@ -342,12 +342,15 @@ class WriteData():
     def userBufWrite(self, record=False):
         ''' inject data into the application buffer and set the return count value seen by the application '''
         retval = None
+        self.lgr.debug('userBufWrite')
         if self.current_packet > 1 and self.no_reset:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
              return
         if self.expected_packet_count <= 1 and self.udp_header is None:
+            self.lgr.debug('userBufWrite wtf1')
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
+                self.lgr.debug('userBufWrite wtf2')
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
                 if self.filter is not None:
@@ -356,15 +359,17 @@ class WriteData():
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
-                self.lgr.debug('writeData TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
+                self.lgr.debug('writeData userBufWrite TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 self.lgr.debug('%s' % next_data)
                 self.setCountValue(len(next_data))
+                self.lgr.debug('writeData userBufWrite back from setCountValue')
                 retval = len(next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
                     ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
                     self.addr = self.addr+1
             else:
+                self.lgr.debug('userBufWrite wtf3')
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
                 tot_len = len(self.in_data)
@@ -375,13 +380,13 @@ class WriteData():
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 eip = self.top.getEIP(self.cpu)
-                #self.lgr.debug('writeData TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
+                self.lgr.debug('writeData userBufWrite TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
                     next_addr = self.addr + len(self.in_data)
                     self.mem_utils.writeString(self.cpu, next_addr, b) 
-                    self.lgr.debug('writeData TCP last packet, padded %d bytes' % pad_count)
+                    self.lgr.debug('writeData userBufWrite TCP last packet, padded %d bytes' % pad_count)
                     tot_len = tot_len + pad_count
                 self.setCountValue(tot_len)
                 self.in_data = ''
@@ -389,15 +394,15 @@ class WriteData():
         elif self.udp_header is not None:
             ''' see if there will be yet another udp header '''
             index = self.in_data[5:].find(self.udp_header)
-            #self.lgr.debug('got %d when look for %s in %s' % (index, self.udp_header, self.in_data[5:]))
+            #self.lgr.debug('userBufWrite got %d when look for %s in %s' % (index, self.udp_header, self.in_data[5:]))
             if index > 0 and self.current_packet > self.udp_header_limit:
-                self.lgr.debug('writeData, too many udp headers')
+                self.lgr.debug('writeData,userBufWrite  too many udp headers')
                 index = -1
             if index > 0:
                 first_data = self.in_data[:(index+5)]
                 self.in_data = self.in_data[len(first_data):]
                 if len(first_data) > self.max_len:
-                    #self.lgr.debug('writeData, udp, trimmed first data to max_len')
+                    #self.lgr.debug('writeData, userBufWrite udp, trimmed first data to max_len')
                     first_data = first_data[:self.max_len]
                 if self.filter is not None: 
                     result = self.filter.filter(first_data, self.current_packet)
@@ -408,14 +413,14 @@ class WriteData():
                     retval = len(first_data)
                 # TBD add handling of padding with udp header                
                 eip = self.top.getEIP(self.cpu)
-                #self.lgr.debug('writeData wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
-                #self.lgr.debug('writeData next packet would start with %s' % self.in_data[:50])
+                #self.lgr.debug('writeData userBufWrite wrote packet %d %d bytes addr 0x%x ip: 0x%x  %s' % (self.current_packet, len(first_data), self.addr, eip, first_data[:50]))
+                #self.lgr.debug('writeData userBufWrite next packet would start with %s' % self.in_data[:50])
             else:
                 ''' no next udp header found'''
                 eip = self.top.getEIP(self.cpu)
                 data = self.in_data[:self.max_len]
-                #self.lgr.debug('writeData wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
-                #self.lgr.debug('writeData next UDP header %s not found wrote remaining packet' % (self.udp_header))
+                #self.lgr.debug('writeData userBufWrite wrote packect %d %d bytes addr 0x%x ip: 0x%x ' % (self.current_packet, len(data), self.addr, eip))
+                #self.lgr.debug('writeData userBufWrite next UDP header %s not found wrote remaining packet' % (self.udp_header))
                 result = data
                 if self.filter is not None:
                     result = self.filter.filter(data, self.current_packet)
@@ -428,8 +433,10 @@ class WriteData():
             self.top.setPacketNumber((self.current_packet+1))
                 
         else:
-            self.lgr.error('writeData could not handle data parameters.')
+            self.lgr.error('writeData userBufWrite could not handle data parameters.')
+        self.lgr.debug('writeData userBufWrite tracing_io ? %r' % self.tracing_io)
         if not self.tracing_io:
+            self.lgr.debug('writeData userBufWrite call setCallHap')
             self.setCallHap()
         #if len(self.in_data) > 0:
         #    self.setCallHap()
@@ -441,7 +448,7 @@ class WriteData():
     def setCallHap(self):
         if self.call_hap is None:
             self.syscallManager = self.top.getSyscallManager()
-            self.lgr.debug('writeData setCallHap call to watch all syscalls')
+            self.lgr.debug('writeData setCallHap call to watch all syscalls callback') 
             self.call_hap = self.syscallManager.watchAllSyscalls(None, 'writeData', callback=self.callCallback)
         
     def setSelectStopHap(self):
@@ -477,12 +484,15 @@ class WriteData():
                 self.lgr.debug('writeData setRetHap on return_ip 0x%x (phys 0x%x) cell is %s' % (self.return_ip, phys_block.address, str(self.cell)))
         elif self.shared_syscall is not None:
             self.lgr.debug('writeData setRetHap call sharedSyscall setReadFixup')
-            if self.addr_of_count is not None:
-                self.shared_syscall.setReadFixup(self.doRetIOCtl)
+            if self.top.isWindows():
+                self.shared_syscall.setReadFixup(self.windowsReadFixup)
             else:
-                self.shared_syscall.setReadFixup(self.doRetFixup)
-            self.shared_syscall.setSelectFixup(self.doRetSelect)
-            self.shared_syscall.setPollFixup(self.doRetPoll)
+                if self.addr_of_count is not None:
+                    self.shared_syscall.setReadFixup(self.doRetIOCtl)
+                else:
+                    self.shared_syscall.setReadFixup(self.doRetFixup)
+                self.shared_syscall.setSelectFixup(self.doRetSelect)
+                self.shared_syscall.setPollFixup(self.doRetPoll)
         else:
             self.lgr.error('writeData setRetHap, shared_syscall is None and not tracing io')
 
@@ -539,7 +549,7 @@ class WriteData():
             return
         tid = self.top.getTID()
         if tid != self.tid:
-            #self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
+            self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
             return
         skip_it = False
         if self.top.isWindows():
@@ -547,20 +557,27 @@ class WriteData():
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
+            self.lgr.debug('writeData callHap call %s' % callname)
             if callname == 'DeviceIoControlFile':
                 frame = self.top.frameFromRegs()
                 operation = frame['param6'] & 0xffffffff
                 if operation in self.ioctl_op_map:
                     op_cmd = self.ioctl_op_map[operation]
-                    #self.lgr.debug('writeData callHap,  is Windows TBD bail if RECV tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s' % (tid, eip, 
-                    #     self.cpu.cycles, callname, op_cmd))
-                    if op_cmd != 'RECV':
+                    frame_s = taskUtils.stringFromFrame(frame)
+                    self.lgr.debug('writeData callHap,  is Windows TBD bail is RECV tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s frame: %s' % (tid, eip, 
+                         self.cpu.cycles, callname, op_cmd, frame_s))
+                    if op_cmd not in ['RECV', 'RECV_DATAGRAM', 'ReadFile']:
                         skip_it = True
+                    fd = frame['param1']
+                    if fd != self.fd:
+                        skip_it = True
+                    callname = op_cmd
             else:
-                #self.lgr.debug('writeData callHap, windows expected DeviceIoControFile got %s' % callname)
+                self.lgr.debug('writeData callHap, windows expected DeviceIoControFile got %s' % callname)
                 skip_it = True
-
-            #    return
+            #TBD remove this
+            skip_it = True
+            
         else:
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
@@ -622,7 +639,7 @@ class WriteData():
         if tid != self.tid:
             #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        if callname in ['recv', 'recvfrom', 'read']:
+        if callname in ['recv', 'recvfrom', 'read', 'RECV', 'RECV_DATAGRAM', 'ReadFile']:
             #self.lgr.debug('writeData handleCall is recv')
             if self.max_packets is not None and self.current_packet >= self.max_packets:
                 self.doBreakSimulation('writeData handleCall max_packets')
@@ -773,7 +790,7 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None, addr_of_count=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        #self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
+        self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
@@ -792,17 +809,17 @@ class WriteData():
             SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
             return None
         self.total_read = self.total_read + eax
-        #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
-                #self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
+                self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
                 if self.shared_syscall is not None and not self.no_reset:
                     self.shared_syscall.foolSelect(self.fd)
         if self.total_read > self.read_limit:
-            #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
+            self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
                  if eax > remain and not self.no_reset:
@@ -831,13 +848,55 @@ class WriteData():
                      self.setSelectStopHap()
                  # TBD why was this being deleted?
                  #SIM_run_alone(self.delRetHap, None)
-                 #self.lgr.debug('writeData doRetFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
+                 self.lgr.debug('writeData doRetFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
+                 self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
                  SIM_break_simulation('Over read limit')
                  return None
-                 #self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
         return eax
+
+    def windowsReadFixup(self, fd, count_addr):
+        count = self.mem_utils.readWord32(self.cpu, count_addr)
+        self.lgr.debug('writeData winReadFixup FD: 0x%x  count_addr 0x%x read count of %d total_read now: %d  read limit %d' % (fd, count_addr, count, self.total_read, self.read_limit))
+        remain = self.read_limit - self.total_read
+
+        if self.total_read >= self.read_limit and self.stop_on_read:
+            self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (count, self.read_limit, self.total_read, remain))
+            SIM_break_simulation('writeData windowsReadFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
+            return None
+        self.total_read = self.total_read + count
+        self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (count, self.read_limit, self.total_read, remain, self.no_reset))
+
+        #if self.stop_on_read and self.total_read >= self.read_limit:
+        if self.total_read >= self.read_limit:
+            if self.mem_utils.isKernel(self.addr):
+                self.lgr.debug('writeData windowsReadFixup read limit, set kernel_buf_consumed')
+                self.kernel_buf_consumed = True
+        if self.total_read > self.read_limit:
+            self.lgr.debug('writeData windowsReadFixup read over limit of %d' % self.read_limit)
+            if self.mem_utils.isKernel(self.addr):
+                 ''' adjust the return value and continue '''
+                 if count > remain and not self.no_reset:
+                     if self.user_space_addr is not None:
+                         start = self.user_space_addr + remain
+                         self.lgr.debug('writeData windowsReadFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:count]), start))
+                         self.mem_utils.writeString(self.cpu, start, self.orig_buffer[remain:count])
+
+                     self.top.writeWord(count_addr, remain, target_cpu=self.cpu, word_size=4)
+                     self.lgr.debug('writeData adjusted count from from %d to remain value of %d kernel buf consumed' % (count, remain))
+                     #rprint('**** Adjusted return value, RESET Origin ***') 
+                     self.kernel_buf_consumed = True
+                 if not self.no_call_hap and not self.tracing_io:
+                     self.setCallHap()
+                 # TBD why was this being deleted?
+                 #SIM_run_alone(self.delRetHap, None)
+                 self.lgr.debug('writeData windowsReadFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
+            else:
+                 ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
+                 self.lgr.debug('writeData windowsReadFixup read over limit of %d' % self.read_limit)
+                 SIM_break_simulation('Over read limit')
+                 return None
 
     def retHap(self, dumb, third, break_num, memory):
         # TBD reworked, must be updated for Windows

@@ -299,6 +299,7 @@ class WinSyscall():
             return
         if self.syscall_info.callnum is None and self.callback is not None:
             # only used syscall to set breaks, we'll take it from here.
+            self.lgr.debug('winSyscall syscallHap call callback %s' % str(self.callback))
             self.callback()
             return
         cpu, comm, tid = self.task_utils.curThread() 
@@ -818,12 +819,13 @@ class WinSyscall():
                         self.lgr.debug('winSyscall read match_param was int, no match?')
                         skip_this = True
             if not skip_this:
-                self.lgr.debug('winSyscall ReadFile set asynch_handler')
-                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, None,
-                        self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
-                if self.watchData(exit_info):
-                    self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
-                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                if exit_info.count > 0:
+                    self.lgr.debug('winSyscall ReadFile set asynch_handler')
+                    exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, None,
+                            self.mem_utils, self.context_manager, self.traceMgr, callname, self.kbuffer, exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
+                    if self.watchData(exit_info):
+                        self.lgr.debug('winSyscall ReadFile doing win_delay.setDataWatch')
+                        exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
 
 
         elif callname == 'WriteFile':
@@ -2085,12 +2087,13 @@ class WinSyscall():
                         SIM_break_simulation('stop_on_call') 
         
         if do_async_io and exit_info is not None: 
-            exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, exit_info.sock_addr,
+            if exit_info.count > 0:
+                exit_info.asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, exit_info.sock_addr,
                       self.mem_utils, self.context_manager, self.traceMgr, exit_info.socket_callname, self.kbuffer, 
                       exit_info.old_fd, exit_info.count, self.stop_action, self.lgr)
-            if self.watchData(exit_info):
-                self.lgr.debug('doing winDelay.setDataWatch, maybe')
-                exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
+                if self.watchData(exit_info):
+                    self.lgr.debug('doing winDelay.setDataWatch, maybe')
+                    exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
         return op_cmd, trace_msg
 
     def getWordSize(self, tid):

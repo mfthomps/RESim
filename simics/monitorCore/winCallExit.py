@@ -213,7 +213,8 @@ class WinCallExit():
             else:
                 # TBD hack to let prepInject get the exit info
                 self.matching_exit_info = exit_info
-                async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready)
+                if exit_info.asynch_handler is not None:
+                    async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready, self.read_fixup_callback, self.read_fixup_callback)
                 if not async_was_ready:
                     self.lgr.debug('winCallExit ReadFile: not ready ')
                     trace_msg = trace_msg+' - Device not ready'
@@ -357,7 +358,7 @@ class WinCallExit():
                         # hack to avoid duplicate call names
                         trace_msg = trace_msg.rsplit(' ', 1)[0]
                         self.lgr.debug('winCallExit %s call exitingKernel with trace_msg %s' % (exit_info.socket_callname, trace_msg))
-                        async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready)
+                        async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, call_return_not_ready, self.read_fixup_callback)
 
                         ''' Call params satisfied in winDelay'''
                         #exit_info.call_params = None
@@ -484,3 +485,11 @@ class WinCallExit():
         if tid in self.tid_sockets and fd in self.tid_sockets[tid]:
             sock_type = self.tid_sockets[tid][fd]
         return sock_type
+
+    def setReadFixup(self, callback):
+        self.lgr.debug('winCallExit setReadFixup to %s' % callback)
+        self.read_fixup_callback = callback
+
+    def setSelectFixup(self, callback):
+        self.lgr.debug('winCall exit setSelectFixup TBD not yet used')
+

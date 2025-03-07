@@ -85,6 +85,7 @@ class WinDelay():
         self.do_not_stop = False
         self.device_not_ready = False
 
+        self.read_fixup_callback = None
 
     def setDataWatch(self, data_watch, linger):
         #self.lgr.debug('winDelay setDataWatch')
@@ -237,6 +238,11 @@ class WinDelay():
                 self.lgr.debug('winDelay writeCountHap for self.tid %s, but current tid is %s' % (self.tid, tid))
             else:
                 self.lgr.debug('winDelay writeCountHap tid:%s module %s' % (self.tid, str(self)))
+            if self.read_fixup_callback is not None:
+                # adjust return count and track data read from kernel buffer if applicable
+                self.lgr.debug('winDelay writeCountHap call read fixup callback')
+                fixed_count = self.read_fixup_callback(self.exit_info.old_fd, self.exit_info.delay_count_addr)
+                self.read_fixup_callback = None 
             # TBD ?
             #self.getIOData(return_count, memory.logical_address)
             self.getIOData(return_count, self.exit_info.delay_count_addr)
@@ -295,8 +301,11 @@ class WinDelay():
             self.count_write_hap = None
             #self.lgr.debug('winDelay rmAllHaps removed count_write_hap')
 
-    def exitingKernel(self, trace_msg, not_ready):
+    def exitingKernel(self, trace_msg, not_ready, read_fixup_callback):
         retval = False
+        if self.call_name in ['RECV_DATAGRAM', 'RECV', 'ReadFile']:
+            self.lgr.debug('winDelay exitingKernel set read_fixup_callback to %s' % read_fixup_callback)
+            self.read_fixup_callback = read_fixup_callback
         if self.trace_msg is not None or not not_ready:
             if self.trace_msg is None and not not_ready:
                 #if self.exit_info.count_addr is None:
@@ -309,6 +318,12 @@ class WinDelay():
                     return 
                 self.lgr.debug('winDelay exitingKernel tid:%s with no delay assume data it is there, return count 0x%x' % (self.tid, return_count))
                 if return_count > 0:
+                    if self.read_fixup_callback is not None:
+                        # adjust return count and track data read from kernel buffer if applicable
+                        self.lgr.debug('winDelay exitingKernel call read fixup callback')
+                        fixed_count = self.read_fixup_callback(self.exit_info.old_fd, self.exit_info.delay_count_addr)
+                        self.read_fixup_callback = None 
+
                     self.getIOData(return_count, self.exit_info.delay_count_addr)
                     if self.data_watch is not None or (self.exit_info is not None and self.exit_info.matched_param is not None and self.exit_info.matched_param.break_simulation):
                         self.doDataWatch(False)
@@ -334,6 +349,11 @@ class WinDelay():
                 #if self.exit_info.syscall_instance is not None:
                 #    self.lgr.debug('winDelay exitingKernel remove win delay for tid:%s fd 0x%x' % (self.tid, self.exit_info.old_fd))
                 #    self.exit_info.syscall_instance.rmWinDelay(self.tid, self.exit_info.old_fd)
+                if self.read_fixup_callback is not None:
+                    # adjust return count and track data read from kernel buffer if applicable
+                    self.lgr.debug('winDelay exitingKernel after data and count already written, call read fixup callback')
+                    fixed_count = self.read_fixup_callback(self.exit_info.old_fd, self.exit_info.delay_count_addr)
+                    self.read_fixup_callback = None 
         else:
             self.lgr.debug('winDelay exitingKernel tid:%s did not yet see data' % self.tid)
             self.did_exit = True

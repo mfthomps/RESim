@@ -1447,10 +1447,16 @@ class SharedSyscall():
         self.kbuffer = kbuffer
 
     def setReadFixup(self, read_fixup_callback):
-        self.read_fixup_callback = read_fixup_callback
+        if self.top.isWindows(target=self.cell_name):
+            self.win_call_exit.setReadFixup(read_fixup_callback) 
+        else:
+            self.read_fixup_callback = read_fixup_callback
 
     def setSelectFixup(self, select_fixup_callback):
-        self.select_fixup_callback = select_fixup_callback
+        if self.top.isWindows(target=self.cell_name):
+            self.win_call_exit.setSelectFixup(select_fixup_callback) 
+        else:
+            self.select_fixup_callback = select_fixup_callback
 
     def setPollFixup(self, poll_fixup_callback):
         self.poll_fixup_callback = poll_fixup_callback
