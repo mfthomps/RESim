@@ -161,6 +161,8 @@ class TrackThreads():
             return
         prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
+        # in case we want to ignore this comm
+        self.context_manager.newProg(comm, tid)
         if full_path is not None:
             self.lgr.debug('trackThreads addSO, set target fs, progname is %s  full: %s' % (prog_name, full_path))
 
