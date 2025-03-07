@@ -1039,7 +1039,7 @@ class SOMap():
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
-            self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? prog_start is %s' % (tid, str(self.prog_start)))
+            self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? ' % (tid))
             if tid in self.text_prog:
                 self.lgr.debug('soMap getLoadOffset text_prog[%s] is %s and prog_in is %s' % (tid, self.text_prog[tid], prog_in))
             retval = self.getLoadAddr(prog, tid)
