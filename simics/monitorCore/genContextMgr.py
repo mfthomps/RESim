@@ -600,6 +600,7 @@ class GenContextMgr():
         if tid is None:
             return
         retval = False       
+        #self.lgr.debug('onlyOrIgnore comm %s' % comm)
         if tid in self.ignore_threads:
             if self.cpu.current_context != self.ignore_context:
                 #SIM_run_alone(self.restoreIgnoreContext, None)
@@ -1628,6 +1629,13 @@ class GenContextMgr():
                 '''
             else:
                 self.lgr.error('contextManager loadIgnoreList no file at %s' % fname)
+        if retval:
+            cur_tid = self.task_utils.curTID()
+            comm = self.task_utils.getCommFromTid(cur_tid) 
+            if comm in self.ignore_progs:
+                self.lgr.debug('contextManager loadIgnoreList current comm of %s should be ignored, so set ignore context' % comm)
+                self.restoreIgnoreContext()
+
         return retval
 
     def loadOnlyList(self, fname):
@@ -1645,6 +1653,12 @@ class GenContextMgr():
                         retval = True
             else:
                 self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
+        if retval:
+            cur_tid = self.task_utils.curTID()
+            comm = self.task_utils.getCommFromTid(cur_tid) 
+            if comm not in self.ignore_progs:
+                self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
+                self.restoreIgnoreContext()
         return retval
 
     def loadIgnoreThreadList(self, fname):
