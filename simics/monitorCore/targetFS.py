@@ -109,11 +109,12 @@ class TargetFS():
                         lgr.debug('TargetFS getFull, not relative no glob at %s' % (full+'*'))
                     ''' try basename '''
                     retval = self.find(path)
-                    base = os.path.basename(retval)
-                    if path == base and retval is not None and path not in self.file_cache:
-                        self.file_cache[path] = retval
-                    if lgr is not None:
-                         lgr.debug('getFull used find found file %s' % retval)
+                    if retval is not None:
+                        base = os.path.basename(retval)
+                        if path == base and retval is not None and path not in self.file_cache:
+                            self.file_cache[path] = retval
+                        if lgr is not None:
+                             lgr.debug('getFull used find found file %s' % retval)
                 else:
                     self.lgr.debug('TargetFS, did not find program %s' % full)
 
