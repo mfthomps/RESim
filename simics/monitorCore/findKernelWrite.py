@@ -140,6 +140,7 @@ class findKernelWrite():
         if not self.reverse_mgr.nativeReverse():
             self.reverse_mgr.setCallback(self.revWriteCallbackSim7)
         else:
+            #self.hackOrigin()
             self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
             self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
             self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
@@ -158,7 +159,29 @@ class findKernelWrite():
             self.top.quit()
         #SIM_run_alone(SIM_run_command, 'reverse')
         '''
+     
+
+        #if False and addr == 0x83ca6cf:
+        #    print('remove this would reverse') 
+        #else:
         self.reverse_mgr.reverse()
+        #hack_limit_cycle = self.cpu.cycles - 1000
+        #self.lgr.debug( 'findKernelWrite hack_limit cycle 0x%x' % hack_limit_cycle)
+        #self.reverse_mgr.reverse(hack_limit_cycle)
+
+    def hackOrigin(self):
+        max_delta = 100000000
+        orig = self.top.getFirstCycle()
+        now = self.cpu.cycles
+        delta = now - orig
+        self.lgr.debug('findKernelWrite delta cycles is %s' % f'{delta:,}')
+        if delta > max_delta:
+            #new_origin = now - max_delta
+            new_origin = origin + 1000
+            self.top.skipToCycle(new_origin)
+            self.lgr.debug('findKernelWrite new origin at 0x%x' % self.cpu.cycles)
+            self.top.resetOrigin()
+            self.top.skipToCycle(now)
 
     def checkInitialBufferAlone(self, addr):
         self.lgr.debug('findKernelWrite checkInitialBufferAlone 0%x' % addr)
@@ -288,6 +311,7 @@ class findKernelWrite():
                         return
                     else:
                         bm = "eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr)
+                        self.lgr.debug(" revWriteCallback eip:0x%x modification of :0x%x not found after some looking.  Simics is sick and must die." % (eip, self.addr))
                         self.top.quit()
                         #self.bookmarks.setBacktrackBookmark(bm)
                         #SIM_break_simulation('revWriteCallbackx')
@@ -810,7 +834,7 @@ class findKernelWrite():
                     self.lgr.debug('findKernelWrite backOneAlone, found constant %x, stumped' % value)
                     SIM_run_alone(self.cleanup, False)
                     self.top.skipAndMail()
-        elif instruct[1].startswith('rep movs'):
+        elif instruct[1].startswith('rep movs') or instruct[1].startswith('movs'):
             #copy_addr, offset, mark = self.dataWatch.getMarkCopyOffset(self.addr)
             #if copy_addr is not None:
             #    self.lgr.debug('findKernelWrite backOneAlone got copy mark addr 0x%x offset 0x%x' % (copy_addr, offset))
@@ -819,7 +843,15 @@ class findKernelWrite():
                 src_addr = self.mem_utils.getRegValue(self.cpu, 'esi')
                 dst_addr = self.mem_utils.getRegValue(self.cpu, 'edi')
                 ecx = self.mem_utils.getRegValue(self.cpu, 'ecx')
-                self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x ecx: 0x%x addr 0x%x' % (src_addr, dst_addr, ecx, self.addr))
+                num_bytes = 1
+                if 'movsw' in instruct[1]:
+                    num_bytes = 4
+                elif 'movsd' in instruct[1]:
+                    num_bytes = 8
+                if 'rep' in instruct[1]:
+                    self.lgr.debug('findKernelWrite backOneAlone rep mov esi 0x%x edi 0x%x num_bytes %d, ecx: 0x%x addr 0x%x' % (src_addr, dst_addr, num_bytes, ecx, self.addr))
+                else:
+                    self.lgr.debug('findKernelWrite backOneAlone esi 0x%x edi 0x%x num_bytes %d, addr 0x%x' % (src_addr, dst_addr, num_bytes, self.addr))
                 if self.prev_buffer:
                     # we are just looking for the previous buffer, e.g., to backtrack to a kernel buffer.
                     self.k_buffer_addrs.append(src_addr)
@@ -828,9 +860,9 @@ class findKernelWrite():
                         self.lgr.debug('got rep movs.. with prev_buffer set, call rev_to_call to callback with address 0x%x' % src_addr)
                         self.rev_to_call.cleanup(self.k_buffer_addrs)
                     else:
-                        self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
+                        self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer, num_bytes=num_bytes)
                 else:
-                    self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
+                    self.top.stopAtKernelWrite(src_addr, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer, num_bytes=num_bytes)
         
         elif mn == 'push':
             op1, op0 = self.decode.getOperands(instruct[1])
