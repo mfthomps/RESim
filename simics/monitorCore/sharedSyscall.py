@@ -88,6 +88,7 @@ class SharedSyscall():
 
         ''' TBD arm linux seems to set a process TID to 1 for some period (when opening /var/run/utmp?)'''
         self.hack_exit_tid = None
+        self.lgr.debug('sharedSyscall traceFiles: %s' % self.traceFiles)
 
     def trackSO(self, track_so):
         #self.lgr.debug('sharedSyscall track_so %r' % track_so)
@@ -735,7 +736,7 @@ class SharedSyscall():
         ueax = self.mem_utils.getUnsigned(eax)
         eax = self.mem_utils.getSigned(eax)
         callname = exit_info.callname
-        #self.lgr.debug('exitHap cell %s callnum %d name %s  tid %s ' % (self.cell_name, exit_info.callnum, callname, tid))
+        #self.lgr.debug('exitHap cell %s callnum %d name %s  tid %s cycle: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, self.cpu.cycles))
         trace_msg = '\treturn from %s tid:%s (%s), ' % (callname, tid, comm)
         err_trace_msg = '\terror return from %s tid:%s (%s) ' % (callname, tid, comm)
         if callname == 'clone':
@@ -887,11 +888,12 @@ class SharedSyscall():
             if eax >= 0 and exit_info.retval_addr is not None:
 
                 max_len = min(eax, 1024)
-                max_max_len = min(eax, 10000)
+                max_max_len = min(eax, 10000000)
                 byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, exit_info.retval_addr)
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:max_len])
                     if self.traceFiles is not None:
+                        self.lgr.debug('sharedSyscall call traceFiles read')
                         self.traceFiles.read(tid, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
@@ -1129,6 +1131,8 @@ class SharedSyscall():
                 else:
                     self.lgr.debug('sharedSyscall exitHap fname soMap none')
                     trace_msg = trace_msg+('addr: 0x%x \n' % (ueax))
+                    #if exit_info.prot is not None and exit_info.prot & 2 > 0:
+                    self.lgr.debug('sharedSyscall exitHap mmap prot %s' % exit_info.prot) 
                     self.dataWatch.mmap(ueax)
         elif callname == 'ipc':
             callname = exit_info.socket_callname
