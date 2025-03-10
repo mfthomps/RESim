@@ -31,7 +31,9 @@ ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp"]
 ia64_regs = ["rax", "rbx", "rcx", "rdx", "rbp", "rdi", "rsi", "rip", "rsp", "eflags", "r8", "r9", "r10", "r11", 
                      "r12", "r13", "r14", "r15"]
 def modifiesOp0(op):
-    if op.startswith('mov') or op.startswith('cmov') or op in modifiesOp0_list:
+    if op.startswith('movs'):
+        return False
+    elif op.startswith('mov') or op.startswith('cmov') or op in modifiesOp0_list:
         return True
     else: 
         return False
