@@ -48,7 +48,7 @@ class NullTestLoop():
         if self.instruct[1].startswith('mov'):
             op2, op1 = self.decode.getOperands(self.instruct[1])
             #self.lgr.debug('nullTestLoop is mov op1: %s op2: %s' % (op1, op2))
-            if self.decode.regLen(op1) == 1: 
+            if op1 is not None and self.decode.regLen(op1) == 1: 
                 self.our_reg = op2.split('[', 1)[1].split(']')[0]
                 self.lgr.debug('nullTestLoop is 1 byte op1 %s op2 %s' % (op1, op2))
                 next_eip = self.eip + self.instruct[0]
