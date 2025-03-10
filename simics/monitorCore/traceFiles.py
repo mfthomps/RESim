@@ -55,7 +55,7 @@ class TraceFiles():
     def watchFile(self, path, outfile):
         self.path_list[path] = self.FileWatch(path, outfile)
         if path not in self.watched_files:
-            self.lgr.debug('traceFiles open and close %s' % outfile)
+            self.lgr.debug('traceFiles open and close %s watching path %s' % (outfile, path))
             with open(outfile+'-read', 'w') as fh:
                 fh.write('start of RESim copy of %s\n' % outfile) 
             with open(outfile+'-write', 'w') as fh:
@@ -87,7 +87,7 @@ class TraceFiles():
                 pass
             with open(outfile+'-write', 'wb') as fh:
                 pass
-        self.lgr.debug('TraceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
+        self.lgr.debug('traceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
         if tid not in self.tracing_fd:
             self.tracing_fd[tid] = []
         self.tracing_fd[tid].append(fd)
@@ -97,28 +97,28 @@ class TraceFiles():
             if tid not in self.binders:
                 self.binders[tid] = {}
             self.binders[tid][new_fd] = fd
-            self.lgr.debug('TraceFiles accept tid:%s new fd %d for open_files %d' % (tid, new_fd, fd))
+            self.lgr.debug('traceFiles accept tid:%s new fd %d for open_files %d' % (tid, new_fd, fd))
 
     def open(self, path, fd):
         if path in self.path_list:
             self.path_list[path].fd = fd
             tid = self.top.getTID(target=self.cell_name)
-            if tid not in self.open_file:
+            if tid not in self.open_files:
                 self.open_files[tid] = {}
             self.open_files[tid][fd] = self.path_list[path]
 
     def close(self, fd):
         
         tid = self.top.getTID(target=self.cell_name)
-        self.lgr.debug('TraceFiles close tid:%s %d'  % (tid, fd))
+        self.lgr.debug('traceFiles close tid:%s %d'  % (tid, fd))
         if tid in self.binders and fd in self.binders[tid]:
             del self.binders[tid][fd] 
-            self.lgr.debug('TraceFiles close removed binders %d for tid:%s'  % (fd, tid))
+            self.lgr.debug('traceFiles close removed binders %d for tid:%s'  % (fd, tid))
         if tid not in self.tracing_fd or fd not in self.tracing_fd[tid]:
             if tid in self.open_files and fd in self.open_files[tid] and (tid not in self.tracing_fd or fd not in self.tracing_fd[tid]):
                 self.open_files[tid][fd].fd = None
                 del self.open_files[tid][fd]
-                self.lgr.debug('TraceFiles close tid:%s FD: %d num open files %d'  % (tid, fd, len(self.open_files)))
+                self.lgr.debug('traceFiles close tid:%s FD: %d num open files %d'  % (tid, fd, len(self.open_files)))
         elif not self.raw:
             if tid in self.open_files:
                 with open(self.open_files[tid][fd].outfile+'-read', 'a') as fh:
@@ -138,7 +138,7 @@ class TraceFiles():
                         #print('got nonzero at %d' % index)
                         retval.append(i)
                 else:
-                    self.lgr.debug('TraceFiles nonull got None in the bytes: %s' % str(the_bytes))
+                    self.lgr.debug('traceFiles nonull got None in the bytes: %s' % str(the_bytes))
                 index += 1
         return retval 
 
@@ -148,6 +148,7 @@ class TraceFiles():
             self.lgr.debug('traceFiles read tid:%s fd_in: %d fd: %d len %d' % (tid, fd_in, fd, len(the_bytes)))
         else:
             fd = fd_in 
+        self.lgr.debug('traceFiles read fd: 0x%x len of bytes %d' % (fd, len(the_bytes)))
         self.io(tid, fd, the_bytes, read=True, fd_in=fd_in)
 
     def write(self, tid, fd_in, the_bytes):
@@ -182,12 +183,12 @@ class TraceFiles():
             did_write = False
             if self.traceProcs is not None and len(self.path_list) > 0:
                 fname = self.traceProcs.getFileName(tid, fd)
-                self.lgr.debug('TraceFiles write got fname %s' % fname)
+                self.lgr.debug('traceFiles write got fname %s path in list is %s' % (fname, list(self.path_list.keys())[0]))
                 if fname is not None and fname in self.path_list:
                     file_watch = self.path_list[fname]
                     with open(self.path_list[fname].outfile+suf, 'a') as fh:
                         s = ''.join(map(chr,stripped))+'\n'
-                        self.lgr.debug('TraceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
+                        self.lgr.debug('traceFiles got %s from traceProcs for fd %d, writing to %s %s'  % (fname, fd, self.path_list[fname].outfile, s))
                         fh.write(s)
                         fh.flush()
                         if self.dataWatch is not None:
@@ -198,7 +199,7 @@ class TraceFiles():
                 ''' tracing fd '''
                 with open(self.open_files[tid][fd].outfile+suf, 'a') as fh:
                     s = ''.join(map(chr,stripped))+'\n'
-                    self.lgr.debug('TraceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
+                    self.lgr.debug('traceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
                     fh.write(s)
                     if self.dataWatch is not None:
                         prefix = 'FD:%d' % fd
@@ -207,10 +208,10 @@ class TraceFiles():
 
     def markLogs(self, dataWatch):
         self.dataWatch = dataWatch
-        self.lgr.debug('TraceFiles markLogs')
+        self.lgr.debug('traceFiles markLogs')
 
     def clone(self, old, new):
-        self.lgr.debug('TraceFiles clone old: %s new: %s' % (old, new))
+        self.lgr.debug('traceFiles clone old: %s new: %s' % (old, new))
         if old in self.open_files:
             self.open_files[new] = {}
             for fd in self.open_files[old]:
@@ -221,7 +222,7 @@ class TraceFiles():
                 self.binders[new][fd] = self.binders[old][fd]
 
     def dup(self, old, new):
-        self.lgr.debug('TraceFiles dup old: %s new: %s' % (old, new))
+        self.lgr.debug('traceFiles dup old: %s new: %s' % (old, new))
         tid = self.top.getTID(target=self.cell_name)
         if tid in self.open_files and old in self.open_files[tid]:
             self.open_files[tid][new] = self.open_files[tid][old]
