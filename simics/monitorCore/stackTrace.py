@@ -1036,7 +1036,9 @@ class StackTrace():
         while not done and (count < 9000): 
             ''' ptr iterates through stack addresses.  val is the value at that address '''
             #if not been_above_clib and (ptr - self.prev_frame_sp) > 1500:
-            if self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
+           
+            # TBD ignoring when only one frame 
+            if len(self.frames) > 1 and self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
                 self.mind_the_gap = False
                 fun_addr = self.frames[-1].fun_addr
                 if fun_addr is None:
@@ -1637,8 +1639,10 @@ class StackTrace():
                        if (self.frames[-1].sp - self.frames[-2].sp) > 1500:
                            self.mind_the_gap = True
                            self.lgr.debug('stackTrace addFrame found a gap of %d' % delta)
+            else:
+                self.lgr.debug('stackTrace skipping for vxworks reasons')
         else:
-            #self.lgr.debug('stackTrace skipping back to back identical calls: %s' % frame.instruct)
+            self.lgr.debug('stackTrace skipping back to back identical calls: %s' % frame.instruct)
             pass
         #adjust = 0
         if adjust > 0:
