@@ -2887,6 +2887,10 @@ managed by the genContextManager.  It may be an ad-hock break/hap, such as those
 
 IDA sometimes gets confused about memory segments.  See simics/ida/missingSegs.py.
 
+If a reverse results in RESim quitting simics, it may be because the reversable recorded time frame is too long.  How long depends
+on the simulation.  Look for complaints such as "BUT A FUTURE CYCLE" in the log, indicating simics is sick and is going forward
+instead of backwards.
+
 \section{Data Stores}
 \label{data-stores}
 This section describes how RESim names and accesses different data stores.
