@@ -159,7 +159,7 @@ class SockStruct():
             if lgr is not None:
                 lgr.debug('net sockStruct failed reading sa family from 0x%x' % self.addr)
             return
-        if lgr is not None:
+        if lgr is not None and self.sa_family is not None:
             lgr.debug('net sockStruct sa_family read as 0x%x' % self.sa_family)
         if self.sa_family == 1:
             self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)

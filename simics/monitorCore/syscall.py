@@ -398,6 +398,7 @@ class ExitInfo():
         self.did_delay = False
         self.src_addr = None
         self.src_addr_len = None
+        self.prot = None
 
 EXTERNAL = 1
 AF_INET = 2
@@ -1002,7 +1003,7 @@ class Syscall():
         if cp is not None: 
             if cp.match_param.__class__.__name__ == 'Dmod':
                self.task_utils.modExecParam(tid, self.cpu, cp.match_param)
-            else: 
+            elif cp.match_param is not None:
 
                 if '/' in cp.match_param:
                     ''' compare full path '''
@@ -2119,7 +2120,8 @@ class Syscall():
                 is_ex = prot & 4
             else:
                 is_ex = 0
-            self.lgr.debug('syscall mmap fd %s  watch_first_mmap %s  is exec? %d' % (fd, self.watch_first_mmap, is_ex))
+            exit_info.prot = prot
+            self.lgr.debug('syscall mmap fd %s  watch_first_mmap %s  prot %s is exec? %d' % (fd, self.watch_first_mmap, prot, is_ex))
             if fd is not None and fd != 'NULL' and self.watch_first_mmap == int(fd) and is_ex:
                 self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % int(fd))
                 exit_info.fname = self.mmap_fname

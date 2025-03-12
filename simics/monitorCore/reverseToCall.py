@@ -1210,7 +1210,7 @@ class reverseToCall():
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
             if address is not None:
                 self.lgr.debug('followTaint, yes, address is 0x%x' % address)
-                if self.decode.isByteReg(op0):
+                if self.decode.isByteReg(op0) or 'byte ptr' in op1:
                     value = self.task_utils.getMemUtils().readByte(self.cpu, address)
                 else:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
@@ -1224,7 +1224,9 @@ class reverseToCall():
                     self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: backtrack eip:0x%x inst:"%s"' % (eip, instruct[1]))
                 #self.cleanup(None)
-                if self.num_bytes is None:
+                if 'byte ptr' in op1:
+                    num_bytes = 1 
+                elif self.num_bytes is None:
                     num_bytes = self.decode.regLen(op0)
                 else:
                     num_bytes = self.num_bytes

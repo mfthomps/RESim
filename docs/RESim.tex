@@ -531,7 +531,7 @@ If an {\tt accept} call with the given FD is detected, the FD being tracked will
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
 FD, RESim will ensure that call is tracked.  The count parameter can be used to track the Nth read or recv.   Data watches persist after the
 call, e.g., to support {\tt retrack} described below.  Each use of trackIO will reset all data watches, but does not clear watch marks, i.e., you can still skip to those simulation cycles.  Also see 
-the {\tt tagIterator} command.  The {\tt reset} parameter will cause the reverse time origin to be reset if the kernel was waiting on a read/recv. See \ref{real-networks}  Data to be consumed by the taget can originate from a simulated computer, e.g., a driver, or via a real network using something like:
+the {\tt tagIterator} command and {\tt addIterator}.  The {\tt reset} parameter will cause the reverse time origin to be reset if the kernel was waiting on a read/recv. See \ref{real-networks}  Data to be consumed by the taget can originate from a simulated computer, e.g., a driver, or via a real network using something like:
 \begin{verbatim}
     cat foo.io > /dev/udp/127.0.0.1/6060 
 \end{verbatim}
@@ -576,6 +576,10 @@ an input file, e.g., either an injectIO file or a drive-driver file.
 
 \item {\tt tagIterator(index)} Tag a watch mark as being an iterator.  The associated function is added to a file stored along with IDA functions
 The intent is to avoid data watch events on each move, or access, e.g., a crc generator.
+
+\item {\tt addIterator(address)} Tag a function as being an iterator. The address can be any address within the function.  Use this if your tagIterator turns out
+to not reduce watch marks because it is repeatedly called by the calling fuction, which you would set as the iterator.  Note however that you will loose any other watch
+marks that the iterator function might have generated. 
 
 \item {\tt trackFunctionWrite(fun)} Record all write operations that occur between entry and return from the named function.
 
@@ -670,11 +674,13 @@ the {\tt EXECUTION\_JUMPERS} ini environment value.
 The following functions are intended for manual, ad-hoc code coverage analysis.  Also see the functions listed under \ref{fuzzing} and the discussion
 of fuzzing in \ref{fuzz}.
 \begin{itemize}
-\item {\tt mapCoverage} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
+\item {\tt mapCoverage(backstop=False, dead\_zone=False} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
 saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client when the {\tt color} option is used. Subsequent uses of {\tt mapCoverage}
 will reset the coverage tracking.  Use {\tt stopCoverage} to stop basic block tracking.  The basic blocks database is read from the .blocks file created
 by the {\tt idaDump.py} script or the Ghidra plugin's dump artifacts function.  See section \ref{coverage} for information on how the IDA client 
-represents code coverage and highlights branches that have not been taken.
+represents code coverage and highlights branches that have not been taken.  The {\tt backstop} option causes execution to stop when {\tt BACK\_STOP\_CYCLES} pass without
+hitting a basic block.  The {\tt dead\_zone} option will record all basic blocks into a file that can later be used to ignore those basic blocks.  This is intended to
+remove background noise, e.g., behavior of threads of a process having nothing to do with your input data.  See the {\tt IGNORE\_BB\_LIST} ini parameter.
 
 \item {\tt showCoverage} -- display summary of basic block coverage.  Also see the IDA client {\tt color} and {\tt clear} options.
 
@@ -771,6 +777,8 @@ The {\tt runPlay} stand-alone command launches parallel instances of RESim runni
 does not generate a new total hits file, it only creates coverage files.  
 
 If processes exit during replay, those will be reported after {\tt playAFL} completes replaying the sessions.
+
+See the {\tt IGNORE\_BB\_LIST} and code coverage discussion at \ref{coverage} to understand how to ignore some basic blocks.
 
 \item{\tt crashReport(dfile)} Generate crash reports for each crash discovered by AFL.  The given {\tt dfile} is as defined in the {\tt playAFL} command and may
 be a path to a single file.  The recommended method for processing multiple crashes found by AFL is to use the {\tt crashReport.py} utility (see section \ref{utilities} to launch RESim multiple times,
@@ -960,6 +968,8 @@ from/to addresses in hex.  Syntax of the file is described in \ref{dynamic_contr
 buffers ever find their way to any program output). See \ref{trace_buffers}
 \item {\tt WORD\_SIZES} -- Name of a file that defines the word sizes used by programs.  Each entry is a comm followed by either 4 or 8.
 This can be helpful for Windows systems that include 32 and 64 bit applications.  Also see the winProgSizes.py utility.
+\item {\tt IGNORE\_BB\_LIST} -- File name to use when recording basic blocks that are to be ignored when running AFL or other coverage-related functions.  If this parameter
+is not present, then the basic blocks will be recorded in a file named by the current snapshot with a suffix of {\tt .dead}.
 \end{itemize}
 
 \subsection{Target platforms}
@@ -1135,10 +1145,10 @@ wish to download and place in this directory.
 
 \item For analysis of Windows applications, install the pev package to get the readpe function for reading coff headers.
 \item Install the Capstone disassembler engine and python bindings to handle cases where RESim needs to analyze instructions that have not yet
-been paged in.  
+been paged in.   For Ubuntu 22:
 \begin{verbatim}
-    apt install capstone4
-    pip3 install capstone
+    apt install -y capstone-tool pip
+    pip install capstone
 \end{verbatim}
 RESim assumes the python bindings are at /usr/local/lib/python3.10/dist-packages.  Set a symlink if needed.
 
@@ -2345,15 +2355,18 @@ Note this approach may be slow because each AFL cycle requires data to be sent f
 prior to commencing code coverage.
 
 \subsection{Thread isolation and skipping breakpoints}
-Sometimes some other thread is in a poorly constructed receive loop, geneating lots of breakpoints and slowing down execution.
+Sometimes some other thread is in a poorly constructed receive loop, generating lots of breakpoints and slowing down execution.
 Unless otherwise directed, the afl function causes the coverage breakpoints to be on physical addresses, which are shared amongst threads of a process -- or amongst
 all processes sharing a library that is being tracked.  Given the costs
 of tracking context switches, breaking on physical addresses is often the best alternative.  
 You can record the basic blocks hit by any other threads, and subsequently keep those blocks from generating
-breakpoints using the {\tt dead=True} parameter (the {\tt -d} flag on runAFL).  This causes the coverage function to generate a [snap].dead file in the working directory, where snap is the
-name of the snapshot from which the session began.  This may take several minutes to complete.  When it has found no new blocks hit by other threads for 2 minutes, it stores the
+breakpoints using the {\tt dead=True} parameter (the {\tt -d} flag on runAFL).  This causes the coverage function to generate list of basic blocks to ignore.
+See the {\tt IGNORE\_BB\_LIST} ini parameter for naming.  This may take several minutes to complete.  When it has found no new blocks hit by other threads for 2 minutes, it stores the
 dead zones and exits. When starting a new afl session, if such a file exists, it will be used to ignore selected basic blocks
 when establishing code coverage.  The {\tt -d} option should be run before multiple AFL clone copies are created using {\tt clonewd.sh}
+An alternate method of creating these lists to use the {\tt backstop} and {\tt dead\_zone} options to {\tt mapCoverage} command.  You would do this from a snapshot without
+injecting or providing any outside input to the process of interest.  You may want to increase the {\tt BACK\_STOP\_CYCLES} value when recording these background bb hits to ensure
+you cover the period of time that may elapse once you've provided input to the process.
 
 One symptom of problems with thread isolation is that AFL reports poor stability.
 
@@ -2381,7 +2394,7 @@ value to allow time for the crash analysis to encounter the crash.
 
 \subsection{Blacklist crashing instructions}
 The crash report funtions look for a file named {\tt ignore\_crash\_ip.txt} in the workspace, and will skip processing of crashes that occur at instruction
-addresses listsed therein.  This can improve the speed of crash analysis.
+addresses listed therein.  This can improve the speed of crash analysis.
 
 \subsubsection{False crash reports}
 The primary means of detecting SEGV relies on looking for unresolved page faults when an AFL cycle ends, e.g., due to a backstop.
@@ -2873,6 +2886,10 @@ and look at the logs to see if some Hap is defined for that breakpoint.  Use sho
 managed by the genContextManager.  It may be an ad-hock break/hap, such as those used by the writeData module.
 
 IDA sometimes gets confused about memory segments.  See simics/ida/missingSegs.py.
+
+If a reverse results in RESim quitting simics, it may be because the reversable recorded time frame is too long.  How long depends
+on the simulation.  Look for complaints such as "BUT A FUTURE CYCLE" in the log, indicating simics is sick and is going forward
+instead of backwards.
 
 \section{Data Stores}
 \label{data-stores}

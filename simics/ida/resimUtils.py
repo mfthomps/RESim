@@ -380,8 +380,6 @@ def adjustStack(fun_ea):
         word_size = 8
     ip_list = []
     for item_ea in idautils.FuncItems(fun_ea):
-        #if fun_ea == 0x6ff5de4a:
-        #    print('\t item: 0x%x' % item_ea)
         ip_list.append(item_ea)
     count=0
     adjust = 0
@@ -389,36 +387,32 @@ def adjustStack(fun_ea):
     for item_ea in reversed(ip_list):
         ins = idautils.DecodeInstruction(item_ea)
         mn = ins.get_canon_mnem().lower()
-        if fun_ea == 0x6ff5de4a:
-            print('0x%x mn is %s' % (item_ea, mn))
         if not got_ret:
             if not mn.startswith('ret'):
                 continue
             else:
                 got_ret=True
-        '''
-        if fun_ea == 0x6ff5de4a:
 
-            print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
-            op0 = idc.print_operand(item_ea, 0)
-            print('op0 is %s' % op0)
-            op1 = idc.print_operand(item_ea, 1)
-            print('op1 is %s' % op1)
-            op2 = idc.print_operand(item_ea, 2)
-            print('op2 is %s' % op2)
-        '''
+        #if fun_ea == 0x688f1d30:
+#
+#            print('proc %s ea 0x%x mn is %s' % (info.procname, item_ea, mn))
+#            op0 = idc.print_operand(item_ea, 0)
+#            print('op0 is %s' % op0)
+#            op1 = idc.print_operand(item_ea, 1)
+#            print('op1 is %s' % op1)
+#            op2 = idc.print_operand(item_ea, 2)
+#            print('op2 is %s' % op2)
+
 
         if mn == 'add':
-            #print('is add') 
             op0 = idc.print_operand(item_ea, 0).lower()
-            if op0 == 'sp':
+            if 'sp' in op0:
                 if info.procname.startswith('ARM'):
                     op2 = idaversion.get_operand_value(item_ea, 2)
                     #print('is SP, op2 value is 0x%x' % op2)
                     adjust = adjust+op2
                 else:
                     op1 = idaversion.get_operand_value(item_ea, 1)
-                    #print('is SP, op1 value is 0x%x' % op1)
                     adjust = adjust+op1
                 break
         elif info.procname == 'ARM' and mn.startswith('l'):
@@ -441,7 +435,7 @@ def adjustStack(fun_ea):
         #    adjust = adjust + word_size
             
         count += 1
-        if count > 4:
+        if count > 10:
             break
     #if adjust is not None:
     #    print('adjust sp by 0x%x' % adjust)

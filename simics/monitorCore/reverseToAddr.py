@@ -65,9 +65,13 @@ class reverseToAddr():
         backone = self.cpu.cycles - 1 
         #cmd = 'skip-to cycle = %d ' % backone
         #SIM_run_command(cmd)
-        if not self.top.skipToCycle(backone, cpu=self.cpu):
+        self.lgr.debug('goBackAlone call skipToCycle to 0x%x' % backone)
+        if not self.top.skipToCycle(backone, cpu=self.cpu, disable=True):
             first = self.top.getFirstCycle()
             self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHap, hap)
+            self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         else:
             self.reverse_mgr.reverse()
 
@@ -79,7 +83,17 @@ class reverseToAddr():
             return
         cpu, comm, tid  = self.task_utils.curThread()
         eip = self.top.getEIP()
-        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x' % (eip, cpu.cycles))
+        first = self.top.getFirstCycle()
+        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x first cycle: 0x%x' % (eip, cpu.cycles, first))
+        if cpu.cycles <= first:
+            self.lgr.error('reverseToAddr stopHap eip: %x cycles: 0x%x at first cycle' % (eip, cpu.cycles))
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHap, hap)
+            self.stop_hap = None 
+            self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
+            self.the_break = None
+            return
+
         if tid != self.tid:
             self.lgr.debug('reverseToAddr stopHap at 0x%x wrong tid got %s wanted %s cycles: 0x%x excpt: %s  errorstring %s' % (eip, tid, 
                  self.tid, cpu.cycles, str(exception), str(error_string)))

@@ -608,7 +608,7 @@ class DataWatch():
             self.range_cr3.append(memUtils.getCR3(self.cpu))
             
             sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-            self.lgr.debug('dataWatch setRange msg %s stack 0x%x  start 0x%x' % (msg, sp, start))
+            self.lgr.debug('dataWatch setRange msg %s stack 0x%x  start 0x%x range_cr3 0x%x' % (msg, sp, start, self.range_cr3[-1]))
             #if (self.isCopyMark(watch_mark) and watch_mark.mark.sp) or \
             #         ((msg == 'fun result' or (msg is not None and msg.startswith('injectIO'))) and self.watchMarks.isStackBuf(start)):
             if self.watchMarks.isStackBuf(start):
@@ -3749,9 +3749,9 @@ class DataWatch():
         #    self.lgr.debug('dataWatch getNextInstruct return None')
         return next_ip, next_instruct, mn, jump_cycles
 
-    def checkPushedData(self, track_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size):
+    def checkPushedData(self, track_sp, our_reg_list, next_instruct, orig_ip, addr, trans_size, start, length, recent_instructs, word_size):
         adhoc = False
-        next_next_ip = next_ip + next_instruct[0]
+        next_next_ip = orig_ip + next_instruct[0]
         #self.lgr.debug('dataWatch loopAdHoc pushed our reg, next_next_ip is 0x%s' % next_next_ip)
         ''' Assumes calls we care about to ntohl-type calls immediatly follow push of our register 
             See if result of function is stored to memory. 
@@ -3776,6 +3776,7 @@ class DataWatch():
                 adhoc = self.trackPush(track_sp, instruct, addr, start, length, next_next_ip, loop_instructions=loop_instructions)
             else:
                 ''' set a break/hap on return from transform to see if its eax gets pushed onto the stack for a call.'''
+                orig_cycle = self.cpu.cycles
                 self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, fun, ip=orig_ip, cycle=orig_cycle)
                 after_call = next_next_ip + instruct[0]
                 self.lgr.debug('dataWatch checkPushedData, was push, saw it is a data transform function, look for push of result, thinking after_call is 0x%x.' % after_call)
@@ -4766,7 +4767,8 @@ class DataWatch():
         if self.length[index] == 0:
             self.lgr.error('dataWatch setOneBreak length for index %d is zero?  bail start of that index is 0x%x' % (index, self.start[index]))
             return
-        phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=False)
+        self.lgr.debug('dataWatch setOneBreak index %d  force_cr3 to 0x%x' % (index, self.range_cr3[index]))
+        phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=True)
         #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
         #if index == 52:
         #    self.lgr.debug('setOneBreak index self.start[%d] = 0x%x phys: 0x%x cr3 0x%x' % (index, self.start[index], phys, self.range_cr3[index]))
@@ -4786,12 +4788,12 @@ class DataWatch():
         end = self.start[index] + (self.length[index] - 1)
         eip = self.top.getEIP(self.cpu)
         hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
-        #if phys is not None and phys != 0:
-        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
-        #        break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
-        #else:
-        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
-        #        break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
+        if phys is not None and phys != 0:
+            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
+                break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
+        else:
+            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
+                break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
         if not replace:
             self.read_hap.append(hap)
         else:
@@ -6020,9 +6022,10 @@ class DataWatch():
             return
         phys_of_addr = self.mem_utils.v2p(self.cpu, addr)
         if phys_of_addr is None:
-            self.lgr.error('dataWatch mmap called with addr 0x%x, but not mapped' % addr)
-            return 
-        self.lgr.debug('dataWatch mmap addr 0x%x phys is 0x%x' % (addr, phys_of_addr))
+            self.lgr.debug('dataWatch mmap called with addr 0x%x, but not mapped' % addr)
+            #return 
+        else:
+            self.lgr.debug('dataWatch mmap addr 0x%x phys is 0x%x cycles: 0x%x' % (addr, phys_of_addr, self.cpu.cycles))
         index = self.findRangeIndex(addr)
         if index is not None:
             self.lgr.debug('dataWatch mmap redo range')
@@ -6030,6 +6033,7 @@ class DataWatch():
             self.rmRange(addr)
             self.setRange(addr, length)        
             self.setBreakRange()
+            #SIM_break_simulation('remove this')
         else:
             self.lgr.debug('dataWatch mmap range not found')
             pass

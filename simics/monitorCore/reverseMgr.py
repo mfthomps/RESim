@@ -77,8 +77,9 @@ class ReverseMgr():
         self.top = top
         #self.cycle_span = 0x100000
         if span is None:
-            #self.cycle_span = 0x10000
+            #self.cycle_span = 0x100000
             self.cycle_span =  0x1000000
+
         else:
             self.cycle_span = span
         parts = cli.quiet_run_command('version')
@@ -213,6 +214,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x size 0x%x' % (self.origin_cycle, size))
             # TBD Simics bug?
             #SIM_restore_snapshot('origin')
+            #self.restoreSnapshot('origin')
             self.setNextCycle()
         else:
             self.lgr.error('reverseMgr enableReverse, already enabled')

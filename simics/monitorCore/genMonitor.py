@@ -1495,6 +1495,7 @@ class GenMonitor():
                     self.doDebugCmd()
                 if self.bookmarks is None:
                     self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
+                    self.bookmarks.setOrigin(cpu)
                     self.debugger_target = self.target
             self.did_debug=True
             if not self.rev_execution_enabled:
@@ -2716,7 +2717,7 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False):
+    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2745,6 +2746,10 @@ class GenMonitor():
             call_params = [no_param]
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
+        if trace:
+            tf = 'logs/runToCall_%s.trace' % callname
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.traceMgr[self.target].open(tf, cpu)
         self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger)
         if run: 
             SIM_continue(0)
@@ -6499,6 +6504,7 @@ class GenMonitor():
         return retval
 
     def cutRealWorld(self):
+        self.lgr.debug('cutRealWorld')
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
@@ -6843,8 +6849,15 @@ class GenMonitor():
 
     def reverse(self):
         self.reverse_mgr[self.target].reverse()
+
     def revOne(self):
+        self.lgr.debug('revOne')
+        self.context_manager[self.target].disableAll()
+        self.context_manager[self.target].setReverseContext()
         self.reverse_mgr[self.target].revOne()
+        self.context_manager[self.target].enableAll()
+        self.context_manager[self.target].clearReverseContext()
+        self.lgr.debug('revOne done')
 
     def timer(self, cycles):
         target_cpu = self.cell_config.cpuFromCell(self.target)
