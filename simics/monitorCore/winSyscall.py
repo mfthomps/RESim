@@ -1203,10 +1203,12 @@ class WinSyscall():
         if trace_msg is not None and not quiet:
             #self.lgr.debug(trace_msg.strip()) 
             
+            self.dataWatch.markTrace(trace_msg.strip())
             #if trace_msg is not None and self.traceMgr is not None and (len(self.call_params) == 0 or exit_info.call_params is not None):
             if trace_msg is not None and self.traceMgr is not None:
                 if len(trace_msg.strip()) > 0:
                     self.traceMgr.write(trace_msg+'\n'+frame_string+'\n')
+                     
 
         if exit_info.asynch_handler is not None:
             # catch orphan winDelays'
