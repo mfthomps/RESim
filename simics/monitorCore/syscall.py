@@ -1003,7 +1003,7 @@ class Syscall():
         if cp is not None: 
             if cp.match_param.__class__.__name__ == 'Dmod':
                self.task_utils.modExecParam(tid, self.cpu, cp.match_param)
-            else: 
+            elif cp.match_param is not None:
 
                 if '/' in cp.match_param:
                     ''' compare full path '''
