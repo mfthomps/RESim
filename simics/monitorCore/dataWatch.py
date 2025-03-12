@@ -309,6 +309,8 @@ class DataWatch():
         # our watch buffer is at 494 and thus we think the strlen does not pertain to our buffer, but the breakpoint will be hit
         self.last_buffer_not_found = None
 
+        self.call_trace = False
+
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
@@ -5638,6 +5640,10 @@ class DataWatch():
     def getAllJson(self):
         return self.watchMarks.getAllJson()
 
+    def markTrace(self, s):
+        if self.call_trace:
+            self.markLog(s, 'syscall')
+
     def markLog(self, s, prefix):
         self.lgr.debug('dataWatch markLog')
         self.watchMarks.logMark(s, prefix)
@@ -6150,7 +6156,8 @@ class DataWatch():
         self.lgr.debug('dataWatch recordOtherProcRead self.comm: %s index: %d index_phys: 0x%x phys_addr: 0x%x linear: 0x%x delta: 0x%x trans_size %d tid:%s (%s) cpl: %d opt_type: %d' % (self.comm, index, index_phys, phys_addr, linear_addr, delta, trans_size, tid, comm, cpl, op_type))
         self.data_watch_manager.recordRead(self.comm, index, phys_addr, linear_addr, self.start[index], self.length[index], trans_size, cur_comm, cur_tid, op_type)
                      
-                            
+    def markCallTrace(self):                            
+        self.call_trace = True
                     
                     
                 
