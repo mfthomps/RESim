@@ -572,6 +572,8 @@ def getClibIndex(fname):
     return retval
     
 def isClib(in_lib_file):
+    if in_lib_file is None:
+        return False
     retval = False
     lib_file = os.path.basename(in_lib_file) 
     if lib_file is not None:
