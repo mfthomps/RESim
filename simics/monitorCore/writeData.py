@@ -348,9 +348,7 @@ class WriteData():
              SIM_break_simulation('writeData userBufWrite, no reset')
              return
         if self.expected_packet_count <= 1 and self.udp_header is None:
-            self.lgr.debug('userBufWrite wtf1')
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
-                self.lgr.debug('userBufWrite wtf2')
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
                 if self.filter is not None:
@@ -369,7 +367,6 @@ class WriteData():
                     ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
                     self.addr = self.addr+1
             else:
-                self.lgr.debug('userBufWrite wtf3')
                 if len(self.in_data) > self.max_len:
                     self.in_data = self.in_data[:self.max_len]
                 tot_len = len(self.in_data)
@@ -438,6 +435,11 @@ class WriteData():
         if not self.tracing_io:
             self.lgr.debug('writeData userBufWrite call setCallHap')
             self.setCallHap()
+
+        if self.top.isWindows() and self.stop_on_read:
+            self.lgr.debug('writeData userBufWrite call shared syscall to set read fixup to didRead')
+            self.shared_syscall.setReadFixup(self.didUserRead)
+
         #if len(self.in_data) > 0:
         #    self.setCallHap()
         #else:
@@ -1050,6 +1052,11 @@ class WriteData():
     def tracingIO(self):
         # syscalls of IO are being traced, thus we need not catch syscalls or returns
         self.tracing_io = True
+
+    def didUserRead(self):
+        if self.stop_on_read: 
+            self.lgr.debug('writeData didUserRead stop_on_read')
+            self.doBreakSimulation('writeData didUserRead stop_on_read')
 
     def loadPickle(self, name):
         cell_name = self.top.getTopComponentName(self.cpu)
