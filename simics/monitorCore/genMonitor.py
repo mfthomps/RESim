@@ -2717,7 +2717,7 @@ class GenMonitor():
     def revToWrite(self, addr):
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False):
+    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2746,6 +2746,10 @@ class GenMonitor():
             call_params = [no_param]
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
+        if trace:
+            tf = 'logs/runToCall_%s.trace' % callname
+            cpu = self.cell_config.cpuFromCell(self.target)
+            self.traceMgr[self.target].open(tf, cpu)
         self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger)
         if run: 
             SIM_continue(0)
