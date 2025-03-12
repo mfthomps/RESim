@@ -353,6 +353,9 @@ class WinCallExit():
                     trace_msg = trace_msg+' handle: 0x%x' % exit_info.old_fd
                 
                 else: 
+                    if self.read_fixup_callback is not None:
+                        self.read_fixup_callback()
+
                     if exit_info.asynch_handler is not None:
                         self.matching_exit_info = exit_info
                         # hack to avoid duplicate call names
@@ -455,7 +458,6 @@ class WinCallExit():
         if trace_msg is not None and len(trace_msg.strip())>0:
             #self.lgr.debug('cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
-
         return True
 
     def stopTrace(self):
