@@ -4631,7 +4631,7 @@ class GenMonitor():
         print('Track IO has stopped at a backstop or max marks.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
-                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None, commence_offset=0):
+                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None, commence_offset=0, track_calls=False):
         if max_marks is None:
             max_marks = self.max_marks
         self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
@@ -4657,6 +4657,8 @@ class GenMonitor():
            
         if commence is not None:
             self.dataWatch[self.target].commenceWith(commence, offset=commence_offset)
+        if track_calls:
+            self.dataWatch[self.target].markCallTrace()
         self.track_started = True
         self.stopTrackIOAlone(immediate=True, check_crash=False)
         cpu = self.cell_config.cpuFromCell(self.target)
