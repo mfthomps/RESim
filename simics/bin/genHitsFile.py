@@ -30,7 +30,7 @@ def main():
     ofile = '/tmp/%s.hits' % args.target
     with open(ofile, 'w') as fh:
         fh.write(json.dumps(hits))
-    print('Found %d hits' % len(hits))
+    print('Found %d hits written to /tmp/%s.hits' % (len(hits), args.target))
     
     
 if __name__ == '__main__':
