@@ -11,7 +11,7 @@ global mytop, myinject
 def quit(cycles=None):
     global mytop, myinject
     print('in onedoneTrack quit')
-    myinject.saveJson()
+    myinject.saveJson(from_quit=True)
     mytop.quit(cycles)
 
 def reportExit():
