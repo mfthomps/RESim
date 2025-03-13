@@ -21,8 +21,10 @@ import subprocess
 
 ok = True
 arg_count = idc.eval_idc("ARGV.count")
+print('arg_count is %d' % arg_count)
 if arg_count > 1:
     resim_ida_arg=idc.eval_idc("ARGV[1]")
+    #resim_ida_arg = 'color'
     print('In runsFirst arg_count %d resim_ida_arg %s ' % (arg_count, resim_ida_arg))
     if resim_ida_arg == 'color':
         '''
@@ -58,6 +60,7 @@ if arg_count > 1:
 armBrComments.addComments()
 print('did armBr')
 if ok:
+    idaversion.grab_focus('IDA View-A')
     idb_hooks = idbHooks.IDBHooks()
     idb_hooks.hook()
     re_hooks = reHooks.Hooks()
@@ -67,6 +70,7 @@ if ok:
     re_hooks.hook()
     dbg_hooks.hook()
     #ida_dbg.set_remote_debugger('127.0.0.1', '9123')
+    print('load debugger')
     ida_dbg.load_debugger('gdb', True)
     result=ida_dbg.attach_process(0,-1) 
     print('attach result %d' % result)
