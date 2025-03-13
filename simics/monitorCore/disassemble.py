@@ -30,7 +30,12 @@
 '''
 from simics import *
 import sys
+import os
 sys.path.insert(0,'/usr/local/lib/python3.10/dist-packages')
+home=os.getenv('HOME')
+if home is not None:
+    local_path = home+'/.local/lib/python3.10/site-packages'
+    sys.path.insert(0,local_path)
 try:
     from capstone import *
 except:
