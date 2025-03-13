@@ -78,23 +78,13 @@ def getIdaDataFromIni(prog, ini, lgr=None):
                 return retval
             prog_relative = full_prog[len(root_fs)+1:]
         base = os.path.basename(root_fs)
+        root_parent = os.path.basename(os.path.dirname(root_fs))
         #retval = os.path.join(resim_ida_data, base, prog, prog)
-        retval = os.path.join(resim_ida_data, base, prog_relative)
-    return retval
-
-def getOldIdaDataFromIni(prog, ini):
-    retval = None
-    resim_ida_data = os.getenv('RESIM_IDA_DATA')
-    if resim_ida_data is None:
-        print('ERROR: RESIM_IDA_DATA not defined')
-    else:
-        root_fs = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-        base = os.path.basename(root_fs)
-        retval = os.path.join(resim_ida_data, base, prog, prog)
+        retval = os.path.join(resim_ida_data, root_parent, base, prog_relative)
     return retval
 
 def getIdaData(full_path, root_prefix, lgr=None):
-    ''' get the ida data path, providing backward compatability with old style paths '''
+    ''' get the ida data path from various forms of full path'''
     retval = None
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
     if resim_ida_data is None:
@@ -111,12 +101,14 @@ def getIdaData(full_path, root_prefix, lgr=None):
         print('ERROR: IDA_ANALYSIS not defined')
         return None
     if full_path.startswith(resim_image):
+        # given path was a full path relative to RESIM_IMAGE
         offset = len(resim_image)+1
         remain = full_path[offset:]
         retval = os.path.join(resim_ida_data, remain)
         if lgr is not None:
             lgr.debug('getIdaData is image path full_path %s, remain %s return %s' % (full_path, remain, retval))
     elif full_path.startswith(ida_analysis):
+        # TBD just returning same path?
         offset = len(ida_analysis)+1
         remain = full_path[offset:]
         retval = os.path.join(resim_ida_data, remain)
@@ -128,24 +120,16 @@ def getIdaData(full_path, root_prefix, lgr=None):
             lgr.debug('full_path %s' % full_path)
         base = os.path.basename(full_path)
         root_base = os.path.basename(root_prefix)
+        root_parent = os.path.basename(os.path.dirname(root_prefix))
         if lgr is not None:
             lgr.debug('root_prefix %s' % root_prefix)
-        new_path = os.path.join(resim_ida_data, root_base, base)
-        old_path = os.path.join(resim_ida_data, base)
-        if lgr is not None:
-            lgr.debug('old %s' % old_path)
+        new_path = os.path.join(resim_ida_data, root_parent, root_base, base)
         if lgr is not None:
             lgr.debug('new %s' % new_path)
         if not os.path.isdir(new_path): 
-            if os.path.isdir(old_path):
-                ''' Use old path style '''
-                retval = os.path.join(old_path, base)
-                if lgr is not None:
-                    lgr.debug('Using old style ida data path %s' % retval)
-            else:
-                retval = os.path.join(new_path, base)
-                if lgr is not None:
-                    lgr.debug('Using new style ida data path %s' % retval)
+            retval = os.path.join(new_path, base)
+            if lgr is not None:
+                lgr.debug('Using new style ida data path %s' % retval)
         else:
             retval = os.path.join(new_path, base)
             if lgr is not None:
@@ -498,34 +482,34 @@ def getWinPath(path, root_prefix, lgr=None):
         path = path[1:]
     return path
 
+def getRootTopDir(root_prefix):
+    analysis_path = os.getenv('IDA_ANALYSIS')
+    if analysis_path is None:
+        lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
+        return None
+    root_dir = os.path.basename(root_prefix)
+    root_parent = os.path.basename(os.path.dirname(root_prefix))
+    top_dir = os.path.join(analysis_path, root_parent, root_dir)
+    return top_dir
+
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getAnalyisPath find %s' % fname)
-    analysis_path = os.getenv('IDA_ANALYSIS')
-    if analysis_path is None:
-        lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
-    quick_check = fname+'.funs'
-    if fname.startswith(analysis_path) and os.path.isfile(quick_check):
-        if lgr is not None:
-            lgr.debug('resimUtils getAnalyisPath quick check got %s' % fname)
-        retval = fname
-    else:
-        if lgr is not None:
-            lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
-        if root_prefix is None: 
-            root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-        root_dir = os.path.basename(root_prefix)
-        top_dir = os.path.join(analysis_path, root_dir)
-        if fname.startswith('/'):
-            analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
-            #lgr.debug('try %s' % analysis_path)
-            if os.path.isfile(analysis_path):
-                retval = analysis_path[:-5]
+    if lgr is not None:
+        lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
+    if root_prefix is None: 
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+    top_dir = getRootTopDir(root_prefix)
+    if fname.startswith('/'):
+        analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
+        #lgr.debug('try %s' % analysis_path)
+        if os.path.isfile(analysis_path):
+            retval = analysis_path[:-5]
        
     if retval is None:    
         if lgr is not None:
-            lgr.debug('resimUtils getAnalysisPath root_dir %s top_dir %s' % (root_dir, top_dir))
+            lgr.debug('resimUtils getAnalysisPath top_dir %s' % (top_dir))
         if len(fun_list_cache) == 0:
             fun_list_cache = findListFrom('*.funs', top_dir)
             if lgr is not None:
@@ -646,14 +630,8 @@ def getExecList(ini, lgr=None):
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getExecList ini %s' % ini)
-    analysis_path = os.getenv('IDA_ANALYSIS')
-    if analysis_path is None:
-        if lgr is not None:
-            lgr.error('resimUtils getExecList path IDA_ANALYSIS not defined')
-        return None
     root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    root_dir = os.path.basename(root_prefix)
-    top_dir = os.path.join(analysis_path, root_dir)
+    top_dir = getRootTopDir(root_prefix)
     retval = os.path.join(top_dir, 'exec_list.txt')
     return retval
 
@@ -661,13 +639,7 @@ def getExecDict(root_prefix, lgr=None):
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getExecDict root_prefix %s' % root_prefix)
-    analysis_path = os.getenv('IDA_ANALYSIS')
-    if analysis_path is None:
-        if lgr is not None:
-            lgr.error('resimUtils getExecDict path IDA_ANALYSIS not defined')
-        return None
-    root_dir = os.path.basename(root_prefix)
-    top_dir = os.path.join(analysis_path, root_dir)
+    top_dir = getRootTopDir(root_prefix)
     path = os.path.join(top_dir, 'exec_dict.json')
     if lgr is not None:
         lgr.debug('resimUtils getExecDict path %s' % path)
