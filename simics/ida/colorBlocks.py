@@ -35,7 +35,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     if os.path.isfile(latest_hits_file):
         with open(latest_hits_file) as funs_fh:
             latest_hits_json = json.load(funs_fh)
-        #print('loaded blocks from %s, got %d hits' % (latest_hits_file, len(latest_hits_json)))
+        print('loaded blocks from %s, got %d hits' % (latest_hits_file, len(latest_hits_json)))
     else:
         latest_hits_json = {}
     if os.path.isfile(all_hits_file):
@@ -47,9 +47,10 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
     if os.path.isfile(pre_hits_file):
         with open(pre_hits_file) as funs_fh:
             pre_hits_json = json.load(funs_fh)
-        #print('loaded blocks from %s, got %d functions' % (pre_hits_file, len(pre_hits_json)))
+        print('loaded blocks from %s, got %d functions' % (pre_hits_file, len(pre_hits_json)))
     else:
         pre_hits_json = {}
+        print('No prehits at %s' % pre_hits_file)
     p = idaapi.node_info_t()
     ''' New hits '''
     p.bg_color =  new_hit_color
@@ -103,8 +104,7 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         else: 
             print('block for 0x%x is None' % bb)
 
-    print('Colored %d hits' % num_new)
-
+    print('Colored %d hits for all hits' % num_new)
     ''' Not hit on recent data session, but hit previously '''
     p.bg_color =  not_hit_color
     for bb in all_hits_json:
@@ -113,26 +113,35 @@ def doColor(latest_hits_file, all_hits_file, pre_hits_file):
         if f is None:
             print('unable to get function from addr 0x%x' % bb)
             continue
-        if f not in graph_dict:
-            graph_dict[f] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        bb_id = getBBId(graph_dict[f], bb)
-        if bb_id is not None:
+        f_start = f.start_ea
+        if f_start not in graph_dict:
+            graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
+        block = getBB(graph_dict[f_start], bb)
+        if block is not None:
+            bb_id = block.id
             if bb not in latest_hits_json:
                 ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                #print('not hit fun 0x%x bb: 0x%x' % (f_start, bb))
 
     ''' Hit prior to start of any data session, i.e., IO setup '''
+    num_pre = 0
     p.bg_color =  pre_hit_color
     for bb in pre_hits_json:
         f = idaapi.get_func(bb)
-        #print('fun addr 0x%x' % fun_addr)
-        if f not in graph_dict:
-            graph_dict[f] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
-        bb_id = getBBId(graph_dict[f], bb)
-        if bb_id is not None:
+        if f is None:
+            print('unable to get function from addr 0x%x' % bb)
+            continue
+        f_start = f.start_ea
+        if f_start not in graph_dict:
+            graph_dict[f_start] = ida_gdl.FlowChart(f, flags=ida_gdl.FC_PREDS)
+        block = getBB(graph_dict[f_start], bb)
+        if block is not None:
+            bb_id = block.id
             if bb not in latest_hits_json and bb not in all_hits_json:
                 ida_graph.set_node_info(f.start_ea, bb_id, p, idaapi.NIF_BG_COLOR | idaapi.NIF_FRAME_COLOR)
-                #print('not hit fun 0x%x bb: 0x%x' % (fun_addr, bb))
+                print('prehits not hit in latest or all, color it fun 0x%x bb: 0x%x' % (f_start, bb))
+                num_pre = num_pre+1
+    print('Colored %d hits for pre' % num_pre)
 
 def colorBlocks():
     resim_ida_data = os.getenv('RESIM_IDA_DATA')
