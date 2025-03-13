@@ -75,7 +75,7 @@ class InjectIO():
             if not self.checkBreakOn(self.target_fname, break_on):
                 self.lgr.error('injectIO unable to break on given block.')
                 return
-        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname))
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s callback %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname, self.callback))
         self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         if not self.top.hasAFL():
             self.backstop.reportBackstop(True)
@@ -620,8 +620,9 @@ class InjectIO():
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
         else:
             self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
+            self.top.quit()
 
-    def saveJson(self, save_file=None, packet=None):
+    def saveJson(self, save_file=None, packet=None, from_quit=False):
         if packet is None:
             packet = self.write_data.getCurrentPacket()
         self.lgr.debug('injectIO saveJson packet %d' % packet)
@@ -633,7 +634,9 @@ class InjectIO():
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
         self.top.stopTrackIOAlone()
-        self.lgr.debug('injectIO saveJson back from call to stopTrackIO callback is %s' % self.callback)
+        if from_quit:
+            self.callback = None
+        self.lgr.debug('injectIO saveJson back from call to stopTrackIO from_quit was %r callback is %s' % (from_quit, self.callback))
         if self.callback is not None:
             self.callback()
 
