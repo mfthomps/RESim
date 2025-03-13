@@ -81,19 +81,21 @@ class Coverage():
         self.re_enable_bp = []
         self.tid = None
         self.linear = False
+        # key is breakpoint; value is bb address from analysis
         self.addr_map = {}
-        ''' offset due to relocation, e.g., of so file '''
+        # offset due to relocation, e.g., of so file '''
         self.offset = 0
         if self.cpu.architecture.startswith('arm'):
             pcreg = 'pc'
         else:
             pcreg = 'eip'
         self.pc_reg = self.cpu.iface.int_register.get_number(pcreg)
-        ''' jump over crc calcs and such '''
+        # jump over crc calcs and such '''
         self.jumpers = None
-        ''' manage set of physical basic block addresses we don't want to cover, e.g., due to their being used in other threads (performance) '''
+        # manage set of physical basic block addresses we don't want to cover, e.g., due to their being used in other threads (performance) '''
         self.crate_dead_zone = None
-        self.dead_map = []
+        # list of bb's that will be ignored.  We are either collecting them, or using them to filter breakpoints.
+        self.dead_list = []
         self.run_from_snap = run_from_snap
         self.time_start = time.time()
         random.seed(12345)
@@ -180,17 +182,18 @@ class Coverage():
     def setBreak(self, bb_rel):
         ''' default is to use physical.  current exceptions are call for linear or default_context '''
         bp = None
+        #self.lgr.debug('coverage setBreak bb_rel 0x%x' % (bb_rel))
         if self.linear:
-            if bb_rel not in self.dead_map:
+            if bb_rel not in self.dead_list:
                 bp = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         elif self.force_default_context:
-            if bb_rel not in self.dead_map:
+            if bb_rel not in self.dead_list:
                 bp = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, bb_rel, 1, 0)
         else: 
             phys_addr = self.mem_utils.v2p(self.cpu, bb_rel, force_cr3=self.target_cr3)
             #phys_block = self.cpu.iface.processor_info.logical_to_physical(bb_rel, Sim_Access_Execute)
-            #if phys_block.address not in self.dead_map:
-            if phys_addr not in self.dead_map:
+            #if phys_block.address not in self.dead_list:
+            if bb_rel not in self.dead_list:
             
                 if phys_addr == 0 or phys_addr is None:
                     #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
@@ -256,11 +259,11 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                #self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
+                self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
                 # TBD REMOVE THIS
                 #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
                 #return
-                #if bb_rel in self.dead_map:
+                #if bb_rel in self.dead_list:
                 #    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
                 #    continue
                 if self.afl:
@@ -376,13 +379,13 @@ class Coverage():
     def getStatus(self):
         return self.proc_status
 
-    def saveDeadFile(self):
+    def saveDeadFile(self, dead_file=None):
         if self.create_dead_zone:
-            dead_file = self.deadFileName()
-            self.lgr.debug('saveDeadFile %s len %d' % (dead_file, len(self.dead_map)))
+            if dead_file is None: 
+                dead_file = self.deadFileName()
+            self.lgr.debug('saveDeadFile %s len %d' % (dead_file, len(self.dead_list)))
             with open(dead_file, 'w') as fh:
-                fh.write(json.dumps(self.dead_map))
-            SIM_run_alone(SIM_run_command, 'q')
+                fh.write(json.dumps(self.dead_list))
                         
     def addHapAlone(self, bplist): 
         if len(bplist) == 0:
@@ -480,7 +483,7 @@ class Coverage():
                             self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
                         addr = pt.page_addr | (bb & 0x00000fff)
-                        if addr not in self.dead_map:
+                        if bb not in self.dead_list:
                             got_one = True
                             #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
                             bp = self.setPhysBreak(addr)
@@ -576,7 +579,8 @@ class Coverage():
                             self.lgr.debug('coverage pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
                         addr = pt.page_addr | (bb & 0x00000fff)
-                        if addr not in self.dead_map:
+                        adjusted_addr = addr - self.offset
+                        if adjusted_addr not in self.dead_list:
                             got_one = True
                             bp = self.setPhysBreak(addr)
                             self.lgr.debug('coverage pageBaseUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
@@ -623,10 +627,11 @@ class Coverage():
                     #addr = value + offset
                     pt = pageUtils.findPageTable(self.cpu, bb, self.lgr)
                     addr = pt.page_addr
+                    adjusted_addr = addr - self.offset
                     if addr is None:
                         self.lgr.error('coverage pageHap got none for addr ofr bb 0x%x.  broken' % bb) 
                         self.top.brokenAFL()
-                    elif addr not in self.dead_map:
+                    elif adjusted_addr not in self.dead_list:
                         self.lgr.error('pageHap NOT YET FINISHED added break at phys addr 0x%x' % addr)
                         bp = self.setPhysBreak(addr)
                         self.addr_map[bp] = bb
@@ -663,11 +668,11 @@ class Coverage():
                 # User wants to identify breakpoints hit by other threads so they can later be masked 
                 tid = self.top.getTID(target=self.cell_name)
                 if tid != self.tid:
-                    self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_map)))
+                    self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_list)))
                     dead_set = True
             else:
                 # Independent of tid
-                #self.lgr.debug('converage bbHap, addr: 0x%x dead set len dead_map %d' % (addr, len(self.dead_map)))
+                #self.lgr.debug('converage bbHap, addr: 0x%x dead set len dead_map %d' % (addr, len(self.dead_list)))
                 dead_set = True
 
         if self.only_thread:
@@ -750,14 +755,14 @@ class Coverage():
                         self.lgr.debug('converage bbHap, not my tid, got %s I am %s context: %s' % (tid, self.tid, str(self.cpu.current_context)))
                     #SIM_break_simulation('broken')
                     return
-                if dead_set:
-                    if addr not in self.dead_map:
-                        ''' dead zone should be physical addresses '''
-                        self.dead_map.append(addr)
+                if dead_set:    
+                    if this_addr not in self.dead_list:
+                        ''' dead zone should be physical addresses TBD WHY?  trying adjusted linear'''
+                        self.dead_list.append(this_addr)
                         if not self.report_coverage:
                             self.time_start = time.time()
                             self.lgr.debug('converage bbHap, not my tid, got %s I am %s add phys addr 0x%x to dead map num dead spots %d ' % (tid, 
-                                   self.tid, addr, len(self.dead_map)))
+                                   self.tid, addr, len(self.dead_list)))
                 if self.create_dead_zone and not self.report_coverage:
                     now = time.time()
                     delta = int(now - self.time_start)
@@ -765,8 +770,9 @@ class Coverage():
                         self.lgr.debug('delta is %d' % int(delta))
                         self.last_delta = delta
                     if int(delta) > 120: 
-                        self.lgr.debug('120 seconds since last dead spot %d dead spots' % len(self.dead_map)) 
+                        self.lgr.debug('120 seconds since last dead spot %d dead spots' % len(self.dead_list)) 
                         self.saveDeadFile()
+                        SIM_run_alone(SIM_run_command, 'q')
 
                 cur_loc = self.afl_map[this_addr]
                 index = cur_loc ^ self.prev_loc
@@ -806,9 +812,9 @@ class Coverage():
                 #self.trace_bits[index] = min(255, self.trace_bits[index]+1)
                 self.prev_loc = cur_loc >> 1
             else:
-                if dead_set and addr not in self.dead_map:
+                if dead_set and this_addr not in self.dead_list:
                     # e.g., for filtering background noise
-                    self.dead_map.append(addr)
+                    self.dead_list.append(this_addr)
         
     def getTraceBits(self): 
         #self.lgr.debug('hit count is %d' % self.hit_count)
@@ -861,7 +867,12 @@ class Coverage():
             fh.flush()
         self.lgr.debug('coverage saveCoverage to %s' % save_name)
         print('Coverage saveCoverage to %s' % save_name)
-
+        if self.create_dead_zone:
+            # save once in workspace and once in ida data for bb coloring
+            self.saveDeadFile()
+            dead_file = '%s.pre.hits' % self.hits_path
+            self.saveDeadFile(dead_file=dead_file)
+            SIM_run_alone(SIM_run_command, 'q')
 
     def restoreAFLBreaks(self):
         ''' leave unused code as cautionary tale re: pom '''
@@ -1088,9 +1099,9 @@ class Coverage():
             self.lgr.debug('coverage enableCoverage dead file would be %s' % dead_file)
             if os.path.isfile(dead_file):
                 with open(dead_file) as fh:
-                    self.dead_map = json.load(fh)
-                    self.lgr.debug('coverage enableCoverage, loaded %d from dead file from %s' % (len(self.dead_map), dead_file))
-                    #for addr in self.dead_map:
+                    self.dead_list = json.load(fh)
+                    self.lgr.debug('coverage enableCoverage, loaded %d from dead file from %s' % (len(self.dead_list), dead_file))
+                    #for addr in self.dead_list:
                     #    self.lgr.debug('dead spot: 0x%x' % addr)
 
     def disableCoverage(self):
@@ -1335,13 +1346,12 @@ class Coverage():
         return retval
 
     def reportCoverage(self):
+        self.lgr.debug('coverage reportCoverage')
         self.showCoverage()
         self.saveCoverage(fname='manual')
         delta_cycles = self.cpu.cycles - self.start_cycle
         print('Ran 0x%x (%d) cycles' % (delta_cycles, delta_cycles))
         print('Backstop was 0x%x (%d) cycles' % (self.backstop_cycles, self.backstop_cycles))
-        if self.create_dead_zone:
-            self.saveDeadFile()
 
     def deadFileName(self):
         dead_file = self.top.getCompDict(self.cell_name, 'IGNORE_BB_LIST') 
