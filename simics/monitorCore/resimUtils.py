@@ -501,11 +501,19 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
     if root_prefix is None: 
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
     top_dir = getRootTopDir(root_prefix)
+    lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
     if fname.startswith('/'):
         analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
-        #lgr.debug('try %s' % analysis_path)
+        lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
+    if retval is None and root_prefix is not None and fname.startswith(root_prefix):
+        rest = fname[len(root_prefix):]        
+        analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
+        lgr.debug('resimUtils getAnalysis rest is %s analyis_path %s' % (rest, analysis_path))
+        if os.path.isfile(analysis_path):
+            retval = analysis_path[:-5]
+
        
     if retval is None:    
         if lgr is not None:
