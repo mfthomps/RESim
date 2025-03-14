@@ -446,7 +446,7 @@ def getProgPathFromAnalysis(full_analysis_path, ini, lgr=None, root_prefix=None)
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
     if lgr is not None:
         lgr.debug('getProgPathFromAnalysis root_prefix %s' % root_prefix)
-    retval = os.path.join(os.path.dirname(root_prefix), relative)
+    retval = os.path.join(os.path.dirname(os.path.dirname(root_prefix)), relative)
     return retval
 
 def soMatch(fname, cache, lgr):
