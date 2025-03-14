@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import sys
 import argparse
 
@@ -24,6 +25,17 @@ def getCPU(line):
             #print('could not get cpu from line %s' % line)
             #print('tried parts from %s' % line[17:])
             return None
+
+def addrFilter(line, find):
+    go = re.search(find, line, re.M|re.I)
+    if go is None:
+        #line = re.sub(r"<l.*>", "", line)
+        line = 'removed'
+    return line
+
+def rmPhys(line):
+    line = re.sub(r"<p.*>", "", line)
+    return line
 class getter():
     def __init__(self, fname):
         fh = open(fname)
@@ -68,18 +80,23 @@ def main():
     parser.add_argument('trace2', action='store', help='The second trace file.')
     parser.add_argument('-i', '--ignore', action='store', type=int, default=0, help='Number of differences to ignore.')
     parser.add_argument('-d', '--divergence', action='store_true', help='Only look for instruction difference.')
+    parser.add_argument('-a', '--instruction_addr_filter', action='store', help='Only look for instruction addresses matching this pattern.')
     args = parser.parse_args()
 
     get1 = getter(args.trace1)
     line1 = ''
-    while not line1.startswith('inst'):
+    while not line1.startswith('inst:'):
         line1 = get1.nextLine()
         #print('line1 is %s' % line1)
     get2 = getter(args.trace2)
     line2 = ''
-    while not line2.startswith('inst'):
+    while not line2.startswith('inst:'):
         line2 = get2.nextLine()
         #print('line2 is %s' % line2)
+    if args.divergence:
+        #print('is divert')
+        line1 = rmPhys(line1)
+        line2 = rmPhys(line2)
     
     rest1 = line1[16:]
     rest2 = line2[16:]
@@ -93,6 +110,14 @@ def main():
             #print('\tline1 %s' % line1)
             #print('get2')
             line2 = get2.nextLine()
+            if args.divergence:
+                #print('is divert')
+                line1 = rmPhys(line1)
+                line2 = rmPhys(line2)
+            if args.instruction_addr_filter is not None:
+                addr_filter = '<l.*%s' % args.instruction_addr_filter
+                line1 = addrFilter(line1, addr_filter)
+                line2 = addrFilter(line2, addr_filter)
             #print('\tline2 %s' % line2)
             rest1 = line1[16:]
             rest2 = line2[16:]
