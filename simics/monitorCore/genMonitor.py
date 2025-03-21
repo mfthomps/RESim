@@ -6403,6 +6403,9 @@ class GenMonitor():
         return self.rev_execution_enabled
 
     def traceWindows(self):
+        if self.target in self.trace_all:
+            print('Already tracing windows')
+            return
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         self.traceBufferTarget(self.target)
         if tid is None:
@@ -6507,6 +6510,7 @@ class GenMonitor():
 
     def cutRealWorld(self):
         self.lgr.debug('cutRealWorld')
+        print('Cutting links to real networks')
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
