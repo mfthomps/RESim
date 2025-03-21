@@ -1473,6 +1473,9 @@ class GenMonitor():
         has likely populated its shared libraries and has just returned back to its text segment.
          
         '''
+        if group is not None and type(group) == str:
+            print('Did you mean debugProc?')
+            return
     
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
@@ -6499,6 +6502,9 @@ class GenMonitor():
         self.context_manager[self.target].setReverseContext()
         if disable:
             self.context_manager[self.target].disableAll()
+        else:
+            # assume user invoked, make sure we are not tracking, or that will mess things up
+            self.stopTracking()
         retval = self.skip_to_mgr[self.target].skipToTest(cycle)
         self.context_manager[self.target].clearReverseContext()
         if disable:
@@ -6742,6 +6748,7 @@ class GenMonitor():
         print('start at 0x%x' % base)
         cpu = self.cell_config.cpuFromCell(self.target)
         for i in range(2000000):
+            running = ''
             offset=0
             got_one = True
             for b in byte_array:
@@ -6751,7 +6758,10 @@ class GenMonitor():
                     got_one = False
                     break
                 else:
-                    print('matched 0x%x' % b)
+                    hexval = '%2x' % b
+                    running = running + hexval
+                    if offset > 0:
+                        print('matched %s offset %d' % (running, offset))
                     offset = offset + 1
             if got_one:
                 print('got one at 0x%x' % (base+i))
