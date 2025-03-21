@@ -121,6 +121,37 @@ def getSigned(val):
         val = -0x100000000 + val
     return val
 
+def isConstant(s):
+    is_integer = False
+    try:
+        value = int(s)
+        is_integer = True
+    except:
+        pass 
+        try:
+            value = int(s, 16)
+            is_integer = True
+        except:
+            pass
+    return is_integer
+
+def adjustRegInBrackets(s, lgr):
+    retval = None
+    if '[' in s:
+        content = s.split('[', 1)[1].split(']')[0]
+        if isReg(content):
+            retval = content
+        else:
+            parts = content.split('+')
+            if len(parts) == 1:
+                parts = content.split('-')
+            if len(parts) == 2:
+                if isReg(parts[0]):
+                    if isConstant(parts[1]):
+                        retval = parts[0]
+    return retval
+
+
 def getInBrackets(cpu, s, lgr):
     cell_name = getTopComponentName(cpu)
     if s is not None and s.find('[') != -1 and s.find(']') != -1:

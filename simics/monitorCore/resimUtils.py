@@ -425,7 +425,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
 
 def realPath(full_path):
         retval = full_path
-        if os.path.islink(full_path):
+        if full_path is not None and os.path.islink(full_path):
             parent = os.path.dirname(full_path)
             actual = os.readlink(full_path)
             retval = os.path.join(parent, actual)
