@@ -876,7 +876,7 @@ class DataWatch():
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
-        #self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_back_stop), str(no_backstop)))
+        self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_back_stop), str(no_backstop)))
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         self.watchFunEntries()
@@ -3579,10 +3579,13 @@ class DataWatch():
         else:
             offset = self.checkNoTaint(op1, recent_instructs)
             if offset is not None:
-                self.lgr.debug('dataWatch gotAdHocDest dest addr base reg seems unchanged, or scalar. %s offset 0x%x' % (op1, offset))
+                self.lgr.debug('dataWatch gotAdHocDest dest addr base reg seems unchanged, or scalar. %s offset 0x%x op2 is %s' % (op1, offset, op2))
+                if self.decode.isReg(op2):
+                    trans_size = min(decode.regLen(op2), trans_size)
+                    self.lgr.debug('dataWatch gotAdHocDest set trans_size to %d' % trans_size)
                 dest_addr = dest_addr + offset
                 adhoc = self.adHocCopy(addr, trans_size, dest_addr, start, length, byte_swap=byte_swap)
-                self.lgr.debug('dataWatch gotAdHocDestx back from adHocCopy adhoc %r' % adhoc)
+                self.lgr.debug('dataWatch gotAdHocDestx back from adHocCopy adhoc %r length %d trans_size %d' % (adhoc, length, trans_size))
                 if adhoc:
                     self.recordAdHocCopy(addr, start, length, trans_size, dest_addr, byte_swap=byte_swap)
                     self.move_cycle_max = self.cpu.cycles+move_cycles+1
@@ -3637,7 +3640,7 @@ class DataWatch():
         return retval
                 
     def checkNoTaint(self, op, recent):
-        # return True if the recent instructions do not seem to affect the register found in op
+        # return offset if the recent instructions do not seem to affect the register found in op. otherwise return None
         retval = 0
         if '[' in op: 
             content = op.split('[', 1)[1].split(']')[0]
@@ -4253,6 +4256,10 @@ class DataWatch():
         if addr in self.ignore_addr_list:
             return
 
+        if self.read_hap[index] is None:
+            self.lgr.debug('dataWatch readHap for index %d is None bail' % index)
+            return
+
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
         #if self.top.isVxDKM(target=self.cell_name) and self.so_map.inVxWorks(eip): 
@@ -4373,7 +4380,7 @@ class DataWatch():
         else:
             break_handle = self.context_manager.getBreakHandle(breakpoint)
             if break_handle is None:
-                self.lgr.error('dataWatch failed to get break_handle for breakpoint 0x%x (%d)' % (breakpoint, breakpoint))
+                self.lgr.error('dataWatch failed to get break_handle for breakpoint 0x%x (%d) addr: 0x%x index %d cycle 0x%x' % (breakpoint, breakpoint, addr, index, self.cpu.cycles))
                 return
             self.lgr.debug('****************dataWatch readHap tid:%s read addr: 0x%x index: %d breakpoint: %d handle: %d marks: %s max: %s cycle: 0x%x eip: 0x%x phys_addr 0x%x' % (tid, addr, index, breakpoint, break_handle, str(self.watchMarks.markCount()), str(self.max_marks), 
                  self.cpu.cycles, eip, memory.physical_address))
@@ -4646,7 +4653,7 @@ class DataWatch():
         return retval
 
     def rmFree(self, fun, index):
-        self.lgr.debug('dataWatch rmFree delete hap for %s' % fun)
+        self.lgr.debug('dataWatch rmFree delete hap index %d for %s start[index] 0x%x' % (index, fun, self.start[index]))
         hap = self.read_hap[index]
         self.context_manager.genDeleteHap(hap, immediate=False)
         self.read_hap[index] = None
@@ -5122,7 +5129,10 @@ class DataWatch():
         else:
             self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
         self.stopWatch(immediate=immediate, leave_backstop=leave_backstop)
+        self.lgr.debug('DataWatch clearWatches set break_simulation False')
         self.break_simulation = True
+        # TBD ??
+        self.break_simulation = False
         self.stack_buffers = {}
         self.total_read = 0
         self.last_ad_hoc = []
@@ -5173,26 +5183,31 @@ class DataWatch():
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
         if len(self.start) == 0:
             return
-        del self.start[:]
-        del self.length[:]
-        del self.hack_reuse[:]
-        del self.cycle[:]
-        self.other_starts = []
-        self.other_lengths = []
         data_watch_list = self.watchMarks.getDataWatchList()
-        self.lgr.debug('clearWatches rebuild data watches')
         origin_watches = []
-        for data_watch in data_watch_list:
-            if data_watch['cycle'] <= cycle:
-                if data_watch['start'] is not None:
-                    self.setRange(data_watch['start'], data_watch['length']) 
-                    origin_watches.append(data_watch)
+        if len(self.cycle) > 0 and cycle <= self.cycle[-1]:
+            del self.start[:]
+            del self.length[:]
+            del self.hack_reuse[:]
+            del self.cycle[:]
+            self.other_starts = []
+            self.other_lengths = []
+            for data_watch in data_watch_list:
+                if data_watch['cycle'] <= cycle:
+                    if data_watch['start'] is not None:
+                        self.setRange(data_watch['start'], data_watch['length']) 
+                        origin_watches.append(data_watch)
+                    else:
+                        self.lgr.debug('dataWatch resetOrigin  watch has no start %s' % str(data_watch))
                 else:
-                    self.lgr.debug('dataWatch resetOrigin  watch has no start %s' % str(data_watch))
-            else:
-                self.lgr.debug('dataWatch resetOrigin clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
-                break
-        self.lgr.debug('dataWatch resetOrigin now call watchmarks')
+                    self.lgr.debug('dataWatch resetOrigin clearWatches found cycle 0x%x > given 0x%x, stop rebuild' % (data_watch['cycle'], cycle))
+                    break
+            self.lgr.debug('dataWatch resetOrigin cleared and rebuilt data watches now call watchmarks')
+        else:
+            self.lgr.debug('dataWatch resetOrigin current cycle greater than last recorded, do not reset data watches')
+            for data_watch in data_watch_list:
+                if data_watch['start'] is not None:
+                    origin_watches.append(data_watch)
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
 
     def setFunMgr(self, fun_mgr):
