@@ -792,7 +792,7 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None, addr_of_count=None):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        self.lgr.debug('doRetFixup fd %d looking for %d' % (fd, self.fd))
+        self.lgr.debug('writeData doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
@@ -935,7 +935,7 @@ class WriteData():
         elif self.pending_callname == 'ioctl' and self.watch_ioctl:
             self.doRetIOCtl(self.fd)
         elif self.pending_callname in ['recv', 'recvfrom', 'read']:
-            #self.lgr.debug('writeData retHap call doRetFixup')
+            self.lgr.debug('writeData retHap call doRetFixup')
             self.doRetFixup(self.fd)
         self.pending_callname = None
         
