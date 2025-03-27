@@ -876,7 +876,7 @@ class DataWatch():
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
-        #self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_back_stop), str(no_backstop)))
+        self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_back_stop), str(no_backstop)))
         if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
             self.back_stop.setFutureCycle(self.back_stop_cycles)
         self.watchFunEntries()
@@ -5122,7 +5122,10 @@ class DataWatch():
         else:
             self.lgr.debug('DataWatch clearWatches cycle 0x%x' % cycle)
         self.stopWatch(immediate=immediate, leave_backstop=leave_backstop)
-        self.break_simulation = True
+        self.lgr.debug('DataWatch clearWatches set break_simulation False')
+        # TBD ??
+        self.break_simulation = False
+        #self.break_simulation = True
         self.stack_buffers = {}
         self.total_read = 0
         self.last_ad_hoc = []
@@ -5653,7 +5656,7 @@ class DataWatch():
         self.break_simulation = False
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         argc = self.mem_utils.readAppPtr(self.cpu, sp)
-        self.lgr.debug('dataWatch watchArgs sp 0x%x, argc is %d' % (sp, argc))
+        self.lgr.debug('dataWatch watchArgs sp 0x%x, argc is %d break_simulation now false' % (sp, argc))
         argptr = sp + self.mem_utils.wordSize(self.cpu)
         for index in range(argc):
             ''' TBD good size limit? '''
