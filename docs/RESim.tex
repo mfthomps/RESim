@@ -525,7 +525,7 @@ Also see \ref{tracking}
 \begin{itemize}
 
 \item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True, \
-             commence=None, max\_marks=None)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+             commence=None, max\_marks=None, track\_calls=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -551,6 +551,8 @@ Use an optional {\tt commence=string} to delay data tracking until the received 
 wish to focus on traffic that you are sending.  Do not use this along with kbuf.
 
 Use {\tt max\_marks} to stop the simulation after a given number of watch marks are generated.
+
+Use {\tt track\_calls} to generate watch marks for each syscall.
 
 \item {\tt trackProgArgs} Track references to arguments provided to the program as argv values.
 
