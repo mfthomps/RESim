@@ -739,16 +739,21 @@ class WinDLLMap():
             print(ret_json)
         return ret_json
 
-    def wordSize(self, tid):
-        retval = None
-        ms = self.getMachineSize(tid)
-        if ms == 32:
-            retval = 4
-        elif ms  == 64:
-            retval = 8
-        elif ms is None:
-            retval = self.mem_utils.wordSize(self.cpu)
-        return retval
+    def wordSize(self, tid=None):
+       # TBD clean this up
+       retval = None
+       if tid is None:
+           retval = self.mem_utils.wordSize(self.cpu)
+       else:
+           retval = None
+           ms = self.getMachineSize(tid)
+           if ms == 32:
+               retval = 4
+           elif ms  == 64:
+               retval = 8
+           elif ms is None:
+               retval = self.mem_utils.wordSize(self.cpu)
+       return retval
 
     def findSize(self, find_comm):
         retval = None
@@ -772,8 +777,10 @@ class WinDLLMap():
    
         return retval
 
-    def getMachineSize(self, tid):
+    def getMachineSize(self, tid=None):
         retval = None
+        if tid is None:
+            return self.task_utils.getMemUtils().wordSize(self.cpu)
         pid = self.pidFromTID(tid)
         #self.lgr.debug('getMachineSize tid %s' % tid)
         if pid in self.text:
