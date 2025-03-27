@@ -139,6 +139,7 @@ import recordEntry
 import reverseMgr
 import skipToMgr
 import defaultConfig
+import watchWrite
 
 #import fsMgr
 import json
@@ -2178,12 +2179,15 @@ class GenMonitor():
         if self.bookmarks is None:
             self.lgr.debug('genMonitor goToOrigin, no bookmarks do nothing')
             return
+        cpu, comm, tid  = self.task_utils[self.target].curThread()
+        if self.getFirstCycle() == cpu.cycles:
+            self.lgr.debug('genMonitor goToOrigin already there, do nothing')
+            return
         if debugging:
             self.removeDebugBreaks(immediate=True)
             self.lgr.debug('goToOrigin am debugging, call stopTrackIO')
             self.stopTrackIO(immediate=True)
-        cpu, comm, tid  = self.task_utils[self.target].curThread()
-        #self.lgr.debug('goToOrigin tid was is %s' % tid)
+        self.lgr.debug('goToOrigin tid was is %s' % tid)
         msg = self.bookmarks.goToOrigin()
         cpu, comm, tid  = self.task_utils[self.target].curThread()
         #self.lgr.debug('goToOrigin tid now is %s' % tid)
@@ -3078,7 +3082,7 @@ class GenMonitor():
     #        self.context_manager[self.target].recordText(start, end)
     #        self.soMap[self.target].addText(start, end-start, 'tbd', tid)
 
-    def textHap(self, prec, third, forth, memory):
+    def textHap(self, prec, the_object, the_break, memory):
         ''' callback when text segment is executed '''
         if self.proc_hap is None:
             return
@@ -6915,6 +6919,12 @@ class GenMonitor():
         if target is None:
             target = self.target
         return self.reverse_mgr[target].restoreSnapshot(name)
+
+    def watchWrite(self, start, count):
+        target_cpu = self.cell_config.cpuFromCell(self.target)
+        self.watch_write = watchWrite.WatchWrite(self, target_cpu, self.context_manager[self.target], self.lgr)
+        self.watch_write.watchRange(start, count)
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
