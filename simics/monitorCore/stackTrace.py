@@ -151,11 +151,13 @@ class StackTrace():
                 retval = eip
         else:
             fun_addr = self.fun_mgr.getFun(return_to)
+            #self.lgr.debug('stackTrace followCall return_to 0x%x' % return_to)
             if fun_addr is not None:
                 retval = self.disassembler.getPrevInstruction(return_to, fun_addr)
+                #self.lgr.debug('stackTrace followCall return_to 0x%x back from disassembler with %s' % (return_to, retval))
             else:
                 eip = return_to - 2
-                self.lgr.debug('followCall no function found for return_to is 0x%x  ip 0x%x' % (return_to, eip))
+                #self.lgr.debug('followCall no function found for return_to is 0x%x  ip 0x%x' % (return_to, eip))
                 # TBD use instruction length to confirm it is a true call
                 # not always 2* word size?
                 count = 0
@@ -502,12 +504,11 @@ class StackTrace():
             #self.lgr.debug('doX86,  look for call return that is within a few bytes of SP')
             if cur_fun is not None:
                 cur_fun_name = self.fun_mgr.funFromAddr(cur_fun)
-            #if self.ida_funs is not None:
-            #    cur_fun_name = self.ida_funs.getFun(eip)
             if cur_fun is not None and cur_fun_name is not None:
                 #self.lgr.debug('doX86, cur_fun 0x%x name %s' % (cur_fun, cur_fun_name))
                 pass
             fname = self.soMap.getSOFile(eip)
+            #self.lgr.debug('doX86 back from getSOFile with fname %s' % fname)
             was_clib = resimUtils.isClib(fname)
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
             ret_to = self.readAppPtr(ret_to_addr)
@@ -643,7 +644,7 @@ class StackTrace():
    
     def findReturnFromCall(self, ptr, cur_fun, max_bytes=900, eip=None):        
         ''' See if an x86 return instruction is within a max_bytes of the SP.  Handles clib cases where ebp is not pushed. 
-            Likely more complicated then it needs to be.  Many special casesl.
+            Likely more complicated then it needs to be.  Many special cases.
             Will add at most one frame.
         '''
         got_fun_name = None
@@ -752,8 +753,8 @@ class StackTrace():
                 #else:
                 #    self.lgr.debug('call_ip is None')
             ptr = ptr + self.mem_utils.wordSize(self.cpu)
-        if ptr >= limit:
-            self.lgr.debug('stackTrace findReturnFromCall hit stack limit of 0x%x' % limit)
+        #if ptr >= limit:
+        #    self.lgr.debug('stackTrace findReturnFromCall hit stack limit of 0x%x' % limit)
         return retval                
 
     def isGOT(self, ptr, call_addr, cur_fun, cur_fun_name, instruct_of_call, call_ip, fname, cur_is_clib):
@@ -899,12 +900,12 @@ class StackTrace():
             self.lgr.debug('stackTrace eip in kernel new eip 0x%x instruct %s .' % (eip, instruct))
         '''
 
-        #if self.stack_base is not None:
-        #    self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
-        #    pass
-        #else:
-        #    self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
-        #    pass
+        if self.stack_base is not None:
+            self.lgr.debug('stackTrace doTrace tid:%s esp is 0x%x eip 0x%x  stack_base 0x%x' % (self.tid, esp, eip, self.stack_base))
+            pass
+        else:
+            self.lgr.debug('stackTrace doTrace NO STACK BASE tid:%s esp is 0x%x eip 0x%x' % (self.tid, esp, eip))
+            pass
         done  = False
         count = 0
         #ptr = ebp
@@ -1008,12 +1009,15 @@ class StackTrace():
                         if len(self.frames) > 5:
                             ''' TBD revisit this wag '''
                             done = True
+                        elif self.soMap.isMainText(self.frames[-1].ip):
+                            done = True
                         elif bp is not None:
                             ptr = bp
                 else:
                     # TBD at least add some guard rails
                     new_ptr = self.hackBP(ptr, fname)
-                    if new_ptr is not None:
+                    #self.lgr.debug('stackTrace doTrace new_ptr from hackBP is 0x%x' % new_ptr)
+                    if new_ptr is not None and new_ptr != 0:
                         ptr = new_ptr
                         cur_fun_name = None
                         hacked_bp = True
@@ -1038,7 +1042,11 @@ class StackTrace():
             #if not been_above_clib and (ptr - self.prev_frame_sp) > 1500:
            
             # TBD ignoring when only one frame 
-            if len(self.frames) > 1 and self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
+            #self.lgr.debug('stackTrace loop count %d' % count)
+            #if len(self.frames) > 1 and self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
+            if len(self.frames) > 0 and self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
+            #if self.cpu.architecture not in ['arm', 'arm64'] and (self.mindTheGap(ptr) or self.mind_the_gap):
+                self.lgr.debug('stackTrace mind the fgap')
                 self.mind_the_gap = False
                 fun_addr = self.frames[-1].fun_addr
                 if fun_addr is None:
@@ -1070,7 +1078,7 @@ class StackTrace():
                     self.lgr.error('stackTrace gap reset gap_reset_to %d is greater than any most frames %d' % (self.gap_reset_to, self.most_frames))
                     #SIM_break_simulation('remove this')
                     break
-                if self.gap_reset_to > 1:
+                if self.gap_reset_to > 1 and len(self.frames)>0:
                     ptr = self.frames[-1].sp
                     prev_ip = self.frames[-1].ip
                     cur_fun_name = self.frames[-1].fun_of_ip
@@ -1081,7 +1089,7 @@ class StackTrace():
                 # TBD fix this if reset get incremented
                 been_above_clib = start_been_above_clib
                 been_in_main = start_been_in_main
-                if not frames_found:
+                if not frames_found and len(self.frames)>0:
                     if fail_count > 0:
                         self.lgr.error('stackTrace gap, already failed.  TBD adjust stack?')
                         #SIM_break_simulation('remove this')
@@ -1104,9 +1112,14 @@ class StackTrace():
                 self.lgr.debug('stackTrace gap minding done.  ptr 0x%x been_above_clib %r cur_fun_name %s' % (ptr, been_above_clib, cur_fun_name))
                 continue
             # ABOVE is mindTheGap, TBD move to function.
-            cur_fun = self.frames[-1].fun_addr_of_ip 
-            cur_fun_name = self.frames[-1].fun_of_ip 
-            prev_ip = self.frames[-1].ip
+            if len(self.frames) > 0:
+                cur_fun = self.frames[-1].fun_addr_of_ip 
+                cur_fun_name = self.frames[-1].fun_of_ip 
+                prev_ip = self.frames[-1].ip
+            else:
+                self.lgr.error('stackTrace after mindTheGap no stack frames?')
+                SIM_break_simulation('remove this')
+                return
             
             val = self.readAppPtr(ptr)
             if val is None:

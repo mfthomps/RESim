@@ -58,6 +58,9 @@ class getter():
             while not ok:
                 v, p = getVP(line)
                 next_line = self.lines[self.index+1]
+                if not next_line.startswith('inst:') and not next_line.startswith('data:'):
+                    self.index = self.index+1
+                    continue
                 if len(next_line.strip()) == 0:
                     self.index = self.index+1
                     continue
@@ -129,7 +132,7 @@ def main():
         rest1 = 'ok'
         rest2 = 'ok'
     print('line1 line number %d %s' % (get1.getIndex(), line1))
-    print('line2  line number %d %s' % (get2.getIndex(), line2))
+    print('line2 line number %d %s' % (get2.getIndex(), line2))
     if last_match_ins is not None:
         v, p = getVP(last_match_ins)    
         count = instruct_list.count(v)

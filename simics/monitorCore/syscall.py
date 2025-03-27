@@ -701,7 +701,7 @@ class Syscall():
                 break_list.append(proc_break)
                 break_addrs.append(entry)
                 callname = call
-                if not arm64_app:
+                if self.cpu.architecture.startswith('arm') and not arm64_app:
                     callname = '%s-arm32' % call
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, callname))
                 #self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
@@ -2132,7 +2132,7 @@ class Syscall():
                  cpu, self.mem_utils, self.lgr)
 
             ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
-            self.lgr.debug(ida_msg)
+            self.lgr.debug('syscall: '+ida_msg)
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))

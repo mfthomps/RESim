@@ -44,7 +44,10 @@ class PlayAFL():
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
              fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
              search_list=None, commence_params=None):
-        lgr.debug('playAFL dfile: %s' % dfile)
+        if fname is not None and '/' in fname and fname[0] != '/':
+            # needed for soMap lookups
+            fname = '/'+fname
+        lgr.debug('playAFL dfile: %s fname: %s' % (dfile, fname))
         self.top = top
         self.backstop = backstop
         self.no_cover = no_cover
@@ -143,7 +146,9 @@ class PlayAFL():
             else:
                 self.afl_list = [dfile]
                 self.lgr.debug('playAFL, single file, abs path is %s' % dfile)
-        elif os.path.isdir(dfile):
+        elif os.path.isdir(dfile) and not os.path.isfile(os.path.join(dfile, 'version.pickle')):
+            # avoid snapshot directories
+
             self.lgr.debug('playAFL, directory of input files')
             flist = os.listdir(dfile)
             for f in sorted(flist):
@@ -686,9 +691,10 @@ class PlayAFL():
                
     def doWriteData(self): 
         if self.write_data is None:
-            force_default_context = True
-            if self.dfile == 'oneplay' and not self.repeat:
-                force_default_context = False
+            force_default_context = False
+            #force_default_context = True
+            #if self.dfile == 'oneplay' and not self.repeat:
+            #    force_default_context = False
             self.lgr.debug('playAFL gen writeData')
             write_callback = None
             if self.stop_on_read or self.ioctl_count_max is not None:

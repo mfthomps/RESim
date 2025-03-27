@@ -799,7 +799,7 @@ class GenContextMgr():
             # TBD do we need this?  results in a mode hap and recording stack at start of execve?
             self.top.recordStackClone(tid, leader_tid)
         if self.catch_tid is not None:
-            self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
+            #self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
             #if self.catch_tid == tid or (self.catch_tid == '-1' and tid in self.tid_cache) or (self.catch_tid == '-2' and tid != '0') or \
             if self.catch_tid == tid or (self.catch_tid == '-1' and self.amWatching(tid)) or (self.catch_tid == '-2' and tid != '0') or \
                                         (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0]):
@@ -1133,7 +1133,7 @@ class GenContextMgr():
             self.lgr.debug('contextManager restoreWatchTasks restore RESim context')
             self.restoreDebugContext()
 
-    def watchTasks(self, set_debug_tid = False, tid=None):
+    def watchTasks(self, set_debug_tid = False, tid=None, restore_debug=True):
         if self.top.isVxDKM():
             return
         self.lgr.debug('contextManager watchTasks set_debug_tid: %r' % set_debug_tid)
@@ -1150,7 +1150,7 @@ class GenContextMgr():
         if self.task_break is None:
             self.setTaskHap()
         self.watching_tasks = True
-        if len(self.watch_rec_list) == 0:
+        if len(self.watch_rec_list) == 0 and restore_debug:
             self.lgr.debug('watchTasks, call restoreDebug')
             self.restoreDebug()
         if set_debug_tid:

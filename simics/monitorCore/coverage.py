@@ -259,7 +259,7 @@ class Coverage():
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
+                #self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
                 # TBD REMOVE THIS
                 #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
                 #return
