@@ -78,7 +78,8 @@ class Disassemble():
         fun_addr_orig = fun_addr - load_addr 
         # for windows
         # 0x400 is the file pointer for the text section.  0x1000 is the address of text.
-        fun_addr_orig = fun_addr_orig + 0x400 - 0x1000
+        if self.top.isWindows():
+            fun_addr_orig = fun_addr_orig + 0x400 - 0x1000
         prev = fun_addr
         prev_mnemonic = None
         self.lgr.debug('disassemble getPrevInstruction for addr 0x%x fun_addr 0x%x adjusted to 0x%x fname %s, load_addr 0x%x' % (addr, 
