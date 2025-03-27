@@ -41,12 +41,14 @@ echo "the target base is $target_base"
 here="$(pwd)"
 echo "we are currently: $here"
 root_dir="$(basename --  "$here")"
+root_dirname="$(dirname -- $here)"
+root_parent="$(basename -- $root_dirname)"
 echo "the root_dir is $root_dir"
-old_dir=$RESIM_IDA_DATA/$target_base
-new_dir=$RESIM_IDA_DATA/$root_dir/$target_base
+echo "the root_dir parent is is $root_parent"
+old_dir=$RESIM_IDA_DATA/$root_dir/$target_base
+new_dir=$RESIM_IDA_DATA/$root_parent/$root_dir/$target_base
 if [[ -d $old_dir ]] && [[ ! -d $new_dir ]]; then
-    echo "Sorry, paths relative to RESIM_IDA_DATA have changed."
-    echo "Also, runIda.sh assumes you are running from the file system root (per your ini file)."
+    echo "idaDump.sh assumes you are running from the file system root (per your ini file)."
     echo "If $old_dir is where the ida data is, rename it to $new_dir"
     echo "Or, if $old_dir is from some other system, fix its path, change its name, or remove it."
     exit
@@ -69,12 +71,12 @@ else
 fi    
 if [ "$resim_ida_arg" == color ] && [ ! -z $remote ]; then
        echo "Be sure to have run syncIda.sh so that IDA has the necessary hits files."
-       #remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$root_dir/$target_base; echo \$RESIM_IDA_DATA" )
+       #remote_ida=$( ssh $remote "source $HOME/.resimrc;mkdir -p \$RESIM_IDA_DATA/$root_parent/$root_dir/$target_base; echo \$RESIM_IDA_DATA" )
        #if [ -z "$remote_ida" ];then
        #    echo "The $remote server needs a ~/.resimrc file containing the RESim env variables that may be in your ~/.bashrc file"
        #    exit 1 
        #fi
-       #rsync -avh $remote:$remote_ida/$root_dir/$target_base/*.hits $RESIM_IDA_DATA/$root_dir/$target_base/
+       #rsync -avh $remote:$remote_ida/$root_parent/$root_dir/$target_base/*.hits $RESIM_IDA_DATA/$root_parent/$root_dir/$target_base/
 fi
 if [ ! -z "$remote" ]; then
     echo "REMOTE IS $remote"
@@ -104,11 +106,11 @@ if [[ $target = $here/* ]]; then
 fi
 
 target_path=$(realpath "$target")
-ida_db_path=$RESIM_IDA_DATA/$root_dir/$target.$ida_suffix
+ida_db_path=$RESIM_IDA_DATA/$root_parent/$root_dir/$target.$ida_suffix
 parent="$(dirname "$ida_db_path")"
 mkdir -p "$parent"
 
-export ida_analysis_path=$IDA_ANALYSIS/$root_dir/$target
+export ida_analysis_path=$IDA_ANALYSIS/$root_parent/$root_dir/$target
 mkdir -p "$ida_analysis_path" > /dev/null 2>&1
 
 echo "target is $target"
@@ -135,6 +137,6 @@ if [[ -f $ida_db_path ]];then
     #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
 else
     echo "No IDA db at $ida_db_path  create it."
-    mkdir -p "$RESIM_IDA_DATA/$root_dir/$target_base"
+    mkdir -p "$RESIM_IDA_DATA/$root_parent/$root_dir/$target_base"
     "$idacmd" -o"$ida_db_path" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $target_path $@" "$target"
 fi

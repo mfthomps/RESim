@@ -32,6 +32,10 @@ program_parent="$(dirname -- $program)"
 echo "parent is $program_parent"
 here="$(pwd)"
 root_dir="$(basename --  $here)"
+root_dirname="$(dirname -- $here)"
+root_parent="$(basename -- $root_dirname)"
+echo "the root_dir is $root_dir"
+echo "the root_dir parent is is $root_parent"
 remote=$2
 if [ $# -eq 3 ]; then
     user=$3@
@@ -47,26 +51,26 @@ if [ -z "$remote_ida" ];then
            exit 1
 fi
 #echo "remote_ida is $remote_ida"
-remote_program=$remote_ida/$root_dir/$program
+remote_program=$remote_ida/$root_parent/$root_dir/$program
 parent="$(dirname "$remote_program")"
 has_hits=$( ssh $user$remote "ls $remote_program*.hits" )
 #echo "has_hits is $has_hits"
 if [[ -z "$has_hits" ]]; then
     echo "No hits files on server, do not try to sync them."
 else
-    echo "Command is rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/"
-    rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_dir/$program_parent/
+    echo "Command is rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent/"
+    rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent/
 fi
 
 #
 #  Now copy analysis
 #
 
-analysis_dir=$IDA_ANALYSIS/$root_dir/$program_parent/
+analysis_dir=$IDA_ANALYSIS/$root_parent/$root_dir/$program_parent/
 #echo "analysis_dir is $analysis_dir"
 remote_analysis=$( ssh $user$remote "source \$HOME/.resimrc; echo \$IDA_ANALYSIS" )
 #echo "remote_analysis is $remote_analysis"
-remote_program=$remote_analysis/$root_dir/$program_parent/
+remote_program=$remote_analysis/$root_parent/$root_dir/$program_parent/
 
 file_type=$( ssh $user$remote "df $remote_program -TP | tail -n -1 | awk '{print \$2}'" )
 #echo "file_type is $file_type"
