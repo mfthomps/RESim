@@ -49,22 +49,29 @@ class Disassemble():
         self.top = top
         self.prog_bytes = {}
         try:
-            if cpu.architecture == 'arm':
-                self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM)
-            elif cpu.architecture == 'arm64':
-                self.md = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
+            if cpu.architecture.startswith('arm'):
+                self.md32 = Cs(CS_ARCH_ARM, CS_MODE_ARM)
+                self.md64 = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
             else:
-                self.md = Cs(CS_ARCH_X86, CS_MODE_64)
+                self.md32 = Cs(CS_ARCH_X86, CS_MODE_32)
+                self.md64 = Cs(CS_ARCH_X86, CS_MODE_64)
             self.lgr.debug('disassemble did capstone init for cpu %s' % cpu.name)
         except:
             self.lgr.error('disassemble failed capstone init for cpu %s' % cpu.name)
-            self.md = None
+            self.md32 = None
+            self.md64 = None
 
     def getPrevInstruction(self, addr, fun_addr):
         ''' Find the instruction that preceeds the given address. Inputs are load values '''
         retval = None
+        if self.so_map.wordSize() == 4:
+            self.lgr.debug('disassemble getPrevInstruction word size 4')
+            md = self.md32
+        else:
+            self.lgr.debug('disassemble getPrevInstruction word size 8')
+            md = self.md64
         max_instructs = int((addr - fun_addr) / 2)
-        if self.md is None:
+        if md is None:
             self.lgr.error('disassemble getPrevInstruction but md is None')
             return None
         fname, load_addr, end = self.getProgBytes(addr)
@@ -74,31 +81,31 @@ class Disassemble():
         fun_addr_orig = fun_addr_orig + 0x400 - 0x1000
         prev = fun_addr
         prev_mnemonic = None
-        #self.lgr.debug('disassemble getPrevInstruction for addr 0x%x fun_addr 0x%x adjusted to 0x%x fname %s, load_addr 0x%x' % (addr, 
-        #       fun_addr, fun_addr_orig, fname, load_addr))
-        for (address, size, mnemonic, op_str) in self.md.disasm_lite(self.prog_bytes[fname][fun_addr_orig:], fun_addr, count=max_instructs):
-            #self.lgr.debug("disassemble getPrevInstruction 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
+        self.lgr.debug('disassemble getPrevInstruction for addr 0x%x fun_addr 0x%x adjusted to 0x%x fname %s, load_addr 0x%x' % (addr, 
+               fun_addr, fun_addr_orig, fname, load_addr))
+        for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][fun_addr_orig:], fun_addr, count=max_instructs):
+            self.lgr.debug("disassemble getPrevInstruction 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
             if address == addr:
                 if prev_mnemonic == 'call':
                     retval = prev 
                 else:
-                    #self.lgr.debug('disassemble getPrevInstruction reached address 0x%x, but not a call, was %s' % (addr, prev_mnemonic))
+                    self.lgr.debug('disassemble getPrevInstruction reached address 0x%x, but not a call, was %s' % (addr, prev_mnemonic))
                     pass
                 break
             prev = address 
             prev_mnemonic = mnemonic 
-        #if retval is None:
-        #    # could be odd data on stack that would fall in this function
-        #    self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
-        #else:
-        #    self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
+        if retval is None:
+            # could be odd data on stack that would fall in this function
+            self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
+        else:
+            self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
         return retval
 
     def getProgBytes(self, addr):
         fname, load_addr, end = self.so_map.getSOInfo(addr)
         load_offset = self.so_map.getLoadOffset(fname)
         if fname is not None:
-            self.lgr.debug('disassemble getProgBytes addr 0x%x is fname %s load_addr 0x%x, load_offset 0x%x' % (addr, fname, load_addr, load_offset))
+            #self.lgr.debug('disassemble getProgBytes addr 0x%x is fname %s load_addr 0x%x, load_offset 0x%x' % (addr, fname, load_addr, load_offset))
             if fname not in self.prog_bytes:
                 full_path = self.top.getFullPath(fname=fname)
                 with open(full_path, 'rb') as fh:
@@ -110,11 +117,15 @@ class Disassemble():
     def getDisassemble(self, addr):
         ''' NOT right for windows '''
         retval = None
+        if self.so_map.wordSize() == 4:
+            md = self.md32
+        else:
+            md = self.md64
         instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
-        if self.md is not None and 'illegal memory mapping' in instruct[1]:
+        if md is not None and 'illegal memory mapping' in instruct[1]:
             fname, load_addr, end = self.getProgBytes(addr)
             delta = addr - load_addr
-            for (address, size, mnemonic, op_str) in self.md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
+            for (address, size, mnemonic, op_str) in md.disasm_lite(self.prog_bytes[fname][delta:], addr, count=1):
                 self.lgr.debug("disassemble getDisassemble 0x%x:\t%s\t%s" %(address, mnemonic, op_str))
                 retval = (size, mnemonic+' '+op_str)
         else:
