@@ -1642,7 +1642,8 @@ class WatchMarks():
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
-        new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
+        #new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
+        new_marks = self.getAllJson(packet=packet, start_index=start_index)
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
             combined = {}
@@ -1686,10 +1687,14 @@ class WatchMarks():
                     my_marks.append(entry)
         return my_marks
 
-    def getAllJson(self):
+    def getAllJson(self, packet=1, start_index=1):
         self.lgr.debug('getAllJson %d stale and %d new marks' % (len(self.stale_marks), len(self.mark_list)))
-        all_marks = self.getJson(self.stale_marks)
-        new_marks = self.getJson(self.mark_list, start_index=len(self.stale_marks))
+        if start_index == 1:
+            all_marks = self.getJson(self.stale_marks)
+            new_marks = self.getJson(self.mark_list, start_index=len(self.stale_marks))
+        else:
+            all_marks = []
+            new_marks = self.getJson(self.mark_list, start_index=start_index)
         all_marks.extend(new_marks)
         self.lgr.debug('getAllJson returning %d marks' % len(all_marks))
         return all_marks
