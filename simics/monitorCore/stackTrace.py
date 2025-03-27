@@ -152,7 +152,7 @@ class StackTrace():
         else:
             fun_addr = self.fun_mgr.getFun(return_to)
             #self.lgr.debug('stackTrace followCall return_to 0x%x' % return_to)
-            if False and fun_addr is not None:
+            if fun_addr is not None:
                 retval = self.disassembler.getPrevInstruction(return_to, fun_addr)
                 #self.lgr.debug('stackTrace followCall return_to 0x%x back from disassembler with %s' % (return_to, retval))
             else:
