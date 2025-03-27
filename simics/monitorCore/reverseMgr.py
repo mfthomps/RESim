@@ -371,11 +371,12 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
             self.enableAll()
 
-    def reverse(self, dumb=None):
+    def reverse(self, dumb=None, reverse_to=None):
         '''
         Reverse until either a breakpoint is hit, or we hit the origin.  If multiple breakpoionts are set, execution
         is set at the most recent.
         '''
+        self.reverse_to =  reverse_to
         if self.nativeReverse():
             if self.reverse_to is not None:
                 cmd = 'reverse-to cycle=0x%x' % self.reverse_to
@@ -775,8 +776,7 @@ class ReverseMgr():
         Reverse to given cycle or breakpoint hit.
         '''
         self.lgr.debug('reverseMgr reverseTo cycle 0x%x' % cycle)
-        self.reverse_to =  cycle
-        self.reverse()
+        self.reverse(reverse_to=cycle)
 
     def nativeReverse(self):
         ''' Does Simics itself support reversing? '''
