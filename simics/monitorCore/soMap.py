@@ -850,8 +850,9 @@ class SOMap():
        else:
            return False
 
-    def wordSize(self, tid):
-       # TBD why take tid as param?
+    def wordSize(self, tid=None):
+       # TBD why take tid as param?  Because may be multiple processes/objects of different sizes
+       # should pass in address, or leave as None to indicate current scheduled thread
        return self.task_utils.getMemUtils().wordSize(self.cpu)
 
     def getMachineSize(self, tid):
@@ -877,7 +878,7 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
-        self.lgr.debug('soMap getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
+        #self.lgr.debug('soMap getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
         retval = None
         prog = self.fullProg(in_fname)
         if prog is None:
@@ -889,11 +890,11 @@ class SOMap():
         if map_tid not in self.so_file_map:
             self.lgr.debug('soMap getLoadAddr tid %s not in so_file_map, perhaps a prog' % map_tid)
         else:
-            self.lgr.debug('soMap getLoadAddr prog %s tid:%s file_map size %d' % (prog, tid, len(self.so_file_map[map_tid])))
+            #self.lgr.debug('soMap getLoadAddr prog %s tid:%s file_map size %d' % (prog, tid, len(self.so_file_map[map_tid])))
             for load_info in self.so_file_map[map_tid]:
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
-                    self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
+                    #self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
         if retval is None and map_tid in self.text_prog:
@@ -1026,22 +1027,29 @@ class SOMap():
         tid = self.getSOTid(tid)
         if tid in self.text_prog:
             self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
+        else:
+            self.lgr.debug('soMap getLoadOffset tid is %s not in text_prog' % (tid))
+        if tid in self.prog_start:
+           self.lgr.debug('tid %s in prog_start and text_prog[tid] is %s' % (tid, self.text_prog[tid]))
+           
+        else:
+           self.lgr.debug('tid %s not in prog_start' % tid)
         if tid in self.text_prog and tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
                 if self.prog_info[prog].text_start > 0:
                     image_base =  self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                     retval = load_addr - image_base
-                    self.lgr.debug('soMap getLoadOffset return offset %d based on load_addr 0x%x image_base 0x%x text_start 0x%x textoffset 0x%x' % (retval, load_addr,
-                         image_base, self.prog_info[prog].text_start, self.prog_info[prog].text_offset))
+                    #self.lgr.debug('soMap getLoadOffset return offset %d based on load_addr 0x%x image_base 0x%x text_start 0x%x textoffset 0x%x' % (retval, load_addr,
+                    #     image_base, self.prog_info[prog].text_start, self.prog_info[prog].text_offset))
                 else:
                     retval = load_addr
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
         else:
             self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? ' % (tid))
-            if tid in self.text_prog:
-                self.lgr.debug('soMap getLoadOffset text_prog[%s] is %s and prog_in is %s' % (tid, self.text_prog[tid], prog_in))
+            #if tid in self.text_prog:
+            #    self.lgr.debug('soMap getLoadOffset text_prog[%s] is %s and prog_in is %s' % (tid, self.text_prog[tid], prog_in))
             retval = self.getLoadAddr(prog, tid)
         return retval
 
