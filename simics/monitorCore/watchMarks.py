@@ -267,14 +267,15 @@ class CompareMark():
         return self.msg
 
 class StrChrMark():
-    def __init__(self, start, the_chr, count):
+    def __init__(self, fun, start, the_chr, count):
+        self.fun = fun
         self.the_chr = the_chr
         self.start = start    
         self.count = count    
         if self.the_chr > 20 and self.the_chr < 256:
-            self.msg = 'strchr in string at 0x%08x find 0x%08x(%s) ' % (start, self.the_chr, chr(self.the_chr))
+            self.msg = '%s in string at 0x%08x find 0x%08x(%s) ' % (fun, start, self.the_chr, chr(self.the_chr))
         else:
-            self.msg = 'strchr in string at 0x%08x find 0x%08x' % (start, self.the_chr)
+            self.msg = '%s in string at 0x%08x find 0x%08x' % (fun, start, self.the_chr)
     def getMsg(self):
         return self.msg
 
@@ -1186,12 +1187,12 @@ class WatchMarks():
         self.lgr.debug('watchMarks compare (%s) %s' % (fun, the_str))
         return wm
 
-    def strchr(self, start, the_chr, count):
-        cm = StrChrMark(start, the_chr, count)
+    def strchr(self, fun, start, the_chr, count):
+        cm = StrChrMark(fun, start, the_chr, count)
         self.removeRedundantDataMark(start)
         self.addWatchMark(cm)
         the_str = cm.getMsg().encode('utf-8', 'ignore')
-        self.lgr.debug('watchMarks strchr %s' % (the_str))
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
 
     def strtoul(self, fun, src):
         cm = StrtousMark(fun, src)
