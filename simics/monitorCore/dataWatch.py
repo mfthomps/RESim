@@ -52,7 +52,7 @@ import dataWatchManager
 import nullTestLoop
 import defaultConfig
 MAX_WATCH_MARKS = 1000
-mem_funs = ['memcpy','memmove','memcmp','strcpy','strcmp','strncmp', 'strnicmp', 'strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
+mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', 'strnicmp', 'strncasecmp', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
             'strcasecmp', 'strncpy', 'strlcpy', 'strtoul', 'String5toInt', 'string_strncmp', 'string_strnicmp', 'string_strlen',
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim', 'getopt',
             'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 'fwrite', 'IO_do_write', 'xmlStrcmp',
@@ -1284,7 +1284,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap suspect a ghost frame, returned from assumed memsomething to ip: 0x%x, but cycles 0x%x less than when we read the data 0x%x' % (eip, self.cpu.cycles, self.cycles_was))
                 SIM_run_alone(self.startUndoAlone, None)
                 return
-        self.lgr.debug('dataWatch returnHap should be at return from memsomething, eip 0x%x cycles: 0x%x skip_this %r' % (eip, self.cpu.cycles, skip_this))
+        self.lgr.debug('dataWatch returnHap should be at return from memsomething fun %s, eip 0x%x cycles: 0x%x skip_this %r' % (self.mem_something.fun, eip, self.cpu.cycles, skip_this))
         hap = self.return_hap
         self.pending_call = False
         #MFTMFT SIM_run_alone(self.top.restoreDebugBreaks, True)
@@ -1335,14 +1335,14 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
                        self.mem_something.src, self.mem_something.dest, self.mem_something.length))
                 self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.length, buf_start)
-        elif self.mem_something.fun in ['strchr', 'strrchr']:
+        elif self.mem_something.fun in ['strchr', 'strrchr', 'memchr']:
             buf_start = self.findRange(self.mem_something.src)
             if self.mem_something.the_chr is None:
                 self.lgr.debug('dataWatch returnHap, return from %s but the_chr is None? ' % (self.mem_something.fun))
             else:
-                self.watchMarks.strchr(self.mem_something.src, self.mem_something.the_chr, self.mem_something.length)
-            #self.lgr.debug('dataWatch returnHap, return from %s strchr 0x%x count %d ' % (self.mem_something.fun, 
-            #       self.mem_something.the_chr, self.mem_something.length))
+                self.watchMarks.strchr(self.mem_something.fun, self.mem_something.src, self.mem_something.the_chr, self.mem_something.length)
+            self.lgr.debug('dataWatch returnHap, return from %s strchr 0x%x count %d ' % (self.mem_something.fun, 
+                   self.mem_something.the_chr, self.mem_something.length))
         elif self.mem_something.fun in ['strtoul', 'strtoull', 'strtol', 'strtoll', 'strtoq', 'atoi', 'String5toInt']:
             self.watchMarks.strtoul(self.mem_something.fun, self.mem_something.src)
             ''' see if result is stored in memory '''
@@ -2378,6 +2378,9 @@ class DataWatch():
         elif self.mem_something.fun == 'memcmp':
             self.mem_something.dest, self.mem_something.src, self.mem_something.length = self.getCallParams(sp, word_size)
             self.lgr.debug('getmemParams memcmp dest 0x%x src 0x%x' % (self.mem_something.dest, self.mem_something.src))
+        elif self.mem_something.fun == 'memchr':
+            self.mem_something.src, self.mem_something.the_chr, self.mem_something.length = self.getCallParams(sp, word_size)
+            self.lgr.debug('getmemParams memchr src 0x%x chr 0x%x' % (self.mem_something.src, self.mem_something.the_chr))
         elif self.mem_something.fun == 'strdup':
             self.mem_something.src, dumb1, dubm2 = self.getCallParams(sp, word_size)
             self.mem_something.length = self.getStrLen(self.mem_something.src)        
