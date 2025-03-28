@@ -855,7 +855,11 @@ class WatchMarks():
                     skip_this = False
                     if dest is not None:
                         cur_len = pm.mark.getSize()
-                        ok_dest = pm.mark.dest + cur_len + 1
+                        # TBD track down this off by one error
+                        if trans_size != 16:
+                            ok_dest = pm.mark.dest + cur_len + 1
+                        else:
+                            ok_dest = pm.mark.dest + cur_len 
                         self.lgr.debug('watchMarks dataRead addr: 0x%x dest: 0x%x previous_dest: 0x%x  prev_addr: 0x%x cur_len (pm.getSize()) 0x%x  ok_dest would be 0x%x trans_size %d' % (addr, 
                                       dest, pm.mark.dest, pm.mark.addr, cur_len, ok_dest, trans_size))
                         if dest != ok_dest:
