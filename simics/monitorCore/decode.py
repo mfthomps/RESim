@@ -68,6 +68,8 @@ def regIsPart(reg1, reg2, lgr=None):
 def regLen(reg):
     if reg.startswith('r'):
         return 8
+    elif reg.startswith('xmm'):
+        return 16
     elif reg.startswith('e'):
         return 4
     elif len(reg) == 2 and reg.endswith('x'):
