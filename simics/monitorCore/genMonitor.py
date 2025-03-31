@@ -6744,6 +6744,8 @@ class GenMonitor():
         self.lgr.debug('getProgPath cell %s for %s' % (target, prog_in))
         if prog_in is not None:
             retval = self.soMap[target].getFullPath(prog_in)
+            if retval is None:
+                retval = self.getFullPath(fname=prog_in)
         else:
             self.lgr.debug('getProgPath for None')
         return retval
