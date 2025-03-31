@@ -611,11 +611,13 @@ class AFL():
         SIM_continue(0)
 
     def doWriteData(self):
+        shared_syscall = self.top.getSharedSyscall()
         if self.write_data is None:
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max,backstop_delay=self.backstop_delay)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max,backstop_delay=self.backstop_delay,
+                 shared_syscall=shared_syscall)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
