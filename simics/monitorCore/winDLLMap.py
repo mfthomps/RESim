@@ -204,7 +204,20 @@ class WinDLLMap():
         self.lgr.debug('winDLL addFile tid:%s fd:0x%x fname: %s' % (tid, fd, fname))
         if pid not in self.open_files:
             self.open_files[pid] = {}
+        full_path = self.top.getFullPath(fname=fname)
+        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, None, full_path, self.lgr)
+
         dll_info = DLLInfo(pid, fname, fd)
+        dll_info.load_addr = win_prog_info.load_addr
+        dll_info.size = win_prog_info.text_size
+        dll_info.image_base = win_prog_info.image_base
+        dll_info.text_offset = win_prog_info.text_offset
+        dll_info.machine = win_prog_info.machine
+        if dll_info.image_base is not None:
+            self.lgr.debug('winDLL addFile tid:%s image_base 0x%x fname: %s' % (tid, dll_info.image_base, fname))
+        else:
+            self.lgr.debug('winDLL addFile tid:%s image_base None for fname: %s' % (tid, fname))
+
         self.open_files[pid][fd] = dll_info
 
     def addText(self, fname, tid, addr, size, machine, image_base, text_offset, local_path):
