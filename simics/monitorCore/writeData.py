@@ -432,7 +432,7 @@ class WriteData():
         else:
             self.lgr.error('writeData userBufWrite could not handle data parameters.')
         self.lgr.debug('writeData userBufWrite tracing_io ? %r' % self.tracing_io)
-        if not self.tracing_io:
+        if not self.tracing_io and (self.stop_on_read or self.udp_header is not None or (self.pad_to_size is not None and self.pad_to_size > 0)):
             self.lgr.debug('writeData userBufWrite call setCallHap')
             self.setCallHap()
 
@@ -566,7 +566,7 @@ class WriteData():
                 if operation in self.ioctl_op_map:
                     op_cmd = self.ioctl_op_map[operation]
                     frame_s = taskUtils.stringFromFrame(frame)
-                    self.lgr.debug('writeData callHap,  is Windows TBD bail is RECV tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s frame: %s' % (tid, eip, 
+                    self.lgr.debug('writeData callHap,  is Windows is io_ctl tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s frame: %s' % (tid, eip, 
                          self.cpu.cycles, callname, op_cmd, frame_s))
                     if op_cmd not in ['RECV', 'RECV_DATAGRAM', 'ReadFile']:
                         skip_it = True
@@ -574,12 +574,10 @@ class WriteData():
                     if fd != self.fd:
                         skip_it = True
                     callname = op_cmd
+                    self.lgr.debug('writeData callHap skip it %r' % skip_it)
             else:
                 self.lgr.debug('writeData callHap, windows expected DeviceIoControFile got %s' % callname)
                 skip_it = True
-            #TBD remove this
-            skip_it = True
-            
         else:
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
@@ -619,7 +617,7 @@ class WriteData():
 
         if not skip_it:
             self.read_count = self.read_count + 1
-            #self.lgr.debug('writeData callHap, read_count is %d tid:%s' % (self.read_count, tid))
+            self.lgr.debug('writeData callHap, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
             self.pending_call = True
             self.handleCall(callname)
 
@@ -639,10 +637,10 @@ class WriteData():
         self.pending_callname = callname
         tid = self.top.getTID()
         if tid != self.tid:
-            #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
+            self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if callname in ['recv', 'recvfrom', 'read', 'RECV', 'RECV_DATAGRAM', 'ReadFile']:
-            #self.lgr.debug('writeData handleCall is recv')
+            self.lgr.debug('writeData handleCall is recv')
             if self.max_packets is not None and self.current_packet >= self.max_packets:
                 self.doBreakSimulation('writeData handleCall max_packets')
             elif not self.mem_utils.isKernel(self.addr):
@@ -1053,9 +1051,9 @@ class WriteData():
         # syscalls of IO are being traced, thus we need not catch syscalls or returns
         self.tracing_io = True
 
-    def didUserRead(self):
-        if self.stop_on_read: 
-            self.lgr.debug('writeData didUserRead stop_on_read')
+    def didUserRead(self, fd, addr):
+        if self.stop_on_read and fd == self.fd: 
+            self.lgr.debug('writeData didUserRead stop_on_read fd 0x%x' % fd)
             self.doBreakSimulation('writeData didUserRead stop_on_read')
 
     def loadPickle(self, name):
