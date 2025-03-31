@@ -407,7 +407,7 @@ class WinTaskUtils():
             frame['param8'] = self.mem_utils.readWord(self.cpu, user_stack+3*self.mem_utils.wordSize(self.cpu))
         return frame
 
-    def frameFromRegsComputed(self, word_size):
+    def frameFromRegsComputed(self):
         frame = self.frameFromRegs(swap_r10=False, skip_sp=True)
 
         gs_base = self.cpu.ia32_gs_base
