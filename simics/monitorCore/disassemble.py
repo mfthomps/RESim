@@ -65,10 +65,10 @@ class Disassemble():
         ''' Find the instruction that preceeds the given address. Inputs are load values '''
         retval = None
         if self.so_map.wordSize() == 4:
-            self.lgr.debug('disassemble getPrevInstruction word size 4')
+            #self.lgr.debug('disassemble getPrevInstruction word size 4')
             md = self.md32
         else:
-            self.lgr.debug('disassemble getPrevInstruction word size 8')
+            #self.lgr.debug('disassemble getPrevInstruction word size 8')
             md = self.md64
         max_instructs = int((addr - fun_addr) / 2)
         if md is None:
@@ -76,7 +76,7 @@ class Disassemble():
             return None
         fname, load_addr, end = self.getProgBytes(addr)
         if fname is None:
-            self.lgr.debug('disassemble getPrevInstruction not fname for addr 0x%x' % addr)
+            #self.lgr.debug('disassemble getPrevInstruction not fname for addr 0x%x' % addr)
             return None
         fun_addr_orig = fun_addr - load_addr 
         # for windows
