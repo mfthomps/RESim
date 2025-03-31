@@ -1275,7 +1275,7 @@ class WinSyscall():
             exit_eip1 = self.param.arm_ret
             exit_eip2 = self.param.arm_ret2
             if frame is None:
-                frame = self.task_utils.frameFromRegsComputed(word_size)
+                frame = self.task_utils.frameFromRegsComputed()
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
         elif syscall_info.calculated:
@@ -1284,14 +1284,14 @@ class WinSyscall():
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture.startswith('arm'):
                 if frame is None:
-                    frame = self.task_utils.frameFromRegsComputed(word_size)
+                    frame = self.task_utils.frameFromRegsComputed()
                 exit_eip1 = self.param.arm_ret
                 exit_eip2 = self.param.arm_ret2
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    frame = self.task_utils.frameFromRegsComputed(word_size)
+                    frame = self.task_utils.frameFromRegsComputed()
                     frame_string = taskUtils.stringFromFrame(frame)
                     #self.lgr.debug('frame computed string %s' % frame_string)
                 exit_eip1 = self.param.sysexit
@@ -1942,33 +1942,34 @@ class WinSyscall():
                         break
 
         elif op_cmd in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
+            # TBD Seems to vary.  Needs much testing.  Offsets dependent on other params?  API version IDs?
             if exit_info.count > 0:
                 trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
        
             # data buffer address
             self.lgr.debug('winSyscall op_cmd <%s>' % op_cmd)
-            #if op_cmd in ['SEND', 'RECV']:
-            #    #exit_info.retval_addr = frame['param5']
-            #    exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame, word_size)
-            #    self.lgr.debug('winSyscall %s set retval_addr to 0x%x' % (op_cmd, frame['param5']))
-            #else:
-            #    exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
+
             exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
-            # the return count address --> this is where kernel will store count ACTUALLY sent/received
+
             frame_string = taskUtils.stringFromFrame(frame)
             if exit_info.retval_addr is not None:
                 self.lgr.debug('winSyscall %s word_size %d retval_addr 0x%x' % (op_cmd, word_size, exit_info.retval_addr))
             else:
                 self.lgr.error('winSyscall %s word_size %d retval_addr None' % (op_cmd, word_size))
             #SIM_break_simulation('in send/recv') 
-            count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
-            #if word_size == 4:
-            #    count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            #if op_cmd in ['SEND'] and word_size == 8:
+            #    count_value = self.paramOffPtr(7, [0, 8], frame, word_size) 
             #else:
-            #    count_value = self.paramOffPtr(7, [0], frame, word_size) 
+            #    count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            if count_value == 0 and op_cmd in ['SEND']:
+                count_value = self.paramOffPtr(7, [0, 8], frame, word_size) 
+                exit_info.retval_addr = self.paramOffPtr(7, [0, 0xc], frame, word_size)
+                self.lgr.debug('%s %s was zero HACK adjust offsets so now count_value 0x%x' % (op_cmd, comm, count_value))
             if count_value is not None:
                 send_string = ''
                 exit_info.count = count_value & 0xFFFFFFFF
+                self.lgr.debug('%s %s count_value 0x%x' % (op_cmd, comm, count_value))
 
                 if op_cmd == 'SEND_DATAGRAM':
                     if word_size == 8:
@@ -1976,7 +1977,7 @@ class WinSyscall():
                         exit_info.sock_addr = self.paramOffPtr(7, [0x60], frame, word_size) 
                     else:
                         exit_info.sock_addr = self.paramOffPtr(7, [0x34], frame, word_size) 
-                    self.lgr.debug('SEND_DATAGRAM sock_addr: 0x%x' % (exit_info.sock_addr))
+                    self.lgr.debug('SEND_DATAGRAM sock_addr: 0x%x count_value %d' % (exit_info.sock_addr, count_value))
                     sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
                     send_string = sock_struct.getString()
                     ## TBD UDP has different params than TCP?
@@ -1986,7 +1987,7 @@ class WinSyscall():
                     else:
                         exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
                     
-                    self.lgr.debug('RECV_DATAGRAM sock_addr: 0x%x' % (exit_info.sock_addr))
+                    self.lgr.debug('RECV_DATAGRAM sock_addr: 0x%x count_value %d' % (exit_info.sock_addr, count_value))
                     # TBD UDP has different params than TCP?
                     sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
                     to_string = sock_struct.getString()
