@@ -455,6 +455,9 @@ class GenMonitor():
             self.recordDriverServerVersion()
         self.lgr.debug('genInit each target in comp_dict (%d targets)' % len(comp_dict))
         for cell_name in comp_dict:
+            if 'OS_TYPE' not in comp_dict[cell_name]:
+                self.lgr.debug('Cell %s does not have an os type. Params from snapshot, but missing from ini file.  not tracked' % cell_name)
+                continue
             self.lgr.debug('genInit for cell %s' % (cell_name))
             if 'RESIM_PARAM' in comp_dict[cell_name] and cell_name not in self.param and comp_dict[cell_name]['RESIM_PARAM'].lower() != 'none':
                 param_file = comp_dict[cell_name]['RESIM_PARAM']
@@ -972,6 +975,9 @@ class GenMonitor():
             for cell_name in self.cell_config.cell_context:
                 if cell_name not in self.param:
                     ''' not monitoring this cell, no param file '''
+                    continue
+                if cell_name not in self.os_type:
+                    ''' not monitoring this cell, no os_type means sections missing from ini file'''
                     continue
                 if cell_name in self.task_utils:
                     ''' already got taskUtils for this cell '''
@@ -5490,6 +5496,8 @@ class GenMonitor():
         self.rmDebugWarnHap()
         if parallel:
             self.no_gdb = True
+        if afl_mode:
+            self.disable_reverse = True
         play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[target_cell], no_cover,
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
@@ -6061,6 +6069,7 @@ class GenMonitor():
         cmd = 'run count = 0x%x unit = cycles' % (delta)
         self.lgr.debug('runToCycle 0x%x cmd %s' % (cycle, cmd))
         SIM_run_command(cmd)
+        print('Done, at cycle 0x%x.' % cpu.cycles)
 
     def runToSeconds(self, seconds):
         self.rmDebugWarnHap()
@@ -6930,6 +6939,10 @@ class GenMonitor():
         target_cpu = self.cell_config.cpuFromCell(self.target)
         self.watch_write = watchWrite.WatchWrite(self, target_cpu, self.context_manager[self.target], self.lgr)
         self.watch_write.watchRange(start, count)
+
+    def noExitMaze(self):
+        if self.target in self.trace_all:
+            self.trace_all[self.target].noExitMaze()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
