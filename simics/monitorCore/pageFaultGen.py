@@ -336,16 +336,20 @@ class PageFaultGen():
                 if prec.cr2 is None:
                     self.lgr.error('pageFaultGen modeChanged with no prec.cr2 set. Not expecting this')
                     return
-                phys_addr = self.mem_utils.v2p(self.cpu, prec.cr2)
-                if phys_addr is None:
-                    #TBD remove this, seems redundant
-                    self.lgr.debug('pageFaultGen modeChanged v2p failed on prec.cr2 of 0x%x.' % prec.cr2)
-                    phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
-                    if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
-                        #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
-                        phys_addr = phys_block.address
+
+                # should be in user space, so if mapped, should be able to use iface
+                #phys_addr = self.mem_utils.v2p(self.cpu, prec.cr2)
+                phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
+                #if phys_addr is None:
+                #    #TBD remove this, seems redundant
+                #    self.lgr.debug('pageFaultGen modeChanged v2p failed on prec.cr2 of 0x%x.' % prec.cr2)
+                #    phys_block = self.cpu.iface.processor_info.logical_to_physical(prec.cr2, Sim_Access_Read)
+                #    if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
+                #        #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
+                #        phys_addr = phys_block.address
                   
-                if phys_addr is not None:  
+                if phys_block is not None:  
+                    phys_addr = phys_block.address
                     if tid in self.pending_double_faults:
                         self.pending_double_faults[tid].cancel()
                         del self.pending_double_faults[tid]
