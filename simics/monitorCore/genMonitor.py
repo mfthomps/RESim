@@ -4539,10 +4539,10 @@ class GenMonitor():
         # TBD Simics VT_revexec_active is broken.  Often gives the wrong answer
         #return True
         if self.disable_reverse: 
-            self.lgr.debug('reverseEnabled disable_reverse is True')
+            #self.lgr.debug('reverseEnabled disable_reverse is True')
             return False
         else:
-            self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
+            #self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
             if not self.reverse_mgr[self.target].nativeReverse():
                 return self.reverse_mgr[self.target].reverseEnabled()
             else:
@@ -5490,6 +5490,8 @@ class GenMonitor():
         self.rmDebugWarnHap()
         if parallel:
             self.no_gdb = True
+        if afl_mode:
+            self.disable_reverse = True
         play = playAFL.PlayAFL(self, this_cpu, cell_name, self.back_stop[target_cell], no_cover,
               self.mem_utils[self.target], dfile, self.run_from_snap, self.context_manager[target_cell],
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
