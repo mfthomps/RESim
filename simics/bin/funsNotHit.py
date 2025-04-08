@@ -37,17 +37,34 @@ def main():
 
     funs = getFuns(analysis_path)
     the_hits = None
+    missed_funs = []
+    hit_funs = []
     with open(args.hits) as fh:
         the_hits = json.load(fh)
-
+    print('there are %d funs' % len(funs))
     for the_fun in funs:
         faddr = int(the_fun)
-        print('fun 0x%x' % faddr)
-        if faddr not in the_hits:
+        #print('fun 0x%x' % faddr)
+        if the_fun not in the_hits:
             size = funs[the_fun]['end'] - funs[the_fun]['start']
-            print('fun 0x%x not in hits size 0x%x' % (faddr, size))
+            #print('fun 0x%x not in hits size 0x%x' % (faddr, size))
+            missed_funs.append(faddr)
         else:
+            hit_funs.append(faddr)
             pass
             #print('fun 0x%x IS in hits' % faddr)
+    json_out = '/tmp/missed_funs.json'
+    with open(json_out, 'w') as fh:
+        js = json.dumps(missed_funs) 
+        fh.write(js)
+        print('Saved %d missed funs in %s, %d funs were hit' % (len(missed_funs), json_out, len(hit_funs)))
+
+    #for hit in the_hits:
+    #    for the_fun in funs:
+    #        faddr = int(the_fun)
+    #        hit_addr = int(hit)
+    #        if hit_addr >= funs[the_fun]['start'] and hit_addr <= funs[the_fun]['end']:
+    #            print('hit 0x%x in fun 0x%x' % (hit_addr, faddr))
+      
 if __name__ == '__main__':
     sys.exit(main())
