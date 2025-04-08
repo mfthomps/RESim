@@ -379,11 +379,18 @@ class AFL():
             self.stop_hap = None
             #self.lgr.debug('afl removed stop hap')
 
+    def traceChecksum(self, trace_bits):
+        cksum = 0
+        for byte in trace_bits:
+            cksum += byte
+        return cksum & 0xff
     def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
             else:
-                trace_bits = self.coverage.getTraceBits()
+                #trace_bits = self.coverage.getTraceBits()
+                #cksum = self.traceChecksum(trace_bits)
+                #self.lgr.debug('afl finishup cksum is 0x%x' % cksum)
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
             new_hits = self.coverage.getHitCount() 
@@ -404,7 +411,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
