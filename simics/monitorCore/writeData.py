@@ -342,7 +342,7 @@ class WriteData():
     def userBufWrite(self, record=False):
         ''' inject data into the application buffer and set the return count value seen by the application '''
         retval = None
-        self.lgr.debug('userBufWrite')
+        #self.lgr.debug('userBufWrite')
         if self.current_packet > 1 and self.no_reset:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
@@ -357,10 +357,10 @@ class WriteData():
                     #self.lgr.debug('writeData first_data failed filter, wrote nulls')
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
-                self.lgr.debug('writeData userBufWrite TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
+                #self.lgr.debug('writeData userBufWrite TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
                 self.lgr.debug('%s' % next_data)
                 self.setCountValue(len(next_data))
-                self.lgr.debug('writeData userBufWrite back from setCountValue')
+                #self.lgr.debug('writeData userBufWrite back from setCountValue')
                 retval = len(next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
@@ -377,13 +377,13 @@ class WriteData():
                 else:
                     self.mem_utils.writeString(self.cpu, self.addr, self.in_data) 
                 eip = self.top.getEIP(self.cpu)
-                self.lgr.debug('writeData userBufWrite TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
+                #self.lgr.debug('writeData userBufWrite TCP last packet (or headerless UDP), wrote %d bytes to 0x%x packet_num %d eip 0x%x' % (tot_len, self.addr, self.current_packet, eip))
                 if self.pad_to_size is not None and tot_len < self.pad_to_size:
                     pad_count = self.pad_to_size - len(self.in_data)
                     b = bytearray(pad_count)
                     next_addr = self.addr + len(self.in_data)
                     self.mem_utils.writeString(self.cpu, next_addr, b) 
-                    self.lgr.debug('writeData userBufWrite TCP last packet, padded %d bytes' % pad_count)
+                    #self.lgr.debug('writeData userBufWrite TCP last packet, padded %d bytes' % pad_count)
                     tot_len = tot_len + pad_count
                 self.setCountValue(tot_len)
                 self.in_data = ''
@@ -431,7 +431,7 @@ class WriteData():
                 
         else:
             self.lgr.error('writeData userBufWrite could not handle data parameters.')
-        self.lgr.debug('writeData userBufWrite tracing_io ? %r' % self.tracing_io)
+        #self.lgr.debug('writeData userBufWrite tracing_io ? %r' % self.tracing_io)
         if not self.tracing_io and (self.stop_on_read or self.udp_header is not None or (self.pad_to_size is not None and self.pad_to_size > 0)):
             self.lgr.debug('writeData userBufWrite call setCallHap')
             self.setCallHap()
