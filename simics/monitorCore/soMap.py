@@ -48,7 +48,11 @@ class ProgInfo():
             return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
                 self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
         elif self.text_offset is not None:
-            return('relocatable text_offset 0x%x size: 0x%x interp: %s' % (self.text_offset, self.text_size, self.interp))
+            if self.text_size is not None:
+                return('relocatable text_offset 0x%x size: 0x%x interp: %s' % (self.text_offset, self.text_size, self.interp))
+            else:
+                return('relocatable text_offset 0x%x size is none interp: %s' % (self.text_offset, self.interp))
+                
         else:
             return('Not a binary')
 
@@ -355,18 +359,21 @@ class SOMap():
                 self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
             
             if prog in self.prog_info:    
-                if self.prog_info[prog].dynamic:
-                    load_addr = None
-                    self.prog_end[tid] = None
+                if self.prog_info[prog].text_start is not None:
+                    if self.prog_info[prog].dynamic:
+                        load_addr = None
+                        self.prog_end[tid] = None
+                    else:
+                        load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                        self.prog_end[tid] = self.prog_info[prog].text_end
+                    self.prog_start[tid] = load_addr
+                    self.text_prog[tid] = prog
+                    self.checkSOWatch(load_addr, prog)
+                    #size = self.prog_info[prog].text_end - self.prog_start[tid]
+                    size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+                    retval = LoadInfo(load_addr, size, interp=interp)
                 else:
-                    load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
-                    self.prog_end[tid] = self.prog_info[prog].text_end
-                self.prog_start[tid] = load_addr
-                self.text_prog[tid] = prog
-                self.checkSOWatch(load_addr, prog)
-                #size = self.prog_info[prog].text_end - self.prog_start[tid]
-                size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
-                retval = LoadInfo(load_addr, size, interp=interp)
+                    self.lgr.debug('soMap addText prog %s has no text start' % prog)
             else:
                 self.lgr.debug('soMap addText prog %s not in prog_info' % prog)
         else:
@@ -381,19 +388,22 @@ class SOMap():
             interp = elf_info.interp
             self.lgr.debug('soMap addProgInfo prog info %s %s' % (prog, self.prog_info[prog].toString()))
             if self.prog_info[prog].text_start is None:
-                eip = self.top.getEIP(self.cpu)
-                mem_utils = self.task_utils.getMemUtils()
-                if mem_utils.isKernel(eip):
-                    eip = mem_utils.getKReturnAddr(self.cpu)
-                    if eip is None:
-                        self.lgr.error('soMap addProgInfo no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
-                        return
-                    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                if self.prog_info[prog].text_size is not None:
+                    eip = self.top.getEIP(self.cpu)
+                    mem_utils = self.task_utils.getMemUtils()
+                    if mem_utils.isKernel(eip):
+                        eip = mem_utils.getKReturnAddr(self.cpu)
+                        if eip is None:
+                            self.lgr.error('soMap addProgInfo no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
+                            return
+                        self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                    else:
+                        self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip is 0x%x' % eip)
+                    self.prog_info[prog].text_start = 0
+                    self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
+                    self.prog_info[prog].setDynamic()
                 else:
-                    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip is 0x%x' % eip)
-                self.prog_info[prog].text_start = 0
-                self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
-                self.prog_info[prog].setDynamic()
+                    self.lgr.debug('soMap addProgInfo no text start or text size, for %s' % prog)
 
     def noText(self, prog, tid):
         self.lgr.debug('soMap noText, prog %s tid:%s' % (prog, tid))

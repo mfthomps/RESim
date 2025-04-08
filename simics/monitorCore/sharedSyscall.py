@@ -996,7 +996,7 @@ class SharedSyscall():
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
-                if self.mem_utils.WORD_SIZE == 4:
+                if callname == '_llseek' and self.mem_utils.WORD_SIZE == 4:
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
                         trace_msg = trace_msg+('FD: %d result: 0x%x\n' % (exit_info.old_fd, result))
@@ -1068,6 +1068,11 @@ class SharedSyscall():
                 timer_syscall.checkTimeLoop('waitpid', tid)
             else:
                 self.lgr.debug('timer_syscall is None')
+            if exit_info.retval_addr != 0:
+                wstatus = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
+                trace_msg = trace_msg+('eax: 0x%x wstatus: 0x%x\n' % (eax, wstatus))
+            else:
+                trace_msg = trace_msg+('eax: 0x%x wstatus addr was none\n' % (eax))
 
 
         elif callname == 'close':
