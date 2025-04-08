@@ -255,7 +255,15 @@ class Coverage():
         self.stopCover()
         tmp_list = []
         prev_bp = None
+        # TBD remove this
+        #missed_fun_file = '/tmp/missed_funs.json' 
+        #missed_funs = []
+        #with open(missed_fun_file) as fh:
+        #    missed_funs = json.load(fh)
         for fun in self.blocks:
+            fun_addr = int(fun)
+        #    if fun_addr in missed_funs:
+        #        continue
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
