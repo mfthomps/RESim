@@ -388,7 +388,7 @@ class AFL():
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
             else:
-                #trace_bits = self.coverage.getTraceBits()
+                trace_bits = self.coverage.getTraceBits()
                 #cksum = self.traceChecksum(trace_bits)
                 #self.lgr.debug('afl finishup cksum is 0x%x' % cksum)
                 if self.empty_trace_bits is None:
