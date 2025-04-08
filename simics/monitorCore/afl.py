@@ -448,8 +448,10 @@ class AFL():
                     self.lgr.debug('afl test file, found %d unique hits, HUNG. Done' % self.total_hits)
                     print('afl test file %s, found %d unique hits hung ' % (self.test_file, self.total_hits))
                 else:
-                    self.lgr.debug('afl test file, found %d unique hits. Done' % self.total_hits)
-                    print('afl test file %s, found %d unique hits' % (self.test_file, self.total_hits))
+                    now = time.time()
+                    delta = (now - self.tmp_time)
+                    self.lgr.debug('afl test file, found %d unique hits. 0x%x cycles in %.2f seconds Done' % (self.total_hits, delta_cycles, delta))
+                    print('afl test file %s, found %d unique hits, 0x%x cycles %.2f seconds' % (self.test_file, self.total_hits, delta_cycles, delta))
                 return
 
             if self.one_done:
@@ -546,6 +548,7 @@ class AFL():
         #self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
+            self.tmp_time = time.time()
             self.lgr.debug('afl goN first, context is %s' % str(self.target_cpu.current_context))
             if self.test_file is None:
                 self.in_data = self.getMsg()
