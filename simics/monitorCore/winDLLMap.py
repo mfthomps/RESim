@@ -900,8 +900,12 @@ class WinDLLMap():
                     section = self.section_map[pid][fname]
                     if section.load_addr is None:
                         self.lgr.error('winDLL getLoadOffset section for pid %s %s has not load addr' % (pid, fname))
-                    else:
+                    elif section.image_base is not None:
                         retval = section.load_addr - section.image_base
+                    else:
+                        self.lgr.debug('winDLL getLoadOffset %s tid %s no image base, just use load_addr 0x%x' % (in_fname, tid, section.load_addr))
+                        retval = section.load_addr 
+                    break
         else:
             self.lgr.debug('winDLL getLoadOffset tid %s not in section_map' % pid)
         return retval
