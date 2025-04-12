@@ -52,9 +52,9 @@ class CopyMark():
                 trunc_string = ''
                 if truncated is not None:
                     if copy_start is not None:
-                        trunc_string = ' (trucated from %d original start 0x%x)' % (truncated, copy_start)        
+                        trunc_string = ' (truncated from %d original start 0x%x)' % (truncated, copy_start)        
                     else:
-                        trunc_string = ' (trucated from %d)' % (truncated)        
+                        trunc_string = ' (truncated from %d)' % (truncated)        
                 self.msg = '%s %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%08x)' % (fun_name, length, trunc_string, src, dest, offset, buf_start)
             else:
                 self.msg = '%s %d bytes from 0x%08x to 0x%08x . (Source buffer starts before known buffers!)' % (fun_name, length, src, dest)
@@ -1151,7 +1151,8 @@ class WatchMarks():
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
             else:
                 if two_bytes:
-                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
+                    #dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
+                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count)
                 else:
                     dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
