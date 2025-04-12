@@ -1847,37 +1847,8 @@ class WinSyscall():
             exit_info.sock_struct = sock_struct
             to_string = sock_struct.getString()
             trace_msg = trace_msg + ' ' + to_string
-            for call_param in self.call_params:
-                #self.lgr.debug('winSyscall subcall %s call_param.proc %s' % (call_param.subcall, call_param.proc))
-                if call_param.subcall == 'BIND' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                     if call_param.match_param is not None:
-                         #self.lgr.debug('winSyscall match_param is %s' % str(call_param.match_param))
-                         go = None
-                         if sock_struct.port is not None:
-                             #self.lgr.debug('winSyscall sock_struct.port %s' % sock_struct.port)
-                             ''' look to see if this address matches a given pattern '''
-                             s = sock_struct.dottedPort()
-                             pat = call_param.match_param
-                             try:
-                                 go = re.search(pat, s, re.M|re.I)
-                             except:
-                                 self.lgr.error('invalid expression: %s' % pat)
-                                 return None, None
-                         
-                             #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
-                         if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
-                             self.lgr.debug('socketParse found match %s' % (call_param.match_param))
-                             syscall.addParam(exit_info, call_param)
-                             if go:
-                                 ida_msg = 'BIND to %s, FD: %d' % (s, sock_struct.fd)
-                             else:
-                                 ida_msg = 'BIND to %s, FD: %d' % (call_param.match_param, sock_struct.fd)
-                             self.context_manager.setIdaMessage(ida_msg)
-                             break
-
-                     if syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
-                         syscall.addParam(exit_info, call_param)
-                         self.sockwatch.bind(tid, sock_struct.fd, call_param)
+            if not self.checkMatchParams('BIND', sock_struct, exit_info): 
+                return None, None
 
         elif op_cmd == 'CONNECT':
 
@@ -1901,6 +1872,8 @@ class WinSyscall():
             to_string = sock_struct.getString()
             exit_info.sock_struct = sock_struct
             trace_msg = trace_msg+' '+to_string
+            if not self.checkMatchParams('CONNECT', sock_struct, exit_info): 
+                return None, None
         elif op_cmd == 'SUPER_CONNECT' or op_cmd == 'SUPER_CONNECT2':
 
             sock_addr = pdata_addr+10
@@ -2098,6 +2071,42 @@ class WinSyscall():
                     self.lgr.debug('doing winDelay.setDataWatch, maybe')
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
         return op_cmd, trace_msg
+
+    def checkMatchParams(self, call_name, sock_struct, exit_info):
+            retval = True
+            for call_param in self.call_params:
+                #self.lgr.debug('winSyscall subcall %s call_param.proc %s' % (call_param.subcall, call_param.proc))
+                if call_param.subcall == call_name and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                     if call_param.match_param is not None:
+                         #self.lgr.debug('winSyscall match_param is %s' % str(call_param.match_param))
+                         go = None
+                         if sock_struct.port is not None:
+                             #self.lgr.debug('winSyscall sock_struct.port %s' % sock_struct.port)
+                             ''' look to see if this address matches a given pattern '''
+                             s = sock_struct.dottedPort()
+                             pat = call_param.match_param
+                             try:
+                                 go = re.search(pat, s, re.M|re.I)
+                             except:
+                                 self.lgr.error('invalid expression: %s' % pat)
+                                 return False
+                         
+                             #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                         if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
+                             self.lgr.debug('socketParse found match %s' % (call_param.match_param))
+                             syscall.addParam(exit_info, call_param)
+                             if go:
+                                 ida_msg = '%s to %s, FD: %d' % (call_name, s, sock_struct.fd)
+                             else:
+                                 ida_msg = '%s to %s, FD: %d' % (call_name, call_param.match_param, sock_struct.fd)
+                             self.context_manager.setIdaMessage(ida_msg)
+                             break
+                     
+                     if call_name == 'BIND' and syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
+                         syscall.addParam(exit_info, call_param)
+                         self.sockwatch.bind(tid, sock_struct.fd, call_param)
+            return retval
+
 
     def getWordSize(self, tid):
         # determine if we are going to be doing 32 or 64 bit syscall
