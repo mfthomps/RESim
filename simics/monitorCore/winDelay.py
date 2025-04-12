@@ -87,6 +87,8 @@ class WinDelay():
 
         self.read_fixup_callback = None
 
+        self.traceFiles = self.top.getTraceFiles()
+
     def setDataWatch(self, data_watch, linger):
         #self.lgr.debug('winDelay setDataWatch')
         if self.top.tracking():
@@ -179,9 +181,9 @@ class WinDelay():
             byte_array = self.mem_utils.getBytes(self.cpu, max_bytes, self.exit_info.retval_addr)
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
-                # TBD add traceFiles to windows
-                #if self.traceFiles is not None:
-                #    self.traceFiles.read(tid, exit_info.old_fd, byte_array)
+                if self.traceFiles is not None:
+                    tid = self.top.getTID()
+                    self.traceFiles.read(tid, self.exit_info.old_fd, byte_array)
             else:
                 read_data = '<< NOT MAPPED >>'
 
