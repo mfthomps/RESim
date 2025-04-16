@@ -2151,8 +2151,11 @@ class WinSyscall():
             self.lgr.debug('winSyscall doRecordLoad unable to get size.  Maybe executable is not in the local file system.  Otherwise, is path to executable defined in the ini file RESIM_root_prefix? Useing full_path %s')
             return 
         text_addr = load_addr + text_offset
-        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x%x' % size)
         self.soMap.addText(prog, tid, load_addr, size, machine, image_base, text_offset, full_path)
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        # stack base found via hurestic, windows libs manage it.
+        #self.top.recordStackBase(tid, sp)
+        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x% sp 0x%xx' % (size, sp))
 
     def rmPendingCall(self, tid):
         if tid in self.pending_calls:
