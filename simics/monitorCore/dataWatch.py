@@ -60,7 +60,8 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 'String14compare_helper',
+            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 
+            'String14compare_helper', 'String14compare_helper_latin',
             'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'ByteArray5toInt', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
@@ -1839,7 +1840,7 @@ class DataWatch():
             wm = self.watchMarks.split(self.mem_something.src, self.mem_something.the_string, item_list, self.mem_something.fun)
             for item_len, item_addr in item_list:
                 self.setRange(item_addr, item_len, watch_mark=wm)
-        elif self.mem_something.fun == 'String14compare_helper':
+        elif self.mem_something.fun.startswith('String14compare_helper'):
             buf_start, buf_length = self.findBufForRange(self.mem_something.src, self.mem_something.length)
             if buf_start is None:
                 self.lgr.debug('%s failed to get buf_start for src 0x%x' % (self.mem_something.fun, self.mem_something.src))
@@ -2784,6 +2785,10 @@ class DataWatch():
             self.lgr.debug('%s struct_addr 0x%x src_len 0x%x src 0x%x delim_addr 0x%x delim %s' % (self.mem_something.fun, struct_addr, src_len, self.mem_something.src, delim_addr, delim))
         elif self.mem_something.fun == 'String14compare_helper':
             self.mem_something.src, self.mem_something.length, self.mem_something.dest = self.getCallParams(sp, word_size)
+            self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.dest, self.mem_something.length)
+        elif self.mem_something.fun == 'String14compare_helper_latin':
+            self.mem_something.src, self.mem_something.length, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, sp+3*word_size, size=word_size)
             self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.dest, self.mem_something.length)
         elif self.mem_something.fun == 'String6toUtf8':
             struct_addr_addr, dumb2, dumb = self.getCallParams(sp, word_size)
@@ -4657,6 +4662,9 @@ class DataWatch():
                 if fun_name in mem_funs:
                     if self.mem_something is None or self.mem_something.length != 1 or size != 1 or addr != self.mem_something.src:
                         self.lgr.debug('dataWatch cheapReuse mod within memsomething. Remove buffer 0x%x TBD too crude.' % addr)
+                        if index is None:
+                            addr = addr + size - 1
+                            self.lgr.debug('dataWatch cheapReuse index was none, so hack addr to 0x%x assuming write is a few bytes before the buffer.' % addr)
                         self.rmRange(addr)
                         retval = True
                 elif 'destructor' in fun_name:
@@ -5012,7 +5020,7 @@ class DataWatch():
     def rmRange(self, addr):
         index = self.findRangeIndex(addr)
         if index is not None:
-            #self.lgr.debug('dataWatch rmRange addr 0x%x index %d ' % (addr, index))
+            self.lgr.debug('dataWatch rmRange addr 0x%x index %d ' % (addr, index))
             self.start[index] = None
             if index < len(self.read_hap) and self.read_hap[index] is not None:
                 self.lgr.debug('dataWatch rmRange addr 0x%x index %d len of read_hap %d call genDeleteHap' % (addr, index, len(self.read_hap)))
