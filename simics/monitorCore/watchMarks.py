@@ -1152,7 +1152,7 @@ class WatchMarks():
             else:
                 if two_bytes:
                     #dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
-                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count)
+                    dst_str = self.mem_utils.readString(self.cpu, dest, count)
                 else:
                     dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
