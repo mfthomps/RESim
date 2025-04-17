@@ -934,7 +934,10 @@ class WatchMarks():
                 elif ip == mark_compare.compare_eip and ip == self.prev_ip[-1] and trans_size <= 2:
                     self.lgr.debug('watchMarks same compare as last one at 0x%x cmp_instruct %s' % (ip, mark_compare.compare_instruction)) 
                     prev_mark = self.getRecentMark()
-                    prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
+                    if type(prev_mark) == DataMark:
+                        prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
+                    else:
+                        self.lgr.debug('watchMarks but previous mark is a %s, not a DataMark' % type(prev_mark))
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
@@ -1151,8 +1154,8 @@ class WatchMarks():
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
             else:
                 if two_bytes:
-                    #dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
-                    dst_str = self.mem_utils.readString(self.cpu, dest, count)
+                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count)
+                    #dst_str = self.mem_utils.readString(self.cpu, dest, count)
                 else:
                     dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
