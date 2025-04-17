@@ -1829,10 +1829,10 @@ class GenMonitor():
             self.toExecve(prog=proc, flist=flist)
 
 
-    def toProc(self, proc, binary=False, run=True):
+    def toProc(self, proc, binary=False, run=True, new=False):
         self.rmDebugWarnHap()
         plist = self.task_utils[self.target].getTidsForComm(proc, ignore_exits=True)
-        if len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
+        if not new and len(plist) > 0 and not (len(plist)==1 and self.task_utils[self.target].isExitTid(plist[0])):
             self.lgr.debug('toProc process %s found, run until some instance is scheduled' % proc)
             print('%s is running as %s.  Will continue until some instance of it is scheduled' % (proc, plist[0]))
             f1 = stopFunction.StopFunction(self.toUser, [], nest=True)
@@ -2034,9 +2034,9 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, flist=None, want_tid=None): 
+    def toUser(self, want_tid=None, flist=None):
         self.rmDebugWarnHap()
-        self.lgr.debug('toUser')
+        self.lgr.debug('toUser want_tid %s' % want_tid)
         cpu = self.cell_config.cpuFromCell(self.target)
         if self.isVxDKM(cpu=cpu):
             self.vxKMonitor[self.target].toModule()
@@ -3566,8 +3566,14 @@ class GenMonitor():
             self.lgr.error('invalid pattern: %s' % addr)
             return
         ''' NOTE: socketCallName returns "socket" for x86 '''
-        call = self.task_utils[self.target].socketCallName('connect', self.is_compat32)
-        call_params = syscall.CallParams('runToConnect', 'connect', addr, break_simulation=True, proc=proc)        
+
+        if self.isWindows(self.target):
+            cname = 'CONNECT'
+            call = ['CONNECT']
+        else:
+            cname = 'CONNECT'
+            call = self.task_utils[self.target].socketCallName('connect', self.is_compat32)
+        call_params = syscall.CallParams('runToConnect', cname, addr, break_simulation=True, proc=proc)        
         call_params.nth = nth
         self.runTo(call, call_params, name='connect')
 
@@ -5030,16 +5036,16 @@ class GenMonitor():
         if go:
             SIM_continue(0)
 
-    def runToOther(self, go=True):
+    def runToOther(self, go=True, threads=False):
         ''' Continue execution until a different library is entered, or main text is returned to '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
 
         if self.isWindows():
             self.lgr.debug('runToOther eip 0x%x' % eip)
-            self.run_to[self.target].runToKnown(eip)
+            self.run_to[self.target].runToKnown(eip, threads=threads)
         else:
-            self.soMap[self.target].runToKnown(eip)
+            self.soMap[self.target].runToKnown(eip, threads=threads)
         if go:
            SIM_continue(0)
 
@@ -6510,6 +6516,17 @@ class GenMonitor():
         tid_list = None
         self.run_to[self.target].runToSO(file, threads=threads)
 
+    def runToMainSO(self, threads=True):
+        self.rmDebugWarnHap()
+        tid_list = None
+        self.run_to[self.target].runToMainSO(threads=threads)
+  
+    def traceSO(self, threads=True):
+        if self.checkOnlyIgnore():
+            self.rmDebugWarnHap()
+        tid_list = None
+        self.run_to[self.target].traceSO(threads=threads)
+
     def skipToCycle(self, cycle, cpu=None, disable=False):
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -6691,6 +6708,11 @@ class GenMonitor():
 
     def getTIB(self):
         return self.task_utils[self.target].getTIB()
+
+    def getThraedRec(self):
+        if self.target in self.task_utils:
+            rec = self.task_utils[self.target].getCurThreadRec()
+            print('thread rec is 0x%x' % rec)
 
     def getCurProcRec(self):
         if self.target in self.task_utils:
@@ -6943,6 +6965,12 @@ class GenMonitor():
     def noExitMaze(self):
         if self.target in self.trace_all:
             self.trace_all[self.target].noExitMaze()
+
+    def getTraceFiles(self):
+        if self.target in self.traceFiles:
+            return self.traceFiles[self.target]
+        else:
+            return None
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
