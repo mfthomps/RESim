@@ -138,11 +138,6 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
     prog_base = os.path.basename(prog)
-    old_ida_path = resimUtils.getOldIdaDataFromIni(prog_base, ini)
-    if target is None:
-        old_fname = '%s.hits' % old_ida_path
-    else:
-        old_fname = '%s.%s.hits' % (old_ida_path, target)
 
     ida_path = resimUtils.getIdaDataFromIni(prog, ini, lgr=lgr)
     print('prog: %s  ida_path is %s' % (prog, ida_path))
@@ -151,10 +146,6 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         fname = '%s.hits' % ida_path
     else:
         fname = '%s.%s.hits' % (ida_path, target)
-    if os.path.isfile(old_fname) and not os.path.isfile(fname):
-        os.makedirs(os.path.dirname(fname), exist_ok=True) 
-        shutil.move(old_fname, fname)
-        print('Old file path found.  Moved from %s to %s' % (old_fname, fname))
 
     print('Using hits file %s' % fname)
     lgr.debug('Using hits file %s prog: %s' % (fname, prog))
