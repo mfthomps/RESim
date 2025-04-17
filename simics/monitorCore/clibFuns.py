@@ -150,11 +150,19 @@ def adjustFunName(fun_name, fun_mgr, lgr):
             elif fun.startswith('ZN') and 'Q' in fun[:9]:
                 #lgr.debug('is QT')
                 ''' QTCore5 '''
-                fun = fun.split('Q')[1]
+                fun = fun.split('Q', 1)[1]
+                latin = False
+                lgr.debug('clibFuns ZN fun is %s' % fun)
+                if 'Latin' in fun:
+                    lgr.debug('clibFuns has Latin')
+                    latin  = True
                 q_suffix = ['EP', 'SER', 'ER', 'E5', 'Ev', 'Ei', 'E13']
                 for suf in q_suffix:
                     if suf in fun:
                         fun = fun.split(suf)[0]
+                        if latin:
+                            fun = fun+'_latin'
+                            lgr.debug('clibFuns Latin suffix, fun now %s' % fun)
                         break
             elif fun.startswith('Zeq') and 'Q' in fun[:9]:
                 fun = fun.split('Q')[1]+'eq'
