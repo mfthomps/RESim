@@ -576,7 +576,7 @@ class GenContextMgr():
             SIM_run_alone(self.restoreSuspendContext, None)
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
-            if not self.isDebugContext():
+            if not self.isDebugContext() and self.debugging_tid is not None:
                 #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 #SIM_run_alone(self.restoreDebugContext, None)
                 self.restoreDebugContext()
@@ -792,8 +792,9 @@ class GenContextMgr():
                             leader_tid = None
                             break 
             if add_task:
-                self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
+                #self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
                 self.addTask(tid, new_addr, watch_exit=False)
+                self.tid_cache.append(tid)
 
         self.alterWatches(new_addr, prev_task, tid)
         if add_task:
@@ -1647,7 +1648,7 @@ class GenContextMgr():
         if not self.didListLoad():
             self.lgr.debug('contextManager loadOnlyList')
             if os.path.isfile(fname):
-                self.lgr.debug('loadIgnoreList %s' % fname)
+                self.lgr.debug('loadOnlyList %s' % fname)
                 with open(fname) as fh:
                     for line in fh:
                         if line.startswith('#'):
@@ -1660,7 +1661,7 @@ class GenContextMgr():
         if retval:
             cur_tid = self.task_utils.curTID()
             comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm not in self.ignore_progs:
+            if comm not in self.only_progs:
                 self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
                 self.restoreIgnoreContext()
         return retval
