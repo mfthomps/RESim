@@ -27,7 +27,7 @@ import os
 import json
 import struct
 import binascii
-import resimUtils
+import resimSimicsUtils
 import memUtils
 import taskUtils
 import winSocket
@@ -221,7 +221,7 @@ class Win7CallParams():
         else:
             ''' debugging, skip back to entry '''
             frame, cycle = self.top.getPreviousEnterCycle()
-            resimUtils.skipToTest(self.cpu, cycle, self.lgr)
+            resimSimicsUtils.skipToTest(self.cpu, cycle, self.lgr)
             self.lgr.debug('win7Callparams reverseToSyscall was debug, so skipped to cycle 0x%x' % cycle)
             SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
 

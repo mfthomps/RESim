@@ -582,6 +582,8 @@ class Syscall():
         # Determine when to stop tracing due to a close FD for trackIO
         self.clone_fd_count = 1
 
+        self.no_exit_maze = False
+
     def breakOnExecve(self):
         for call in self.call_params:
             if call is not None and call.subcall == 'execve' and call.break_simulation:
@@ -701,7 +703,7 @@ class Syscall():
                 break_list.append(proc_break)
                 break_addrs.append(entry)
                 callname = call
-                if not arm64_app:
+                if self.cpu.architecture.startswith('arm') and not arm64_app:
                     callname = '%s-arm32' % call
                 self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, callname))
                 #self.lgr.debug('Syscall setComputeBreaks callnum %s name %s entry 0x%x compat32: %r call_params %s self.cell %s break 0x%x' % (callnum, call, entry, compat32, str(self.syscall_info), self.cell, proc_break))
@@ -969,7 +971,7 @@ class Syscall():
         if self.traceProcs is not None:
             self.traceProcs.setName(call_info.tid, prog_string, arg_string)
 
-        if self.name != 'traceAll':
+        if self.name != 'traceAll' and self.top.trackingThreads():
             self.addElf(prog_string, tid)
         else:
             # Assume done by trackThreads
@@ -1860,7 +1862,9 @@ class Syscall():
         elif callname == 'waitpid':        
             if not self.record_fd:
                 wait_tid = frame['param1']
-                ida_msg = 'waitfor tid:%s (%s) wait_tid: %d' % (tid, comm, wait_tid)
+                exit_info.retval_addr = frame['param2']
+                options = frame['param3']
+                ida_msg = 'waitpid tid:%s (%s) wait_tid: %d wstatus 0x%x options %x' % (tid, comm, wait_tid, exit_info.retval_addr, options)
             else:
                 self.checkTimeLoop(callname, tid)
                 exit_info = None
@@ -1891,7 +1895,7 @@ class Syscall():
 
         elif callname in ['_llseek','lseek']:        
             low = None
-            if self.mem_utils.WORD_SIZE == 4:
+            if callname == '_llseek' and self.mem_utils.WORD_SIZE == 4:
                 fd = frame['param1']
                 high = frame['param2']
                 low = frame['param3']
@@ -2132,7 +2136,7 @@ class Syscall():
                  cpu, self.mem_utils, self.lgr)
 
             ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
-            self.lgr.debug(ida_msg)
+            self.lgr.debug('syscall: '+ida_msg)
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -2876,7 +2880,7 @@ class Syscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
+                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s').  \nOr autoMaze() to always exit.\nor noExitMaze() to not check for loops." % (tid, syscall))
                 SIM_break_simulation('timer loop?')
   
     def rmModeHap(self, hap): 
@@ -2895,7 +2899,7 @@ class Syscall():
             
 
     def checkTimeLoop(self, callname, tid):
-        if self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm') or self.no_exit_maze:
             return
         limit = 800
         delta_limit = 0x12a05f200
@@ -3262,3 +3266,7 @@ class Syscall():
             iov_addr = iov_addr+iov_size
         trace_msg = trace_msg+'\n'
         return trace_msg, full_byte_tuple
+
+    def noExitMaze(self):
+        self.lgr.debug('syscall noExitMaze') 
+        self.no_exit_maze = True

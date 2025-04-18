@@ -84,6 +84,7 @@ def runPlay(args, lgr, hits_prefix, full, workspace):
     else:
         afl_name = os.path.basename(here)
     print('Using afl_name %s' % afl_name)
+    lgr.debug('Using afl_name %s' % afl_name)
     resim_procs = []
 
     if not args.ini.endswith('.ini'):
@@ -114,6 +115,7 @@ def runPlay(args, lgr, hits_prefix, full, workspace):
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
     print('Found %d files in cover list' % len(cover_list))
+    lgr.debug('Found %d files in cover list' % len(cover_list))
     for cfile in cover_list:
         fstat = os.stat(cfile)
         if fstat.st_size == 0:
@@ -155,6 +157,7 @@ def runPlay(args, lgr, hits_prefix, full, workspace):
                         pass
                     continue 
                 print('do hit file %s' % hit_file)
+                lgr.debug('runPlayAFL do hit file %s' % hit_file)
                 for hit in coverage:
                     hit_i = int(hit)
                     if hit_i not in all_hits:
@@ -207,17 +210,24 @@ def main():
     else:
         root_prefix = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
     root_name = os.path.basename(root_prefix)
-    hits_prefix = os.path.join(ida_data, root_name)
+    root_dir = os.path.basename(os.path.dirname(root_prefix))
+    hits_prefix = os.path.join(ida_data, root_dir, root_name)
+    lgr.debug('runPlayAFL hits_prefix %s' % hits_prefix)
     os.makedirs(hits_prefix, exist_ok=True)
     if '/' in args.program:
         full = args.program
+        full_with_prefix = os.path.join(root_prefix, full)
     else:
         full_with_prefix = resimUtils.getFullPath(args.program, args.ini, lgr=lgr)
         if full_with_prefix is None:
             print('ERROR failed to get full path for program %s' % args.program)
             exit(1)
         full = full_with_prefix[len(root_prefix)+1:]
+    if not os.path.isfile(full_with_prefix):
+        print('ERROR, no file at %s' % full_with_prefix)
+        return
     print('Using analysis for program: %s' % full)   
+    lgr.debug('runPlayAFL Using analysis for program: %s' % full)   
     runPlay(args, lgr, hits_prefix, full, args.workspace)
   
 if __name__ == '__main__':

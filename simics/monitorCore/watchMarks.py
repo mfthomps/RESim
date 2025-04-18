@@ -52,9 +52,9 @@ class CopyMark():
                 trunc_string = ''
                 if truncated is not None:
                     if copy_start is not None:
-                        trunc_string = ' (trucated from %d original start 0x%x)' % (truncated, copy_start)        
+                        trunc_string = ' (truncated from %d original start 0x%x)' % (truncated, copy_start)        
                     else:
-                        trunc_string = ' (trucated from %d)' % (truncated)        
+                        trunc_string = ' (truncated from %d)' % (truncated)        
                 self.msg = '%s %d bytes%s from 0x%08x to 0x%08x . (from offset %d into buffer at 0x%08x)' % (fun_name, length, trunc_string, src, dest, offset, buf_start)
             else:
                 self.msg = '%s %d bytes from 0x%08x to 0x%08x . (Source buffer starts before known buffers!)' % (fun_name, length, src, dest)
@@ -267,14 +267,15 @@ class CompareMark():
         return self.msg
 
 class StrChrMark():
-    def __init__(self, start, the_chr, count):
+    def __init__(self, fun, start, the_chr, count):
+        self.fun = fun
         self.the_chr = the_chr
         self.start = start    
         self.count = count    
         if self.the_chr > 20 and self.the_chr < 256:
-            self.msg = 'strchr in string at 0x%08x find 0x%08x(%s) ' % (start, self.the_chr, chr(self.the_chr))
+            self.msg = '%s in string at 0x%08x find 0x%08x(%s) ' % (fun, start, self.the_chr, chr(self.the_chr))
         else:
-            self.msg = 'strchr in string at 0x%08x find 0x%08x' % (start, self.the_chr)
+            self.msg = '%s in string at 0x%08x find 0x%08x' % (fun, start, self.the_chr)
     def getMsg(self):
         return self.msg
 
@@ -855,7 +856,11 @@ class WatchMarks():
                     skip_this = False
                     if dest is not None:
                         cur_len = pm.mark.getSize()
-                        ok_dest = pm.mark.dest + cur_len + 1
+                        # TBD track down this off by one error
+                        if trans_size != 16:
+                            ok_dest = pm.mark.dest + cur_len + 1
+                        else:
+                            ok_dest = pm.mark.dest + cur_len 
                         self.lgr.debug('watchMarks dataRead addr: 0x%x dest: 0x%x previous_dest: 0x%x  prev_addr: 0x%x cur_len (pm.getSize()) 0x%x  ok_dest would be 0x%x trans_size %d' % (addr, 
                                       dest, pm.mark.dest, pm.mark.addr, cur_len, ok_dest, trans_size))
                         if dest != ok_dest:
@@ -929,7 +934,10 @@ class WatchMarks():
                 elif ip == mark_compare.compare_eip and ip == self.prev_ip[-1] and trans_size <= 2:
                     self.lgr.debug('watchMarks same compare as last one at 0x%x cmp_instruct %s' % (ip, mark_compare.compare_instruction)) 
                     prev_mark = self.getRecentMark()
-                    prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
+                    if type(prev_mark) == DataMark:
+                        prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
+                    else:
+                        self.lgr.debug('watchMarks but previous mark is a %s, not a DataMark' % type(prev_mark))
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
@@ -1146,7 +1154,8 @@ class WatchMarks():
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
             else:
                 if two_bytes:
-                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count*2)
+                    dst_str = self.mem_utils.readWinString(self.cpu, dest, count)
+                    #dst_str = self.mem_utils.readString(self.cpu, dest, count)
                 else:
                     dst_str = self.mem_utils.readString(self.cpu, dest, count)
             if dst_str is not None:
@@ -1182,12 +1191,12 @@ class WatchMarks():
         self.lgr.debug('watchMarks compare (%s) %s' % (fun, the_str))
         return wm
 
-    def strchr(self, start, the_chr, count):
-        cm = StrChrMark(start, the_chr, count)
+    def strchr(self, fun, start, the_chr, count):
+        cm = StrChrMark(fun, start, the_chr, count)
         self.removeRedundantDataMark(start)
         self.addWatchMark(cm)
         the_str = cm.getMsg().encode('utf-8', 'ignore')
-        self.lgr.debug('watchMarks strchr %s' % (the_str))
+        self.lgr.debug('watchMarks %s %s' % (fun, the_str))
 
     def strtoul(self, fun, src):
         cm = StrtousMark(fun, src)
@@ -1642,7 +1651,8 @@ class WatchMarks():
                 self.lgr.debug('watchMarks loaded my_marks with %d marks' % len(my_marks))
             except:
                 my_marks = []
-        new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
+        #new_marks = self.getJson(self.mark_list, packet=packet, start_index=start_index)
+        new_marks = self.getAllJson(packet=packet, start_index=start_index)
         my_marks.extend(new_marks)
         with open(fname, 'w') as fh:
             combined = {}
@@ -1686,10 +1696,14 @@ class WatchMarks():
                     my_marks.append(entry)
         return my_marks
 
-    def getAllJson(self):
+    def getAllJson(self, packet=1, start_index=1):
         self.lgr.debug('getAllJson %d stale and %d new marks' % (len(self.stale_marks), len(self.mark_list)))
-        all_marks = self.getJson(self.stale_marks)
-        new_marks = self.getJson(self.mark_list, start_index=len(self.stale_marks))
+        if start_index == 1:
+            all_marks = self.getJson(self.stale_marks)
+            new_marks = self.getJson(self.mark_list, start_index=len(self.stale_marks))
+        else:
+            all_marks = []
+            new_marks = self.getJson(self.mark_list, start_index=start_index)
         all_marks.extend(new_marks)
         self.lgr.debug('getAllJson returning %d marks' % len(all_marks))
         return all_marks

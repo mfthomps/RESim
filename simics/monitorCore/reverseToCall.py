@@ -833,7 +833,7 @@ class reverseToCall():
             elif reg_mod_type.mod_type != RegisterModType.BAIL:
                 done=True
                 ''' current eip modifies self.reg, done, or continue taint '''
-                self.lgr.debug('reverseToModReg got mod reg right off self.taint is %r reg_mod: %s' % (self.taint, reg_mod_type.toString()))
+                self.lgr.debug('reverseToModReg got mod reg right off self.taint is %r reg_mod: %s no_increments %r' % (self.taint, reg_mod_type.toString(), no_increments))
                 if not self.taint:
                     addr = None
                     if reg_mod_type.mod_type == RegisterModType.ADDR:
@@ -858,8 +858,10 @@ class reverseToCall():
                                 done = True
                                 self.cleanup(None)
                             else:
+                                self.lgr.debug('doToRevModReg no increments, not add call follow taint')
                                 self.followTaint(reg_mod_type)
                         else:
+                            self.lgr.debug('doToRevModReg NOT no increments, call follow taint')
                             self.followTaint(reg_mod_type)
                             
                     else:
@@ -975,7 +977,18 @@ class reverseToCall():
                             elif (mn.startswith('mov') or mn.startswith('sxt')) and self.decode.isReg(op1):
                                 self.lgr.debug('cycleRegisterMod type is reg')
                                 retval = RegisterModType(op1, RegisterModType.REG)
+                            elif mn == 'lea':
+                                self.lgr.debug('cycleRegisterMod is lea %s' % instruct[1])
+                                lea_reg = decode.adjustRegInBrackets(op1, self.lgr)
+                                if lea_reg is not None: 
+                                    self.lgr.debug('cycleRegisterMod lea is constant adjust, new reg %s' % lea_reg)
+                                    if lea_reg == self.reg:
+                                        done = False
+                                    else:
+                                        self.lgr.debug('cycleRegisterMod lea set mod type')
+                                        retval = RegisterModType(lea_reg, RegisterModType.REG)
                             elif mn.startswith('add') or mn.startswith('sub') or mn.startswith('rsb'):
+                                # looks like arm stuff?
                                 parts = op1.split(',') 
                                 if len(parts) == 2:
                                    rn = parts[0].strip()
@@ -1003,6 +1016,11 @@ class reverseToCall():
                                                    self.lgr.debug('cycleRegisterMod, out of ideas, bail')
                                                    self.context_manager.setIdaMessage('As far as we can go back.  TBD look for user input on add or sub.')
                                                    self.top.skipAndMail()
+                                elif not self.decode.isReg(op1) and not '[' in op1:
+                                    # assume constant 
+                                    self.lgr.debug('cycleRegisterMod, constant adjust to %s, keep going' % op0)
+                                    done = False 
+                                    
                                 
                     elif self.cpu.architecture.startswith('arm'):
                         if ']!' in instruct[1]:
@@ -1155,7 +1173,7 @@ class reverseToCall():
             Where does its value come from? '''
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('followTaint instruct at 0x%x is %s' % (eip, str(instruct)))
+        self.lgr.debug('followTaintX86 instruct at 0x%x self.reg %s instruct is %s' % (eip, self.reg, str(instruct)))
         op1, op0 = self.decode.getOperands(instruct[1])
         mn = self.decode.getMn(instruct[1])
         if not self.multOne(op0, mn) and not mn.startswith('mov') and not mn == 'pop' and not mn.startswith('cmov') \
@@ -1167,22 +1185,26 @@ class reverseToCall():
                if '[' in op1:
                    address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                    offset = self.task_utils.getMemUtils().readWord32(self.cpu, address)
-                   self.lgr.debug('followTaint, add check of %s, address 0x%x offset is 0x%x' % (op1, address, offset))
+                   self.lgr.debug('followTaintX86, add check of %s, address 0x%x offset is 0x%x' % (op1, address, offset))
                else:
                    offset = self.decode.getValue(op1, self.cpu, self.lgr)
                    self.lgr.debug('followTaint, add check offset of %s is 0x%x' % (op1, offset))
                if offset is not None and offset <= 8:
                    ''' wth, just an address adjustment? '''
-                   self.lgr.debug('followTaint, add of %x, assume address adjust, e.g., heap struct' % offset)
+                   self.lgr.debug('followTaintX86, add of %x, assume address adjust, e.g., heap struct' % offset)
                    self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                    self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
                    return 
             elif mn == 'xchg':
-                self.lgr.debug('followTaint, is xchg, track %s' % reg_mod_type.value)
+                self.lgr.debug('followTaintX86, is xchg, track %s' % reg_mod_type.value)
+                self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
+                return
+            elif mn == 'lea':
+                self.lgr.debug('followTaintX86, is lea, track %s' % reg_mod_type.value)
                 self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
                 return
              
-            self.lgr.debug('followTaint, not a move, we are stumped')
+            self.lgr.debug('followTaintX86, %s not a move, we are stumped cycle 0x%x' % (instruct[1], self.cpu.cycles))
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
             self.top.skipAndMail()
 
@@ -1194,10 +1216,10 @@ class reverseToCall():
             self.top.stopAtKernelWrite(esp, self, satisfy_value = self.satisfy_value, kernel=self.kernel, num_bytes=word_size, track=True)
 
         elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
-            self.lgr.debug('followTaint, is reg, track %s' % op1)
+            self.lgr.debug('followTaintX86, is reg, track %s' % op1)
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
-            self.lgr.debug('followTaint, is indrect reg, track %s' % op1)
+            self.lgr.debug('followTaintX86, is indrect reg, track %s' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
             self.bookmarks.setBacktrackBookmark('switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
@@ -1206,17 +1228,17 @@ class reverseToCall():
         #    address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
 
         else:
-            self.lgr.debug('followTaint, see if %s is an address' % op1)
+            self.lgr.debug('followTaintX86, see if %s is an address' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
             if address is not None:
-                self.lgr.debug('followTaint, yes, address is 0x%x' % address)
+                self.lgr.debug('followTaintX86, yes, address is 0x%x' % address)
                 if self.decode.isByteReg(op0) or 'byte ptr' in op1:
                     value = self.task_utils.getMemUtils().readByte(self.cpu, address)
                 else:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                 newvalue = self.task_utils.getMemUtils().getUnsigned(address+self.offset)
                 if newvalue is not None and value is not None: 
-                    self.lgr.debug('followTaint BACKTRACK eip: 0x%x value 0x%x at address of 0x%x loaded into register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
+                    self.lgr.debug('followTaintX86 BACKTRACK eip: 0x%x value 0x%x at address of 0x%x loaded into register %s call stopAtKernelWrite for 0x%x' % (eip, value, address, op0, newvalue))
                 if not mn.startswith('mov'):
                     self.bookmarks.setBacktrackBookmark('taint branch eip:0x%x inst:%s' % (eip, instruct[1]))
                     self.lgr.debug('BT bookmark: taint branch eip:0x%x inst %s' % (eip, instruct[1]))
@@ -1232,7 +1254,7 @@ class reverseToCall():
                     num_bytes = self.num_bytes
                 self.top.stopAtKernelWrite(newvalue, self, satisfy_value=self.satisfy_value, kernel=self.kernel, num_bytes=num_bytes, track=True)
             else:
-                self.lgr.debug('followTaint, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
+                self.lgr.debug('followTaintX86, BACKTRACK op1 %s not an address or register, stopping traceback' % op1)
                 self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
                 self.top.skipAndMail()
        

@@ -1275,7 +1275,7 @@ class WinSyscall():
             exit_eip1 = self.param.arm_ret
             exit_eip2 = self.param.arm_ret2
             if frame is None:
-                frame = self.task_utils.frameFromRegsComputed(word_size)
+                frame = self.task_utils.frameFromRegsComputed()
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
         elif syscall_info.calculated:
@@ -1284,14 +1284,14 @@ class WinSyscall():
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture.startswith('arm'):
                 if frame is None:
-                    frame = self.task_utils.frameFromRegsComputed(word_size)
+                    frame = self.task_utils.frameFromRegsComputed()
                 exit_eip1 = self.param.arm_ret
                 exit_eip2 = self.param.arm_ret2
                 exit_eip2 = None
                 #exit_eip3 = self.param.sysret64
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    frame = self.task_utils.frameFromRegsComputed(word_size)
+                    frame = self.task_utils.frameFromRegsComputed()
                     frame_string = taskUtils.stringFromFrame(frame)
                     #self.lgr.debug('frame computed string %s' % frame_string)
                 exit_eip1 = self.param.sysexit
@@ -1569,7 +1569,7 @@ class WinSyscall():
             if self.top.getAutoMaze():
                 SIM_run_alone(self.stopForMazeAlone, syscall)
             else:
-                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s')" % (tid, syscall))
+                rprint("Tid %s seems to be in a timer loop.  Try exiting the maze? Use @cgc.exitMaze('%s').  \nOr autoMaze() to always exit. \n or noExitMaze() to disable loop checking." % (tid, syscall))
                 SIM_break_simulation('timer loop?')
    
  
@@ -1847,37 +1847,8 @@ class WinSyscall():
             exit_info.sock_struct = sock_struct
             to_string = sock_struct.getString()
             trace_msg = trace_msg + ' ' + to_string
-            for call_param in self.call_params:
-                #self.lgr.debug('winSyscall subcall %s call_param.proc %s' % (call_param.subcall, call_param.proc))
-                if call_param.subcall == 'BIND' and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                     if call_param.match_param is not None:
-                         #self.lgr.debug('winSyscall match_param is %s' % str(call_param.match_param))
-                         go = None
-                         if sock_struct.port is not None:
-                             #self.lgr.debug('winSyscall sock_struct.port %s' % sock_struct.port)
-                             ''' look to see if this address matches a given pattern '''
-                             s = sock_struct.dottedPort()
-                             pat = call_param.match_param
-                             try:
-                                 go = re.search(pat, s, re.M|re.I)
-                             except:
-                                 self.lgr.error('invalid expression: %s' % pat)
-                                 return None, None
-                         
-                             #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
-                         if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
-                             self.lgr.debug('socketParse found match %s' % (call_param.match_param))
-                             syscall.addParam(exit_info, call_param)
-                             if go:
-                                 ida_msg = 'BIND to %s, FD: %d' % (s, sock_struct.fd)
-                             else:
-                                 ida_msg = 'BIND to %s, FD: %d' % (call_param.match_param, sock_struct.fd)
-                             self.context_manager.setIdaMessage(ida_msg)
-                             break
-
-                     if syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
-                         syscall.addParam(exit_info, call_param)
-                         self.sockwatch.bind(tid, sock_struct.fd, call_param)
+            if not self.checkMatchParams('BIND', sock_struct, exit_info): 
+                return None, None
 
         elif op_cmd == 'CONNECT':
 
@@ -1901,6 +1872,8 @@ class WinSyscall():
             to_string = sock_struct.getString()
             exit_info.sock_struct = sock_struct
             trace_msg = trace_msg+' '+to_string
+            if not self.checkMatchParams('CONNECT', sock_struct, exit_info): 
+                return None, None
         elif op_cmd == 'SUPER_CONNECT' or op_cmd == 'SUPER_CONNECT2':
 
             sock_addr = pdata_addr+10
@@ -1942,33 +1915,34 @@ class WinSyscall():
                         break
 
         elif op_cmd in ['RECV', 'RECV_DATAGRAM', 'SEND', 'SEND_DATAGRAM']:
+            # TBD Seems to vary.  Needs much testing.  Offsets dependent on other params?  API version IDs?
             if exit_info.count > 0:
                 trace_msg = trace_msg + ' OutputBuffer: 0x%x OutputBufferLength: %d' % (exit_info.retval_addr, exit_info.count)
        
             # data buffer address
             self.lgr.debug('winSyscall op_cmd <%s>' % op_cmd)
-            #if op_cmd in ['SEND', 'RECV']:
-            #    #exit_info.retval_addr = frame['param5']
-            #    exit_info.retval_addr = self.paramOffPtr(7, [0, 4], frame, word_size)
-            #    self.lgr.debug('winSyscall %s set retval_addr to 0x%x' % (op_cmd, frame['param5']))
-            #else:
-            #    exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
+
             exit_info.retval_addr = self.paramOffPtr(7, [0, word_size], frame, word_size)
-            # the return count address --> this is where kernel will store count ACTUALLY sent/received
+
             frame_string = taskUtils.stringFromFrame(frame)
             if exit_info.retval_addr is not None:
                 self.lgr.debug('winSyscall %s word_size %d retval_addr 0x%x' % (op_cmd, word_size, exit_info.retval_addr))
             else:
                 self.lgr.error('winSyscall %s word_size %d retval_addr None' % (op_cmd, word_size))
             #SIM_break_simulation('in send/recv') 
-            count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
-            #if word_size == 4:
-            #    count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            #if op_cmd in ['SEND'] and word_size == 8:
+            #    count_value = self.paramOffPtr(7, [0, 8], frame, word_size) 
             #else:
-            #    count_value = self.paramOffPtr(7, [0], frame, word_size) 
+            #    count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            count_value = self.paramOffPtr(7, [0, 0], frame, word_size) 
+            if count_value == 0 and op_cmd in ['SEND']:
+                count_value = self.paramOffPtr(7, [0, 8], frame, word_size) 
+                exit_info.retval_addr = self.paramOffPtr(7, [0, 0xc], frame, word_size)
+                self.lgr.debug('%s %s was zero HACK adjust offsets so now count_value 0x%x' % (op_cmd, comm, count_value))
             if count_value is not None:
                 send_string = ''
                 exit_info.count = count_value & 0xFFFFFFFF
+                self.lgr.debug('%s %s count_value 0x%x' % (op_cmd, comm, count_value))
 
                 if op_cmd == 'SEND_DATAGRAM':
                     if word_size == 8:
@@ -1976,7 +1950,7 @@ class WinSyscall():
                         exit_info.sock_addr = self.paramOffPtr(7, [0x60], frame, word_size) 
                     else:
                         exit_info.sock_addr = self.paramOffPtr(7, [0x34], frame, word_size) 
-                    self.lgr.debug('SEND_DATAGRAM sock_addr: 0x%x' % (exit_info.sock_addr))
+                    self.lgr.debug('SEND_DATAGRAM sock_addr: 0x%x count_value %d' % (exit_info.sock_addr, count_value))
                     sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
                     send_string = sock_struct.getString()
                     ## TBD UDP has different params than TCP?
@@ -1986,7 +1960,7 @@ class WinSyscall():
                     else:
                         exit_info.sock_addr = self.paramOffPtr(7, [0x10], frame, word_size) 
                     
-                    self.lgr.debug('RECV_DATAGRAM sock_addr: 0x%x' % (exit_info.sock_addr))
+                    self.lgr.debug('RECV_DATAGRAM sock_addr: 0x%x count_value %d' % (exit_info.sock_addr, count_value))
                     # TBD UDP has different params than TCP?
                     sock_struct = net.SockStruct(self.cpu, exit_info.sock_addr, self.mem_utils, exit_info.old_fd)
                     to_string = sock_struct.getString()
@@ -2098,6 +2072,42 @@ class WinSyscall():
                     exit_info.asynch_handler.setDataWatch(self.dataWatch, exit_info.syscall_instance.linger) 
         return op_cmd, trace_msg
 
+    def checkMatchParams(self, call_name, sock_struct, exit_info):
+            retval = True
+            for call_param in self.call_params:
+                #self.lgr.debug('winSyscall subcall %s call_param.proc %s' % (call_param.subcall, call_param.proc))
+                if call_param.subcall == call_name and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                     if call_param.match_param is not None:
+                         #self.lgr.debug('winSyscall match_param is %s' % str(call_param.match_param))
+                         go = None
+                         if sock_struct.port is not None:
+                             #self.lgr.debug('winSyscall sock_struct.port %s' % sock_struct.port)
+                             ''' look to see if this address matches a given pattern '''
+                             s = sock_struct.dottedPort()
+                             pat = call_param.match_param
+                             try:
+                                 go = re.search(pat, s, re.M|re.I)
+                             except:
+                                 self.lgr.error('invalid expression: %s' % pat)
+                                 return False
+                         
+                             #self.lgr.debug('socketParse look for match %s %s' % (pat, s))
+                         if len(call_param.match_param.strip()) == 0 or go or call_param.match_param == sock_struct.sa_data: 
+                             self.lgr.debug('socketParse found match %s' % (call_param.match_param))
+                             syscall.addParam(exit_info, call_param)
+                             if go:
+                                 ida_msg = '%s to %s, FD: %d' % (call_name, s, sock_struct.fd)
+                             else:
+                                 ida_msg = '%s to %s, FD: %d' % (call_name, call_param.match_param, sock_struct.fd)
+                             self.context_manager.setIdaMessage(ida_msg)
+                             break
+                     
+                     if call_name == 'BIND' and syscall.AF_INET in call_param.param_flags and sock_struct.sa_family == net.AF_INET:
+                         syscall.addParam(exit_info, call_param)
+                         self.sockwatch.bind(tid, sock_struct.fd, call_param)
+            return retval
+
+
     def getWordSize(self, tid):
         # determine if we are going to be doing 32 or 64 bit syscall
         if tid in self.word_size_cache:
@@ -2141,8 +2151,11 @@ class WinSyscall():
             self.lgr.debug('winSyscall doRecordLoad unable to get size.  Maybe executable is not in the local file system.  Otherwise, is path to executable defined in the ini file RESIM_root_prefix? Useing full_path %s')
             return 
         text_addr = load_addr + text_offset
-        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x%x' % size)
         self.soMap.addText(prog, tid, load_addr, size, machine, image_base, text_offset, full_path)
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        # stack base found via hurestic, windows libs manage it.
+        #self.top.recordStackBase(tid, sp)
+        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x% sp 0x%xx' % (size, sp))
 
     def rmPendingCall(self, tid):
         if tid in self.pending_calls:

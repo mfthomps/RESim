@@ -214,7 +214,7 @@ class WinCallExit():
                 # TBD hack to let prepInject get the exit info
                 self.matching_exit_info = exit_info
                 if exit_info.asynch_handler is not None:
-                    async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready, self.read_fixup_callback, self.read_fixup_callback)
+                    async_was_ready = exit_info.asynch_handler.exitingKernel(trace_msg, not_ready, self.read_fixup_callback)
                 if not async_was_ready:
                     self.lgr.debug('winCallExit ReadFile: not ready ')
                     trace_msg = trace_msg+' - Device not ready'
@@ -354,7 +354,7 @@ class WinCallExit():
                 
                 else: 
                     if self.read_fixup_callback is not None:
-                        self.read_fixup_callback()
+                        self.read_fixup_callback(exit_info.old_fd, exit_info.retval_addr)
 
                     if exit_info.asynch_handler is not None:
                         self.matching_exit_info = exit_info

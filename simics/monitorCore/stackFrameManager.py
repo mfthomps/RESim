@@ -47,6 +47,8 @@ class StackFrameManager():
         self.disassembler = disassembler
         self.stack_base = {}
         self.stack_cache = {}
+        self.stack2_cache = {}
+        self.best_stack_base = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
@@ -55,28 +57,37 @@ class StackFrameManager():
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
             return
-        cycle = self.cpu.cycles
-        if cycle in self.stack_cache and use_cache:
-            st = self.stack_cache[cycle]
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        if in_tid is not None:
+            tid = in_tid
         else:
-            cpu, comm, cur_tid = self.task_utils.curThread() 
-            if in_tid is not None:
-                tid = in_tid
+            tid = cur_tid
+        st = self.checkIpSpCache(tid)
+        if st is None:
+            cycle = self.cpu.cycles
+            if cycle in self.stack_cache and use_cache:
+                st = self.stack_cache[cycle]
             else:
-                tid = cur_tid
-            if tid not in self.stack_base:
-                stack_base = None
-            else:
-                stack_base = self.stack_base[tid]
-            if tid == cur_tid:
-                reg_frame = self.task_utils.frameFromRegs()
-            else:
-                reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(tid)
-           
-            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
-                     self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                     reg_frame, self.disassembler, self.lgr)
-            self.stack_cache[cycle] = st
+                if tid not in self.stack_base:
+                    stack_base = None
+                else:
+                    stack_base = self.stack_base[tid]
+                if tid == cur_tid:
+                    reg_frame = self.task_utils.frameFromRegs()
+                else:
+                    reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(tid)
+               
+                st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
+                         self.task_utils, stack_base, fun_mgr, self.targetFS, 
+                         reg_frame, self.disassembler, self.lgr)
+                if stack_base is None:
+                    self.recordMissingStackBase(tid, st.frames[-1].sp)
+                self.stack_cache[cycle] = st
+                key = self.cacheKey()
+                self.lgr.debug('stackFrameManager added key %s' % key)
+                if key not in self.stack2_cache:
+                    self.stack2_cache[key] = []
+                self.stack2_cache[key].append(st)
         st.printTrace(verbose)
 
     def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
@@ -84,65 +95,45 @@ class StackFrameManager():
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
             return
-        cycle = self.cpu.cycles
-        if cycle in self.stack_cache:
-            st = self.stack_cache[cycle]
+        tid, cpu = self.context_manager.getDebugTid() 
+        if tid is None:
+            cpu, comm, tid = self.task_utils.curThread() 
         else:
-            tid, cpu = self.context_manager.getDebugTid() 
-            if tid is None:
-                cpu, comm, tid = self.task_utils.curThread() 
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            if tid != cur_tid:
+                if fun_mgr.hasIDAFuns():
+                    self.lgr.debug('stackFrameManager getStackTraceQuiet not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
+                    tid = cur_tid
+                else:
+                    self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
+                    return None
+        st = self.checkIpSpCache(tid)
+        if st is None:
+            cycle = self.cpu.cycles
+            if cycle in self.stack_cache:
+                st = self.stack_cache[cycle]
             else:
-                cpu, comm, cur_tid = self.task_utils.curThread() 
-                if tid != cur_tid:
-                    if fun_mgr.hasIDAFuns():
-                        self.lgr.debug('stackFrameManager getStackTraceQuiet not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
-                        tid = cur_tid
-                    else:
-                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
-                        return None
-            if tid not in self.stack_base:
-                stack_base = None
-            else:
-                stack_base = self.stack_base[tid]
-            reg_frame = self.task_utils.frameFromRegs()
-            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
-                    self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                    reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
-            self.stack_cache[cycle] = st
+                if tid not in self.stack_base:
+                    stack_base = None
+                else:
+                    stack_base = self.stack_base[tid]
+                reg_frame = self.task_utils.frameFromRegs()
+                st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
+                        self.task_utils, stack_base, fun_mgr, self.targetFS, 
+                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
+                if stack_base is None:
+                    self.recordMissingStackBase(tid, st.frames[-1].sp)
+                self.stack_cache[cycle] = st
+                key = self.cacheKey()
+                self.lgr.debug('stackFrameManager added key %s' % key)
+                if key not in self.stack2_cache:
+                    self.stack2_cache[key] = []
+                self.stack2_cache[key].append(st)
         return st
 
     def getStackTrace(self):
         ''' used by IDA client '''
-        fun_mgr = self.top.getFunMgr()
-        if fun_mgr is None:
-            self.lgr.error('No function manager defined.  Debugging?')
-            return
-        cycle = self.cpu.cycles
-        if cycle in self.stack_cache:
-            st = self.stack_cache[cycle]
-        else:
-            tid, cpu = self.context_manager.getDebugTid() 
-            if tid is None:
-                cpu, comm, tid = self.task_utils.curThread() 
-            else:
-                cpu, comm, cur_tid = self.task_utils.curThread() 
-                if tid != cur_tid:
-                    if fun_mgr.hasIDAFuns():
-                        self.lgr.debug('stackFrameManager getStackTrace not in debug tid:%s, current is %s, but we have funs, use it' % (tid, cur_tid))
-                        tid = cur_tid
-                    else:
-                        self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
-                        return "{}"
-            self.lgr.debug('stackFrameManager getStackTrace tid %s' % tid)
-            if tid not in self.stack_base:
-                stack_base = None
-            else:
-                stack_base = self.stack_base[tid]
-            reg_frame = self.task_utils.frameFromRegs()
-            st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
-                      self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                      reg_frame, self.disassembler, self.lgr)
-            self.stack_cache[cycle] = st
+        st = self.getStackTraceQuiet()
         j = st.getJson() 
         self.lgr.debug(j)
         #print j
@@ -158,6 +149,8 @@ class StackFrameManager():
         if os.path.isfile(stack_base_file):
             self.lgr.debug('stackFrameManager stack_base pickle from %s' % stack_base_file)
             self.stack_base = pickle.load( open(stack_base_file, 'rb') ) 
+            for tid in self.stack_base:
+                self.lgr.debug('stackFrameManager loadPickle tid:%s stack_base 0x%x' % (tid, self.stack_base[tid]))
 
     def setStackBase(self):
         ''' debug cpu not yet set.  TBD align with debug cpu selection strategy '''
@@ -171,17 +164,22 @@ class StackFrameManager():
         if self.mode_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('modeChangeForStack tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
-        RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-        self.mode_hap = None
-        
+        rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
+        self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
+        if tid != want_tid:
+            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d bail' % (tid, want_tid, old, new))
+            return 
         #if new != Sim_CPU_Mode_Supervisor:
         ''' catch entry into kernel so that we can read SP without breaking simulation '''
         if new == Sim_CPU_Mode_Supervisor:
             esp = self.mem_utils.getRegValue(self.cpu, 'sp')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('stackFrameManager modeChangedForStack, calling into  kernel mode eip: 0x%x esp: 0x%x' % (eip, esp))
+            self.lgr.debug('stackFrameManager modeChangedForStack tid:%s , calling into kernel mode eip: 0x%x esp: 0x%x cycle: 0x%x' % (tid, eip, esp, self.cpu.cycles))
             self.setStackBase()
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.mode_hap = None
+        #else:
+        #    SIM_break_simulation('remove this')
 
     def recordStackBase(self, tid, sp):
         if tid is not None and sp is not None:
@@ -236,3 +234,58 @@ class StackFrameManager():
             ptr = ptr + offset
         if fh is not None:
             fh.close()
+
+    def recordMissingStackBase(self, tid, base):
+        if tid not in self.best_stack_base:
+            self.best_stack_base[tid] = {}
+        if base not in self.best_stack_base[tid]:
+            self.best_stack_base[tid][base] = 1
+        else:
+            self.best_stack_base[tid][base] = self.best_stack_base[tid][base] + 1
+        if self.best_stack_base[tid][base] >= 5:
+            self.stack_base[tid] = base
+            self.lgr.debug('stackFrameManager recordStackBase decided base is 0x%x for tid:%s' % (base, tid))
+
+    def cacheKey(self):
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        ip = self.mem_utils.getRegValue(self.cpu, 'ip')
+        key = '0x%x-0x%x' % (sp, ip)
+        return key
+
+    def checkIpSpCache(self, tid):
+        retval = None
+        matched = False
+        key = self.cacheKey()
+        self.lgr.debug('stackFrameManager check key %s' % key)
+        if key in self.stack2_cache:
+            #st = self.stack2_cache[key]
+            for st in self.stack2_cache[key]:
+                matched = True
+                for frame in st.frames:
+                    if frame.ret_to_addr is not None:
+                       my_ret_to = self.readAppPtr(tid, frame.ret_to_addr)
+                       if my_ret_to is not None:
+                           if my_ret_to == frame.ret_addr:
+                               pass
+                           else:
+                               self.lgr.debug('stackFrameManager checkIpSpCache mismatch in frame with ip 0x%x key %s my_ret_to 0x%x frame_ret_addr 0x%x' % (frame.ip, key, my_ret_to, frame.ret_addr))
+                               matched = False
+                               break
+                       else:
+                           self.lgr.debug('stackFrameManager checkIpSpCache failed to read my_ret_to from 0x%x' % frame.ret_to_addr)
+                           matched = False
+                           break
+                if matched:
+                    retval = st
+                    self.lgr.debug('stackFrameManager checkIpSpCached found match for key %s' % key)
+                    break
+        return retval
+
+    def readAppPtr(self, tid, addr):
+        word_size = self.soMap.wordSize(tid)
+        if word_size == 4: 
+            retval = self.mem_utils.readWord32(self.cpu, addr)
+        else:
+            retval = self.mem_utils.readWord(self.cpu, addr)
+        return retval
+

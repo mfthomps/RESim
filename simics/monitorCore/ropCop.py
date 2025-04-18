@@ -177,7 +177,7 @@ class RopCop():
         self.top.removeDebugBreaks()
         self.top.stopDataWatch()
         self.bookmarks.setDebugBookmark(bm)
-        self.top.skipAndMail()
+        self.top.skipAndMail(restore_debug=False)
 
     def clearHap(self):
         if self.rop_hap is not None:

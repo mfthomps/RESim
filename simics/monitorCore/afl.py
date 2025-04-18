@@ -379,11 +379,18 @@ class AFL():
             self.stop_hap = None
             #self.lgr.debug('afl removed stop hap')
 
+    def traceChecksum(self, trace_bits):
+        cksum = 0
+        for byte in trace_bits:
+            cksum += byte
+        return cksum & 0xff
     def finishUp(self): 
             if self.bad_trick and self.empty_trace_bits is not None:
                 trace_bits = self.empty_trace_bits
             else:
                 trace_bits = self.coverage.getTraceBits()
+                #cksum = self.traceChecksum(trace_bits)
+                #self.lgr.debug('afl finishup cksum is 0x%x' % cksum)
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
             new_hits = self.coverage.getHitCount() 
@@ -404,7 +411,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -441,8 +448,10 @@ class AFL():
                     self.lgr.debug('afl test file, found %d unique hits, HUNG. Done' % self.total_hits)
                     print('afl test file %s, found %d unique hits hung ' % (self.test_file, self.total_hits))
                 else:
-                    self.lgr.debug('afl test file, found %d unique hits. Done' % self.total_hits)
-                    print('afl test file %s, found %d unique hits' % (self.test_file, self.total_hits))
+                    now = time.time()
+                    delta = (now - self.tmp_time)
+                    self.lgr.debug('afl test file, found %d unique hits. 0x%x cycles in %.2f seconds Done' % (self.total_hits, delta_cycles, delta))
+                    print('afl test file %s, found %d unique hits, 0x%x cycles %.2f seconds' % (self.test_file, self.total_hits, delta_cycles, delta))
                 return
 
             if self.one_done:
@@ -539,6 +548,7 @@ class AFL():
         #self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
+            self.tmp_time = time.time()
             self.lgr.debug('afl goN first, context is %s' % str(self.target_cpu.current_context))
             if self.test_file is None:
                 self.in_data = self.getMsg()
@@ -611,11 +621,13 @@ class AFL():
         SIM_continue(0)
 
     def doWriteData(self):
+        shared_syscall = self.top.getSharedSyscall()
         if self.write_data is None:
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                  self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 
                  pad_to_size=self.pad_to_size, filter=self.filter_module, backstop_cycles=self.backstop_cycles, force_default_context=True,
-                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max,backstop_delay=self.backstop_delay)
+                 stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max,backstop_delay=self.backstop_delay,
+                 shared_syscall=shared_syscall)
         else:
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 

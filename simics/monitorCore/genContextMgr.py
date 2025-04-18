@@ -576,7 +576,7 @@ class GenContextMgr():
             SIM_run_alone(self.restoreSuspendContext, None)
             #self.restoreSuspendContext()
         elif new_task in self.watch_rec_list:
-            if not self.isDebugContext():
+            if not self.isDebugContext() and self.debugging_tid is not None:
                 #self.lgr.debug('contextManager alterWatches restore RESim context tid:%s' % tid)
                 #SIM_run_alone(self.restoreDebugContext, None)
                 self.restoreDebugContext()
@@ -598,10 +598,11 @@ class GenContextMgr():
             However we could be switching to a suspended thread
         '''
         if tid is None:
-            return
+            return False
         retval = False       
         #self.lgr.debug('onlyOrIgnore comm %s' % comm)
         if tid in self.ignore_threads:
+            #self.lgr.debug('onlyOrIgnore tid:%s in ignore_threads' % tid)
             if self.cpu.current_context != self.ignore_context:
                 #SIM_run_alone(self.restoreIgnoreContext, None)
                 self.restoreIgnoreContext()
@@ -613,10 +614,12 @@ class GenContextMgr():
                     #self.lgr.debug('ignoring context for tid:%s comm %s' % (tid, comm))
                     #SIM_run_alone(self.restoreIgnoreContext, None)
                     self.restoreIgnoreContext()
+                retval = True 
             elif len(self.suspend_watch_list) > 0:
                 if new_addr is not None and self.isSuspended(new_addr):
                     #SIM_run_alone(self.restoreSuspendContext, None)
                     self.restoreSuspendContext()
+                    retval = True 
                 else:
                     #SIM_run_alone(self.restoreDefaultContext, None)
                     self.restoreDefaultContext()
@@ -627,7 +630,6 @@ class GenContextMgr():
                 self.restoreDefaultContext()
                 if len(self.watch_for_prog) > 0: 
                     self.checkFirstSchedule(new_addr, tid, comm)
-            retval = True 
         elif len(self.only_progs) > 0 and self.debugging_tid is None:
             #self.lgr.debug('onlyOrIgnore tid:%s comm %s' % (tid, comm))
             if comm not in self.only_progs:
@@ -635,11 +637,13 @@ class GenContextMgr():
                     #self.lgr.debug('ignoring context for comm tid:%s %s' % (tid, comm))
                     #SIM_run_alone(self.restoreIgnoreContext, None)
                     self.restoreIgnoreContext()
+                retval = True 
             elif len(self.suspend_watch_list) > 0:
                 if new_addr is not None and self.isSuspended(new_addr):
                     #self.lgr.debug('restore suspend context for tid:%s comm %s' % (tid, comm))
                     #SIM_run_alone(self.restoreSuspendContext, None)
                     self.restoreSuspendContext()
+                    retval = True 
                 else:
                     #SIM_run_alone(self.restoreDefaultContext, None)
                     self.restoreDefaultContext()
@@ -651,10 +655,9 @@ class GenContextMgr():
                 if len(self.watch_for_prog) > 0:
                     self.checkFirstSchedule(new_addr, tid, comm)
                 if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
-                    self.lgr.debug('contextManager is in only_prog, watch exit for tid: %s' % tid)
+                    #self.lgr.debug('contextManager is in only_prog, watch exit for tid: %s' % tid)
                     self.watchExit(tid=tid)
                 #self.lgr.debug('restore default context for tid:%s comm %s' % (tid, comm))
-            retval = True 
             
             if tid is not None and self.catch_tid is not None:
                 #self.lgr.debug('contextManager onlyOrIgnore self.catch_tid %s  tid %s' % (self.catch_tid, tid))
@@ -662,7 +665,8 @@ class GenContextMgr():
                     #self.lgr.debug('contextManager onlyOrIgnore thread do catch_callback for tid %s' % tid)
                     #SIM_break_simulation('in tid %s' % tid)
                     if self.catch_callback is not None: 
-                        SIM_run_alone(self.catch_callback, None)
+                        self.lgr.debug('contextManager onlyOrIgnore do catch callback tid:%s' % tid)
+                        SIM_run_alone(self.catch_callback, tid)
                     else:
                         SIM_break_simulation('changed thread, now in tid %s' % tid)
                     self.catch_tid = None
@@ -737,7 +741,6 @@ class GenContextMgr():
             return 
         else:
             self.checkFirstSchedule(new_addr, tid, comm)
-       
         if len(self.pending_watch_tids) > 0:
             ''' Are we waiting to watch tids that have not yet been scheduled?
                 We don't have the process rec until it is ready to schedule. '''
@@ -789,23 +792,25 @@ class GenContextMgr():
                             leader_tid = None
                             break 
             if add_task:
-                self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
+                #self.lgr.debug('contextManager changedThread, adding windows tasks new addr 0x%x' % new_addr)
                 self.addTask(tid, new_addr, watch_exit=False)
+                self.tid_cache.append(tid)
 
         self.alterWatches(new_addr, prev_task, tid)
         if add_task:
             self.top.addProc(tid, leader_tid, comm, clone=True)
             self.watchExit(new_addr, tid)
             # TBD do we need this?  results in a mode hap and recording stack at start of execve?
-            self.top.recordStackClone(tid, leader_tid)
+            if not self.top.isWindows():
+                self.top.recordStackClone(tid, leader_tid)
         if self.catch_tid is not None:
-            self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
+            #self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
             #if self.catch_tid == tid or (self.catch_tid == '-1' and tid in self.tid_cache) or (self.catch_tid == '-2' and tid != '0') or \
             if self.catch_tid == tid or (self.catch_tid == '-1' and self.amWatching(tid)) or (self.catch_tid == '-2' and tid != '0') or \
                                         (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0]):
                 self.lgr.debug('contextManager changedThread do catch_callback for tid %s' % tid)
                 if self.catch_callback is not None: 
-                    SIM_run_alone(self.catch_callback, None)
+                    SIM_run_alone(self.catch_callback, tid)
                 else:
                     SIM_break_simulation('changed thread, now in tid %s' % tid)
                 self.catch_tid = None
@@ -819,7 +824,7 @@ class GenContextMgr():
         else:
             self.catch_tid = tid
         self.catch_callback = callback 
-        self.lgr.debug('contectManager catchTid %s' % self.catch_tid)
+        self.lgr.debug('contectManager catchTid %s callback %s' % (self.catch_tid, str(callback)))
         self.setTaskHap(tid=tid)
 
     def watchAll(self):
@@ -910,10 +915,10 @@ class GenContextMgr():
             rec = self.task_utils.getRecAddrForTid(tid)
         if rec not in self.watch_rec_list:
             if rec is None:
-                self.lgr.debug('contextManager, addTask got rec of None for tid %s, pending' % tid)
+                self.lgr.debug('contextManager, addTask got rec of None for tid %s, pending cycle: 0x%x' % (tid, self.cpu.cycles))
                 self.pending_watch_tids.append(tid)
             else:
-                self.lgr.debug('contextManager, addTask tid %s add rec 0x%x watch_exit %r' % (tid, rec, watch_exit))
+                self.lgr.debug('contextManager, addTask tid %s add rec 0x%x watch_exit %r cycle: 0x%x' % (tid, rec, watch_exit, self.cpu.cycles))
                 self.watch_rec_list[rec] = tid
                 if watch_exit:
                     self.watchExit(rec=rec, tid=tid)
@@ -1133,7 +1138,7 @@ class GenContextMgr():
             self.lgr.debug('contextManager restoreWatchTasks restore RESim context')
             self.restoreDebugContext()
 
-    def watchTasks(self, set_debug_tid = False, tid=None):
+    def watchTasks(self, set_debug_tid = False, tid=None, restore_debug=True):
         if self.top.isVxDKM():
             return
         self.lgr.debug('contextManager watchTasks set_debug_tid: %r' % set_debug_tid)
@@ -1150,7 +1155,7 @@ class GenContextMgr():
         if self.task_break is None:
             self.setTaskHap()
         self.watching_tasks = True
-        if len(self.watch_rec_list) == 0:
+        if len(self.watch_rec_list) == 0 and restore_debug:
             self.lgr.debug('watchTasks, call restoreDebug')
             self.restoreDebug()
         if set_debug_tid:
@@ -1565,7 +1570,7 @@ class GenContextMgr():
         self.comm_prog_map[comm]=prog
         if comm not in self.only_progs:
             self.only_progs.append(comm)
-            self.lgr.debug('contextManager onlyProg %s' % comm)
+            #self.lgr.debug('contextManager onlyProg %s' % comm)
             self.setTaskHap()
             if prog.startswith('/'):
                 existing_tids = self.task_utils.getTidsForComm(comm)
@@ -1643,7 +1648,7 @@ class GenContextMgr():
         if not self.didListLoad():
             self.lgr.debug('contextManager loadOnlyList')
             if os.path.isfile(fname):
-                self.lgr.debug('loadIgnoreList %s' % fname)
+                self.lgr.debug('loadOnlyList %s' % fname)
                 with open(fname) as fh:
                     for line in fh:
                         if line.startswith('#'):
@@ -1656,7 +1661,7 @@ class GenContextMgr():
         if retval:
             cur_tid = self.task_utils.curTID()
             comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm not in self.ignore_progs:
+            if comm not in self.only_progs:
                 self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
                 self.restoreIgnoreContext()
         return retval

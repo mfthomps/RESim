@@ -7,6 +7,7 @@ import hapCleaner
 import resimUtils
 import memUtils
 import glob
+import os
 ''' TBD extend for multiple concurrent threads and multiple skip SO files '''
 class Prec():
     def __init__(self, cpu, proc, tid=None, who=None):
@@ -45,6 +46,9 @@ class RunTo():
         self.write_hap = None
         # just a cheap global used to reflect we are interested in any thread within the proc
         self.threads = False
+        # for SO tracing
+        self.want_tid = None
+        self.so_haps = {}
 
     def delStopHap(self, dumb):
         if self.stop_hap is not None:
@@ -110,6 +114,41 @@ class RunTo():
                 SIM_run_alone(self.stopIt, None)
             #else:
             #    self.lgr.debug('soMap knownHap wrong tid, wanted %d got %d' % (tid, cur_tid))
+
+    def traceHap(self, start, the_obj, break_num, memory):
+        if start not in self.so_haps or self.so_haps[start] is None:
+            self.lgr.debug('runTo traceHap start 0x%x not in so_haps,bail' % start)
+        else:
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            #self.lgr.debug('runTo traceHap start 0x%x addr 0x%x tid:%s want_tid:%s' % (start, memory.logical_address, cur_tid, self.want_tid))
+            right_tid = False
+            if self.threads:
+                group_tids = self.task_utils.getGroupTids(self.want_tid)
+                if cur_tid in group_tids: 
+                    right_tid = True
+            else:
+                if cur_tid == self.want_tid:
+                    right_tid = True
+            if right_tid:
+                value = memory.logical_address
+                fname, start, end = self.so_map.getSOInfo(value)
+                if fname is not None and start is not None:
+                    if start not in self.so_haps:
+                        self.lgr.debug('runTo traceHap start 0x%x not in so_haps' % start)
+                    elif self.so_haps[start] is None:
+                        self.lgr.debug('runTo traceHap start 0x%x in so_haps as None' % start)
+                   
+                    else:
+                        self.lgr.debug('soMap traceHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
+                        self.context_manager.genDeleteHap(self.so_haps[start])
+                        self.so_haps[start] = None
+                    
+                else:
+                    self.lgr.debug('soMap traceHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
+            else:
+                #self.lgr.debug('soMap traceHap tid:%s is not the right tid %s' % (cur_tid, self.want_tid))
+                pass
+
         
     def runToKnown(self, skip=None, reset=False, threads=False):        
        self.threads = threads
@@ -125,7 +164,7 @@ class RunTo():
            if skip is None or not (skip >= section.addr and skip <= end):
                proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
                self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
-               #self.lgr.debug('runTo runToKnown set break on 0x%x size 0x%x' % (section.addr, section.size))
+               self.lgr.debug('runTo runToKnown set break on 0x%x size 0x%x' % (section.addr, section.size))
            else:
                self.skip_list.append(section.addr)
                self.lgr.debug('soMap runToKnow, skip 0x%x' % (skip))
@@ -374,14 +413,49 @@ class RunTo():
         self.lgr.debug('runTo setOriginWhenStopped')
         self.stop_action.addFun(f1)
 
-    def setRunToSOBreak(self, addr, size):
+    def traceSO(self, threads=True):
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.lgr.debug('runTo traceSO tid:%s (%s)' % (cur_tid, comm))
+        code_section_list = self.so_map.getCodeSections(cur_tid)
+        self.want_tid = cur_tid
+        for section in code_section_list:
+            addr = section.addr
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, section.size, 0)
+            hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.traceHap, section.addr, proc_break, 'traceSO')
+            self.so_haps[section.addr] = hap
+        self.lgr.debug('runTo traceSO set %d section breaks' % len(code_section_list))
+
+    def runToMainSO(self, threads=False):
+        self.lgr.debug('runTo runToMainSO thread: %r' % threads)
+        main_dll_file = self.top.getCompDict(self.cell_name, 'MAIN_LIBS')
+        if main_dll_file is not None:
+            if os.path.isfile(main_dll_file):
+                cpu, comm, cur_tid = self.task_utils.curThread() 
+                main_dll_list = []
+                with open(main_dll_file) as fh:
+                    for line in fh:
+                        main_dll_list.append(line.strip())
+                self.lgr.debug('runTo runToMainSO got %d dlls in list' % len(main_dll_list))
+                code_section_list = self.so_map.getCodeSections(cur_tid)
+                dll_section_list = []
+                for section in code_section_list:
+                    if section.fname in main_dll_list: 
+                        dll_section_list.append(section)
+                self.setRunToSOBreak(dll_section_list)
+                SIM_continue(0)
+            else:
+                self.lgr.error('runTo runToMainSO, no file at %s' % main_dll_file)
+                
+
+    def setRunToSOBreak(self, section_list):
        cpu, comm, cur_tid = self.task_utils.curThread() 
        hap_clean = hapCleaner.HapCleaner(self.cpu)
        f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
        self.stop_action = hapCleaner.StopAction(hap_clean, flist=[f1])
-       end = addr+size
-       proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, size, 0)
-       self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
+       for section in section_list:
+           addr = section.addr
+           proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, addr, section.size, 0)
+           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
 
     def runToSO(self, fname, threads=False):        
        ''' run until the give SO/DLL file.  if not loaded, use soMap/winDLL to call us back when it is loaded'''
@@ -397,7 +471,8 @@ class RunTo():
            if section.addr in self.skip_list:
                continue
            if section.fname.lower().endswith(fname.lower()):
-               self.setRunToSOBreak(section.addr, section.size)
+               #self.setRunToSOBreak(section.addr, section.size)
+               self.setRunToSOBreak([section])
                self.lgr.debug('runTo runToSO set break on 0x%x size 0x%x' % (section.addr, section.size))
                got_one = True
                SIM_continue(0)

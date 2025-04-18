@@ -255,11 +255,19 @@ class Coverage():
         self.stopCover()
         tmp_list = []
         prev_bp = None
+        # TBD remove this
+        #missed_fun_file = '/tmp/missed_funs.json' 
+        #missed_funs = []
+        #with open(missed_fun_file) as fh:
+        #    missed_funs = json.load(fh)
         for fun in self.blocks:
+            fun_addr = int(fun)
+        #    if fun_addr in missed_funs:
+        #        continue
             for block_entry in self.blocks[fun]['blocks']:
                 bb = block_entry['start_ea']
                 bb_rel = bb + self.offset
-                self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
+                #self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
                 # TBD REMOVE THIS
                 #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
                 #return

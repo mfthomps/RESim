@@ -368,7 +368,7 @@ def findListFrom(pattern, from_dir):
     return retval
 
 def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
-    lgr.debug('resimUtils getfileInsensitve path %s' % path)
+    #lgr.debug('resimUtils getfileInsensitve path %s' % path)
     got_it = False
     retval = root_prefix
     cur_dir = root_prefix
@@ -379,12 +379,19 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
             dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
 
             for d in dlist:
-                if d.upper() == p.upper():
+                #lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
+                if '~' in p:
+                    tilda_parts = p.split('~')
+                    if d.lower().startswith(tilda_parts[0].lower()): 
+                        retval = os.path.join(retval, d)
+                        cur_dir = os.path.join(cur_dir, d)
+                        break
+                elif d.upper() == p.upper():
                     retval = os.path.join(retval, d)
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():
@@ -425,7 +432,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
 
 def realPath(full_path):
         retval = full_path
-        if os.path.islink(full_path):
+        if full_path is not None and os.path.islink(full_path):
             parent = os.path.dirname(full_path)
             actual = os.readlink(full_path)
             retval = os.path.join(parent, actual)

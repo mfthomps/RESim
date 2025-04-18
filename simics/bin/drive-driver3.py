@@ -232,10 +232,11 @@ def main():
     except:
         pass
     remote_directives_file = os.path.join(udir, 'directives.sh')
-    print('remove_directives_file is %s' % remote_directives_file)
+    print('remote_directives_file is %s' % remote_directives_file)
 
     directives_script = '/tmp/directives.sh'
     driver_file = open(remote_directives_file, 'w')
+    driver_file.write('#!/bin/bash\n')
     if args.disconnect:
         driver_file.write('chmod a+x /tmp/simics-magic\n')
         driver_file.write('/tmp/simics-magic\n')

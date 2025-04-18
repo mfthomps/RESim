@@ -87,6 +87,8 @@ class WinDelay():
 
         self.read_fixup_callback = None
 
+        self.traceFiles = self.top.getTraceFiles()
+
     def setDataWatch(self, data_watch, linger):
         #self.lgr.debug('winDelay setDataWatch')
         if self.top.tracking():
@@ -179,9 +181,9 @@ class WinDelay():
             byte_array = self.mem_utils.getBytes(self.cpu, max_bytes, self.exit_info.retval_addr)
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
-                # TBD add traceFiles to windows
-                #if self.traceFiles is not None:
-                #    self.traceFiles.read(tid, exit_info.old_fd, byte_array)
+                if self.traceFiles is not None:
+                    tid = self.top.getTID()
+                    self.traceFiles.read(tid, self.exit_info.old_fd, byte_array)
             else:
                 read_data = '<< NOT MAPPED >>'
 
@@ -192,20 +194,30 @@ class WinDelay():
                 self.lgr.debug('winDelay getIOData already did exit so log the trace message %s' % trace_msg)
             else:
                 trace_msg = self.call_name+' handle: 0x%x return count: 0x%x request: 0x%x address: 0x%x data: %s\n' % (self.fd, return_count, self.exit_info.count, self.exit_info.retval_addr, repr(read_data))
-                self.lgr.debug('winDelay tid:%s getIOData have not yet done exit so log SAVE the trace message %s' % (self.tid, trace_msg))
+                self.lgr.debug('winDelay getIOData tid:%s getIOData have not yet done exit so log SAVE the trace message %s' % (self.tid, trace_msg))
             if self.call_name == 'RECV_DATAGRAM':
-                self.lgr.debug('winDelay tid:%s get sock struct from addr 0x%x' % (self.tid, self.sock_addr))
+                self.lgr.debug('winDelay getIOData tid:%s get sock struct from addr 0x%x' % (self.tid, self.sock_addr))
                 self.exit_info.sock_addr = self.sock_addr
                 sock_struct = net.SockStruct(self.cpu, self.sock_addr, self.mem_utils, -1)
                 sock_string = sock_struct.getString()
                 trace_msg = trace_msg + ' '+sock_string+'\n'
-                self.lgr.debug('winDelay RECV_DATAGRAM socket addr %s' % sock_string)
+                self.lgr.debug('winDelay getIOData RECV_DATAGRAM socket addr %s' % sock_string)
                 #SIM_break_simulation(trace_msg)
             if self.call_name in ['RECV_DATAGRAM', 'RECV', 'SEND', 'SEND_DATAGRAM']:
                 for call_param in self.exit_info.call_params:
+                    self.lgr.debug('winDelay getIOData param name %s check for call %s sub_match is %s' % (call_param.name, self.call_name, call_param.sub_match))
                     if call_param.match_param is not None and call_param.name in ['runToReceive', 'runToSend']:
                         if call_param.match_param in read_data:
-                            self.lgr.debug('winDelay got match of matched_param.')  
+                            self.lgr.debug('winDelay getIOData got match of matched_param.')  
+                            call_param.match_param = None
+                            self.exit_info.matched_param = call_param
+                        else:
+                            self.exit_info.matched_param = None
+                            self.do_not_stop = True
+                            pass
+                    elif call_param.sub_match is not None and call_param.name in ['runToIO']:
+                        if call_param.sub_match in read_data:
+                            self.lgr.debug('winDelay getIOData got match of sub_match.')  
                             call_param.match_param = None
                             self.exit_info.matched_param = call_param
                         else:

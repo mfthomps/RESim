@@ -354,6 +354,9 @@ NOTE: for windows, if the process is not running, it runs until it is created.  
 \item {\tt autoMaze} -- Avoid being prompted when tracing detects a crude timing loop or other events that are repeated many times in a loop.
 See section \ref{maze}.
 
+\item {\tt noExitMaze} -- Do not check for tight timing  loops.
+See section \ref{maze}.
+
 \item {\tt instructTrace(file, all\_proc=False, kernel=False, watch\_threads=False) -- Generate an instruction trace and save it into the named file. Use the kernel
 flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all threads of the current process.}  The file name is relative to /tmp.
 
@@ -525,7 +528,7 @@ Also see \ref{tracking}
 \begin{itemize}
 
 \item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True, \
-             commence=None, max\_marks=None)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+             commence=None, max\_marks=None, track\_calls=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
 points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
@@ -548,9 +551,11 @@ are then referenced when injecting data into the kernel as described in \ref{pre
 Use an optional {\tt run=False} to prevent RESim from continuing the simulation, e.g., so that you can run commands such as ptime.
 
 Use an optional {\tt commence=string} to delay data tracking until the received data starts with a given string.  This can be useful when a socket receives a lot of traffic and you
-wish to focus on traffic that you are sending.  Do not use this along with kbuf.
+wish to focus on traffic that you are sending.  Use the commence\_offset parameter to skip N characters before testing for commence.  Do not use this along with kbuf.
 
 Use {\tt max\_marks} to stop the simulation after a given number of watch marks are generated.
+
+Use {\tt track\_calls} to generate watch marks for each syscall.
 
 \item {\tt trackProgArgs} Track references to arguments provided to the program as argv values.
 
@@ -3108,7 +3113,7 @@ Creating a process trace on such a program could take hours (or days) because th
 
 While tracing system calls of a process, invocations of system calls are tracked and compared to a frequency threshold.  When it appears that the program is spinning on a clock or an event such as {\tt waitpid}, the user is prompted with an option to attempt to exit the loop. If the user so chooses, RESim will step through a single circuit of the timing loop, recording instructions at the outermost level of scope. It then searches the recorded instructions to identify all conditional jump instructions, and their destinations. Each destination is inspected to determine if it was encountered within the loop.  If not, the destination and the comparison operator that controlled the jump is recorded.  Breakpoints are set on each such destination address.  We then disable all other breakpoints, e.g., those involved in tracing and context management, and run until we reach a breakpoint.  
 This feature is called a \textit{maze exit}.  If you would like to avoid the prompts, use the {\tt @cgc.autoMaze()} function to cause the system
-to automatically try ot exit mazes as efficiently as it can.
+to automatically try ot exit mazes as efficiently as it can.  Use noExitMaze() to disable loop checking.
 
 RESim includes an optional function to ensure that the number of breakpoints does not exceed 4 (the quantity of hardware breakpoints supported by x86).  If more than 4 breakpoints are found the analyst can guide the removal of breakpoints. RESim will automatically execute the loop a large number of times in order to identify comparisons that may be converging.  And the user is informed of those to aid the reduction of the quantity of breakpoints.  (Note that in the context of this issue, there are less than or equal to 4 breakpoints and more than 4.  There is probably a lot more than 4 as well, but we've not yet quantified its effects.)
 
@@ -3990,6 +3995,21 @@ are the registers rcx; rdx; r8; and r9.  The remaining four are pointers relativ
 In the above example, item 13 reflects the kernel reading the socket information, including the IP address and port.
 The record tells us the address of that sock struct is 10 bytes relative to the address found in the third stack parameter,
 and is thus frame['param7'] in the RESim frames within winSyscall.py.
+
+Another example (updated record format) from a SEND:
+\begin{verbatim}
+        20 addr: 0x2ef6f8 read: b'000000ce' size: 4 best_base: 0x2ef6f0  best_base_delta: 0x8 \
+               ptr 0x2ef6f0 base 0x2ef530 offset 0x0 ptr 0x2ef530 base rsp3 offset 0x0
+\end{verbatim}
+Says the size was read from 0x2ef6f8.  And that address is found by starting with the address found in rsp3 (0x2ef530).
+That address contains 0x2ef6f0. 
+
+The paramOffPtr names parameters (starting at 1), so rsp3 would be 7. 
+\begin{verbatim}
+            count_value = self.paramOffPtr(7, [0, 0], frame, word_size) + 8
+\end{verbatim}
+
+
 
 \section{CADET01 networking}
 The cadet01 example can serve as a rapid prototyping testbed to explore Simics networking and RESim functions.

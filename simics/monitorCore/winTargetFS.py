@@ -57,12 +57,15 @@ class TargetFS():
              #    retval = self.find(base)
              retval = self.find(base)
         else:     
-            #if lgr is not None:
-            #    lgr.debug('getFull look at %s' % path) 
+            if lgr is not None:
+                lgr.debug('getFull look at %s' % path) 
             path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
             self.lgr.debug('winTargetFS getFull root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
             retval = self.checkExecDict(path)
-            if retval is None:
+            if retval == 'multiple_results':
+                retval = None
+                
+            elif retval is None:
                 full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
                 self.lgr.debug('winTargetFS getFull full_insenstive is %s' % full_insensitive)
                 if full_insensitive is None or not os.path.isfile(full_insensitive):
@@ -106,9 +109,17 @@ class TargetFS():
             if path_base in self.exec_dict:
                 retval = os.path.join(self.root_prefix, self.exec_dict[path_base]['path'])
                 self.lgr.debug('winTargetFS checkExecDict found path for %s, %s' % (path_base, retval))
-            elif path_base == path and len(path) == self.comm_len:
+            #elif path_base == path and len(path) == self.comm_len:
+            elif path_base == path:
+                result_list = []
                 for exec_base in self.exec_dict:
                     if exec_base.startswith(path):
-                        retval = os.path.join(self.root_prefix, self.exec_dict[exec_base]['path'])
+                        result = os.path.join(self.root_prefix, self.exec_dict[exec_base]['path'])
+                        result_list.append(result)
                         self.lgr.debug('winTargetFS checkExecDict found truncated base, and path for %s, %s' % (path_base, retval))
+                if len(result_list) == 1:
+                    retval = result_list[0] 
+                elif len(result_list) > 1:
+                    print('Multiple results found for %s:  %s' % (path, str(result_list)))
+                    retval = 'multiple_results'
         return retval

@@ -36,24 +36,29 @@ class UserBreak():
         self.lgr = lgr
         self.hit = 0
         self.user_break_hap = None
+        self.tid = self.top.getTID()
 
         self.doBreak()
 
     def userBreakHap(self, dumb, third, forth, memory):
         if self.user_break_hap is not None:
-            self.hit = self.hit + 1
-            if self.hit >= self.count:
-                self.lgr.debug('userBreakHap after %d hits' % self.hit)
-                self.top.stopAndGo(self.top.stopTrackIO) 
-                self.context_manager.genDeleteHap(self.user_break_hap)
-                self.user_break_hap = None
-                self.top.delUserBreak()
+            tid = self.top.getTID()
+            if tid != self.tid:
+                pass
+            else:
+                self.hit = self.hit + 1
+                if self.hit >= self.count:
+                    self.lgr.debug('userBreakHap after %d hits' % self.hit)
+                    self.top.stopAndGo(self.top.stopTrackIO) 
+                    self.context_manager.genDeleteHap(self.user_break_hap)
+                    self.user_break_hap = None
+                    self.top.delUserBreak()
 
     def stopBreak(self):
         if self.user_break_hap is not None:
             hap = self.user_break_hap
             self.context_manager.genDeleteHap(hap)
-            eslf.user_break_hap = None
+            self.user_break_hap = None
      
 
     def doBreak(self):
