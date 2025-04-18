@@ -20,7 +20,7 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, no_reset, lgr):
+def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, no_reset, lgr):
     retval = []
     count = 0
     #print('in findBNTForFun')
@@ -38,7 +38,7 @@ def findBNTForFun(target, hits, fun_blocks, no_print, prog, prog_elf, show_read_
                     continue
                 lgr.debug('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
-                    if branch not in hits:
+                    if branch not in hits and branch not in pre_hits:
                         read_mark = None
                         packet_num = None
                         before_read = ''
@@ -138,11 +138,6 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
     prog_base = os.path.basename(prog)
-    old_ida_path = resimUtils.getOldIdaDataFromIni(prog_base, ini)
-    if target is None:
-        old_fname = '%s.hits' % old_ida_path
-    else:
-        old_fname = '%s.%s.hits' % (old_ida_path, target)
 
     ida_path = resimUtils.getIdaDataFromIni(prog, ini, lgr=lgr)
     print('prog: %s  ida_path is %s' % (prog, ida_path))
@@ -151,10 +146,6 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         fname = '%s.hits' % ida_path
     else:
         fname = '%s.%s.hits' % (ida_path, target)
-    if os.path.isfile(old_fname) and not os.path.isfile(fname):
-        os.makedirs(os.path.dirname(fname), exist_ok=True) 
-        shutil.move(old_fname, fname)
-        print('Old file path found.  Moved from %s to %s' % (old_fname, fname))
 
     print('Using hits file %s' % fname)
     lgr.debug('Using hits file %s prog: %s' % (fname, prog))
@@ -164,6 +155,13 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         return None
     with open(fname) as fh:
         hits = json.load(fh)
+
+    pre_hits = []
+    pre_fname = '%s.pre.hits' % ida_path
+    if os.path.isfile(pre_fname):
+        with open(pre_fname) as fh:
+            pre_hits = json.load(fh)
+ 
     blocks, prog_elf = resimUtils.getBasicBlocks(prog, ini, lgr=lgr)
     if blocks is None:
         print('Falied to find blocks for %s, perhaps a symbolic link?' % prog)
@@ -184,12 +182,12 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
     if fun_name is None:
         for fun in sorted(blocks):
             lgr.debug('call findBNTForFun for fun %s' % fun)
-            this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+            this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNTForFun(target, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+                this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
