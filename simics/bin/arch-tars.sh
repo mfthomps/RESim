@@ -12,10 +12,17 @@ if [ ! -f drones.txt ]; then
 else
    flist=$(cat drones.txt)
 fi
+do_workspace=YES
+if [ "$#" -eq 2 ] && [ "$1" = "-n" ]; then
+    do_workspace=NO
+    echo "will skip workspace"
+    shift 1
+fi
 if [ "$#" -ne 1 ] || [ "$1" = "-h" ]; then
-    echo "arch-tars.sh <project>"
+    echo "arch-tars.sh [-n] <project>"
     echo "   Archive workspace and sync folders to the resim_archive under a given project name"
-    echo "   All data will be in a subdirectory having the workspace name."
+    echo "   All data will be in a subdirectory having the workspace name. "
+    echo "   Use -n to skip archive of workspace itself."
     exit
 fi
 if [ ! -d .workspace-properties ] && [ ! -d .project-properties ]; then
@@ -45,17 +52,21 @@ echo "done sync"
 echo "create tar"
 here=$(pwd)
 cd $aflout
-tar -czf $destination/sync_dirs.tgz *_resim_* manual_queue manual_coverage manual_trackio
-echo "finished tar"
+echo "now in $(pwd)"
+manual=$(ls | grep "manual_")
+tar -czf $destination/sync_dirs.tgz *_resim_* $manual
+echo "finished tar to $destination"
 cd $here
 aflseed=$AFL_DATA/seeds/$base
 seed_dest=$fuzz_archive/afl/seeds
 mkdir -p $seed_dest
 cp -a $aflseed/* $seed_dest/
 
-echo "archive workspace"
-workspace_dest=$fuzz_archive/workspace.tar
-tar --exclude=logs --exclude='*.tgz' ---exclude=linux64/doc-index -cvf /tmp/workspace.tar .
-echo "tar done now copy"
-cp /tmp/workspace.tar $workspace_dest
-echo "done copy of archive to $workspace_dest"
+if [ "$do_workspace" = "YES" ]; then
+    echo "archive workspace.  Note failure likely unless a merged checkpoint is referenced" 
+    workspace_dest=$fuzz_archive/workspace.tar
+    tar --exclude=linux64/doc-index --exclude=logs --exclude='*.tgz' -cvf /tmp/workspace.tar .
+    echo "tar done now copy"
+    #cp /tmp/workspace.tar $workspace_dest
+    echo "done copy of archive to $workspace_dest"
+fi
