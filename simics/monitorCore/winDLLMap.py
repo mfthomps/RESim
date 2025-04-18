@@ -33,12 +33,14 @@ class DLLInfo():
         self.size = None
         self.machine = None
         self.image_base = None
+        # IF fields are added, add them to copy below.
 
     @classmethod
     def copy(cls, info):
         new = cls(info.pid, info.fname, info.fd)
         new.load_addr = info.load_addr
         new.size = info.size
+        new.text_offset = info.text_offset
         new.machine = info.machine
         new.image_base = info.image_base
         return new
@@ -151,7 +153,10 @@ class WinDLLMap():
                         if section.size is None:
                             self.lgr.warning('winDLL loadPickle no size for %s, addr 0x%x pid:%s' % (section.fname, section.load_addr, section.pid))
                             continue
-                        ma = section.load_addr + section.text_offset + section.size
+                        if section.text_offset is not None:
+                            ma = section.load_addr + section.text_offset + section.size
+                        else:
+                            ma = section.load_addr + section.size
                         if self.max_addr[section.pid] is None or self.max_addr[section.pid] < ma:
                             self.max_addr[section.pid] = ma
     
@@ -217,6 +222,11 @@ class WinDLLMap():
             self.lgr.debug('winDLL addFile tid:%s image_base 0x%x fname: %s' % (tid, dll_info.image_base, fname))
         else:
             self.lgr.debug('winDLL addFile tid:%s image_base None for fname: %s' % (tid, fname))
+
+        if dll_info.text_offset is not None:
+            self.lgr.debug('winDLL addFile tid:%s text_offset 0x%x fname: %s' % (tid, dll_info.text_offset, fname))
+        else:
+            self.lgr.debug('winDLL addFile tid:%s text_offset None for fname: %s' % (tid, fname))
 
         self.open_files[pid][fd] = dll_info
 
@@ -661,8 +671,9 @@ class WinDLLMap():
         if fun_mgr is None:
             self.lgr.warning('IDA funs is none, no SOMap')
             return
+        self.lgr.debug('winDLL setFunMgr tid:%s' % tid)
         self.fun_mgr = fun_mgr
-
+ 
         pid = self.pidFromTID(tid)
         sort_map = {}
         if pid in self.section_map:
@@ -702,9 +713,9 @@ class WinDLLMap():
             if text_offset is not None:
                 delta = (locate - image_base) 
                 offset = delta + text_offset
-                self.lgr.debug('winDLL addSectionFunction xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x ' % (offset, locate, text_offset, image_base, delta))
+                self.lgr.debug('winDLL addSectionFunction xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x fun_path: %s' % (offset, locate, text_offset, image_base, delta, fun_path))
             else:
-                self.lgr.debug('winDLL addSectionFunction offset 0x%x locate: 0x%x text_offset is None ' % (offset, locate))
+                self.lgr.debug('winDLL addSectionFunction offset 0x%x locate: 0x%x text_offset is None fun_path: %s' % (offset, locate, fun_path))
                 offset = 0
                 text_offset = 0
             self.fun_mgr.add(fun_path, locate, offset=offset, text_offset=text_offset)
