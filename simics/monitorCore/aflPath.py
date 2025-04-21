@@ -313,3 +313,16 @@ def getSyncDirs(target):
         return list(target_path)
     else:
         return glist
+
+def getPathFromIndex(target, index):
+    afl_path = getAFLOutput()
+    afl_dir = os.path.join(afl_path, target)
+    unique_path = os.path.join(afl_dir, target+'.unique')
+    if not os.path.isfile(unique_path):
+        print('ERROR, no unique file at %s' % unique_path)
+        return None
+    ulist = json.load(open(unique_path))
+    if index >= len(ulist):
+        print('ERROR, index %d out of range for file at %s' % (index, unique_path))
+        return None
+    return ulist[index]
