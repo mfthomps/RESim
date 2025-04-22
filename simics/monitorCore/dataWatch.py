@@ -5119,6 +5119,7 @@ class DataWatch():
         '''
         ret_start = None
         ret_length = None
+        ret_index = None
         if addr is not None:
             range_end = addr + length - 1
 
@@ -5135,8 +5136,9 @@ class DataWatch():
                     if self.start[index] is not None:
                         ret_start, ret_length = self.getIntersect(addr, length, self.start[index], self.length[index])
                         if ret_start is not None:
+                            ret_index = index
                             break            
-        return ret_start, ret_length, index
+        return ret_start, ret_length, ret_index
 
     def showRange(self, addr):
         index = self.findRangeIndex(addr)

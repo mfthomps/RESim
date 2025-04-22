@@ -262,7 +262,7 @@ class StackFrameManager():
             for st in self.stack2_cache[key]:
                 matched = True
                 for frame in st.frames:
-                    if frame.ret_to_addr is not None:
+                    if frame.ret_to_addr is not None and frame.ip is not None and frame.ret_addr is not None:
                        my_ret_to = self.readAppPtr(tid, frame.ret_to_addr)
                        if my_ret_to is not None:
                            if my_ret_to == frame.ret_addr:
