@@ -261,7 +261,7 @@ class Coverage():
         #with open(missed_fun_file) as fh:
         #    missed_funs = json.load(fh)
         for fun in self.blocks:
-            fun_addr = int(fun)
+        #    fun_addr = int(fun)
         #    if fun_addr in missed_funs:
         #        continue
             for block_entry in self.blocks[fun]['blocks']:
