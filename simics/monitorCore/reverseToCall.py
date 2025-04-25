@@ -176,8 +176,9 @@ class reverseToCall():
                 #SIM_run_alone(self.watchSysenter, None)
                 SIM_run_alone(self.top.recordEntry, None)
 
-            dum_cpu, comm, tid = self.task_utils.curThread()
-            self.context_manager.changeDebugTid(tid) 
+            # TBD why do this here? Do where this is called if it needs doing. 
+            #dum_cpu, comm, tid = self.task_utils.curThread()
+            #self.context_manager.changeDebugTid(tid) 
             self.lgr.debug('reverseToCall setup')
             if cpu.architecture.startswith('arm'):
                 self.decode = decodeArm
