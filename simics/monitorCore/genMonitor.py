@@ -362,6 +362,8 @@ class GenMonitor():
         self.record_entry = {}
         self.reverse_mgr = {}
         self.skip_to_mgr = {}
+        # ad hoc watch for exits
+        self.watchingExitTIDs = []
         self.SIMICS_VER = resimSimicsUtils.version()
 
         ''' **** NO init data below here**** '''
@@ -625,7 +627,7 @@ class GenMonitor():
                 reason = "sysenter"
             elif eip == self.param[self.target].sys_entry:
                 reason = "sys_entry"
-            elif eip == self.param[self.target].arm64_entry:
+            elif cpu.architecture.startswith('arm') and eip == self.param[self.target].arm64_entry:
                 reason = "sys_entry"
             elif eip == self.param[self.target].page_fault:
                 reason = "page_fault"
@@ -634,7 +636,7 @@ class GenMonitor():
                 callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
                 callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32)
                 call_info = 'callnum %d (%s)  compat32: %r' % (callnum, callname, self.is_compat32)
-            self.lgr.debug('\tstopModeChanged entered kernel, eip 0x%x %s reason: %s %s' % (eip, instruct[1], reason, call_info))
+            self.lgr.debug('\tstopModeChanged entered kernel, eip 0x%x %s reason: %s %s tid:%s' % (eip, instruct[1], reason, call_info, this_tid))
         self.lgr.debug('stopModeChanged, continue')
         SIM_run_alone(SIM_continue, 0)
 
@@ -652,7 +654,7 @@ class GenMonitor():
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
         phys = self.mem_utils[self.target].v2p(cpu, eip)
         callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
-        self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x eax: 0x%x' % (new_mode, eip, callnum))
+        self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x eax: 0x%x tid:%s cycle: 0x%x' % (new_mode, eip, callnum, this_tid, cpu.cycles))
         if phys is not None:
             instruct = SIM_disassemble_address(cpu, phys, 0, 0)
             if new_mode == 'user':
@@ -2974,7 +2976,7 @@ class GenMonitor():
 
             self.traceMgr[target].open(tf, cpu)
             if not self.isVxDKM(target=target) and not self.isWindows(target=target):
-                if not self.context_manager[self.target].watchingTasks():
+                if not self.context_manager[self.target].watchingTasks() and track_threads:
                     self.traceProcs[target].watchAllExits()
                 self.lgr.debug('traceAll, create syscall hap')
                 self.trace_all[target] = self.syscallManager[self.target].watchAllSyscalls(None, 'traceAll', trace=True, binders=self.binders, connectors=self.connectors,
@@ -4062,7 +4064,7 @@ class GenMonitor():
  
     def resetOrigin(self, cpu=None):
         self.lgr.debug('resetOrigin')
-        if cpu is None:
+        if cpu is None or type(cpu) is str:
             tid, cpu = self.context_manager[self.target].getDebugTid() 
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
@@ -5800,8 +5802,11 @@ class GenMonitor():
         self.execToText(flist=[])
 
     def watchExit(self):
-        self.context_manager[self.target].watchExit()
+        tid = self.getTID()
+        self.watchingExitTIDs.append(tid)
+        self.context_manager[self.target].watchExit(tid=tid)
         self.context_manager[self.target].setExitCallback(self.procExitCallback)
+
     def procExitCallback(self):
         SIM_break_simulation('proc exit')
 
@@ -6971,6 +6976,12 @@ class GenMonitor():
             return self.traceFiles[self.target]
         else:
             return None
+
+    def watchingExitTid(self, tid):
+        if tid in self.watchingExitTIDs:
+            return True
+        else:
+            return False
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
