@@ -1083,7 +1083,7 @@ class Syscall():
         if db_tid is not None:
             self.lgr.debug('parseExecve db_tid:%s tid_list: %s' % (db_tid, str(tid_list)))
         
-        if tid in tid_list and tid != db_tid:
+        if tid in tid_list and tid != db_tid and not self.top.watchingExitTid(tid):
             self.lgr.debug('syscall parseExecve remove %s from list being watched.' % (tid))
             #self.context_manager.rmTask(tid)
             self.context_manager.stopWatchTid(tid)
@@ -1864,11 +1864,19 @@ class Syscall():
                 wait_tid = frame['param1']
                 exit_info.retval_addr = frame['param2']
                 options = frame['param3']
-                ida_msg = 'waitpid tid:%s (%s) wait_tid: %d wstatus 0x%x options %x' % (tid, comm, wait_tid, exit_info.retval_addr, options)
+                frame_string = taskUtils.stringFromFrame(frame)
+                self.lgr.debug('syscall waitpid params: %s' % frame_string)
+                ida_msg = '%s tid:%s (%s) wait_tid: %d wstatus 0x%x options %x' % (callname, tid, comm, wait_tid, exit_info.retval_addr, options)
             else:
                 self.checkTimeLoop(callname, tid)
                 exit_info = None
  
+        elif callname == 'kill':        
+            target_tid = frame['param1']
+            signal = frame['param2']
+            ida_msg = '%s tid:%s (%s) target_tid: %d signal %d' % (callname, tid, comm, target_tid, signal)
+            self.lgr.debug(ida_msg)
+            
         elif callname == 'nanosleep':        
             time_spec = frame['param1']
             seconds = self.mem_utils.readWord32(cpu, time_spec)
