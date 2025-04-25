@@ -888,7 +888,8 @@ class SharedSyscall():
             if eax >= 0 and exit_info.retval_addr is not None:
 
                 max_len = min(eax, 1024)
-                max_max_len = min(eax, 10000000)
+                #max_max_len = min(eax, 10000000)
+                max_max_len = min(eax, 100000)
                 byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, exit_info.retval_addr)
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:max_len])
@@ -1073,6 +1074,7 @@ class SharedSyscall():
                 trace_msg = trace_msg+('eax: 0x%x wstatus: 0x%x\n' % (eax, wstatus))
             else:
                 trace_msg = trace_msg+('eax: 0x%x wstatus addr was none\n' % (eax))
+            self.lgr.debug(trace_msg)
 
 
         elif callname == 'close':
