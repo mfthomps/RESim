@@ -30,7 +30,7 @@ class TargetFS():
         self.cache = {}
         self.lgr = lgr
         self.comm_len = 14
-        self.exec_dict = resimUtils.getExecDict(root_prefix)
+        self.exec_dict = resimUtils.getExecDict(root_prefix, lgr=lgr)
 
     def getRootPrefix(self):
         return self.root_prefix
@@ -61,7 +61,7 @@ class TargetFS():
                 lgr.debug('getFull look at %s' % path) 
             path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
             self.lgr.debug('winTargetFS getFull root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
-            retval = self.checkExecDict(path)
+            retval = self.checkExecDict(path, lgr=lgr)
             if retval == 'multiple_results':
                 retval = None
                 
@@ -102,10 +102,12 @@ class TargetFS():
                 self.lgr.error('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
         return retval
 
-    def checkExecDict(self, path):
+    def checkExecDict(self, path, lgr=None):
         retval = None   
         if self.exec_dict is not None:
             path_base = os.path.basename(path)
+            if lgr is not None:
+                lgr.debug('winTargetFS checkExecDict path_base %s' % path_base)
             if path_base in self.exec_dict:
                 retval = os.path.join(self.root_prefix, self.exec_dict[path_base]['path'])
                 self.lgr.debug('winTargetFS checkExecDict found path for %s, %s' % (path_base, retval))
@@ -122,4 +124,6 @@ class TargetFS():
                 elif len(result_list) > 1:
                     print('Multiple results found for %s:  %s' % (path, str(result_list)))
                     retval = 'multiple_results'
+        if lgr is not None:
+            lgr.debug('winTargetFS checkExecDict no exec_dict')
         return retval
