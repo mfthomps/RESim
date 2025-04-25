@@ -661,15 +661,21 @@ def getExecDict(root_prefix, lgr=None):
     if os.path.isfile(path):
        with open(path) as fh:
            retval = json.load(fh)
+           if lgr is not None:
+               lgr.debug('resimUtils getExecDict loaded %d entries' % len(retval))
     return retval
 
 def getFullPath(prog, ini, lgr=None):
     root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
     root_subdirs = getIniTargetValue(ini, 'RESIM_ROOT_SUBDIRS', lgr=lgr)
+    parts = root_subdirs.split(';')
+    the_subdirs = []
+    for sd in parts:
+        the_subdirs.append(sd.strip()) 
     os_type = getIniTargetValue(ini, 'OS_TYPE', lgr=lgr)
     if os_type.startswith('WIN'):
-        target_fs = winTargetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
+        target_fs = winTargetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
     else:
-        target_fs = targetFS.TargetFS(None, root_prefix, root_subdirs, lgr)
+        target_fs = targetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
     full = target_fs.getFull(prog, lgr=lgr)
     return full
