@@ -25,7 +25,7 @@ def buildExecDict(exec_list_file, ini, root_dir, lgr):
                     path = line.strip()
                 base = os.path.basename(path)
                 if base in exec_map:
-                    lgr.debug('***** Collision on base %s, was %s new %s' % (base, exec_map[base]['path'], path))
+                    lgr.error('***** Collision on base %s, was %s new %s' % (base, exec_map[base]['path'], path))
                     if base not in collisions:
                         collisions.append(base)
                     continue
@@ -64,12 +64,13 @@ def buildList(root_dir, exec_list_file):
 
 def main():
     parser = argparse.ArgumentParser(prog='buildExecDict', description='For each executable listed in a pre-created exec list, generate a dictionary entry reflecting the path to the executable and its word size.')
-    lgr = resimUtils.getLogger('winProgSizes', '/tmp', level=None)
+    lgr = resimUtils.getLogger('buildExecDict', '/tmp', level=None)
     parser.add_argument('ini', action='store', help='The RESim ini file.')
     args = parser.parse_args()
     root_dir = resimUtils.getIniTargetValue(args.ini, 'RESIM_ROOT_PREFIX')
     exec_list_file = resimUtils.getExecList(args.ini, lgr=lgr)
     buildList(root_dir, exec_list_file)
     buildExecDict(exec_list_file, args.ini, root_dir, lgr)
+    print('Program names having collisions were not added to the dictionary.  Use qualified path names to name those.')
 if __name__ == '__main__':
     sys.exit(main())
