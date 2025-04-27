@@ -11,6 +11,8 @@ hits_file = None
 instance_2 = None
 if len(sys.argv) == 3:
     hits_file = sys.argv[1]
+    if 'queue' in hits_file:
+        hits_file = hits_file.replace('queue', 'coverage')
     hits1_json = json.load(open(hits_file))
 else:
     target = sys.argv[1]
@@ -64,6 +66,8 @@ if instance_2 is not None:
     hits2_json = json.load(open(glist2[0]))
 else:
     hits_file = sys.argv[2]
+    if 'queue' in hits_file:
+        hits_file = hits_file.replace('queue', 'coverage')
     hits2_json = json.load(open(hits_file))
 hits2 = []
 sorted_hits = sorted(hits2_json.items(), key=lambda x: x[1]['cycle'])

@@ -28,7 +28,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
        target_prog = prog
     else:
        target_prog = target
-    lgr.debug('findBNTForFun len of fun_blocks is %d' % len(fun_blocks['blocks']))
+    #lgr.debug('findBNTForFun len of fun_blocks is %d num hits %d' % (len(fun_blocks['blocks']), len(hits)))
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             #lgr.debug('compare %s to %s' % (bb_hit, bb['start_ea']))
@@ -36,7 +36,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
                 if bb_hit < prog_elf.text_start or bb_hit > (prog_elf.text_start + prog_elf.text_size):
                     lgr.debug('bb_hit 0x%x not in program text' % bb_hit)
                     continue
-                lgr.debug('check bb_hit 0x%x' % bb_hit)
+                #lgr.debug('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
                     if branch not in hits and branch not in pre_hits:
                         read_mark = None
@@ -179,15 +179,15 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if len(hits) == 0:
         print('*** No hits found in %s.  Try providing the --target option.' % fname)
-    if fun_name is None:
+    elif fun_name is None:
         for fun in sorted(blocks):
             lgr.debug('call findBNTForFun for fun %s' % fun)
-            this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+            this_list = findBNTForFun(target, hits, pre_hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+                this_list = findBNTForFun(target, hits, pre_hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
                 bnt_list.extend(this_list)
                 break
     return bnt_list

@@ -65,8 +65,9 @@ def sendFiles(file_list, sock, target):
         flen = str(os.path.getsize(file))
         fstr = 'FILE: ' + flen + ' ' + os.path.basename(file) + ' =EOFX='
         print("- Send file: " + file + " (" + flen + ")")
-        sock.sendto(fstr.encode(), target)
-        print('sent header')
+        fstr_encoded = fstr.encode()
+        sock.sendto(fstr_encoded, target)
+        print('sent header %d bytes' % len(fstr_encoded))
         use_ack = True
         ack, source = sock.recvfrom(3)
         print('got ack of header')
@@ -288,7 +289,9 @@ def main():
         print('Wait for restart')
         ack, source = sock.recvfrom(3)
         print('Got ack from restart')
+    print('Close sock.')
     sock.close()
+    print('Done.')
 
 if __name__ == '__main__':
     sys.exit(main())

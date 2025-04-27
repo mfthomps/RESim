@@ -12,7 +12,9 @@ import json
 import argparse
 import subprocess
 from datetime import datetime
-
+'''
+Display a summary of fuzzing results for a given target.
+'''
 try:
     import ConfigParser
 except:
@@ -25,19 +27,36 @@ import aflPath
 def showRecentDelta(flist):
     recent = None
     recent_q_file = None
+    oldest_dir_file = {}
     for f in flist:
+        if 'orig' in f:
+            continue
         dt = os.path.getmtime(f)
+        pdir = os.path.dirname(f)
+        if pdir not in oldest_dir_file:
+            oldest_dir_file[pdir] = dt
+        elif dt < oldest_dir_file[pdir]:
+            oldest_dir_file[pdir] = dt
+
+    for f in flist:
+        if 'orig' in f:
+            continue
+        dt = os.path.getmtime(f)
+        pdir = os.path.dirname(f)
+        if dt == oldest_dir_file[pdir]:
+            continue
         if recent is None or dt > recent:
             recent = dt
             recent_q_file = f
-    now = datetime.now()
-    now_ts = datetime.timestamp(now)
-    delta = now_ts - recent
-    #print('delta is %d' % delta)
-    #dt = datetime.fromtimestamp(recent)
-    #print('recent is %s' % str(recent))
-    #print(dt.strftime("%m/%d/%Y, %H:%M:%S"))
-    print('Most recent queue file %d seconds ago %s' % (delta, recent_q_file))
+    if recent is not None:
+        now = datetime.now()
+        now_ts = datetime.timestamp(now)
+        delta = now_ts - recent
+        #print('delta is %d' % delta)
+        #dt = datetime.fromtimestamp(recent)
+        #print('recent is %s' % str(recent))
+        #print(dt.strftime("%m/%d/%Y, %H:%M:%S"))
+        print('Most recent queue file %d seconds ago %s' % (delta, recent_q_file))
 
 def main():
     afldir = os.getenv('AFL_DIR')

@@ -1,5 +1,6 @@
+#!/bin/bash
 #
-# restore an archived fuzzing artifact set and workspace
+# restore an archived fuzzing artifact set and workspace (if archived)
 #
 if [ -z "$RESIM_FUZZ_ARCHIVE" ]; then
     echo "RESIM_FUZZ_ARCHIVE is not defined."
@@ -25,18 +26,26 @@ if [[ -d $afl_output ]]; then
     exit
 fi
 
-fuzz_archive=/mnt/resim_archive/fuzz/$project/$workspace
+fuzz_archive=$RESIM_FUZZ_ARCHIVE/$project/$workspace
 tarfile=$fuzz_archive/workspace.tar
-tar -xf $tarfile
-echo "Extracted workspace."
+if [ -f $tarfile ]; then
+    tar -xf $tarfile || exit
+    echo "Extracted workspace."
+fi
+output_dir=$RESIM_FUZZ_ARCHIVE/$project/$workspace/afl/output
+sync_dirs=$output_dir/sync_dirs.tgz
+if [ ! -f $sync_dirs ]; then
+    echo "No archive found at $sync_dirs"
+    exit
+fi
 mkdir $afl_seed
 mkdir $afl_output
-sync_dirs=$RESIM_FUZZ_ARCHIVE/$project/$workspace/afl/output/sync_dirs.tgz
 cd $afl_output
-tar -xf $sync_dirs
-echo "Extracted sync dirs."
+cp $output_dir/$workspace.unique $base.unique
+tar -xf $sync_dirs || exit
+echo "Extracted sync dirs to $afl_output."
 cd $afl_seed
-seed_dir=$REIM_FUZZ_ARCHIVE/$project/$workspace/afl/seeds
+seed_dir=$RESIM_FUZZ_ARCHIVE/$project/$workspace/afl/seeds
 cp $seed_dir/* .
 cd $here
 echo "done."
