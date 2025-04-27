@@ -1,0 +1,15 @@
+decl{
+    param snap_name : string
+    param FD : int
+    #param count : int
+    param commence : string
+}
+@snap=simenv.snap_name
+@FD=simenv.FD
+#@count=simenv.count
+@commence=simenv.commence
+@cgc.debugSnap()
+!sim-background.sh "drive-driver next_prep.directive"
+#@cgc.prepInject(FD, snap, count=count)
+@cgc.prepInject(FD, snap, commence=commence)
+quit

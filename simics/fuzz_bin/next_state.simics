@@ -1,0 +1,14 @@
+#
+# create a new snapshot (and coverage file) from inject of
+# a queue file named in the tmp.directive (derived from next_state.directive)
+#
+decl{
+    param snap_name : string
+}
+!sim-background.sh "drive-driver tmp.directive"
+@cgc.debugSnap()
+@cgc.mapCoverage(backstop=True)
+c 
+@snap=simenv.snap_name
+@cgc.writeConfig(snap)
+quit
