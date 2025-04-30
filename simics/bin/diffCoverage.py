@@ -42,16 +42,16 @@ def main():
             hit = int(hit)
             if hit not in hits2:
                 hits2.append(hit)
-    print('first %d hits, second %d hits' % (len(hits1), len(hits2)))
+    print('%s %d hits, %s %d hits' % (args.target1, len(hits1), args.target2, len(hits2)))
     num_diff1 = 0
     num_diff2 = 0
     for hit in hits1:
         if hit not in hits2:
-            print('0x%x in first, not second' % hit)
+            print('0x%x in %s, not %s' % (hit, args.target1, args.target2))
             num_diff1 += 1
     for hit in hits2:
         if hit not in hits1:
-            print('0x%x in second, not first' % hit)
+            print('0x%x in %s, not %s' % (hit, args.target2, args.target1))
             num_diff2 += 1
     if num_diff1 == 0 and num_diff2 == 0:
         print('Same blocks hit in both targets.')
