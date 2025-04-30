@@ -1,7 +1,6 @@
 #!/bin/bash
 #
-# Create clone of the current simics workspace
-# auto_ws/next_prep_$index
+# Create clone of the current simics workspace and put it under auto_ws/$ws_name
 #
 if [ "$#" -ne 3 ]; then
     echo "autoclone.sh ws_name quantity qfile"
@@ -22,7 +21,7 @@ files=$( find . -maxdepth 1 -type f )
 dirs=$( find . -maxdepth 1 -type d )
 links=$( find . -maxdepth 1 -type l )
 cd $newdir || exit
-echo "Workspace derived from workspace %source_ws consumption of queue file $source_qfile"
+echo "Workspace derived from workspace $source_ws consumption of queue file $source_qfile"
 for f in $files; do
     target="$(basename -- $f)"
     ln -s ../../$target

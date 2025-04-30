@@ -15,6 +15,8 @@ echo "start runAFL"
 runAFL tmp.ini -b
 echo "runAFL done, remove .watchdog_run"
 rm -f ../../.watchdog_run
+echo "giving kill time to work"
+sleep 3
 echo "runPlay"
 runPlay tmp.ini $program
 echo "runPlay done"

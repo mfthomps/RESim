@@ -4,11 +4,15 @@
 #
 decl{
     param snap_name : string
+    param FD : int
 }
-!sim-background.sh "drive-driver tmp.directive"
 @cgc.debugSnap()
+!sim-background.sh "drive-driver tmp.directive"
+@FD=simenv.FD
+@cgc.noReverse()
+@cgc.runToIO(FD)
 @cgc.mapCoverage(backstop=True)
 c 
 @snap=simenv.snap_name
 @cgc.writeConfig(snap)
-quit
+q

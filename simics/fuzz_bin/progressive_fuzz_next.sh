@@ -1,0 +1,62 @@
+#!/bin/bash
+# Calling script must export the following:
+#     starting_ini : Name of starting ini file
+#     commence : optional value for prepInject commence
+#     FD : FD for prepInject
+#     fuzz_timeout : timeout for fuzzing
+#     program : program name
+#     num_clones : number of fuzzing clones to create
+#     state_id : optional state identifier string to pass to find_new_states.py
+source $RESIM_DIR/simics/fuzz_bin/advance_and_fuzz.sh
+if [ -z "$starting_ini" ] || [ -z "$FD" ] || [ -z "$fuzz_timeout" ] || [ -z "$program" ] || [ -z "$num_clones" ]; then
+    echo "Must define starting_ini, FD, fuzz_timeout, program and num_clones"
+    exit
+fi
+if [ ! -z "$count" ] && [ ! -z "$commence" ]; then
+    echo "Cannot define both count and commence"
+    exit
+fi
+if [ -z "$count" ] && [ -z "$commence" ]; then 
+    echo "Assuming count of 1"
+    count=1
+    commence="NONE"
+fi
+if [ -z "$commence" ]; then
+    commence="NONE"
+fi
+if [ -z "$count" ]; then
+    count="NONE"
+fi
+
+here=$(pwd)
+orig_starting_ws=$(basename -- "$here")
+if [ -z "$state_id" ]; then
+    result=$(find_new_states.py $orig_starting_ws -q)
+else
+    echo "Using state_id $state_id"
+    result=$(find_new_states.py $orig_starting_ws -q -i $state_id)
+fi
+new_index=0
+# output results from find_new_states.py are formatted "workspace cover_file"
+while IFS= read -r line ; do 
+    ws=$(echo $line | awk '{print $1}')
+    cover_file=$(echo $line | awk '{print $2}')
+    qfile="${cover_file/coverage/queue}"
+    echo "ws is $ws"
+    # get index series starting with original unique index
+    original_unique_index=${ws:8}
+    echo "original_unique_index is $original_unique_index"
+    echo "qfile is $qfile"
+    # use the next state reached by consuming queue file named by index in unique list followed by subsequent index values
+    mod_ini.sh $starting_ini next_state_$original_unique_index
+    starting_ini=tmp.ini 
+    index=$original_unique_index
+    index+="_"
+    index+=$new_index
+    echo "index now $index"
+    new_index=$((new_index + 1))
+    starting_ws=$ws
+    #echo " would: advance_and_fuzz $qfile $starting_ini $index $commence $FD $count $num_clones $program $starting_ws"
+    advance_and_fuzz $qfile $starting_ini $index $commence $FD $count $num_clones $program $starting_ws
+    cd $here
+done <<< "$result"
