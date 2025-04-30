@@ -116,6 +116,8 @@ class WinSyscall():
         self.sockwatch = syscall.SockWatch()
 
         self.ignore_progs = context_manager.getIgnoredProgs()
+        # see syscall.py
+        self.flist_in = flist_in
 
         if trace is None and self.traceMgr is not None:
             tf = 'logs/syscall_trace.txt'
