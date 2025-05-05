@@ -15,9 +15,10 @@ import resimUtils
 Return a list of queue files that hit a given BB start address
 '''
 read_marks = ['read', 'compare', 'scan', 'sprint', 'strchr', 'strt']
-def findBB(target, bb, quiet=False, get_all=False, lgr=None):
+def findBB(target, bb, quiet=False, get_all=False, lgr=None, cover_list=None, auto=False):
     retval = []
-    cover_list = aflPath.getAFLCoverageList(target, get_all=get_all)
+    if cover_list is None:
+        cover_list = aflPath.getAFLCoverageList(target, get_all=get_all, auto=auto)
     if len(cover_list) == 0:
         print('No coverage found for %s' % target)
         return retval
