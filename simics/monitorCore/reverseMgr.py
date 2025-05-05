@@ -77,8 +77,8 @@ class ReverseMgr():
         self.top = top
         #self.cycle_span = 0x100000
         if span is None:
-            #self.cycle_span = 0x100000
-            self.cycle_span =  0x1000000
+            self.cycle_span = 0x100000
+            #self.cycle_span =  0x1000000
 
         else:
             self.cycle_span = span
@@ -211,10 +211,10 @@ class ReverseMgr():
             self.origin_cycle = self.cpu.cycles
             self.takeSnapshot('origin')
             size = self.snapSize()
-            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x size 0x%x' % (self.origin_cycle, size))
+            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
             # TBD Simics bug?
             #SIM_restore_snapshot('origin')
-            #self.restoreSnapshot('origin')
+            self.restoreSnapshot('origin')
             self.setNextCycle()
         else:
             self.lgr.error('reverseMgr enableReverse, already enabled')
@@ -288,6 +288,7 @@ class ReverseMgr():
         self.cancelSpanCycle()
 
         if self.latest_span_end is None:
+            self.lgr.error('reverseMgr skipToCycle, have not yet hit a single span.  Consider reducing the cycle span in reverseMgr.py.')
             self.restoreSnapshot('origin')
             if use_cell is None:
                 self.lgr.debug('reverseMgr skipToCycle no latest cycle, restored origin 0x%x, now run to 0x%x' % (self.cpu.cycles, object_cycles))
