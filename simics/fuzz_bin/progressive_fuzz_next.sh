@@ -34,6 +34,27 @@ if [ -z "$state_id" ]; then
     result=$(find_new_states.py $orig_starting_ws -q)
 else
     echo "Using state_id $state_id"
+    # crudely grab every queue file that maybe advanced state and add it to auto seeds
+    new_seeds=$(find_new_states.py $orig_starting_ws -q -r)
+    mkdir -p ./auto_seeds
+    while IFS= read -r full_line ; do 
+        #echo "full_line is $full_line"
+        if [ "$full_line" == *"No paths"* ]; then
+            continue
+        fi
+        line=$(echo $full_line | awk '{$1=$1;print}')
+        #echo "line is $line"
+        ws=$(echo $line | awk '{print $1}')
+        ws_state=${ws:8}
+        cover_file=$(echo $line | awk '{print $2}')
+        qfile="${cover_file/coverage/queue}"
+        echo "qfile is $qfile"
+        new_qfile=$(basename -- $qfile)
+        new_qfile+=$ws_state
+        if [ ! -f auto_seeds/$new_qfile ]; then
+            cp $qfile auto_seeds/$new_qfile
+        fi
+    done <<< "$new_seeds"
     result=$(find_new_states.py $orig_starting_ws -q -i $state_id)
 fi
 new_index=0

@@ -6,12 +6,13 @@ if [ "$#" -ne 3 ]; then
     echo "autoclone.sh ws_name quantity qfile"
     echo "   creates a clone under auto_ws, and then (quantity) fuzzing clones under that"
     echo "   And copy unique queue files of current workspace as seeds for new workspace"
-    echo "   The qfile parameter is simply used to document the providence of the new workspace."
+    echo "   The qfile parameter is simply used to record the providence of the new workspace."
     exit
 fi
-ws_name=$1
+state_id=$1
 quantity=$2
 source_qfile=$3
+ws_name=next_ws_$state_id
 newdir=auto_ws/$ws_name
 echo "new dir is $newdir"
 mkdir -p $newdir || exit
@@ -29,17 +30,23 @@ done
 for d in $dirs; do
     target="$(basename -- $d)"
     if [ $target != "logs" ] && [ $target != "." ] && [ $target != "auto_ws" ]; then
-        echo "target is $target"
+        #echo "target is $target"
         ln -s ../../$target
     fi
 done
 for l in $links; do
     target="$(basename -- $l)"
     if [ $target != "logs" ] && [ $target != "." ] && [ $target != "doc" ] && [[ $target != resim_* ]]; then
-        echo "target is $target"
+        #echo "target is $target"
         ln -s ../../$target
     fi
 done
-cycleSeeds.py -t $source_ws
+echo "*** stateid $state_id"
+if [[ $state_id == *"_"* ]]; then
+    echo "Copying auto seeds"
+    cycleSeeds.py -a ./auto_seeds -t $source_ws
+else
+    cycleSeeds.py -t $source_ws
+fi
 clonewd.sh $quantity
 cd $here

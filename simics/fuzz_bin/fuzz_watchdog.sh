@@ -13,7 +13,22 @@ timeout=$2
 log=/tmp/watchdog.log
 rm -f $log
 echo "fuzz_watchdog.sh begin" >> $log
+
 while [ 1 ]; do
+    running=$(ps aux | grep '[a]fl-fuzz' | awk '{print $2}')
+    if [ ! -z "$running" ]; then
+        echo "AFL not running, begin" >> $log
+        break
+    else
+        sleep 10
+    fi
+done
+while [ 1 ]; do
+    running=$(ps aux | grep '[a]fl-fuzz' | awk '{print $2}')
+    if [ -z "$running" ]; then
+        echo "AFL not running, bail" >> $log
+        exit
+    fi
     result=$(fuzz-summary.py $target | grep "Most recent" | awk '{ print $5 }')
     echo "result is $result" >> $log
     if [ ! -z "$result" ] && [ $result -gt $timeout ]; then
