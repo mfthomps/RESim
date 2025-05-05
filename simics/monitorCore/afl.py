@@ -411,7 +411,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -566,7 +566,7 @@ class AFL():
             #self.lgr.debug('afl goN disabled coverage breakpoints')
         #self.lgr.debug('afl goN restore snapshot')
         if not self.top.nativeReverse():
-            self.top.restoreStoreSnapshot('origin')
+            self.top.restoreSnapshot('origin')
         else:
             cli.quiet_run_command('restore-snapshot name=origin')
             #VT_restore_snapshot('origin')

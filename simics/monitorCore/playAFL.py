@@ -279,7 +279,7 @@ class PlayAFL():
 
         #cmd = 'skip-to bookmark = bookmark0'
         #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu)
+        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu, disable=True)
         SIM_run_alone(self.setHapsAndRun, None)
 
     def setHapsAndRun(self, dumb):
@@ -347,7 +347,7 @@ class PlayAFL():
         #cmd = 'skip-to bookmark = bookmark0'
         # TBD this will break on repeat or playing multiple files
         #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu)
+        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu, disable=True)
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()

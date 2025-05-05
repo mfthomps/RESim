@@ -298,6 +298,7 @@ class LaunchRESim():
             cmd = "$simics_version=%s" % (self.SIMICS_VER)
             #print('cmd is %s' % cmd)
             run_command(cmd)
+            lgr.debug('SIMICS_VER is %s' % self.SIMICS_VER)
         
         self.not_a_target=['ENV', 'driver']
         
@@ -416,6 +417,7 @@ class LaunchRESim():
     
     def getSimicsScript(self, section, lgr):    
         script = self.config.get(section,'SIMICS_SCRIPT')
+        lgr.debug('getSimicsScript got %s' % script)
         if 'genx86' in script:
             if self.SIMICS_VER.startswith('5'):
                 script = script.replace('genx86.simics', 'genx86_5.simics')
@@ -424,6 +426,7 @@ class LaunchRESim():
                 script = script.replace('genx86.simics', 'genx86_6.simics')
                 lgr.debug('Simics 6 Modified SIMICS_SCRIPT to be %s' % script)
             elif self.SIMICS_VER.startswith('7'):
+                script = script.replace('x86-x58-ich10/genx86_6.simics', 'resim-x86/resim-x86.simics')
                 script = script.replace('x86-x58-ich10/genx86.simics', 'resim-x86/resim-x86.simics')
                 lgr.debug('Simics 7 Modified SIMICS_SCRIPT to be %s' % script)
         return script
