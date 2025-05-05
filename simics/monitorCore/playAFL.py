@@ -165,12 +165,14 @@ class PlayAFL():
                     print('No queue files found for %s' % dfile)
                     self.lgr.debug('playAFL No queue files found for %s' % dfile)
                     return
+                self.top.noWatchSysEnter()
             else:
                 self.afl_list = aflPath.getTargetCrashes(dfile)
                 if len(self.afl_list) == 0:
                     print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
+            self.lgr.debug('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
         self.search_list = search_list
         tid = self.top.getTID()
         self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s search_list:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname, search_list))
