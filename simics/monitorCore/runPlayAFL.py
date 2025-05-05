@@ -114,7 +114,7 @@ def runPlay(args, lgr, hits_prefix, full, workspace):
         os.environ['ONE_DONE_PARAM9']=args.workspace
          
     cover_list = aflPath.getAFLCoverageList(afl_name, get_all=True)
-    print('Found %d files in cover list' % len(cover_list))
+    print('Found %d existing files in cover list' % len(cover_list))
     lgr.debug('Found %d files in cover list' % len(cover_list))
     for cfile in cover_list:
         fstat = os.stat(cfile)
