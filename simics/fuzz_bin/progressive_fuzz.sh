@@ -56,6 +56,7 @@ for ((index=0; index<=$max_index; index++)); do
         echo "Failed to find queue file for index $index"
         exit 1
     fi
+    echo "Index $index call advance_and_fuzz for qfile $qfile"
     advance_and_fuzz $qfile $starting_ini $index $commence $FD $count $num_clones $program $starting_ws
     cd $here
 done

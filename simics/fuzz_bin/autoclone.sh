@@ -29,14 +29,14 @@ for f in $files; do
 done
 for d in $dirs; do
     target="$(basename -- $d)"
-    if [ $target != "logs" ] && [ $target != "." ] && [ $target != "auto_ws" ]; then
+    if [ $target != "logs" ] && [ $target != "." ] && [ $target != "auto_ws" ] && [[ "$target" != "resim_"* ]]; then
         #echo "target is $target"
         ln -s ../../$target
     fi
 done
 for l in $links; do
     target="$(basename -- $l)"
-    if [ $target != "logs" ] && [ $target != "." ] && [ $target != "doc" ] && [[ $target != resim_* ]]; then
+    if [ $target != "logs" ] && [ $target != "." ] && [ $target != "doc" ] && [[ "$target" != "resim_*" ]]; then
         #echo "target is $target"
         ln -s ../../$target
     fi
