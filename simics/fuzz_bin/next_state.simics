@@ -6,6 +6,7 @@ decl{
     param snap_name : string
     param FD : int
 }
+@cgc.noPrep()
 @cgc.debugSnap()
 !sim-background.sh "drive-driver tmp.directive"
 @FD=simenv.FD
