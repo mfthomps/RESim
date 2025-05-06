@@ -6974,6 +6974,13 @@ class GenMonitor():
         else:
             return None
 
+    def noPrep(self):
+        # TBD fix to look for afl.pickle instead of naming convention
+        if self.run_from_snap is not None and ('prep_' in self.run_from_snap or '_prep' in self.run_from_snap):
+            print('Current snapshot looks like a prep inject.  Exiting.')
+            self.lgr.debug('Current snapshot looks like a prep inject, bail.')
+            self.quit()
+
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
     cgc = GenMonitor()
