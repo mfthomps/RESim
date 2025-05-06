@@ -178,10 +178,10 @@ class findKernelWrite():
         if delta > max_delta:
             #new_origin = now - max_delta
             new_origin = origin + 1000
-            self.top.skipToCycle(new_origin)
+            self.top.skipToCycle(new_origin, disable=True)
             self.lgr.debug('findKernelWrite new origin at 0x%x' % self.cpu.cycles)
             self.top.resetOrigin()
-            self.top.skipToCycle(now)
+            self.top.skipToCycle(now, disable=True)
 
     def checkInitialBufferAlone(self, addr):
         self.lgr.debug('findKernelWrite checkInitialBufferAlone 0%x' % addr)
@@ -754,14 +754,14 @@ class findKernelWrite():
                 self.lgr.error('findKernelWrite backOneAlone, simics is still running, is this not part of a stop hap???')
                 return
             orig_eip = eip
-            self.top.skipToCycle(previous, cpu=self.cpu)
+            self.top.skipToCycle(previous, cpu=self.cpu, disable=True)
             eip = self.top.getEIP(self.cpu)
             eip = self.top.getEIP(self.cpu)
             if eip == orig_eip:
                 self.lgr.warning('Simics 2 step fu, go forward then reskip...')
                 cli.quiet_run_command('rev 1')
                 eip = self.top.getEIP(self.cpu)
-                self.top.skipToCycle(previous, cpu=self.cpu)
+                self.top.skipToCycle(previous, cpu=self.cpu, disable=True)
                 eip = self.top.getEIP(self.cpu)
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('after skip back one, eip 0x%x' % eip)

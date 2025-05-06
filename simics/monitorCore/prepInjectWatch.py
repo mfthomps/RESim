@@ -75,7 +75,7 @@ class PrepInjectWatch():
             call_mark = self.dataWatch.getMarkFromIndex(next_call)
             self.dataWatch.goToMark(next_call)
             frame, recent_entry = self.top.getPreviousEnterCycle()
-            if not self.top.skipToCycle(recent_entry, self.cpu):
+            if not self.top.skipToCycle(recent_entry, self.cpu, disable=True):
                 self.lgr.error('prepInjectWatch doInject failed skipping to recent_entry 0x%x' % recent_entry)
                 self.top.quit()
                 return
@@ -106,7 +106,7 @@ class PrepInjectWatch():
                 ''' Now jump to just before kernel starting moving data from kernel buffer to application buffer '''
                 kcycle = self.kbuffer.getKernelCycleOfWrite() 
                 if kcycle != self.cpu.cycles:
-                    if not self.top.skipToCycle(kcycle, self.cpu):
+                    if not self.top.skipToCycle(kcycle, self.cpu, disable=True):
                         self.lgr.error('prepInjectWatch doInject failed skipping to kcycle 0x%x' % kcycle)
                         #self.top.quit()
                         return
@@ -114,7 +114,7 @@ class PrepInjectWatch():
                 else:
                     self.lgr.debug('prepInjectWatch doInject was already at kcycle just before buffer copy 0x%x' % kcycle)
             else:
-                if not self.top.skipToCycle(cycle_was, self.cpu):
+                if not self.top.skipToCycle(cycle_was, self.cpu, disable=True):
                     self.lgr.error('prepInjectWatch doInject failed skipping to cycle_was 0x%x' % cycle_was)
                     self.top.quit()
                     return
