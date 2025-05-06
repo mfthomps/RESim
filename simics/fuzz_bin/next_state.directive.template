@@ -1,0 +1,10 @@
+#
+# template for directive to advance to next state
+# Do not modify the REPLACE_THIS
+# Set the other parameters per the target.
+#
+FILE=REPLACE_THIS
+IP=10.10.0.101
+SRC_IP=10.10.0.91
+PORT=1234
+SESSION=UDP
