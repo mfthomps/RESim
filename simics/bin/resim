@@ -14,10 +14,11 @@ fi
 # compatibility...
 export RESIM=$RESIM_DIR
 if [ "$#" -lt 1 ] || [[ "$#" -eq 1 && "$1" = "-h" ]]; then
-    echo "usage: resim <target> [-n] [-b]"
+    echo "usage: resim <target> [-n] [-b] [-c <command>]"
     echo "   Where <target> is the base name of a RESim ini file"
     echo "   Use the -n option to supress the gui and terminal windows."
     echo "   Use the -b option for batch mode."
+    echo "   Use -c to provide Simics with a command file (use quotes)."
     exit
 fi
 S4='simics-4.8'
