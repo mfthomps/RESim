@@ -2034,7 +2034,7 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, want_tid=None, flist=None):
+    def toUser(self, flist=None, want_tid=None):
         self.rmDebugWarnHap()
         self.lgr.debug('toUser want_tid %s' % want_tid)
         cpu = self.cell_config.cpuFromCell(self.target)
