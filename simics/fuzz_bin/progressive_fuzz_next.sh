@@ -73,6 +73,9 @@ new_index=0
 # output results from find_new_states.py are formatted "workspace cover_file"
 while IFS= read -r line ; do 
     ws=$(echo $line | awk '{print $1}')
+    if [ -z "$ws" ]; then
+        continue
+    fi
     cover_file=$(echo $line | awk '{print $2}')
     qfile="${cover_file/coverage/queue}"
     echo "ws is $ws"
