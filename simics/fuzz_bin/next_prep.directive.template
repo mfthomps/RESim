@@ -1,0 +1,8 @@
+# Template
+# directive to drive a prep inject for progressive fuzzing
+#
+FILE=a.io
+IP=10.10.0.101
+SRC_IP=10.10.0.91
+PORT=12345
+SESSION=UDP

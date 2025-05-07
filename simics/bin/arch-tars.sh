@@ -35,6 +35,8 @@ aflout=$AFL_DATA/output/$base
 fuzz_archive=$RESIM_FUZZ_ARCHIVE/$1/$base
 destination=$fuzz_archive/afl/output
 mkdir -p $destination
+unique=$base.unique
+cp $aflout/$unique $destination/
 #
 #  Sync each drone's queues into this master queue.
 #

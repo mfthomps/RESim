@@ -26,16 +26,25 @@ if [ $# -lt 2 ] || [ $1 = "-h" ]; then
     echo "the server, but only if the server's IDA_ANALYIS path is not on an NSF server."
     exit
 fi
-program=$1
+if [ -f $1 ]; then
+    program=$1
+else
+    echo "No program at ./$1, try exec_dict.json"
+    program=./$(findProgram.py $1)
+    if [ ! -f $program ]; then
+        echo "No program at $program"
+        exit
+    fi
+fi
 program_base="$(basename -- $program)"
 program_parent="$(dirname -- $program)"
-echo "parent is $program_parent"
+#echo "parent is $program_parent"
 here="$(pwd)"
 root_dir="$(basename --  $here)"
 root_dirname="$(dirname -- $here)"
 root_parent="$(basename -- $root_dirname)"
-echo "the root_dir is $root_dir"
-echo "the root_dir parent is is $root_parent"
+#echo "the root_dir is $root_dir"
+#echo "the root_dir parent is is $root_parent"
 remote=$2
 if [ $# -eq 3 ]; then
     user=$3@

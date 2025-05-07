@@ -115,7 +115,7 @@ class Kbuffer():
 
     def findArmBuf(self, dumb=None):
         # Find kernel buffers for arm processors.  First skip to the cycle that got us here, which is likely -1 from where we are
-        self.top.skipToCycle(self.write_cycle)
+        self.top.skipToCycle(self.write_cycle, disable=True)
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('Kbuffer findArmBuf eip 0x%x  cycle: 0x%x, is ARM, expect a str: %s' % (eip, self.cpu.cycles, instruct[1]))
@@ -129,7 +129,7 @@ class Kbuffer():
             gotone = False
             for i in range(limit):
                 prev = self.cpu.cycles - 1 
-                self.top.skipToCycle(prev, cpu=self.cpu)
+                self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
                 eip = self.top.getEIP()
                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('findArmBuf pc: 0x%x instruct: %s' % (eip, instruct[1]))
@@ -372,7 +372,7 @@ class Kbuffer():
         self.lgr.debug('Kbuffer findWinBuf instruct %s' % instruct[1])
 
         prev = self.cpu.cycles - 1 
-        self.top.skipToCycle(prev, cpu=self.cpu)
+        self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         op2, op1 = decode.getOperands(instruct[1])
@@ -382,7 +382,7 @@ class Kbuffer():
         gotit = False
         for i in range(limit):
             prev = self.cpu.cycles - 1 
-            self.top.skipToCycle(prev, cpu=self.cpu)
+            self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('Kbuffer findWinBuf prev instruct %s  cycles: 0x%x' % (instruct[1], self.cpu.cycles))
@@ -419,7 +419,7 @@ class Kbuffer():
         frame, cycle = self.top.getPreviousEnterCycle() 
         before_read = cycle - 1
         self.lgr.debug('Kbuffer restartRead skip to cycle 0x%x' % before_read)
-        self.top.skipToCycle(before_read)
+        self.top.skipToCycle(before_read, disable=True)
         syscall_manager = self.top.getSyscallManager()
         # allow syscalls to see entries they previously saw
         syscall_manager.clearSyscallCycles()
