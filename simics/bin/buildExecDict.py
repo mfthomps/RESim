@@ -58,9 +58,16 @@ def buildList(root_dir, exec_list_file):
     if not os.path.isfile(exec_list_file):
         here = os.getcwd()
         os.chdir(root_dir)
+        here = os.getcwd()
+        print('dir is %s' % here)
         cmd = 'find ./ -name *.exe -type f | grep -v "/winsxs/" >%s ' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)
+        cmd = 'find . -name *.dll | grep -vi windows | grep -vi microsoft | grep -v -i temp >>%s' % (exec_list_file)
+        print('cmd is %s' % cmd)
+        os.system(cmd)
+    else:
+        print('Already exec list file at %s' % exec_list_file)
 
 def main():
     parser = argparse.ArgumentParser(prog='buildExecDict', description='For each executable listed in a pre-created exec list, generate a dictionary entry reflecting the path to the executable and its word size.')

@@ -74,7 +74,7 @@ def getIdaDataFromIni(prog, ini, lgr=None):
         else:
             full_prog = getFullPath(prog, ini, lgr=lgr)
             if full_prog is None:
-                print('ERROR no path found for prog %d' % prog)
+                print('ERROR no path found for prog %s' % prog)
                 return retval
             prog_relative = full_prog[len(root_fs)+1:]
         base = os.path.basename(root_fs)
@@ -668,10 +668,13 @@ def getExecDict(root_prefix, lgr=None):
 def getFullPath(prog, ini, lgr=None):
     root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX', lgr=lgr)
     root_subdirs = getIniTargetValue(ini, 'RESIM_ROOT_SUBDIRS', lgr=lgr)
-    parts = root_subdirs.split(';')
-    the_subdirs = []
-    for sd in parts:
-        the_subdirs.append(sd.strip()) 
+    if root_subdirs is not None:
+        parts = root_subdirs.split(';')
+        the_subdirs = []
+        for sd in parts:
+            the_subdirs.append(sd.strip()) 
+    else:
+        the_subdirs = []
     os_type = getIniTargetValue(ini, 'OS_TYPE', lgr=lgr)
     if os_type.startswith('WIN'):
         target_fs = winTargetFS.TargetFS(None, root_prefix, the_subdirs, lgr)

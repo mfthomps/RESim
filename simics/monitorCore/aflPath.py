@@ -125,6 +125,10 @@ def getAFLCoverageList(target, get_all=False, host=None, auto=False):
             glist = []
             for path in ulist:
                 glist.append(os.path.join(afl_dir, path)) 
+        if auto:
+            flist = find_new_states.allQueueFiles(target)
+            for path in flist:
+                glist.append(path)
 
             # auto option assumes unique list present
             if auto:
