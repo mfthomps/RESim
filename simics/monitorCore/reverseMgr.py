@@ -124,7 +124,8 @@ class ReverseMgr():
         '''
         Cancel the event used to record execution of cycle_span cycles during recording
         '''
-        SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
+        if self.cycle_event is not None:
+            SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.recording = False
 
     def getMasked(self, cycle):
