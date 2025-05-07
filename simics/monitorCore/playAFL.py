@@ -165,12 +165,14 @@ class PlayAFL():
                     print('No queue files found for %s' % dfile)
                     self.lgr.debug('playAFL No queue files found for %s' % dfile)
                     return
+                self.top.noWatchSysEnter()
             else:
                 self.afl_list = aflPath.getTargetCrashes(dfile)
                 if len(self.afl_list) == 0:
                     print('No crashes found for %s' % dfile)
                     return
             print('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
+            self.lgr.debug('Playing %d sessions.  Please wait until that is reported.' % len(self.afl_list))
         self.search_list = search_list
         tid = self.top.getTID()
         self.lgr.debug('playAFL afl list has %d items.  current context %s current tid:%s fname:%s search_list:%s' % (len(self.afl_list), self.target_cpu.current_context, tid, self.fname, search_list))
@@ -277,7 +279,7 @@ class PlayAFL():
 
         #cmd = 'skip-to bookmark = bookmark0'
         #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu)
+        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu, disable=True)
         SIM_run_alone(self.setHapsAndRun, None)
 
     def setHapsAndRun(self, dumb):
@@ -345,7 +347,7 @@ class PlayAFL():
         #cmd = 'skip-to bookmark = bookmark0'
         # TBD this will break on repeat or playing multiple files
         #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu)
+        self.top.skipToCycle(self.initial_cycle, cpu=self.target_cpu, disable=True)
         self.disableReverse()
         self.top.setTarget(self.cell_name)
         tid = self.top.getTID()

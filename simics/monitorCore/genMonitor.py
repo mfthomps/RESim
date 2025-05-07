@@ -4064,8 +4064,10 @@ class GenMonitor():
  
     def resetOrigin(self, cpu=None):
         self.lgr.debug('resetOrigin')
+        ''' could be called with tid as the parameter. '''
         if cpu is None or type(cpu) is str:
             tid, cpu = self.context_manager[self.target].getDebugTid() 
+            self.lgr.debug('resetOrigin from context_manager cpu %s' % str(cpu))
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
         self.reverse_mgr[self.target].enableReverse()
@@ -5443,7 +5445,8 @@ class GenMonitor():
                 cpu, comm, tid = self.task_utils[self.target].curThread() 
                 self.debugTidGroup(tid)
             print('fd is %d (0x%x)' % (fd, fd))
-            prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], self.lgr, commence=commence) 
+            prepInject.PrepInject(self, cpu, cell_name, fd, snap_name, count, self.mem_utils[self.target], 
+                 self.lgr, commence=commence) 
         else:
             print('Reverse execution must be enabled to run prepInject')
 
@@ -6982,6 +6985,14 @@ class GenMonitor():
             return True
         else:
             return False
+
+    def noPrep(self):
+        # TBD fix to look for afl.pickle instead of naming convention
+        if self.run_from_snap is not None and ('prep_' in self.run_from_snap or '_prep' in self.run_from_snap):
+            print('Current snapshot looks like a prep inject.  Exiting.')
+            self.lgr.debug('Current snapshot looks like a prep inject, bail.')
+            self.quit()
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 

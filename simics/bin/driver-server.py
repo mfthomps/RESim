@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import socket,os,sys
 from ast import literal_eval as make_tuple
-
+'''
+Receive directives from a simics host and interact
+with the target accordingly.
+'''
 log = open('/tmp/serverx.log', 'a') 
 print('driver-server begin', file=log)
 # Server 

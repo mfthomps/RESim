@@ -1,15 +1,36 @@
 import os
+import json
+'''
+Map Linux syscall numbers and names.
+Windows syscall mapping is managed in the winTaskUtils,
+though passing 'WIN7' as the fpath here will let you use this module,
+e.g., for showTrackSyscalls.py
+'''
 class SyscallNumbers():
     def __init__(self, fpath, lgr):
         self.syscalls = {}
         self.callnums = {}
         self.lgr = lgr
-        if fpath.endswith('ia64.tbl'):
-            self.fromTbl(fpath)
-        elif fpath.endswith('arm64.tbl'):
-            self.fromArm64Tbl(fpath)
+        if fpath == 'WIN7':
+            # hack for bin utils
+            resim_dir = os.getenv('RESIM_DIR')
+            w7mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
+            if os.path.isfile(w7mapfile):
+                cm = json.load(open(w7mapfile))     
+                for call in cm:
+                    self.syscalls[int(call)] = cm[call] 
+                    ''' drop Nt prefix'''
+                    self.callnums[cm[call][2:]] = int(call)
+            else:
+                self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
+                return
         else:
-            self.fromInclude(fpath)
+            if fpath.endswith('ia64.tbl'):
+                self.fromTbl(fpath)
+            elif fpath.endswith('arm64.tbl'):
+                self.fromArm64Tbl(fpath)
+            else:
+                self.fromInclude(fpath)
 
     def fromTbl(self, fpath):
         with open(fpath) as fh:

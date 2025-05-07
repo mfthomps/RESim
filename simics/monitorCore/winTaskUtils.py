@@ -788,7 +788,7 @@ class WinTaskUtils():
             active_threads = self.mem_utils.readWord32(self.cpu, cur_proc + self.ACTIVE_THREADS)
             #self.lgr.debug('winTaskUtils findThreads cur_proc 0x%x pid:%d (%s) active_threads 0x%x' % (cur_proc, pid, comm, active_threads))
             if active_threads < 1:
-                print('not enough threads %d' % active_threads)
+                #print('not enough threads %d' % active_threads)
                 self.lgr.debug('winTaskUtils findThreads not enough threads %d' % active_threads)
                 return thread_id_dict
             thread_list_head = self.mem_utils.readPtr(self.cpu, cur_proc + self.THREAD_HEAD)

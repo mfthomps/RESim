@@ -12,6 +12,7 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
 import elfText
+import aflPath
 '''
 Find BNT's by looking at hits files.
 Will read trackio data from AFL with the -d option and report on 
@@ -20,7 +21,7 @@ watch marks that occur within the BB that leads to the BNT.
 
 
 
-def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, no_reset, lgr):
+def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, show_read_marks, quiet, no_reset, lgr, auto=False):
     retval = []
     count = 0
     #print('in findBNTForFun')
@@ -28,7 +29,13 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
        target_prog = prog
     else:
        target_prog = target
-    lgr.debug('findBNTForFun len of fun_blocks is %d' % len(fun_blocks['blocks']))
+    #lgr.debug('findBNTForFun len of fun_blocks is %d num hits %d' % (len(fun_blocks['blocks']), len(hits)))
+    lgr.debug('findBNTForFun target %s' % target)
+    # TBD would get_all every make sense here?  was true once...
+    if target is None:
+        here = os.getcwd()
+        target = os.path.basename(here)
+    cover_list = aflPath.getAFLCoverageList(target, get_all=False)
     for bb in fun_blocks['blocks']:
         for bb_hit in hits:
             #lgr.debug('compare %s to %s' % (bb_hit, bb['start_ea']))
@@ -36,7 +43,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
                 if bb_hit < prog_elf.text_start or bb_hit > (prog_elf.text_start + prog_elf.text_size):
                     lgr.debug('bb_hit 0x%x not in program text' % bb_hit)
                     continue
-                lgr.debug('check bb_hit 0x%x' % bb_hit)
+                #lgr.debug('check bb_hit 0x%x' % bb_hit)
                 for branch in bb['succs']:
                     if branch not in hits and branch not in pre_hits:
                         read_mark = None
@@ -44,7 +51,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
                         before_read = ''
                         lgr.debug('findBNTForFun target %s bb_hit 0x%x has branch 0x%x not in hits show read marks: %r' % (target, bb_hit, branch, show_read_marks))
                         if show_read_marks:
-                            queue_list = findBB.findBB(target_prog, bb_hit, True, lgr=lgr) 
+                            queue_list = findBB.findBB(target_prog, bb_hit, True, lgr=lgr, cover_list=cover_list, auto=auto) 
                             lgr.debug('findBNTForFun len of qlist for bb_hit 0x%x is %d' % (bb_hit, len(queue_list)))
                             least_packet = 100000
                             least_size = 100000
@@ -133,7 +140,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
                     #    print('branch 0x%x in hits' % branch)
     return retval
 
-def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False, no_reset=False):
+def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=False, no_reset=False, auto=False):
     lgr = resimUtils.getLogger('findBNT', '/tmp', level=None)
     lgr.debug('findBNT begin')
     #ida_path = resimUtils.getIdaData(prog)
@@ -179,15 +186,15 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
         print('findBNT found %d hits, %d functions and %d blocks' % (len(hits), num_funs, num_blocks))
     if len(hits) == 0:
         print('*** No hits found in %s.  Try providing the --target option.' % fname)
-    if fun_name is None:
+    elif fun_name is None:
         for fun in sorted(blocks):
             lgr.debug('call findBNTForFun for fun %s' % fun)
-            this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+            this_list = findBNTForFun(target, hits, pre_hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr, auto=auto)
             bnt_list.extend(this_list)
     else:
         for fun in blocks:
             if blocks[fun]['name'] == fun_name:
-                this_list = findBNTForFun(target, pre_hits, hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr)
+                this_list = findBNTForFun(target, hits, pre_hits, blocks[fun], no_print, prog, prog_elf, read_marks, quiet, no_reset, lgr, auto=auto)
                 bnt_list.extend(this_list)
                 break
     return bnt_list
@@ -201,8 +208,9 @@ def main():
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')
     parser.add_argument('-r', '--no_reset', action='store_true', help='Prioritize watchmarks that occur before a reset.')
+    parser.add_argument('-a', '--auto', action='store_true', help='Include artifacts found in progressive fuzzing')
     args = parser.parse_args()
-    bnt_list = findBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet, no_reset=args.no_reset)
+    bnt_list = findBNT(args.prog, args.ini, args.target, args.datamarks, fun_name=args.function, quiet=args.quiet, no_reset=args.no_reset, auto=args.auto)
     if bnt_list is not None:
         print('Found %d branches not taken.' % len(bnt_list))
 

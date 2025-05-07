@@ -1,0 +1,24 @@
+#!/bin/bash
+#
+# Template for setting env variables for progressive_fuzz.sh
+#
+# Name of starting ini file
+export starting_ini=some.ini
+# value for prepInject commence, if any
+export commence="AAAAAA"
+# value for prepInject count.  Cannot use with commence
+# would default to 1
+#export count=3
+# FD for prepInject
+export FD=0xbaa
+# timeout for fuzzing
+export fuzz_timeout=180
+# program name
+export program=SomeProgram
+# number of fuzzing clones to create
+export num_clones=8
+#
+# invoke the script
+#
+progressive_fuzz.sh
+

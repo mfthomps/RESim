@@ -2,7 +2,8 @@
 #
 # given a an AFL session named by target, compare all of the coverage
 # files and de-dupe them, creating a list of the smallest queue files
-# generate unique a set of hits.
+# that generate a unique a set of hits.  We consider a set of hits to
+# be unique if there is not superset to it.
 #
 import sys
 import os
@@ -10,6 +11,8 @@ import glob
 import json
 import argparse
 import functools
+from multiprocessing import Pool, Array, cpu_count
+from array import array
 try:
     import ConfigParser
 except:
@@ -19,6 +22,10 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import aflPath
 
+# globals
+flist = []
+#remaining_array = Array()
+hit_dict = {}
 
 #for hit in hits1:
 #    print('0x%x' % hit)
@@ -79,7 +86,7 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
         if args.max_size is not None and queue_len > args.max_size:
             return
 
-        ''' get the number of udp packets, if recorded '''
+        # get the number of udp packets, if recorded 
         udp_count = 0
         if udp_header is not None:
             with open(queue, 'br') as fh:
@@ -94,6 +101,7 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
             print('Failed loading json %s' % f)
             exit(1)
 
+        # Is there already a hit_dict entry having the exact same hits?
         numhits = len(hits)
         gotone = None
         for item in hit_dict:
@@ -105,7 +113,7 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
 
         rel_path = aflPath.getRelativePath(f, args.target)
         #print('rel_path is %s' % rel_path)
-        if not gotone or ',orig:' in rel_path:
+        if gotone is None or ',orig:' in rel_path:
             #print('new hit list %d hits %s' % (numhits, rel_path))
             hit_dict[rel_path] = hits
         else:
@@ -192,52 +200,27 @@ def checkMulti(flist, all_hits, udp_header, hit_dict):
         print('%d new hits and %d headers in %s' % (len(multi_hits[f]), this_count, f))
     return hit_dict
     
-               
-
-def main():
-    parser = argparse.ArgumentParser(prog='dedupCoverage', description='Create a deduped file of all unique coverage files.')
-    parser.add_argument('ini', action='store', help='The name of the ini file.')
-    parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
-    parser.add_argument('-s', '--max_size', action='store', type=int, help='Eleminiate queue files larger than this value.')
-    args = parser.parse_args()
-    if args.target.endswith('/'):
-        args.target = args.target[:-1]
-
-    udp_header = getHeader(args.ini)
-    if udp_header is not None:
-        udp_header = udp_header.encode()
-
-    hit_dict = {}
-
-    flist = aflPath.getAFLCoverageList(args.target, get_all=True)
-
-    prefix = aflPath.getTargetPath(args.target)
-    print('prefix is %s' % prefix)
-
-    ''' populate the hit_dict for each coverage file '''
-    for f in flist:
-        checkFileFirst(f, udp_header, hit_dict, args, prefix)
-
-    print('after first pass %d paths' % len(hit_dict))
-    ''' remove subsets '''
-    remove_set = []
+def rmSubsets(f):
+    global flist, remaining_array, hit_dict
+    #print('remove subsets for %s' % f)
     all_hits = []
-    # hack to avoid duplicates of seeds
-    for f in hit_dict:
-        #print('remove subsets for %s' % f)
-        did_orig_basenames = []
-        if f in remove_set:
-            continue
-        for this_f in hit_dict:
+    did_orig_basenames = []
+    index = flist.index(f)
+    f_hits = list(hit_dict[f])
+    f_size = len(f_hits)
+    #print('index %d, remaining_index[%d] is %d' % (index, index, remaining_array[index]))
+    if remaining_array[index] != 0:
+        for this_f in flist:
             if this_f == f:
                 continue
-            if this_f in remove_set:
+            this_f_index = flist.index(this_f)
+            if remaining_array[this_f_index] == 0:
                 continue
             if ',orig:' in this_f:
                 basename = os.path.basename(this_f)
                 if basename in did_orig_basenames:
                     #print('removing orig %s' % this_f)
-                    remove_set.append(this_f)
+                    remaining_array[this_f_index] = 0
                 else:
                     #print('allowing orig %s' % this_f)
                     did_orig_basenames.append(basename)
@@ -247,12 +230,11 @@ def main():
             for hit in hit_dict[this_f]:
                 if hit not in all_hits:
                     all_hits.append(hit)
-                if hit not in hit_dict[f]:
+                if hit not in f_hits:
                     got_dif = True
                     break
             if not got_dif:
                 ''' no hits in this_f that are not in f, remove this_f'''
-                f_size = len(hit_dict[f])
                 this_f_size = len(hit_dict[this_f])
                 delta = f_size - this_f_size
                 if delta > this_f_size:
@@ -260,9 +242,57 @@ def main():
                     pass
                 else:
                     #print('no hits in %s (this_f) that are not in %s (f), remove this_f' % (this_f, f))
-                    remove_set.append(this_f)
-    for f in remove_set:
-        del hit_dict[f]
+                    remaining_array[this_f_index] = 0
+    print('done with %s' % f)
+    return all_hits
+
+def main():
+    global flist, remaining_array, hit_dict
+    parser = argparse.ArgumentParser(prog='dedupCoverage', description='Create a deduped file of all unique coverage files.')
+    parser.add_argument('ini', action='store', help='The name of the ini file.')
+    parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
+    parser.add_argument('-s', '--max_size', action='store', type=int, help='Eleminate queue files larger than this value.')
+    args = parser.parse_args()
+    if args.target.endswith('/'):
+        args.target = args.target[:-1]
+
+    udp_header = getHeader(args.ini)
+    if udp_header is not None:
+        udp_header = udp_header.encode()
+
+    flist = aflPath.getAFLCoverageList(args.target, get_all=True)
+
+    prefix = aflPath.getTargetPath(args.target)
+    print('prefix is %s' % prefix)
+
+    ''' populate the hit_dict for each coverage file '''
+    print('%d files in coverage list' % len(flist))
+    for f in flist:
+        #print('call checkFile for %s' % f)
+        checkFileFirst(f, udp_header, hit_dict, args, prefix)
+
+    print('after first pass %d paths' % len(hit_dict))
+    ''' remove subsets '''
+    remove_set = []
+    all_hits = []
+    # hack to avoid duplicates of seeds
+    flist = list(hit_dict.keys())
+    remaining_array = Array("i", len(flist))
+    for i in range(len(flist)):
+        remaining_array[i] = 1
+    num_cpus = cpu_count()
+    print('at start, remaining_array[0] is %d' % remaining_array[0])
+    print('num_cpus is %d' % num_cpus)
+    with Pool(num_cpus) as p:
+        results = p.map(rmSubsets, flist)
+    for hit_list in results:
+        for hit in hit_list:
+            if hit not in all_hits:
+                all_hits.append(hit)
+
+    for index in range(len(remaining_array)):
+        if remaining_array[index] == 0:
+            del hit_dict[flist[index]]
     print('after subset pass %d paths and %d hits' % (len(hit_dict), len(all_hits)))
   
     if udp_header is not None: 

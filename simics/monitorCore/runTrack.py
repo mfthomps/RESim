@@ -25,6 +25,9 @@ import select
 import shlex
 import aflPath
 import resimUtils
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'fuzz_bin'))
+import find_new_states
 
 global stop_threads
 def handler(signum, frame):
@@ -142,21 +145,26 @@ def main():
     trackFD = None
     file_list = [] 
 
-    '''Check if the input is a seedfile directory or an afl workspace '''
+    # Check if the input is a seedfile directory or an afl workspace 
     if seedfiles is None:
+        # Is either an AFL workspace or a single file
         file_path = aflPath.getTargetPath(workspace)
         if os.path.isfile(workspace):
-            ''' single file to report on '''
+            # single file to report on 
             lgr.debug('runTrack single file %s' % workspace)
             file_list = [workspace]
         else:
             #file_list = aflPath.getTargetQueue(target, ws_filter=workspace)
-            file_list = aflPath.getTargetQueue(workspace)
+            if workspace.startswith('next_ws_'):
+                # Auto fuzz workspaces
+                file_list = find_new_states.queueFilesForWS(workspace)
+            else:
+                file_list = aflPath.getTargetQueue(workspace)
             if len(file_list) == 0:
                 lgr.error('runTrack no queue files found for workspace %s' % workspace)
                 return
             lgr.debug('runTrack file list from %s len %d' % (workspace, len(file_list)))
-        ''' remove any empty or corrupt track jsons '''
+        # remove any empty or corrupt track jsons 
         track_list = aflPath.getAFLTrackList(workspace, ws_filter=working_dir)
         for track_file in track_list:
             if os.path.isfile(track_file):
@@ -179,8 +187,8 @@ def main():
     signal.signal(signal.SIGINT, handler)
     signal.signal(signal.SIGTERM, handler)
     lgr.debug('runTrack create thread')
-    track_thread = threading.Thread(target=oneTrack, args=(file_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, args.max_marks, args.target, args.targetFD, args.trace_all,
-                       lambda: stop_threads, lgr, None, file_path))
+    track_thread = threading.Thread(target=oneTrack, args=(file_list, resim_path, resim_ini, args.only_thread, args.no_page_faults, 
+          args.max_marks, args.target, args.targetFD, args.trace_all, lambda: stop_threads, lgr, None, file_path))
     thread_list.append(track_thread)
     track_thread.start()
    

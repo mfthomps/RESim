@@ -12,6 +12,10 @@ import json
 
 f1 = sys.argv[1]
 f2 = sys.argv[2]
+if 'queue' in f1:
+    f1 = f1.replace('queue', 'coverage')
+if 'queue' in f2:
+    f2 = f2.replace('queue', 'coverage')
 
 hits1 = json.load(open(f1))
 hits2 = json.load(open(f2))
@@ -24,7 +28,7 @@ else:
 
 
 lesser = min(len(hits1), len(hits2))
-print('least hits of the 2 is %d' % lesser)
+print('least hits of the 2 is %d (%d in 1st and %d in second)' % (lesser, len(hits1), len(hits2)))
 for i in range(lesser):
     b1 = hits1[i]
     b2 = hits2[i]

@@ -1,3 +1,27 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 import os
 import pickle
 import stopFunction
@@ -69,11 +93,11 @@ class PrepInject():
             self.lgr.debug('prepInject instrumentSelect Entry into kernel is prior to first cycle, cannot record select_ip')
         else:
             previous = cycle - 1
-            self.top.skipToCycle(previous, cpu=self.cpu)
+            self.top.skipToCycle(previous, cpu=self.cpu, disable=True)
             self.select_call_ip = self.top.getEIP(self.cpu)
             self.lgr.debug('instrumentSelect skipped to call: 0x%x tid:%s cycle is 0x%x' % (self.select_call_ip, tid, self.cpu.cycles))
             ''' now back to return '''
-            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
+            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu, disable=True)
         self.top.restoreDebugBreaks()
         self.prepInject(ignore_waiting=True)
 
@@ -90,7 +114,7 @@ class PrepInject():
                     self.lgr.debug('prepInject instrumentAlone got orig buffer from phys memory len %d syscall len was %d' % (len(orig_buffer), length))
                 else:
                     self.lgr.error('prepInject instrumentAlone failed to get orig buffer from syscall') 
-                self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
+                self.top.skipToCycle(self.ret_cycle, cpu=self.cpu, disable=True)
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
         #else:
         #    self.lgr.error('prepInject finishNoCall falled to get syscall ?')
@@ -186,7 +210,7 @@ class PrepInject():
             previous = cycle - 1
             self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
 
-            if self.top.skipToCycle(previous, cpu=self.cpu):
+            if self.top.skipToCycle(previous, cpu=self.cpu, disable=True):
                 self.call_ip = self.top.getEIP(self.cpu)
                 ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
                 orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
@@ -195,7 +219,7 @@ class PrepInject():
                 self.lgr.error('prepInject instrument failed skip to syscall')
             ''' skip back to return so the snapshot is ready to inject input '''
             self.lgr.debug('prepInjectInstrument skip back to ret_cycle 0x%x' % self.ret_cycle)
-            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu)
+            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu, disable=True)
             current_ip = self.top.getEIP(self.cpu)
             self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
             self.pickleit(self.snap_name, self.exit_info, orig_buffer)
