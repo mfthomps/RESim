@@ -4070,7 +4070,7 @@ class GenMonitor():
             self.lgr.debug('resetOrigin from context_manager cpu %s' % str(cpu))
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
-        self.reverse_mgr[self.target].enableReverse()
+        self.reverse_mgr[self.target].enableReverse(two_step=True)
         self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
         if self.bookmarks is not None:
