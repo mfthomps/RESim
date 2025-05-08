@@ -102,14 +102,14 @@ class RecordEntry():
 
     def sysenterHap(self, prec, the_object, the_break, memory):
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
+        #self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
         if tid is not None:
             if True:
                 cycles = self.cpu.cycles
                 if tid not in self.sysenter_cycles:
                     self.sysenter_cycles[tid] = {}
                 if cycles not in self.sysenter_cycles[tid]:
-                    self.lgr.debug('the_object: %s  breaknum: %s' % (str(the_object), str(the_break)))
+                    #self.lgr.debug('the_object: %s  breaknum: %s' % (str(the_object), str(the_break)))
                     frame = self.task_utils.frameFromRegs(compat32=self.compat32)
                     if not self.top.isVxDKM(target=self.cell_name):
                         call_num = self.mem_utils.getCallNum(self.cpu)
@@ -120,7 +120,7 @@ class RecordEntry():
                         if callname is None:
                             self.lgr.debug('recordEntry sysenterHap bad call num %d, ignore' % call_num)
                             return
-                        self.lgr.debug('recordEntry sysenterHap tid:%s frame %s callnum %d callname %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frame), call_num, callname, self.cpu.cycles))
+                        #self.lgr.debug('recordEntry sysenterHap tid:%s frame %s callnum %d callname %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frame), call_num, callname, self.cpu.cycles))
                     else:
                         pc = self.top.getEIP(self.cpu)
                         callname = self.task_utils.getGlobalSym(pc)
@@ -148,10 +148,10 @@ class RecordEntry():
                         recent_cycle, recent_frame = self.recent_cycle[tid]
                         if cycles > recent_cycle:
                             self.recent_cycle[tid] = [cycles, frame]
-                            self.lgr.debug('recordEntry sysenterHap setting most recent cycle')
+                            #self.lgr.debug('recordEntry sysenterHap setting most recent cycle')
                     else:
                         self.recent_cycle[tid] = [cycles, frame]
-                        self.lgr.debug('recordEntry sysenterHap setting first recent cycle')
+                        #self.lgr.debug('recordEntry sysenterHap setting first recent cycle')
                 else:
                     self.lgr.debug('recordEntry sysenterHap, cycles already there for tid %s cycles: 0x%x' % (tid, cycles)) 
 

@@ -124,7 +124,8 @@ class ReverseMgr():
         '''
         Cancel the event used to record execution of cycle_span cycles during recording
         '''
-        SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
+        if self.cycle_event is not None:
+            SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.recording = False
 
     def getMasked(self, cycle):
@@ -158,9 +159,9 @@ class ReverseMgr():
         Entered when the next span is reached during recording.
         '''
         self.latest_span_end = self.cpu.cycles
-        #if self.top is not None:
-        #    eip = self.top.getEIP()
-        #    self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
+        if self.top is not None:
+            eip = self.top.getEIP()
+            self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
         SIM_run_alone(self.cycleHandlerAlone, cycles)
 
     def takeSnapshot(self, name):
@@ -199,7 +200,7 @@ class ReverseMgr():
             retval = retval + item
         return retval
 
-    def enableReverse(self):
+    def enableReverse(self, two_step=False):
         '''
         Enable reverse execution.  This should only be called for one instance of reverseMgr at a time.
         '''
@@ -212,9 +213,13 @@ class ReverseMgr():
             self.takeSnapshot('origin')
             size = self.snapSize()
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
-            # TBD Simics bug?
-            #SIM_restore_snapshot('origin')
-            self.restoreSnapshot('origin')
+            # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
+            #self.restoreSnapshot('origin')
+            if two_step:
+                # Simics gets confused when restoring memory snapshots.  Doing an immediate restore often avoids
+                # that confusion, however it can interere with real networks. Set two_step when calling due to real world cut. 
+                self.restoreSnapshot('origin')
+                self.lgr.debug('reverseMgr enableReverse did 2-step')
             self.setNextCycle()
         else:
             self.lgr.error('reverseMgr enableReverse, already enabled')
@@ -239,7 +244,7 @@ class ReverseMgr():
                 snap_list = SIM_list_snapshots()
                 for snap in snap_list:
                     SIM_delete_snapshot(snap)
-            self.lgr.debug('reverseMgr deleted %d snapshots' % len(snap_list))
+            self.lgr.debug('reverseMgr disableReverse deleted %d snapshots' % len(snap_list))
             self.rmContinuationHap()
             self.reset()
 
@@ -288,7 +293,7 @@ class ReverseMgr():
         self.cancelSpanCycle()
 
         if self.latest_span_end is None:
-            self.lgr.error('reverseMgr skipToCycle, have not yet hit a single span.  Consider reducing the cycle span in reverseMgr.py.')
+            #self.lgr.error('reverseMgr skipToCycle, have not yet hit a single span.  Consider reducing the cycle span in reverseMgr.py.')
             self.restoreSnapshot('origin')
             if use_cell is None:
                 self.lgr.debug('reverseMgr skipToCycle no latest cycle, restored origin 0x%x, now run to 0x%x' % (self.cpu.cycles, object_cycles))
@@ -335,7 +340,7 @@ class ReverseMgr():
                     else:
                         current_cycle = self.cpu_map[use_cell].cycles
                         self.lgr.debug('reverseMgr skipToCycle restored 0x%x cycles now 0x%x on our cpu and 0x%x on different cell %s' % (recorded, self.cpu.cycles, current_cyle, use_cell))
-                    if recorded != cycle:
+                    if recorded != current_cycle:
                         self.lgr.debug('reverseMgr skipToCycle run to 0x%x' % object_cycles)
                         self.runToCycle(object_cycles, use_cell=use_cell)
         return True

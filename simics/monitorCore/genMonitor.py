@@ -2036,7 +2036,7 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, want_tid=None, flist=None):
+    def toUser(self, flist=None, want_tid=None):
         self.rmDebugWarnHap()
         self.lgr.debug('toUser want_tid %s' % want_tid)
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -4070,7 +4070,7 @@ class GenMonitor():
             self.lgr.debug('resetOrigin from context_manager cpu %s' % str(cpu))
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
-        self.reverse_mgr[self.target].enableReverse()
+        self.reverse_mgr[self.target].enableReverse(two_step=True)
         self.lgr.debug('reset Origin rev ex enabled')
         self.rev_execution_enabled = True
         if self.bookmarks is not None:
