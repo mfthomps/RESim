@@ -146,6 +146,12 @@ class ReverseMgr():
             want_cycle = masked + self.cycle_span
             go_cycles = want_cycle - self.cpu.cycles
             self.lgr.debug('reverseMgr setNextCycle did register computed want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
+        elif self.latest_span_end is None:
+            masked = self.getMasked(self.origin_cycle)
+            want_cycle = masked + self.cycle_span
+            go_cycles = want_cycle - self.cpu.cycles
+            self.lgr.debug('reverseMgr setNextCycle already registered but no latest_span_end, want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
+
         elif self.cpu.cycles == self.latest_span_end:
             self.cancelSpanCycle()
             go_cycles = self.cycle_span
