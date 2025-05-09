@@ -61,7 +61,7 @@ def findStates(target, quiet, state_id, recurse, sibling, only_ws=None):
     if len(expaths_baseline) == 0:
         print(tabs+'***No paths found for target %s when looking for new states.' % target)
         #exit(1)
-        return
+        return retval
     # Baseline of hits
     hits_baseline = []
     for path in expaths_baseline:
@@ -220,9 +220,9 @@ def queueFilesForWS(ws):
 
 def allQueueFiles(ws):
     retval = []
-    track_list = findStates(ws, 1, None, True, False)
+    track_list = findStates(ws, 0, None, True, False)
     for item in track_list:
-        print('item %s' % item)
+        #print('item %s' % item)
         cover_file = item.strip()
         qfile = cover_file.replace('coverage', 'queue')
         retval.append(qfile)
