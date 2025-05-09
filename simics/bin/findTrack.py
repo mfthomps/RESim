@@ -87,7 +87,7 @@ def findTrackMark(f, addr, one, prog, quiet=False, lgr=None, no_cbr=False):
                     if one:
                         break
     else:
-        print('not a file: %s' % track_path)
+        #print('findTrack findTrackMark, not a file: %s' % track_path)
         if lgr is not None:
             lgr.debug('findTrack addr 0x%x NOT A FILE path %s' % (addr, track_path))
     return retval, num_resets
