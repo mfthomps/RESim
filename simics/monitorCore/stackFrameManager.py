@@ -164,8 +164,8 @@ class StackFrameManager():
         if self.mode_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
-        self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
+        #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
+        #self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
         if tid != want_tid:
             self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d bail' % (tid, want_tid, old, new))
             return 
@@ -248,7 +248,7 @@ class StackFrameManager():
 
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        ip = self.mem_utils.getRegValue(self.cpu, 'ip')
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         key = '0x%x-0x%x' % (sp, ip)
         return key
 

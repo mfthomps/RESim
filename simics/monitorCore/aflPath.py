@@ -114,7 +114,7 @@ def getAFLCoveragePath(target, instance, index, host=None):
         retval = glist[0]
     return retval
 
-def getAFLCoverageList(target, get_all=False, host=None, auto=False):
+def getAFLCoverageList(target, get_all=False, host=None, auto=False, lgr=None):
     glist = None
     afl_path = getAFLOutput()
     afl_dir = os.path.join(afl_path, target)
@@ -135,6 +135,8 @@ def getAFLCoverageList(target, get_all=False, host=None, auto=False):
                 auto_cover = find_new_states.allQueueFiles(target)
                 for cover in auto_cover:
                     glist.append(cover)
+                if lgr is not None:
+                    lgr.debug('getAFLCoverageList auto added %d cover files' % len(auto_cover))
 
     if glist is None:
         #glob_mask = '%s/%s/*resim_*/coverage/id:*,src*' % (afl_path, target)
