@@ -816,8 +816,8 @@ class SharedSyscall():
                 exit_info.fname = 'unknown'
             trace_msg = trace_msg+('FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
-            self.lgr.debug('sharedSyscall exitHap return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
-                   eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
+            #self.lgr.debug('sharedSyscall exitHap return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
+            #       eax, exit_info.fname, exit_info.flags, exit_info.mode, eax))
             if eax >= 0:
                 if tid in self.trace_procs:
                     self.traceProcs.open(tid, comm, exit_info.fname, eax)
@@ -1029,8 +1029,9 @@ class SharedSyscall():
                 else:
                     if self.read_fixup_callback is not None:
                         result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-                        self.lgr.debug('sharedSyscall ioctl call read_fixup_callback result was 0x%x' % result) 
-                        self.read_fixup_callback(exit_info.old_fd, callname=callname, addr_of_count=exit_info.retval_addr)
+                        if result is not None:
+                            self.lgr.debug('sharedSyscall ioctl call read_fixup_callback result was 0x%x' % result) 
+                            self.read_fixup_callback(exit_info.old_fd, callname=callname, addr_of_count=exit_info.retval_addr)
                     result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
                     if result is not None:
 
@@ -1038,9 +1039,11 @@ class SharedSyscall():
                         self.lgr.debug(trace_msg)
                         #if exit_info.cmd == 0x541b:
                             
-                    else:
+                    elif exit_info.cmd is not None and exit_info.retval_addr is not None:
                         self.lgr.debug('sharedSyscall ioctl read None from 0x%x cmd: 0x%x' % (exit_info.retval_addr, exit_info.cmd))
                         trace_msg = trace_msg+('FD: %d cmd: 0x%x eax: 0x%x\n' % (exit_info.old_fd, exit_info.cmd, eax))
+                    else:
+                        self.lgr.error('sharedSyscall exit_info cmd or retval_addr is none')
                     # TBD fix to only apply to appropriate ioctl calls
                     self.lgr.debug('sharedSyscall matched_param %s' % str(exit_info.matched_param))
                     if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
@@ -1314,7 +1317,7 @@ class SharedSyscall():
                 print(trace_msg)
     
         if trace_msg is not None and len(trace_msg.strip())>0:
-            self.lgr.debug('sharedSyscall exitHap cell %s %s'  % (self.cell_name, trace_msg.strip()))
+            #self.lgr.debug('sharedSyscall exitHap cell %s %s'  % (self.cell_name, trace_msg.strip()))
             self.traceMgr.write(trace_msg) 
         return True
 

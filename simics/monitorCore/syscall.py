@@ -798,8 +798,8 @@ class Syscall():
         else:
             ida_msg = '%s flags: 0%o  mode: %s  fname_addr 0x%x filename: %s   tid:%s (%s)' % (callname, flags, oct(mode), fname_addr, fname, tid, comm)
 
-        self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
-        self.lgr.debug(taskUtils.stringFromFrame(frame))
+        #self.lgr.debug('parseOpen set ida message to %s' % ida_msg)
+        #self.lgr.debug('parseOpen params: taskUtils.stringFromFrame(frame))
 
         self.context_manager.setIdaMessage(ida_msg)
         #if fname is None:
@@ -1591,8 +1591,8 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, callname, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
-            str(self.cpu.current_context), self.cpu.cycles))
+        #self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
+        #    str(self.cpu.current_context), self.cpu.cycles))
 
         do_stop_from_call = False
         # Optimization to see if call parameters exclude this sytem call
@@ -1666,9 +1666,9 @@ class Syscall():
                         
                 #SIM_break_simulation('fname is none...')
             elif exit_info.fname is not None:
-                self.lgr.debug('syscallParse got fname %s ida_msg is %s' % (exit_info.fname, ida_msg))
+                #self.lgr.debug('syscallParse got fname %s ida_msg is %s' % (exit_info.fname, ida_msg))
                 for call_param in self.call_params:
-                    self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
+                    #self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
                          mod = call_param.match_param
                          #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
@@ -2398,7 +2398,7 @@ class Syscall():
                         self.context_manager.genDeleteHap(hc.hap)
                         hc.hap = None
                 ''' check functions in list '''
-                self.lgr.debug('syscall stopHap call to rmExitHap')
+                #self.lgr.debug('syscall stopHap call to rmExitHap')
                 self.sharedSyscall.rmExitHap(None)
 
                 ''' TBD do this as a stop function? '''
@@ -2414,7 +2414,7 @@ class Syscall():
                 self.stop_action.run(cb_param=msg)
 
                 for param in self.call_params:
-                    self.lgr.debug('syscall stopHap call rmSyscall for param %s' % param.name)
+                    #self.lgr.debug('syscall stopHap call rmSyscall for param %s' % param.name)
                     self.top.rmSyscall(param.name, cell_name=self.cell_name)
             else:
                 self.lgr.debug('syscall will linger and catch next occurance')
@@ -2608,7 +2608,7 @@ class Syscall():
                self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
            callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
-           self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
+           #self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                return
            if tid == 1 and callname in ['open', 'openat', 'mmap', 'mmap2']:
@@ -2750,23 +2750,23 @@ class Syscall():
                                 if self.stop_on_call:
                                     cp = CallParams('stop_on_call', None, None, break_simulation=True)
                                     exit_info.call_params.append(cp)
-                                self.lgr.debug('exit_info.call_params tid %s self.name %s is %s' % (tid, self.name, str(exit_info.call_params)))
+                                #self.lgr.debug('exit_info.call_params tid %s self.name %s is %s' % (tid, self.name, str(exit_info.call_params)))
                                 if tracing_all or len(exit_info.call_params) > 0:
-                                    if len(self.call_params) > 0:
-                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d len %d trace_all %r tid_sockes? %s' % (self.name, 
-                                           self.cell_name, tid, callnum, len(self.call_params), tracing_all, str(self.tid_sockets)))
-                                    else:
-                                        self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d no params trace_all %r tid_sockets? %s' % (self.name, self.cell, 
-                                           tid, callnum, tracing_all, str(self.tid_sockets)))
+                                    #if len(self.call_params) > 0:
+                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d len %d trace_all %r tid_sockes? %s' % (self.name, 
+                                    #       self.cell_name, tid, callnum, len(self.call_params), tracing_all, str(self.tid_sockets)))
+                                    #else:
+                                    #    self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d no params trace_all %r tid_sockets? %s' % (self.name, self.cell, 
+                                    #       tid, callnum, tracing_all, str(self.tid_sockets)))
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 elif callname.startswith('mmap') and self.name in ['runToText', 'trackSO'] and exit_info.fname == self.mmap_fname:
-                                    self.lgr.debug('syscallHap is mmap and runToText and match')
+                                    #self.lgr.debug('syscallHap is mmap and runToText and match')
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 elif callname.startswith('mmap') and self.name in ['dataWatchMmap']:
-                                    self.lgr.debug('syscallHap is dataWatchMmap ')
+                                    #self.lgr.debug('syscallHap is dataWatchMmap ')
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 elif callname.startswith('open') and self.name in ['runToText', 'trackSO']:
-                                    self.lgr.debug('syscallHap callname %s  my name %s, add exit' % (callname, self.name))
+                                    #self.lgr.debug('syscallHap callname %s  my name %s, add exit' % (callname, self.name))
                                     self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                                 else:
                                     self.lgr.debug('syscallHap not trace all and no exit_info call params, so no exit hap')
