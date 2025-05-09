@@ -218,6 +218,8 @@ def getOperands(instruct):
             
     else:
         ret2 = parts_comma[1].strip()
+        if '[' in ret2 and 'ptr' in ret2:
+            ret2 = '[' + ret2.split('[')[1]
         #parts = parts[0].split(' ')
         #ret1 = parts[len(parts) - 1]
         ret1 = parts_comma[0].split(' ',1)[1].strip()
@@ -247,6 +249,7 @@ def getValue(s, cpu, lgr=None, reg_values={}):
     #if lgr is not None:
     #    lgr.debug('getValue for %s' % s)
     s = s.strip()
+
     if '+' in s:
         parts = s.split('+',1)
         reg_size = 4
