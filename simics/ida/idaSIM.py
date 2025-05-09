@@ -51,35 +51,24 @@ class IdaSIM():
         #doRevToAddr(cursor)
         command = '@cgc.revToAddr(0x%x, extra_back=%d)' % (cursor, 0)
         simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
-        #print('simicsString <%s>' % simicsString)
+        print('simicsString <%s>' % simicsString)
         if self.checkNoRev(simicsString):
+            print('simicsString call geteip when stopped')
             eip = gdbProt.getEIPWhenStopped()
+            print('simicsString back from geteip when stopped')
             self.signalClient()
+            print('simicsString back from signalClient')
 
-    def XXXXXXXXXXXXXXXsignalClient(self, norev=False):
-        start_eip = idaversion.get_reg_value(self.PC)
-        if not norev:
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.rev1()");')
-            eip = gdbProt.getEIPWhenStopped()
-            if  eip is None or not (type(eip) is int or type(eip) is long):
-                print('signalClient got wrong stuff? %s from getEIP' % str(eip))
-                return
-            #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
-        idaversion.step_into()
-        idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
-        new_eip = idaversion.get_reg_value(self.PC)
-        #print('signalClient back from cont new_eip is 0x%x' % new_eip)
-        if new_eip >= self.kernel_base:
-            print('in kernel, run to user')
-        self.updateStackTrace()
 
     def signalClient(self, norev=False):
         start_eip = idaversion.get_reg_value(self.PC)
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
+        print('signalClient start_eip 0x%x' % start_eip)
         if norev:
             idaversion.step_into()
             idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.printRegJson()");')
+        #print('signalClient load json')
         try:
             regs = json.loads(simicsString)
         except:
@@ -89,6 +78,7 @@ class IdaSIM():
             except:
                 print('failed to get regs from %s' % simicsString)
                 return
+        print('signalClient update regs')
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
@@ -101,14 +91,15 @@ class IdaSIM():
                 continue
             #print('set %s to 0x%x' % (r, regs[reg]))
             idaversion.set_reg_value(r, regs[reg])
+        print('signalClient refresh memory')
         idaversion.refresh_debugger_memory()
-
+        print('signalClient back from refresh memory')
 
         new_eip = idaversion.get_reg_value(self.PC)
-        #print('signalClient back from cont new_eip is 0x%x' % new_eip)
         if new_eip >= self.kernel_base:
             print('in kernel, run to user')
-        self.updateStackTrace()
+        #self.updateStackTrace()
+        #print('signalClient back from update stack')
 
 
     '''
