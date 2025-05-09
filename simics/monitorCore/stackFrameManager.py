@@ -248,7 +248,7 @@ class StackFrameManager():
 
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        ip = self.mem_utils.getRegValue(self.cpu, 'ip')
+        ip = self.mem_utils.getRegValue(self.cpu, 'pc')
         key = '0x%x-0x%x' % (sp, ip)
         return key
 
