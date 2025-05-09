@@ -25,8 +25,13 @@ def main():
     if os.path.isfile(exec_json_path):
         with open(exec_json_path) as fh:
             exec_dict = json.load(fh)
-            if args.prog in exec_dict:
-                print('%s' % exec_dict[args.prog]['path'])
+            got_one = False
+            for item in exec_dict:
+                if item.lower().startswith(args.prog.lower()):
+                    got_one = True
+                    print('%s' % exec_dict[item]['path'])
+            if not got_one:
+                print('%s not in exec_dict' % args.prog)
     else: 
         sys.stderr.write('No exec_list.json found at %s\n' % exec_json_path)
         exit(1)
