@@ -164,8 +164,8 @@ class StackFrameManager():
         if self.mode_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
-        self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
+        #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
+        #self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
         if tid != want_tid:
             self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d bail' % (tid, want_tid, old, new))
             return 
