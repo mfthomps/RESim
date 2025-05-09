@@ -1169,6 +1169,15 @@ class reverseToCall():
         else:
             self.followTaintX86(reg_mod_type)
 
+    def getOpValue(self, op):
+        retval = None
+        if '[' in op:
+            address = self.decode.getAddressFromOperand(self.cpu, op, self.lgr)
+            retval = self.task_utils.getMemUtils().readWord32(self.cpu, address)
+        else:
+            retval = self.decode.getValue(op, self.cpu, self.lgr)
+        return retval
+         
     def followTaintX86(self, reg_mod_type):
         ''' we believe the instruction at the current ip modifies self.reg 
             Where does its value come from? '''
@@ -1178,25 +1187,9 @@ class reverseToCall():
         op1, op0 = self.decode.getOperands(instruct[1])
         mn = self.decode.getMn(instruct[1])
         if not self.multOne(op0, mn) and not mn.startswith('mov') and not mn == 'pop' and not mn.startswith('cmov') \
-                                     and not self.orValue(op1, mn) and not mn == 'add':
+                                     and not self.orValue(op1, mn) and not mn == 'add' and not mn == 'xor':
             ''' NOTE: treating "or" and "add" and imult of one as a "mov" '''
-            if mn == 'add':
-               offset = None
-               #offset = int(op1, 16)
-               if '[' in op1:
-                   address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-                   offset = self.task_utils.getMemUtils().readWord32(self.cpu, address)
-                   self.lgr.debug('followTaintX86, add check of %s, address 0x%x offset is 0x%x' % (op1, address, offset))
-               else:
-                   offset = self.decode.getValue(op1, self.cpu, self.lgr)
-                   self.lgr.debug('followTaint, add check offset of %s is 0x%x' % (op1, offset))
-               if offset is not None and offset <= 8:
-                   ''' wth, just an address adjustment? '''
-                   self.lgr.debug('followTaintX86, add of %x, assume address adjust, e.g., heap struct' % offset)
-                   self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
-                   self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
-                   return 
-            elif mn == 'xchg':
+            if mn == 'xchg':
                 self.lgr.debug('followTaintX86, is xchg, track %s' % reg_mod_type.value)
                 self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
                 return
@@ -1209,6 +1202,30 @@ class reverseToCall():
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
             self.top.skipAndMail()
 
+        elif mn == 'add':
+           offset = None
+           #offset = int(op1, 16)
+           offset = self.getOpValue(op1)
+           if offset is not None:
+               offset = self.mem_utils.getUnsigned(offset)
+               self.lgr.debug('followTaint, add check offset of %s is 0x%x' % (op1, offset))
+           if offset is not None and offset <= 8:
+               ''' wth, just an address adjustment? '''
+               self.lgr.debug('followTaintX86, add of %x, assume address adjust, e.g., heap struct' % offset)
+               self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
+               self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
+               return 
+           else:
+               offset = self.getOpValue(op0)
+               if offset is not None:
+                   offset = self.mem_utils.getUnsigned(offset)
+               self.lgr.debug('followTaint, add check offset of %s is 0x%x' % (op0, offset))
+               if offset is not None and offset <= 0xff:
+                   # minor adjustment?
+                   self.lgr.debug('followTaintX86, add of %x, assume minor adjust of op1 %s' % (offset, op1))
+                   self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                   self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
+                   return 
         elif mn == 'pop':
             esp = self.top.getReg('esp', self.cpu) 
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
@@ -1219,10 +1236,22 @@ class reverseToCall():
         elif self.decode.isReg(op1) and (mn == 'mov' or not self.decode.isIndirect(op1)):
             self.lgr.debug('followTaintX86, is reg, track %s' % op1)
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
+        elif mn == 'xor':
+            value = self.getOpValue(op1)
+            if value is None:
+                self.lgr.debug('followTaintX86, is xor failed to get value from %s' % op1)
+            elif memUtils.isNull(value):
+                self.lgr.debug('followTaintX86, is xor with ffff.. keep looking at this reg')
+                self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
+                self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
+            else:
+                self.lgr.debug('followTaintX86, xor with value 0x%x, stumped' % value)
+                self.top.skipAndMail()
+
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
             self.lgr.debug('followTaintX86, is indrect reg, track %s' % op1)
             address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
-            self.bookmarks.setBacktrackBookmark('switch to indirect value:0x%x eip:0x%x inst:"%s"' % (self.value, eip, instruct[1]))
+            self.bookmarks.setBacktrackBookmark('switch to indirect op1 %s eip:0x%x inst:"%s"' % (op1, eip, instruct[1]))
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
 
         #elif mn == 'lea':
