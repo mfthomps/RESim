@@ -28,6 +28,9 @@ import shutil
 from simics import *
 binpath = os.path.join(os.getenv('RESIM_DIR'), 'simics', 'bin')
 sys.path.append(binpath)
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'simics', 'fuzz_bin'))
+import find_new_states
 import findBB
 import applyFilter
 import resimUtils
@@ -107,11 +110,7 @@ class InjectToWM():
             else:
                 print('Did not find a watch mark for address 0x%x.  Perhaps it came from a stale trackio artifact?' % self.addr)
 
-    def findOneTrack(self):
-        ''' Find a track having watchmark having the given address. 
-            Prioritize low packet numbers and small queue file size and number of watch marks.
-        '''
-        retval = None
+    def findBestTrack(self, expaths):
         least_packet = 100000
         least_size = 100000
         least_marks = 100000
@@ -119,14 +118,13 @@ class InjectToWM():
         best_result_marks = None
         without_resets = None
         best = None
-        expaths = aflPath.getAFLTrackList(self.afl_target)
-        self.lgr.debug('findOneTrack 0x%x found %d paths' % (self.addr, len(expaths)))
+        retval = None
         for index in range(len(expaths)):
             # NOTE addr given to injectToWM are load addresses, so do not let findTrack apply offsets
             result, num_resets = findTrack.findTrackMark(expaths[index], self.addr, True, None, quiet=True, lgr=self.lgr)
             if result is not None:
-                self.lgr.debug('InjectToWM findOneTrack for addr 0x%x from findTrack got index %d size: %d num_marks %d' % (self.addr, 
-                     result.mark['index'], result.size, result.num_marks))
+                self.lgr.debug('InjectToWM findBestTrack for addr 0x%x from findTrack got index %d size: %d num_marks %d packet %s least_packet %s' % (self.addr, 
+                     result.mark['index'], result.size, result.num_marks, result.mark['packet'], least_packet))
                 if result.mark['packet'] < least_packet:
                     least_packet = result.mark['packet']
                     least_marks = result.num_marks
@@ -145,8 +143,46 @@ class InjectToWM():
                     if result.size < least_size and (not self.no_reset or num_resets == 0 or without_resets is None):
                         least_size = result.size
                         best_result_size = result
+                else:
+                    self.lgr.debug('injectToWM findBestTrack packet is %s least %s' % (result.mark['packet'], leaset_packet))
             #else:
             #    self.lgr.debug('findOneTrack got nothing from findTrack')
+        return retval, without_resets, best_result_marks, best_result_size
+
+
+    def findOneTrack(self):
+        ''' Find a track having watchmark having the given address. 
+            Prioritize low packet numbers and small queue file size and number of watch marks.
+        '''
+        retval = None
+        wrong_state = False
+        from_auto = False
+        here = os.getcwd()
+        best_result_marks = None
+        if 'auto_ws' in here:
+            self.lgr.debug('findOneTrack running from auto_ws')
+        expaths = aflPath.getAFLTrackList(self.afl_target, lgr=self.lgr)
+        self.lgr.debug('findOneTrack 0x%x found %d paths' % (self.addr, len(expaths)))
+        retval, without_resets, best_result_marks, best_result_size = self.findBestTrack(expaths)
+        if retval is not None:
+           self.lgr.debug('findOneTrack retval results %s' % retval.path)
+        elif best_result_marks is not None:
+           self.lgr.debug('findOneTrack best results %s' % best_result_marks.path)
+        auto = os.path.isdir('auto_ws')
+        if (retval is None and best_result_marks is None and auto):
+            # No track had the watch mark and we are at initial state.  Will report and bail.
+            wrong_state = True
+            auto_paths = []
+            qlist = find_new_states.allQueueFiles(self.afl_target)
+            for path in qlist:
+                path = path.replace('queue', 'trackio')
+                auto_paths.append(path) 
+            retval, without_resets, best_result_marks, best_result_size = self.findBestTrack(auto_paths)
+            if retval is not None:
+               self.lgr.debug('findOneTrack retval auto results %s' % retval.path)
+            elif best_result_marks is not None:
+               self.lgr.debug('findOneTrack best auto results %s' % best_result_marks.path)
+
         if self.no_reset and without_resets is None:
             print('Failed to find watchmark prior to origin reset')
             self.lgr.debug('Failed to find watchmark prior to origin reset')
@@ -177,6 +213,9 @@ class InjectToWM():
         else:
             # best is least packets
             pass 
-
+        if wrong_state and retval is not None:
+            print('Watch mark at 0x%x not found in any tracks from this state.  However, a progressive fuzzing' % (self.addr))
+            print('state hit that watch mark via %s. Go to that auto_ws and run again, using the tmp.ini found there.' % retval.path)
+            retval = None
         return retval
    
