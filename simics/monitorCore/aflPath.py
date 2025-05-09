@@ -125,15 +125,12 @@ def getAFLCoverageList(target, get_all=False, host=None, auto=False, lgr=None):
             glist = []
             for path in ulist:
                 glist.append(os.path.join(afl_dir, path)) 
-        if auto:
-            flist = find_new_states.allQueueFiles(target)
-            for path in flist:
-                glist.append(path)
 
             # auto option assumes unique list present
             if auto:
                 auto_cover = find_new_states.allQueueFiles(target)
                 for cover in auto_cover:
+                    cover = cover.replace('queue', 'coverage')
                     glist.append(cover)
                 if lgr is not None:
                     lgr.debug('getAFLCoverageList auto added %d cover files' % len(auto_cover))
@@ -172,7 +169,7 @@ def getTrackBlacklist(afl_dir):
                     track_blacklist.append(line.strip())
     return track_blacklist
 
-def getAFLTrackList(target, get_all=False, host=None, ws_filter=None):
+def getAFLTrackList(target, ws_filter=None, lgr=None):
     glist = []
     afl_path = getAFLOutput()
     afl_dir = os.path.join(afl_path, target)
