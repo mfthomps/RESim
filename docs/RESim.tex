@@ -362,6 +362,10 @@ flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all 
 
 \item {\tt traceFuns} - Generate trace messages when each function within a target is entered.  Currently these message go to the resim log and assume ARM32.
 
+\item {\tt traceSO} - Generate trace messages when each shared object is entered.  One message is generated for each shared object, and then the corresponding
+breakpoint is removed.  An intended use is determining which DLLs process data input, e.g., runToIO and then traceSO.  While trackIO watchmarks also identify
+the SO file, trackIO can fail to track all data movement.  TBD messages currently go to the resim.log.
+
 \end{itemize}
 
 \subsection{Saving state}
@@ -384,7 +388,7 @@ If processes of interest are not being traced or debugged, then then {\tt trackT
 
 \begin{itemize}
 \item {\tt trackThreads} Causes RESim to track shared library loading for all processes on the selected target, filtered by either the
-{\tt ONLY\_PROGS} or {\tt SKIP\_PROGS} directives in the ini file.
+{\tt ONLY\_PROGS} or {\tt SKIP\_PROGS} directives in the ini file.  
 \item Use of {\tt traceAll} or {\tt traceWindows} will cause tracking of libraries.
 \item {\tt showSOMap(filter=None)} will display the SO map of the current process.  Use the filter to select based on string content.
 \item {\tt getSO(addr, show\_orig=False)} Display the shared library file and and address range within which the given address falls.
@@ -395,6 +399,9 @@ If a target system includes multiple interacting processes, use {\tt trackThread
 Let the system run until all such processes have been created and generate a snapshot.  You can then use {\tt debugProc} on any of those
 processes and the system will reflect all of the shared libraries.  This strategy is also consistent with the goal of letting the system 
 settle out prior to per-process analysis to ensure that observed behavior is not simply a consequence of incomplete initialization.
+
+Thread tracking will also record initial stack pointer values for each Linux thread as an optimization for stack frame generation.
+For optimization on windows, we use a hueristic driven by stack analysis that first occurs without a base.
 
 \subsection{Process Analysis}
 These functions support interactive analysis of the threads of a process, e.g., to run until some system call is made.  Also see the \textit{Tracking data} functions
@@ -512,7 +519,9 @@ or other loader goo.
 \item {\tt runToOther} Continue execution until a text range known to the SOMap (see {\tt showSOMap()}) -- but not the current text range -- is entered.
 Useful if you are in some library called by some other library, and you want to return to the latter.
 
-\item {\tt runToSO} Continue execution until a given program, SO or DLL file is reached.
+\item {\tt runToSO} Continue execution until a given program, or library is reached.  The optional {\tt threads=True} will stop when any thread of the
+process enteres the library.
+\item {\tt runToMainSO} Continue execution until a SO or DLL library named within the file defined by {\tt MAIN\_LIBS}.
 
 \item {\tt doBreak} Sets a breakpoint on a given address.  This command can be useful when wishing to break while running other commands.  For example,
 using {\tt doBreak} prior to running {\tt injectIO} may be more reliable than simply setting a Simics break and it will clean up other breaks and haps that 
@@ -753,11 +762,6 @@ will have kernel buffers overwritten by data on the wire.  Consider using drive-
 \item{\tt prepInjectAddr(addr, configfile)} -- For use when preparing to inject data directly into arbitrary application memory, e.g., when fuzzing argv parameters
 to a program.  Consider priming the prepInject state with enough data to cross any page boundaries that might be part of the buffer.
 
-\item{\tt fuzz(IOFile} -- Deprecated, AFL trims data itself just fine.  Trim a data file to the minimum needed to not affect coverage. Assume the simulation is at 
-a return from a read (e.g., using prepInject), set basic block coverage and iteratively execute while reducing the
-IOFile data size (padding with nulls) until a minimum is found.  The final file in {\tt /tmp/trimmer} is truncated and may need to be padded to be properly consumed, e.g.,
-if the program insists on reading a minimum number of bytes.  Intended for use in preparing minimal seed files for AFL.
-
 \item{\tt playAFL(dfile, afl\_mode=False, trace\_all=False, fname=None, target=None, targetFD=None)} -- Play data input files discovered by AFL.  The {\tt dfile} parameter 
 is a single file, a relative directory, or names a subdirectory of an output directory relative to the {\tt AFL\_DATA} environment variable).  
 If a relative directory, then each file in that directory is played and coverage output files are created in local directory named coverage.
@@ -975,6 +979,7 @@ buffers ever find their way to any program output). See \ref{trace_buffers}
 This can be helpful for Windows systems that include 32 and 64 bit applications.  Also see the winProgSizes.py utility.
 \item {\tt IGNORE\_BB\_LIST} -- File name to use when recording basic blocks that are to be ignored when running AFL or other coverage-related functions.  If this parameter
 is not present, then the basic blocks will be recorded in a file named by the current snapshot with a suffix of {\tt .dead}.
+\item {\tt MAIN\_LIBS} -- File name of a list of DLLs or SOs.  The runToMainSO command will run forward until one of these is entered.
 \end{itemize}
 
 \subsection{Target platforms}
@@ -1142,10 +1147,10 @@ non-interactive return so they are picked up by ssh):
 you may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
 wish to download and place in this directory.
 \end{itemize}
-\item Add \$RESIM\_DIR/simics/bin to your path, e.g. by adding to your .profile,
+\item Add \$RESIM\_DIR/simics/bin and fuzz\_bin to your path, e.g. by adding to your .profile,
 \begin{verbatim}
    export RESIM_DIR=[path to your git clone]
-   export PATH=$RESIM_DIR/simics/bin:$PATH
+   export PATH=$RESIM_DIR/simics/bin:$RESIM_DIR/simics/fuzz_bin:$PATH
 \end{verbatim}
 
 \item For analysis of Windows applications, install the pev package to get the readpe function for reading coff headers.
@@ -1398,6 +1403,13 @@ After running the script, rerun the idaDump.sh utility so that the artifacts use
 \subsubsection{IDA Troubleshooting}
 IDA will sometimes get confused about memory regions, especially when debugging libraries.  Use \textit{Debugger / Manual Memory Regions} to help it.
 Symptoms include clicking on a register not resulting in the memory display in Hex View.
+
+Use
+\begin{verbatim}
+set IDALOG=ida.log
+then -z10000 tacked onto the ida command
+\end{verbatim}
+\noindent to generate debug output for IDA
 
 \subsection{Ghidra}
 \label{ghidra}
@@ -2989,7 +3001,7 @@ Intended for use in determining if multiple TIDs reference input data.
 \item bntMerge.py -- Annotate a given BNT report with annotations previoulsy made to corresponding entries in the old\_bnt/ directory.
 \item rmLogs -- Remove log files from AFL clones within a workspace (assumes you are in the workspace directory.)
 \item showCoverage.py -- Show basic block coverage of an AFL file, or all files.
-\item dedupeCoverage -- Identify AFL sessions that resulted in unique sets of hit basic blocks.
+\item dedupeCoverage -- Identify AFL sessions that resulted in unique sets of hit basic blocks. This can be very slow if there are a lot of paths found by AFL.
 \item dataDiff -- Experimental, compare trackio output generated from post-AFL processing.
 \item traceDiff -- Compare 2 instruction trace files and locate points of divergence (see the {\tt instructTrace} command.
 \item diffHits -- Show differences between 2 hits files.
@@ -3011,6 +3023,7 @@ then restores them and copies them to the merged directory.
 \item winProgSizes.py -- Use this to create a file you will name with the WORD\_SIZES target value in an ini file.  The utility will parse a log file 
 to determine the names of programs that are created, and it will then look in your ROOT\_PREFIX directory for those to determine whether the program is 32 or
 64 bit.  Use the {\tt runToCall('CreateUserProcess', linger=True)} command to generate a suitable log file for parsing.
+\item buildExecDict.py -- Builds a dictionary of executable files.
 
 \end{itemize}
 
@@ -3336,6 +3349,7 @@ When using real networks, configure the image routing and resolv.conf, using you
 
 
 \section{Implementation notes}
+\subsection{HAPs}
 Use the {\tt VT\_in\_time\_order(self.vt\_handler, param)} when you need to know the memory transaction that
 led to a stop hap during reverse.  See findKernelWrite for an example.
 
@@ -3349,17 +3363,19 @@ HAPs are often hit after they are deleted.  Alwways set a deleted HAP to None an
 Deleting a breakpoint does not stop its HAP from being called when the deleted breakpoint's address is hit.  As such,
 optimization schemes should not try to reduce breakpoint counts on the fly.
 
+\subsection{Thread tracking}
+Thread tracking is necessary to record address space information of threads for use in analysis, e.g., knowing which library
+is executed while referencing input data.  The scope of threads being tracked is constrained by the only/ignore lists. 
+If a process if being debugged, other process threads are tracked unless track\_threads is set false.  Thread tracking also maintains
+data on initial stack pointers for each thread as a means of optimizing stack frame generation.  The context manager facilitates this 
+by catching the scheduling of new threads and calling top.recordStackClone.
+
 \section{ToDo}
 \textbf{Note} Some of the entries below have been at least partially implemented.  The entries remain to encourage testing and completeness.
 \subsection {Msc}
 \begin{itemize}
 \item Stack trace on x86 assumes use of bp register unless OS is windows.  This is a poor assumption.  Need automated way
 of looking at functions.  Though libraries or compilation units may differ in same program.
-
-\item Standardize syscall trace output so that each entry includes the comm.
-
-\item Add duration option to traceAll so it can run quitely and stop when given duration has been reached.  But must deal with
-autoMaze stops!  Prompt user to allow automaze.
 
 \item Trace params of pctl and catch setname, which is used by systemd to change thread name to rsyslog.  Should be able to 
 break on this like we do for execve.
@@ -4120,7 +4136,7 @@ entry within the ReverseToCall module for purposes of skipping backwards out of 
 many kernel entry points, and functions call other funtions that are also entry points.  If all such functions have clean BL calls, then we could filter out function
 calls made from within the kernel.  A downside is the possibility that a large numbers of breakpoints being hit will affect performance -- but that is unknown.
 
-\subsection{VxWroks Performance}
+\subsection{VxWorks Performance}
 Starting the zynqmp platform for VxWorks can be extremely slow if any other components, e.g., a driver, are defined.  Altering time quantums and the frequency of
 the driver cpu does not seem to significantly speed this up.  As a work-around, the ADD\_FROM\_SNAPSHOT will load a snapshot and then add other components to it.
 First start only the zynqmp platform, without starting any application on it.  Create a snapshot and then run a ini file that includes a driver and names the snapshot
@@ -4135,6 +4151,66 @@ executed before the program start is hit.  If that turns out to be wrong, we can
 Simics 7 deprecated reverse execution.  RESim replaces much of the lost reversing functions with its "reverseMgr" module.
 Simics 7 will not run on pre-Haswell CPUs, e.g., Dell R620.  However it should run on more recent servers.
 There seem to be issues with the i82543gc, leading to kernel errors requiring the board to be "reseated".  Use a different nic.
+
+\section{Progressive fuzzing}
+This section describes scripts and procedures to fuzz a target through a progressive set of states.
+As an example, consider a UDP service whose processing of data within the UDP depends the content of previously received UDP packets.
+\subsection{Overview}
+Broadly the approach is to:
+\begin{enumerate} 
+\item Fuzz from the starting state
+\item For each queue file found to be unique by the dedupCoverage.py utility:
+\begin{itemize}
+\item Drive the service to ingest the queue file and save the resulting state
+\item Create a prepInject snapshot from this new state.
+\item Fuzz from the new state, using original unique queue files as seeds
+\end{itemize}
+\item Identify the queue files that resulted in newly hit blocks in the new fuzz sessions.
+\item For each such queue file, starting from the state of its corresponding fuzz session:
+\begin{itemize}
+\item Drive the service to ingest the queue file and save the resulting state
+\item Create a prepInject snapshot from this new state.
+\item Fuzz from the new state, using original unique queue files as seeds
+\end{itemize}
+\item Repeat from step 3 for each subsequent state
+\end{enumerate} 
+\subsection{Limitations}
+No claim is made regarding the completeness of this approach. Its shortcomings include:
+\begin{itemize}
+\item Hitting new blocks does not necessarily mean the state machine has progressed.
+\item State variables can be set without hitting new blocks.
+\item New blocks may be hit simply because time is progressing and threads may be scheduled independent of fuzzed input.
+\item This form of progressive fuzzing does not work with TCP conversations.
+\item The number of states can explode if there are large numbers of unique coverage files.  
+\end{itemize}
+Alternatives to progressive fuzzing include:
+\begin{itemize}
+\item Include multiple UDP packets in fuzzed data and use the UDP\_HEADER control to inject each in turn.  This becomes challenging if 
+the input buffer addresses change, or if select/ioctl-type of operations precede the receive.
+\item Inject multiple UDP packets (or portions of TCP conversations) into the driver using JSON files, derived from fuzzed data.
+\end{itemize}
+\subsection{Workflow and artifacts}
+This description assumes a UDP service.
+Start with a fuzzing session and run runPlay and dedupCoverage.py when it no longer finds new paths.
+Then create a bash script that defines the parameters described in simics/fuzz\_bin/progressive\_fuzz.sh prior to invoking that 
+script, use simics/fuzz\_bin/auto\_fuzz1.template as a template. Also create next\_state.directive and next\_prep.directive files
+from the corresponding templates.
+
+When the auto\_fuzz1.sh script finishes, your workspace will have snapshots for each unique queue file, 
+one named next\_state\_N and another
+named next\_prep\_N where \textit{N} is the index into the unique queue list.  There will also be a auto\_fuzz directory containing
+workspaces for each unique index.  And AFL artifacts for each of those workspaces will exist under the AFL output and seeds directories.
+
+The {\tt find\_next\_state.py} script can be run to see which fuzzing sessions resulting in new states.
+
+The \textit{N} suffix is referred to as the \textit{state ID}.  The ID will expand as states progress, e.g., it may become something like {\tt 4\_3\_9},
+reflecting a state that was reached by ingesting the 5th unique index (they are zero relative), followed by the forth queue file found to have hit new blocks...
+After running progressive\_fuzz.sh script finishes, any new states IDs will be integers.  Copy your bash script and change it to invoke
+progressive\_fuzz\_next.py, and add the {\tt state\_id} of the state you wish to proceed from. 
+
+Use merge\_progressive\_hits.py to merge all the hits from progressive fuzzing into one hits file.
+
+Use auto\_track.sh, to generate trackio artifacts for each new coverage file.
 
 \end{appendices}
 %\printIndex
