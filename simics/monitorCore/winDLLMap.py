@@ -43,6 +43,7 @@ class DLLInfo():
         new.text_offset = info.text_offset
         new.machine = info.machine
         new.image_base = info.image_base
+        new.local_path = info.local_path
         return new
 
     def addSectionHandle(self, section_handle):
@@ -472,15 +473,20 @@ class WinDLLMap():
         return retval
 
     def isFunNotLibc(self, address):
+        ''' return False if address not in libc, or similar windows rat hole.'''
         retval = False
         if self.isMainText(address):
             retval = True
         else:
-            so_file = self.getSOFile(address)
-            if so_file is not None and not resimUtils.isClib(so_file):
-                fun = self.fun_mgr.getFunName(address)
-                if fun is not None:
-                    retval = True 
+            so_file_full = self.getSOFileFull(address)
+            if so_file_full is not None:
+                so_file = os.path.basename(so_file_full)
+                if not resimUtils.isClib(so_file, lgr=self.lgr):
+                    fun = self.fun_mgr.getFunName(address)
+                    if fun is not None:
+                        retval = True 
+                    elif resimUtils.isWindowsCore(so_file_full):
+                        retval = True
         return retval           
 
     def getSOFile(self, addr_in):
@@ -503,7 +509,7 @@ class WinDLLMap():
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
                 if section.fname != fname:
-                    self.lgr.error('winDLL getSOFileFull section.fname is %s fname %s' % (section.fname, fname))
+                    self.lgr.error('winDLL getSOFileFull section.fname is %s section_map fname %s' % (section.fname, fname))
                 if section.load_addr is None:
                     #self.lgr.debug('getSOFile got no addr for section %s' % section.fname)
                     continue
@@ -551,9 +557,10 @@ class WinDLLMap():
             pass
         return retval
 
-    def getLoadAddr(self, in_fname, tid=None):
+    def getLoadAddrSize(self, in_fname, tid=None):
         self.lgr.debug('winDLLMap loadAddr %s tid %s' % (in_fname, tid))
         retval = None
+        ret_size = None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         pid = self.pidFromTID(tid)
@@ -570,7 +577,12 @@ class WinDLLMap():
                     section = self.section_map[pid][fname]
                     self.lgr.debug('winDLLMap got match for %s section.load_addr 0x%x tid:%s' % (fname, section.load_addr, tid))
                     retval = section.load_addr
+                    ret_size = section.size
                     break 
+        return retval, ret_size
+
+    def getLoadAddr(self, in_fname, tid=None):
+        retval, ret_size = self.getLoadAddrSize(in_fname, tid=tid)
         return retval
 
     def getImageBaseForPid(self, in_fname, pid):
@@ -634,10 +646,8 @@ class WinDLLMap():
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
                 end = section.load_addr+section.size - 1
-                #self.lgr.debug('winDLL getSOInfo section %s addr 0x%x end 0x%x  addr_in 0x%x' % (section.fname, section.load_addr, end, addr_in))
+                #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
                 if addr_in >= section.load_addr and addr_in <= end:
-                    #if retval != (None, None, None):
-                    #    self.lgr.debug('winDLL already got getSOInfo %s 0x%x 0x%x' % ((fname, section.load_addr, end)))
                     retval = (fname, section.load_addr, end)
                     #break 
         return retval
@@ -665,6 +675,9 @@ class WinDLLMap():
                 del self.so_watch_callback[fname][name]
 
     def getAnalysisPath(self, fname):
+        if len(self.fun_list_cache) == 0:
+            self.fun_list_cache = resimUtils.getFunListCache(None, root_prefix=self.root_prefix)
+            self.lgr.debug('winDLL getAnalysisPath loaded %d into fun cache' % len(self.fun_list_cache))
         return resimUtils.getAnalysisPath(None, fname, fun_list_cache = self.fun_list_cache, root_prefix=self.root_prefix, lgr=self.lgr)
 
     def setFunMgr(self, fun_mgr, tid):
@@ -684,8 +697,6 @@ class WinDLLMap():
             for locate in sorted(sort_map, reverse=True):
                 section = sort_map[locate]
                 if section.fname != 'unknown':
-                    #fpath = section.fname
-                    #full_path = self.top.getFullPath(fpath)
                     self.addSectionFunction(section, locate)
         else:
             self.lgr.debug('winDLL setFunMgr pid %d not in section_map' % pid)
@@ -695,6 +706,7 @@ class WinDLLMap():
             #self.lgr.error('winDLL MISSING fun_mgr *************************************')
             self.lgr.debug('winDLL MISSING fun_mgr *************************************')
             return
+        self.lgr.debug('winDLL addSectionFunction section.fname %s local %s' % (section.fname, section.local_path))
         fun_path = self.getAnalysisPath(section.fname)
         if fun_path is not None:
             self.lgr.debug('winDLL addSectionFunction set addr 0x%x for %s' % (locate, fun_path))
@@ -920,6 +932,7 @@ class WinDLLMap():
         else:
             self.lgr.debug('winDLL getLoadOffset tid %s not in section_map' % pid)
         return retval
+
 
     def getSOTid(self, tid):
         # compatability 
