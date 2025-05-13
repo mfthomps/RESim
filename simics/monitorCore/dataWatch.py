@@ -61,7 +61,7 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 
-            'String14compare_helper', 'String14compare_helper_latin',
+            'String14compare_helper', 'String14compare_helper_latin', 'String17fromLatin1_helper_latin', 
             'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'ByteArray5toInt', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
@@ -325,7 +325,7 @@ class DataWatch():
     def checkFread(self, start, length):
         retval = False
         self.lgr.debug('dataWatch checkFread')
-        st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+        st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
         if st is None:
             self.lgr.debug('stack trace is None, wrong tid?')
             return False
@@ -1796,7 +1796,7 @@ class DataWatch():
             else:
                 self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, ret_addr))
                 wm = self.watchMarks.getopt(self.mem_something.fun, None, None, self.mem_something.length, self.mem_something.src, self.mem_something.the_string)
-        elif self.mem_something.fun == 'String16fromAscii_helper':
+        elif self.mem_something.fun in ['String16fromAscii_helper', 'String17fromLatin1_helper_latin']:
             this_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             self.mem_something.dest = this_addr + 0x10 + self.mem_something.pos
             range_count = self.mem_something.length * 2
@@ -1807,7 +1807,6 @@ class DataWatch():
                                       truncated=self.mem_something.truncated, copy_start=self.mem_something.start)
             self.setRange(self.mem_something.dest, range_count, watch_mark=wm)
             self.watchStackObject(this_addr)
-
 
         elif self.mem_something.fun == 'String5split':
             ret_struct_addr_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -2018,7 +2017,7 @@ class DataWatch():
     
         # special case for memsomething functions calling memcpy.  
         if fun in ['memcpy', 'strlen']:
-            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
             if st is None:
                 self.lgr.error('DataWatch memSomethingEntry failed to get stack trace')
                 return 
@@ -2328,7 +2327,7 @@ class DataWatch():
             return True
         orig_param_length = param_length
         # Are there multiple buffers within this copy?
-        if self.multiBuffer(param_src, param_length, param_dest):
+        if param_length > 4 and self.multiBuffer(param_src, param_length, param_dest):
             return False
         buf_start, buf_length, dumb = self.findBufForRange(param_src, param_length)
         if data_hit:
@@ -2387,8 +2386,9 @@ class DataWatch():
                 #self.lgr.debug('gatherCallParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (param_dest, param_src, 
                 #    param_length))
 
-            ''' recalculate buf_start and buf_length per new param_length '''
-            skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
+            if not skip_fun:
+                ''' recalculate buf_start and buf_length per new param_length '''
+                skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
         return skip_fun
 
     def bufferWithinBuffer(self, param_src, param_length, param_dest, orig_param_length):
@@ -2777,6 +2777,11 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch getMemParams %s src: 0x%x string %s' % (self.mem_something.fun, param_src, self.mem_something.the_string))
                 skip_fun = self.bufferWithinBuffer(param_src, param_length, None, param_length)
+
+        elif self.mem_something.fun == 'String17fromLatin1_helper_latin':
+            param_src, param_length, dumb = self.getCallParams(sp, word_size)
+            self.mem_something.the_string = self.mem_utils.readString(self.cpu, param_src, 100)
+            skip_fun = self.bufferWithinBuffer(param_src, param_length, None, param_length)
 
         elif self.mem_something.fun == 'String5split':
             struct_addr_addr, dumb2, dumb = self.getCallParams(sp, word_size)
@@ -4631,7 +4636,7 @@ class DataWatch():
             else:
                 ''' Get the stack frame so we can look for memsomething or frees '''
                 self.lgr.debug('DataWatch call getStackTrace from readHap fun 0x%x not in not_mem_something' % fun)
-                st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
+                st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
                 if st is None:
                     self.lgr.debug('DataWatch userSpaceRef stack trace is None, wrong tid?')
                 else:
