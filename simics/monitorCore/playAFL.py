@@ -43,7 +43,7 @@ class PlayAFL():
              snap_name, context_manager, cfg_file, lgr, packet_count=1, stop_on_read=False, linear=False,
              create_dead_zone=False, afl_mode=False, crashes=False, parallel=False, only_thread=False, target_cell=None, target_proc=None,
              fname=None, repeat=False, targetFD=None, count=1, trace_all=False, no_page_faults=False, show_new_hits=False, diag_hits=False,
-             search_list=None, commence_params=None):
+             search_list=None, commence_params=None, watch_rop=False):
         if fname is not None and '/' in fname and fname[0] != '/':
             # needed for soMap lookups
             fname = '/'+fname
@@ -82,6 +82,7 @@ class PlayAFL():
         self.count = count
         self.trace_all = trace_all
         self.show_new_hits = show_new_hits
+        self.watch_rop = watch_rop
         self.afl_dir = aflPath.getAFLOutput()
         self.all_hits = []
         self.afl_list = []
@@ -452,6 +453,10 @@ class PlayAFL():
             self.lgr.debug('playAFL search_list at %s' % self.search_list)
             self.setSearch() 
         self.backstop.setCallback(self.backstopCallback)
+        if self.watch_rop:
+            load_addr, size = self.top.getLoadSize(self.fname)
+            self.top.watchROP(addr=load_addr, size=size) 
+            self.lgr.debug('playAFL watching rop for %s addr 0x%x size 0x%x' % (self.fname, load_addr, size))
         
 
     def go(self, findbb=None):
