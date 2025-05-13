@@ -169,6 +169,7 @@ def getPacketFilter(packet_filter, lgr):
 
 def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
     blocks = None
+    lgr.debug('getBasicBlocks prog %s' % prog)
     analysis_path = getAnalysisPath(ini, prog, root_prefix=root_prefix, lgr=lgr)
     #print('analysis_path at %s' % analysis_path)
     if lgr is not None:
@@ -462,6 +463,7 @@ def soMatch(fname, cache, lgr):
     base = os.path.basename(fname).upper()
     for item in cache:
         upper_item = item.upper()
+        #lgr.debug('soMatch upper_item %s' % upper_item)
         if upper_item.startswith(base) and upper_item.endswith('.FUNS'):
             if lgr  is not None:
                 #lgr.debug('resimUtils soMatch found match %s' % item)
@@ -492,12 +494,19 @@ def getWinPath(path, root_prefix, lgr=None):
 def getRootTopDir(root_prefix):
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
-        lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
+        lgr.error('resimUtils getRootTopDir path IDA_ANALYSIS not defined')
         return None
     root_dir = os.path.basename(root_prefix)
     root_parent = os.path.basename(os.path.dirname(root_prefix))
     top_dir = os.path.join(analysis_path, root_parent, root_dir)
     return top_dir
+
+def getFunListCache(ini, root_prefix=None):
+    if root_prefix is None: 
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+    top_dir = getRootTopDir(root_prefix)
+    fun_list_cache = findListFrom('*.funs', top_dir)
+    return fun_list_cache
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
     retval = None
@@ -539,6 +548,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
         base = os.path.basename(fname)+'.funs'
         #if base.upper() in map(str.upper, fun_list_cache):
+        lgr.debug('resimUtils getAnalysisPath call soMatch for %s' % fname)
         is_match = soMatch(fname, fun_list_cache, lgr)
         if is_match is not None:
             parent = os.path.dirname(fname)
@@ -563,28 +573,39 @@ clib_dep = {'libc': 0,  'libstdc': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 
 
 def getClibIndex(fname):
     retval = None
-    fname = fname.lower()
+    fname = os.path.basename(fname.lower())
     for lib_file in clib_dep:
         if fname.startswith(lib_file):
             retval = clib_dep[lib_file]
             break
     return retval
     
-def isClib(in_lib_file):
+def isClib(in_lib_file, lgr=None):
     if in_lib_file is None:
         return False
     retval = False
-    lib_file = os.path.basename(in_lib_file) 
-    if lib_file is not None:
-        lf = lib_file.lower()
-        for libname in clib_dep:
-            if lf.startswith(libname):
+    if 'c:\windows' in in_lib_file.lower():
+        retval = True
+    else:
+        lib_file = ntpath.basename(in_lib_file) 
+        if lib_file is not None:
+            lf = lib_file.lower()
+            for libname in clib_dep:
+                if lf.startswith(libname):
+                    retval = True
+                    break
+            if not retval and lf.startswith('ld-'):
+                # loader as libc
                 retval = True
-                break
-        if not retval and lf.startswith('ld-'):
-            # loader as libc
-            retval = True
     return retval
+
+def isWindowsCore(lib_file):
+    #if 'c:\windows' in lib_file.lower():
+    if 'windows' in lib_file.lower():
+        return True
+    else:
+        return False
+
 
 def getLoadOffsetFromSO(so_json, prog, lgr=None):
     retval = None
@@ -680,5 +701,7 @@ def getFullPath(prog, ini, lgr=None):
         target_fs = winTargetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
     else:
         target_fs = targetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
+    if lgr is not None:
+        lgr('resimUtils getFullPath %s' % prog)
     full = target_fs.getFull(prog, lgr=lgr)
     return full
