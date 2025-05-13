@@ -121,7 +121,7 @@ class TargetFS():
             elif path_base == path:
                 result_list = []
                 for exec_base in self.exec_dict:
-                    if exec_base.startswith(path):
+                    if exec_base.lower().startswith(path.lower()):
                         result = os.path.join(self.root_prefix, self.exec_dict[exec_base]['path'])
                         result_list.append(result)
                         if lgr is not None:
@@ -131,6 +131,7 @@ class TargetFS():
                 elif len(result_list) > 1:
                     print('Multiple results found for %s:  %s' % (path, str(result_list)))
                     retval = 'multiple_results'
-        if lgr is not None:
-            lgr.debug('winTargetFS checkExecDict no exec_dict')
+        else:
+            if lgr is not None:
+                lgr.debug('winTargetFS checkExecDict no exec_dict')
         return retval
