@@ -52,7 +52,7 @@ class StackFrameManager():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
-    def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
+    def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -79,7 +79,7 @@ class StackFrameManager():
                
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                          self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                         reg_frame, self.disassembler, self.lgr)
+                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -90,7 +90,7 @@ class StackFrameManager():
                 self.stack2_cache[key].append(st)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -120,7 +120,7 @@ class StackFrameManager():
                 reg_frame = self.task_utils.frameFromRegs()
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                         self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
+                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
