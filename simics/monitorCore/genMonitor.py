@@ -2163,6 +2163,7 @@ class GenMonitor():
             
             self.lgr.debug('skipAndMail call saveCoverage')
             self.coverage.saveCoverage()
+            self.coverage = None
         if self.command_callback is not None:
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
             cb = self.command_callback
@@ -3954,6 +3955,11 @@ class GenMonitor():
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
+    def getLoadSize(self, fname):
+        start, size = self.soMap[self.target].getLoadAddrSize(fname)
+        self.lgr.debug('getLoadSize for %s got 0x%x, 0x%x' % (fname, start, size))
+        return start, size
+
     def getSO(self, eip, show_orig=False, target_cpu=None, just_name=False):
         retval = None
         if target_cpu is None:
@@ -4047,11 +4053,11 @@ class GenMonitor():
         self.showNets()
         print('Traces saved in ./logs.  Move them to artifact repo and run postScripts')
 
-    def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
-        self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache)
+    def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
+        self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache, stop_after_clib=stop_after_clib)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
-        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False):
+        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
 
     def getStackTrace(self):
         return self.stackFrameManager[self.target].getStackTrace()
@@ -5140,12 +5146,12 @@ class GenMonitor():
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
 
-    def watchROP(self, watching=True, callback=None):
+    def watchROP(self, watching=True, callback=None, addr=None, size=None):
         self.lgr.debug('watchROP')
         for t in self.ropCop:
             self.lgr.debug('ropcop instance %s' % t)
         if self.target in self.ropCop:
-            self.ropCop[self.target].watchROP(watching=watching, callback=callback)
+            self.ropCop[self.target].watchROP(watching=watching, callback=callback, addr=addr, size=size)
 
     def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, dead_zone=False):
         ''' Enable code coverage '''
@@ -5489,7 +5495,7 @@ class GenMonitor():
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
             parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, 
-            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None):
+            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None, watch_rop=False):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -5514,7 +5520,7 @@ class GenMonitor():
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
               repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults,
-              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params)
+              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params, watch_rop=watch_rop)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             #if trace_all: 
