@@ -81,7 +81,7 @@ class StackTrace():
                 return 'ip: 0x%x fname: %s instruct: %s sp: 0x%x %s fun_of_ip %s' % (self.ip, self.fname, self.instruct, self.sp, fun_addr, self.fun_of_ip)
 
     def __init__(self, top, cpu, tid, soMap, mem_utils, task_utils, stack_base, fun_mgr, targetFS, 
-                 reg_frame, disassembler, lgr, max_frames=None, max_bytes=None, skip_recurse=False):
+                 reg_frame, disassembler, lgr, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False):
         self.top = top
         self.cpu = cpu
         if self.cpu.architecture in ['arm', 'arm64']:
@@ -102,6 +102,7 @@ class StackTrace():
         self.max_frames = max_frames
         self.skip_recurse = skip_recurse
         self.disassembler = disassembler
+        self.stop_after_clib = stop_after_clib
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
         if cpu.architecture in ['arm', 'arm64']:
@@ -492,7 +493,7 @@ class StackTrace():
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
                 if fun_name is None or fun_name == 'None':
                     fun_name = this_fun_name
-                fname = self.soMap.getSOFile(call_inst)
+                fname = self.soMap.getSOFileFull(call_inst)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, eip)
                 was_clib = resimUtils.isClib(fname)
                 prev_sp = esp
@@ -507,7 +508,7 @@ class StackTrace():
             if cur_fun is not None and cur_fun_name is not None:
                 #self.lgr.debug('doX86, cur_fun 0x%x name %s' % (cur_fun, cur_fun_name))
                 pass
-            fname = self.soMap.getSOFile(eip)
+            fname = self.soMap.getSOFileFull(eip)
             #self.lgr.debug('doX86 back from getSOFile with fname %s' % fname)
             was_clib = resimUtils.isClib(fname)
             ret_to_addr = bp + self.mem_utils.wordSize(self.cpu)
@@ -562,7 +563,7 @@ class StackTrace():
                 #self.lgr.debug('stackTrace doX86 ret_to 0x%x is not code, bail' % ret_to)
                 break
 
-            ret_to_fname = self.soMap.getSOFile(ret_to)
+            ret_to_fname = self.soMap.getSOFileFull(ret_to)
             #self.lgr.debug('stackTrace dox86 ret_to 0x%x ret_to_fname %s' % (ret_to, ret_to_fname))
             if was_clib and not resimUtils.isClib(ret_to_fname):
                 #self.lgr.debug('stackTrace dox86 Was clib, now not, look for other returns? prev_sp is 0x%x bp is 0x%x, pushed_bp is 0x%x' % (prev_sp, bp, pushed_bp))
@@ -582,7 +583,7 @@ class StackTrace():
                 instruct = SIM_disassemble_address(self.cpu, call_inst, 1, 0)
                 call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, call_inst)
                 instruct_1 = self.fun_mgr.resolveCall(instruct, call_inst)
-                fname = self.soMap.getSOFile(call_inst)
+                fname = self.soMap.getSOFileFull(call_inst)
         
                 #if call_addr is not None and been_to_main and not self.soMap.isMainText(call_addr):
                 if call_addr is not None and been_to_main and not self.soMap.isFunNotLibc(call_addr):
@@ -662,7 +663,7 @@ class StackTrace():
         if eip is not None:
             current_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)[1]
             #lib_file = self.top.getSO(eip)
-            lib_file = self.soMap.getSOFile(eip)
+            lib_file = self.soMap.getSOFileFull(eip)
             if resimUtils.isClib(lib_file):
                 cur_is_clib = True
             #self.lgr.debug('stackTrace findReturnFromCall given eip 0x%x, is clib? %r for %s' % (eip, cur_is_clib, current_instruct))
@@ -673,7 +674,7 @@ class StackTrace():
         while ptr < limit:
             if retval is not None and call_ip is not None:
                 if self.soMap.isFunNotLibc(call_ip):
-                    #self.lgr.debug('stackTrace findReturnFromCall, call_ip is in main, we are done')
+                    self.lgr.debug('stackTrace findReturnFromCall, call_ip is in main, we are done')
                     break
             val = self.readAppPtr(ptr)
             if val is None:
@@ -694,7 +695,7 @@ class StackTrace():
                 #self.lgr.debug('stackTrace findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
                 call_ip = self.followCall(val)
                 if call_ip is not None:
-                    fname = self.soMap.getSOFile(call_ip)
+                    fname = self.soMap.getSOFileFull(call_ip)
                     if cur_fun is None and self.fun_mgr is not None:
                         cur_fun = self.fun_mgr.getFun(call_ip)
                         #if cur_fun is not None:
@@ -934,7 +935,7 @@ class StackTrace():
 
         ''' record info about current IP '''
        
-        fname = self.soMap.getSOFile(eip)
+        fname = self.soMap.getSOFileFull(eip)
         prev_fname = fname
         instruct = self.fun_mgr.resolveCall(instruct_tuple, eip)
         first_fun_addr = self.fun_mgr.getFun(eip)
@@ -1175,10 +1176,8 @@ class StackTrace():
                             ''' should we add ida function analysys? '''
                             # windows can take forever to search.  so, no.
                             if not self.top.isWindows() and not self.top.isVxDKM() and (self.fun_mgr.getFunName(call_to) is None):
-                                #self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
+                                self.lgr.debug('stackTrace so check of %s the call_to of 0x%x not in IDA funs?' % (fname, call_to))
                                 if fname is not None:
-                                    #self.lgr.debug('stackTrace call getFull for %s' % fname)
-                                    #full_path = self.targetFS.getFull(fname, self.lgr)
                                     full_path = self.top.getAnalysisPath(fname)
                                     if full_path is not None:
                                         #self.lgr.debug('stackTrace call add for %s' % full_path)
@@ -1219,7 +1218,6 @@ class StackTrace():
                                 # inFun returned true
                                 #self.lgr.debug('stackTrace is in the function. skip_this is %r' % skip_this)
                                 instruct = SIM_disassemble_address(self.cpu, ip_of_call_instruct, 1, 0)
-                                this_fname = self.soMap.getSOFile(ip_of_call_instruct)
                                 fun_hex, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, ip_of_call_instruct)
                                 call_instruction = instruct[1]
                                 if fun_hex is None and call_to is not None:
@@ -1313,7 +1311,7 @@ class StackTrace():
                             # TBD what use is this?
                             #if not self.top.isWindows():
                             #    self.soCheck(fun_hex)
-                            fun_fname = self.soMap.getSOFile(fun_hex)
+                            fun_fname = self.soMap.getSOFileFull(fun_hex)
                             pass
                         else:
                             #self.lgr.debug('stackTrace fun_hex none eh?')
@@ -1323,7 +1321,7 @@ class StackTrace():
                             else:
                                 #self.lgr.debug('stackTrace fun_hex none, use_ip from prev_ip 0x%x' % prev_ip)
                                 use_ip = prev_ip
-                            fun_fname = self.soMap.getSOFile(use_ip)
+                            fun_fname = self.soMap.getSOFileFull(use_ip)
                             if self.fun_mgr is not None:
                                 fun_hex = self.fun_mgr.getFun(use_ip)
                                 if fun_hex is not None:
@@ -1333,7 +1331,7 @@ class StackTrace():
                                     pass
                                 #else:
                                 #    self.lgr.debug('stackTrace fun_hex hack failed fun_hex still none')
-                        fname = self.soMap.getSOFile(val)
+                        fname = self.soMap.getSOFileFull(val)
                         if fname is not None and been_above_clib and resimUtils.isClib(fname):
                             skip_this = True
                         elif fname is None:
@@ -1376,7 +1374,7 @@ class StackTrace():
                                     else:
                                         call_to_actual, actual_fun = self.checkRelocate(call_to)
                                         if call_to_actual is not None:
-                                            actual_fname = self.soMap.getSOFile(call_to_actual)
+                                            actual_fname = self.soMap.getSOFileFull(call_to_actual)
                                             prev_fnamex = self.frames[-1].fname
                                             #self.lgr.debug('stackTrace call_to 0x%x call_to_actual 0x%x fun %s actual_fname %s prev_fnamex %s' % (call_to, call_to_actual, actual_fun, actual_fname, prev_fnamex))
                                             if actual_fname is not None and actual_fname not in [fname, prev_fname]:
@@ -1407,7 +1405,7 @@ class StackTrace():
                                                 skip_this = True
                                                 #self.lgr.debug('stackTrace not a PLT, skipped it first_instruct %s' % first_instruct[1])
 
-                            fname = self.soMap.getSOFile(val)
+                            fname = self.soMap.getSOFileFull(val)
                             if fname is not None and not self.okToCall(fname):
                                 #self.lgr.debug('stackTrace ip_of_call_instruct 0x%x NOT OK to call' % ip_of_call_instruct)
                                 skip_this = True
@@ -1438,7 +1436,9 @@ class StackTrace():
                             #prev_ip = ip_of_call_instruct
                             if self.soMap.isFunNotLibc(ip_of_call_instruct):
                                 been_above_clib = True
-                                #self.lgr.debug('stackTrace been above clib')
+                                if self.stop_after_clib:
+                                    self.lgr.debug('stackTrace been above clib and stop after clib')
+                                    done=True 
                             if self.soMap.isMainText(ip_of_call_instruct):
                                 been_in_main = True
                                 #self.lgr.debug('stackTrace been in main')
@@ -1561,7 +1561,6 @@ class StackTrace():
             if self.fun_mgr is not None and not self.fun_mgr.isFun(eip):
                 fname, start, end = self.soMap.getSOInfo(eip)
                 if fname is not None:
-                    #full = self.targetFS.getFull(fname, self.lgr)
                     full = self.top.getAnalysisPath(fname)
                     self.lgr.debug('stackTrace soCheck eip 0x%x not a fun? Adding it.  fname %s full %s start 0x%x' % (eip, fname,full, start))
                     self.fun_mgr.add(full, start)
