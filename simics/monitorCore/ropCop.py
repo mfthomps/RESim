@@ -27,10 +27,14 @@ class RopCop():
             self.decode = decode
         self.is_signal = False
 
-    def watchROP(self, watching=True, callback=None):
+    def watchROP(self, watching=True, callback=None, addr=None, size=None):
         self.watching = watching
         self.callback = callback
-        self.lgr.debug('watchROP %r, callback %s' % (watching, str(callback)))
+        if addr is not None: 
+            self.text = addr
+            self.size = size
+        self.lgr.debug('watchROP %r, callback %s addr 0x%xi size 0x%x' % (watching, str(callback), self.text, self.size))
+
         if watching:
             self.setHap()
         else:
@@ -83,7 +87,8 @@ class RopCop():
             
             #if instruct[1].startswith('call'):
             #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
-            if instruct[1].startswith(self.callmn):
+            if instruct[1].startswith(self.callmn) and (eip + instruct[0] == return_to):
+                #self.lgr.debug('rob_cop_ret_callback eip 0x%x instruct %s' % (eip, instruct[1]))
                 done = True
             else:
                 eip = eip+1
