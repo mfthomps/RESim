@@ -724,6 +724,9 @@ class SOMap():
             self.cheesy_mapped = retval
         return retval
 
+    def getSOFileFull(self, addr_in):
+        return self.getSOFile(addr_in)
+
     def getSOFile(self, addr_in):
         #if addr_in is not None:
         #    self.lgr.debug('getSOFile addr_in 0x%x' % addr_in)
@@ -888,8 +891,13 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
+        retval, ret_size = self.getLoadAddr(size(in_fname, tid=tid)
+        return retval
+
+    def getLoadAddrSize(self, in_fname, tid=None):
         #self.lgr.debug('soMap getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
         retval = None
+        ret_size = None
         prog = self.fullProg(in_fname)
         if prog is None:
             self.lgr.error('soMap getLoadAddr got no prog for %s' % in_fname)
@@ -904,6 +912,7 @@ class SOMap():
             for load_info in self.so_file_map[map_tid]:
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
+                    ret_size = load_info.size
                     #self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
@@ -911,7 +920,8 @@ class SOMap():
             if os.path.basename(self.text_prog[map_tid]) == os.path.basename(prog):
                 self.lgr.debug('soMap just using prog_start for map_tid %s' % (map_tid))
                 retval = self.prog_start[map_tid]
-        return retval
+                ret_size = self.prog_end[map_tid] - self.prog_start[map_tid] + 1
+        return retval, ret_size
 
     def isDynamic(self, in_fname):
         retval = False
