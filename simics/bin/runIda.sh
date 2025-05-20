@@ -134,7 +134,7 @@ if [[ -f $ida_db_path ]];then
     #echo "ida_db_path is $ida_db_path"
     export IDA_DB_PATH=$ida_db_path
     "$idacmd" -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" "$ida_db_path"
-    #$idacmd -z10000 -L/tmp/ida.log -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" $ida_db_path
+    #"$idacmd" -z10000 -S"$RESIM_DIR/simics/ida/RESimHotKey.idc $resim_ida_arg" "$ida_db_path"
 else
     echo "No IDA db at $ida_db_path  create it."
     mkdir -p "$RESIM_IDA_DATA/$root_parent/$root_dir/$target_base"
