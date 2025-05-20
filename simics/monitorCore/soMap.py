@@ -891,7 +891,7 @@ class SOMap():
         return retval
 
     def getLoadAddr(self, in_fname, tid=None):
-        retval, ret_size = self.getLoadAddr(size(in_fname, tid=tid)
+        retval, ret_size = self.getLoadAddr(size(in_fname, tid=tid))
         return retval
 
     def getLoadAddrSize(self, in_fname, tid=None):
