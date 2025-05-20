@@ -545,7 +545,7 @@ class WinDLLMap():
                 if pid in self.section_map:
                     for fname in self.section_map[pid]:
                         section = self.section_map[pid][fname]
-                        if section.load_addr == 0:
+                        if section.load_addr == 0 or section.size is None:
                             continue
                         if section.pid == pid:
                             end = section.load_addr+section.size - 1
@@ -686,12 +686,23 @@ class WinDLLMap():
             return
         self.lgr.debug('winDLL setFunMgr tid:%s' % tid)
         self.fun_mgr = fun_mgr
+        only_so = self.top.getCompDict(self.cell_name, 'ONLY_SO')
+        only_so_list = []
+        if only_so is not None:
+            if os.path.isfile(only_so):
+                with open(only_so) as fh:
+                    for line in fh:
+                        only_so_list.append(line.strip().lower()) 
+            else:
+                self.lgr.debug('No ONLY_SO files at %s' % only_so)
  
         pid = self.pidFromTID(tid)
         sort_map = {}
         if pid in self.section_map:
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
+                if len(only_so_list) > 0 and os.path.basename(section.fname) not in only_so_list:
+                    continue
                 sort_map[section.load_addr] = section
 
             for locate in sorted(sort_map, reverse=True):
@@ -727,9 +738,9 @@ class WinDLLMap():
                 offset = delta + text_offset
                 self.lgr.debug('winDLL addSectionFunction xxx offset 0x%x locate: 0x%x text_offset 0x%x image_base 0x%x delta 0x%x fun_path: %s' % (offset, locate, text_offset, image_base, delta, fun_path))
             else:
-                self.lgr.debug('winDLL addSectionFunction offset 0x%x locate: 0x%x text_offset is None fun_path: %s' % (offset, locate, fun_path))
                 offset = 0
                 text_offset = 0
+                self.lgr.debug('winDLL addSectionFunction text_offset is None fun_path: %s' % (fun_path))
             self.fun_mgr.add(fun_path, locate, offset=offset, text_offset=text_offset)
 
 
@@ -803,12 +814,12 @@ class WinDLLMap():
             self.lgr.debug('winDLL findSize HEREEEEEE')
         if retval is None and self.exec_dict is not None:
             if find_comm in self.exec_dict:
-                retval = self.exec_dict[find_comm]['word_size']
+                retval = self.exec_dict[find_comm][0]['word_size']
                 self.lgr.debug('winDLLMap findSize found size in exec_dict for %s, %s' % (find_comm, retval))
             elif len(find_comm) == self.task_utils.commSize():
                 for exec_base in self.exec_dict:
                     if exec_base.startswith(find_comm):
-                        retval = self.exec_dict[exec_base]['word_size']
+                        retval = self.exec_dict[exec_base][0]['word_size']
                         self.lgr.debug('winDLLMap findSize truncated base found size in exec_dict for %s, %s' % (find_comm, retval))
    
         return retval
