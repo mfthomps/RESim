@@ -1660,10 +1660,11 @@ class GenContextMgr():
                 self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
         if retval:
             cur_tid = self.task_utils.curTID()
-            comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm not in self.only_progs:
-                self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
-                self.restoreIgnoreContext()
+            if cur_tid is not None:
+                comm = self.task_utils.getCommFromTid(cur_tid) 
+                if comm not in self.only_progs:
+                    self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
+                    self.restoreIgnoreContext()
         return retval
 
     def loadIgnoreThreadList(self, fname):
