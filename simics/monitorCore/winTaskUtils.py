@@ -247,10 +247,13 @@ class WinTaskUtils():
 
         if cur_thread is None:
             self.lgr.error('winTaskUtils getCurProcRec got cur_thread of None reading 0x%x' % self.phys_current_task)
+        elif cur_thread < self.param.kernel_base:
+            self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x, NOT in kernel address space, bail' % (cur_thread, self.phys_current_task))
+            return None
         else:
-            #self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
             ptr = cur_thread + self.param.proc_ptr
-            ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
+            #self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x ptr: 0x%x' % (cur_thread, self.phys_current_task, ptr))
+            ptr_phys = self.mem_utils.v2p(self.cpu, ptr, do_log=False)
             #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
                if ptr > self.param.kernel_base: 
@@ -598,6 +601,8 @@ class WinTaskUtils():
         return retval
 
     def getCommFromTid(self, tid):
+        if tid is None:
+            return None
         ts_list = self.getTaskStructs()
         pid = int(self.pidString(tid))
         for ts in ts_list:
