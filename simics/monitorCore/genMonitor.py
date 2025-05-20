@@ -172,6 +172,7 @@ class GenMonitor():
     def __init__(self, comp_dict, link_dict, cfg_file, conf=None):
         self.comp_dict = comp_dict
         self.link_dict = link_dict
+        # The param structure is shared by many modules.  It may be altered by the memUtils to account for ASLR
         self.param = {}
         self.mem_utils = {}
         self.task_utils = {}
@@ -5723,6 +5724,7 @@ class GenMonitor():
         # get the full local path.
         if fname is not None:
             retval = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
+            self.lgr.debug('getFullPath from targetFS got %s' % retval)
         else:
             retval =  self.full_path
         return retval 
@@ -6438,7 +6440,7 @@ class GenMonitor():
     def isReverseExecutionEnabled(self):
         return self.rev_execution_enabled
 
-    def traceWindows(self):
+    def traceWindows(self, track_threads=True):
         if self.target in self.trace_all:
             print('Already tracing windows')
             return
@@ -6447,7 +6449,8 @@ class GenMonitor():
         if tid is None:
             self.checkOnlyIgnore()
         self.trace_all[self.target]=self.winMonitor[self.target].traceWindows()
-        self.trackThreads()
+        if track_threads:
+            self.trackThreads()
         self.lgr.debug('traceWindows set trace_all[%s] to %s' % (self.target, str(self.trace_all[self.target])))
 
     ''' Hack to catch erzat syscall from application with 9999 as syscall number for purpose of locating program text section load address'''
@@ -6998,6 +7001,12 @@ class GenMonitor():
             print('Current snapshot looks like a prep inject.  Exiting.')
             self.lgr.debug('Current snapshot looks like a prep inject, bail.')
             self.quit()
+
+    def adjustParams(self):
+        for cell_name in self.cell_config.cell_context:
+            if cell_name in self.mem_utils:
+                cpu = self.cell_config.cpuFromCell(cell_name)
+                self.mem_utils[cell_name].adjustParam(cpu)
 
 
 if __name__=="__main__":        
