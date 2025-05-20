@@ -62,11 +62,17 @@ class TargetFS():
             path = resimUtils.getWinPath(path, self.root_prefix, lgr=lgr)
             if lgr is not None:
                 self.lgr.debug('winTargetFS getFull root_prefix %s path %s len root_subdirs %d' % (self.root_prefix, path, len(self.root_subdirs)))
-            retval = self.checkExecDict(path, lgr=lgr)
-            if retval == 'multiple_results':
-                retval = None
+            if '/' in path:
+                maybe = os.path.join(self.root_prefix, path)
+                if os.path.isfile(maybe): 
+                    self.lgr.debug('winTargetFS getFull got slash set retval to %s' % maybe)
+                    retval = maybe
+            if retval is None:
+                retval = self.checkExecDict(path, lgr=lgr)
+                if retval == 'multiple_results':
+                    retval = None
                 
-            elif retval is None:
+            if retval is None:
                 full_insensitive = resimUtils.getfileInsensitive(path, self.root_prefix, self.root_subdirs, lgr)
                 if lgr is not None:
                     self.lgr.debug('winTargetFS getFull full_insenstive is %s' % full_insensitive)
@@ -96,7 +102,9 @@ class TargetFS():
                 else:
                     retval = full_insensitive
         if retval is not None:
+            self.lgr.debug('winTargetFS getFull retval %s, now get abs path?' % path)
             retval = os.path.abspath(retval)
+            self.lgr.debug('winTargetFS getFull abs %s' % retval)
             ret_base = os.path.basename(retval)
             if ret_base not in self.cache:
                 self.cache[ret_base] = retval
@@ -114,7 +122,13 @@ class TargetFS():
             if lgr is not None:
                 lgr.debug('winTargetFS checkExecDict path_base %s' % path_base)
             if path_base in self.exec_dict:
-                retval = os.path.join(self.root_prefix, self.exec_dict[path_base]['path'])
+                if len(self.exec_dict[path_base]) == 1: 
+                    retval = os.path.join(self.root_prefix, self.exec_dict[path_base][0]['path'])
+                elif len(self.exec_dict[path_base]) > 1: 
+                    if lgr is not None:
+                        lgr.debug('multiple paths for %s??' % path)
+                        return 'multiple_results'
+                        
                 if lgr is not None:
                     lgr.debug('winTargetFS checkExecDict found path for %s, %s' % (path_base, retval))
             #elif path_base == path and len(path) == self.comm_len:
@@ -122,7 +136,7 @@ class TargetFS():
                 result_list = []
                 for exec_base in self.exec_dict:
                     if exec_base.lower().startswith(path.lower()):
-                        result = os.path.join(self.root_prefix, self.exec_dict[exec_base]['path'])
+                        result = os.path.join(self.root_prefix, self.exec_dict[exec_base][0]['path'])
                         result_list.append(result)
                         if lgr is not None:
                             lgr.debug('winTargetFS checkExecDict found truncated base, and path for %s, %s' % (path_base, retval))
