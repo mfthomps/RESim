@@ -101,7 +101,11 @@ def getCPL(cpu):
 
 def testBit(int_value, bit):
     mask = 1 << bit
-    return(int_value & mask)
+    result = int_value & mask
+    if result == 0:
+        return 0
+    else:
+        return 1
 
 def clearBit(int_value, bit):
     mask = 1 << bit
@@ -942,7 +946,10 @@ class MemUtils():
             return 'rip'
 
     def adjustParam(self, cpu):
-
+        '''
+        Modify params values to reflect the delta between the recorded fs/gs base and the current one.
+        This will affect the params structure shared by many modules.
+        '''
         if cpu.architecture.startswith('arm'):
             return
 
@@ -952,9 +959,11 @@ class MemUtils():
                 return
             param_xs_base = self.param.fs_base
             new_xs_base = cpu.ia32_fs_base
+            self.param.fs_base = new_xs_base
         else:
             param_xs_base = self.param.gs_base
             new_xs_base = cpu.ia32_gs_base
+            self.param.gs_base = new_xs_base
             self.lgr.debug('memUtils adjustParam current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
    
 
@@ -968,7 +977,7 @@ class MemUtils():
         #    self.param.current_task = self.param.current_task + abs(delta)
 
         if self.param.sysenter is not None:
-            self.lgr.debug('sysenter was to 0x%x' % self.param.sysenter)
+            self.lgr.debug('memUtils adjustParamsysenter was to 0x%x' % self.param.sysenter)
             if self.WORD_SIZE == 4:
                 self.param.sysenter = self.param.sysenter + delta
             else:
@@ -976,7 +985,7 @@ class MemUtils():
                 # TBD remove if
                 #self.param.sysenter = self.param.sysenter + delta
                 pass
-            self.lgr.debug('sysenter adjusted to 0x%x' % self.param.sysenter)
+            self.lgr.debug('memUtils adjustParamsysenter adjusted to 0x%x' % self.param.sysenter)
         if self.param.sysexit is not None:
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
@@ -987,9 +996,9 @@ class MemUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysret64 = self.param.sysret64 + delta
             else:
-                self.lgr.debug('sysret64 was 0x%x' % self.param.sysret64)
+                self.lgr.debug('memUtils adjustParamsysret64 was 0x%x' % self.param.sysret64)
                 self.param.sysret64 = self.param.sysret64 - delta
-                self.lgr.debug('sysret64 now 0x%x' % self.param.sysret64)
+                self.lgr.debug('memUtils adjustParamsysret64 now 0x%x' % self.param.sysret64)
 
         if self.WORD_SIZE == 4:
             if self.param.iretd is not None:
@@ -998,32 +1007,32 @@ class MemUtils():
             self.param.syscall_compute = self.param.syscall_compute + delta
 
             ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('syscall_jump was 0x%x' % self.param.syscall_jump)
+            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
             self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
             if self.param.iretd is not None:
                 self.param.iretd = self.param.iretd + delta
-            self.lgr.debug('page_fault was 0x%x' % self.param.page_fault)
+            self.lgr.debug('memUtils adjustParam page_fault was 0x%x' % self.param.page_fault)
             self.param.page_fault = self.param.page_fault - delta
-            self.lgr.debug('page_fault now 0x%x' % self.param.page_fault)
+            self.lgr.debug('memUtils adjustParam page_fault now 0x%x' % self.param.page_fault)
 
             self.param.syscall_compute = self.param.syscall_compute - delta
 
             ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('syscall_jump was 0x%x' % self.param.syscall_jump)
+            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
             self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
 
         if self.param.sys_entry is not None and self.param.sys_entry != 0: 
             if self.WORD_SIZE==4:
-                self.lgr.debug('sys_entry was to 0x%x' % self.param.sys_entry)
+                self.lgr.debug('memUtils adjustParam sys_entry was to 0x%x' % self.param.sys_entry)
                 self.param.sys_entry = self.param.sys_entry + delta
-                self.lgr.debug('sys_entry adjusted to 0x%x' % self.param.sys_entry)
+                self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
             else:
-                self.lgr.debug('sys_entry was to 0x%x' % self.param.sys_entry)
+                self.lgr.debug('memUtils adjustParam sys_entry was to 0x%x' % self.param.sys_entry)
                 self.param.sys_entry = self.param.sys_entry + delta
-                self.lgr.debug('sys_entry adjusted to 0x%x' % self.param.sys_entry)
+                self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
         
 
     def getCurrentTask(self, cpu):
