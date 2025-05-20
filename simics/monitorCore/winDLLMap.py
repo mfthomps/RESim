@@ -645,11 +645,12 @@ class WinDLLMap():
         if pid in self.section_map:
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
-                end = section.load_addr+section.size - 1
-                #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
-                if addr_in >= section.load_addr and addr_in <= end:
-                    retval = (fname, section.load_addr, end)
-                    #break 
+                if section.size is not None:
+                    end = section.load_addr+section.size - 1
+                    #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
+                    if addr_in >= section.load_addr and addr_in <= end:
+                        retval = (fname, section.load_addr, end)
+                        #break 
         return retval
 
     def getCodeSections(self, tid):
@@ -772,14 +773,15 @@ class WinDLLMap():
                 section = {}
                 text_seg = sort_map[locate]
                 start = text_seg.load_addr
-                end = locate + text_seg.size - 1
-                section['locate'] = locate
-                section['end'] = end
-                section['offset'] = text_seg.text_offset
-                section['size'] = text_seg.size
-                section['file'] = text_seg.fname
-                section['local_path'] = text_seg.local_path
-                retval['sections'].append(section)
+                if text_seg.size is not None:
+                    end = locate + text_seg.size - 1
+                    section['locate'] = locate
+                    section['end'] = end
+                    section['offset'] = text_seg.text_offset
+                    section['size'] = text_seg.size
+                    section['file'] = text_seg.fname
+                    section['local_path'] = text_seg.local_path
+                    retval['sections'].append(section)
 
         ret_json = json.dumps(retval) 
         if not quiet:
