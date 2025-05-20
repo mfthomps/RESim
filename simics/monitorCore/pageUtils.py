@@ -28,7 +28,8 @@ from simics import *
 import memUtils
 PAGE_SIZE = 4096
 class PtableInfo():
-    def __init__(self):
+    def __init__(self, cpu):
+        self.cpu = cpu
         self.pdir_protect = None
         self.ptable_protect = None
         self.page_protect = None
@@ -50,6 +51,8 @@ class PtableInfo():
         if self.entry is not None:
             if self.page_addr is not None:
                 retval = retval + ' page_addr: 0x%x  nx:%d entry:0x%x' % (self.page_addr, self.nx, self.entry)
+                other_info = PageEntryInfo(self.entry, self.cpu.architecture)
+                retval = retval + ' writeable: %r accessed: %r' % (other_info.writable, other_info.accessed) 
         else:
               
             if self.page_addr is not None:
@@ -80,8 +83,6 @@ class PageEntryInfo():
                 self.writable = False
             if ap == 3:
                 self.writable = True
-            
-
             
 
 def unsigned64(val):
@@ -278,7 +279,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
     else:
         #lgr.debug('findPageTableArm user space')
         ttbr = cpu.translation_table_base0
-    ptable_info = PtableInfo()
+    ptable_info = PtableInfo(cpu)
     vaddr_off = va & 0xfff
     ptable_info.ptable_exists = False
     if do_log:
@@ -327,7 +328,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
     return ptable_info
 
 def findPageTableArm(cpu, va, lgr, force_cr3=None, use_sld=None, do_log=False):
-    ptable_info = PtableInfo()
+    ptable_info = PtableInfo(cpu)
     if force_cr3 is not None:
         ttbr = force_cr3
     else:
@@ -392,8 +393,8 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
         #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr, force_cr3=force_cr3) 
     else:
-        #lgr.debug('findPageTable not IA32E')
-        ptable_info = PtableInfo()
+        lgr.debug('findPageTable not IA32E')
+        ptable_info = PtableInfo(cpu)
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
         reg_num = cpu.iface.int_register.get_number("cr4")
@@ -452,7 +453,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
 def findPageTableExtended(cpu, addr, lgr, use_sld=None):
         WORD_SIZE = 8
         mask64 = 0x000ffffffffff000
-        ptable_info = PtableInfo()
+        ptable_info = PtableInfo(cpu)
         ptable_info.entry_size = WORD_SIZE
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
@@ -534,6 +535,7 @@ def get40(cpu, addr, lgr):
     present = None
     page_size = None
     value = None
+    nx = None
     try:
         value = readPhysMemory(cpu, addr, 8, lgr)
     except:
@@ -542,14 +544,15 @@ def get40(cpu, addr, lgr):
         retval = memUtils.bitRange(value, 12, 50) << 12
         page_size = memUtils.testBit(value, 7) 
         present = memUtils.testBit(value, 0) 
-    return retval, present, page_size
+        nx = memUtils.testBit(value, 63) 
+    return retval, present, page_size, nx
 
 def findPageTableIA32E(cpu, addr, lgr, force_cr3=None): 
     '''
     IA32E: CR3 is base address of the PML4 table, which is 512 entries, of 64bits per entry.  
     Bits 47:39 of an address select the entry in the PML4 table.
     '''
-    ptable_info = PtableInfo()
+    ptable_info = PtableInfo(cpu)
     #lgr.debug('findPageTableIA32E addr 0x%x' % addr)
     if force_cr3 is None:
         reg_num = cpu.iface.int_register.get_number("cr3")
@@ -566,7 +569,7 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
     dir_ptr_base_addr = (pml4_entry * 8) + cr3_40
     #lgr.debug('dir_ptr_base_addr 0x%x' % dir_ptr_base_addr)
 
-    dir_ptr_base, present, page_size = get40(cpu, dir_ptr_base_addr, lgr)
+    dir_ptr_base, present, page_size, nx = get40(cpu, dir_ptr_base_addr, lgr)
     #lgr.debug('dir_ptr_base is 0x%x present %d page_size 0x%x' % (dir_ptr_base, present, page_size))
 
     dir_ptr_entry = memUtils.bitRange(addr, 30, 38)
@@ -579,7 +582,7 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
     #lgr.debug('dir_base_addr 0x%x' % dir_base_addr)
     ptable_info.pdir_addr = dir_base_addr
 
-    dir_base, present, page_size = get40(cpu, dir_base_addr, lgr)                
+    dir_base, present, page_size, nx = get40(cpu, dir_base_addr, lgr)                
     #lgr.debug('dir_base 0x%x present %d page_size 0x%x' % (dir_base, present, page_size))
     if dir_base == 0 or dir_base is None:
         return ptable_info
@@ -593,7 +596,7 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
         table_base_addr = dir_base + (dir_entry * 8)
         #lgr.debug('table_base_addr 0x%x' % table_base_addr)
         ptable_info.ptable_addr = table_base_addr
-        table_base, present, page_size = get40(cpu, table_base_addr, lgr)                
+        table_base, present, page_size, nx = get40(cpu, table_base_addr, lgr)                
          
         if table_base is None or table_base == 0:
             #lgr.debug('table_base could not be read from 0x%x' % table_base_addr)
@@ -608,12 +611,14 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
                 #lgr.debug('table base 0x%x is the phys page.  Phys addr is 0x%x' % (table_base, ptable_info.page_addr))
             else:
                 table_entry = memUtils.bitRange(addr, 12, 20)
+                ptable_info.entry = table_entry
                 page_base_addr = table_base + (table_entry * 8)
                 #lgr.debug('page_base_addr 0x%x ' % (page_base_addr))
-                page_base, present, page_size = get40(cpu, page_base_addr, lgr) 
+                page_base, present, page_size, nx = get40(cpu, page_base_addr, lgr) 
                 #lgr.debug('page_base 0x%x present %d' % (page_base, present))
                 ptable_info.page_base_addr = page_base_addr
                 ptable_info.page_exists = present
+                ptable_info.nx = nx
                 if present:
                     offset = memUtils.bitRange(addr, 0, 11)
                     ptable_info.page_addr = page_base + offset
