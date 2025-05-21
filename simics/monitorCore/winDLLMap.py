@@ -723,7 +723,12 @@ class WinDLLMap():
         if fun_path is not None:
             self.lgr.debug('winDLL addSectionFunction set addr 0x%x for %s' % (locate, fun_path))
             if section.image_base is None:
-                full_path = self.top.getFullPath(fname=section.fname)
+                # before searching, see if fname (s/analysis/image/ is a full path to binary
+                full_path = None
+                if fun_path is not None: 
+                    full_path = fun_path.replace('analysis', 'images')
+                if full_path is None or not os.path.isfile(full_path):
+                    full_path = self.top.getFullPath(fname=section.fname)
                 self.lgr.debug('winDLL addSectionFunction got %s from getFullPath' % full_path)
                 size, machine, image_base, text_offset = winProg.getSizeAndMachine(full_path, self.lgr)
                 section.image_base = image_base
