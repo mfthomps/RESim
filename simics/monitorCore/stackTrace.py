@@ -103,6 +103,7 @@ class StackTrace():
         self.skip_recurse = skip_recurse
         self.disassembler = disassembler
         self.stop_after_clib = stop_after_clib
+        self.started_in_libc = False
         ''' limit how far down the stack we look for calls '''
         self.max_bytes = max_bytes 
         if cpu.architecture in ['arm', 'arm64']:
@@ -928,6 +929,8 @@ class StackTrace():
                 #    self.lgr.debug('stackTrace arm lr 0x%x is in Main' % lr)
                 #else:
                 #    self.lgr.debug('stackTrace arm lr 0x%x is NOT in Main' % lr)
+        else:
+            self.started_in_libc = True
         #prev_ip = eip
         if self.fun_mgr is None:
             self.lgr.warning('stackTrace has no ida functions')
@@ -1436,7 +1439,7 @@ class StackTrace():
                             #prev_ip = ip_of_call_instruct
                             if self.soMap.isFunNotLibc(ip_of_call_instruct):
                                 been_above_clib = True
-                                if self.stop_after_clib:
+                                if self.stop_after_clib and self.started_in_libc:
                                     self.lgr.debug('stackTrace been above clib and stop after clib')
                                     done=True 
                             if self.soMap.isMainText(ip_of_call_instruct):
