@@ -200,37 +200,12 @@ class TaskUtils():
     def getCurThreadRec(self):
         if self.phys_current_task == 0:
             return 0
-        '''
-        cpl = memUtils.getCPL(self.cpu)
-        if self.mem_utils.WORD_SIZE == 8 and cpl == 0:
-            va = self.cpu.ia32_gs_base + self.param.current_task
-            phys = self.mem_utils.v2p(self.cpu, va)
-            if phys is None:
-                self.lgr.error('memUtils getCurTaskRec cpl: %d failed to get phys for 0x%x' % (cpl, v))
-                cur_task_rec = 0
-            else:
-                cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, phys)
-            if cur_task_rec is None:
-                self.lgr.error('memUtils getCurTaskRec cpl: %d failed to get cur_task_rec phys 0x%x' % (cpl, phys))
-            if cur_task_rec == 0:
-                cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
-                self.lgr.debug('taskUtils cpl: %d FAILED on new phys, did NOT reset gs_base 0x%x and va 0x%x phys 0x%x cur_task_rec 0x%x' % (cpl, self.cpu.ia32_gs_base, va, phys, cur_task_rec))
-                #SIM_break_simulation('failed remove me')
-                #return 0
-            else:
-                if phys != self.phys_current_task:
-                    self.lgr.debug('taskUtils cpl: %d reset gs_base 0x%x and va 0x%x phys 0x%x cur_task_rec 0x%x' % (cpl, self.cpu.ia32_gs_base, va, phys, cur_task_rec))
-                    self.phys_current_task = phys
-                    offset = va - phys
-                    self.mem_utils.setHackedPhysOffset(offset)
-        '''
         #self.lgr.debug('taskUtils getCurThreadRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
         #if cur_task_rec is None:
         #    self.lgr.debug('FAILED')
         #else:
         #    self.lgr.debug('taskUtils curTaskRec got task rec 0x%x' % cur_task_rec)
-
 
         return cur_task_rec
 
@@ -1053,7 +1028,13 @@ class TaskUtils():
             #else:
             #    self.lgr.error('getSyscallEntry arm64 callnum %d (0x%x), val 0x%x, entry is none' % (callnum, callnum, val))
                  
-            
+        elif self.cpu.architecture == 'ppc32':
+            call_shifted = callnum << 2
+            val = call_shifted + self.param.syscall_jump
+            val = self.mem_utils.getUnsigned(val)
+            entry = self.mem_utils.readPtr(self.cpu, val)
+            self.lgr.debug('getSyscallEntry call 0x%x entry 0x%x' % (callnum, entry))
+    
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
@@ -1142,6 +1123,12 @@ class TaskUtils():
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm64'][p])
             #frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'x13')
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
+            frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+            frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
+        elif self.cpu.architecture == ('ppc32'):
+            for p in memUtils.param_map['ppc32']:
+                frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['ppc32'][p])
+            frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'r1')
             frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
         else:

@@ -69,7 +69,7 @@ def writePhysBytes(cpu, paddr, data):
 def getCPL(cpu):
     # return RESim cpl value (0 = kernel)
     #print('arch %s' % cpu.architecture)
-    if cpu.architecture == 'arm':
+    if cpu.architecture in ['arm', 'ppc32']:
         ''' TBD FIX this! '''
         reg_num = cpu.iface.int_register.get_number("sp")
         sp = cpu.iface.int_register.read(reg_num)
@@ -126,7 +126,7 @@ def setBitRange(initial, value, start):
     return retval
 
 def cpuWordSize(cpu):
-    if cpu.architecture == 'arm':
+    if cpu.architecture in ['arm', 'ppc32']:
         retval = 4
     elif cpu.architecture == 'arm64':
         retval = 8
@@ -141,6 +141,11 @@ def cpuWordSize(cpu):
 def getCR3(cpu):
     if cpu.architecture.startswith('arm'):
         cr3 = cpu.translation_table_base0
+    
+    elif cpu.architecture == 'ppc32':
+        #TBD guess
+        reg_num = cpu.iface.int_register.get_number("ctr")
+        cr3 = cpu.iface.int_register.read(reg_num)
     else:
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
@@ -183,6 +188,13 @@ param_map['x86_32']['param3'] = 'edx'
 param_map['x86_32']['param4'] = 'esi'
 param_map['x86_32']['param5'] = 'edi'
 param_map['x86_32']['param6'] = 'ebb'
+param_map['ppc32'] = {}
+param_map['ppc32']['param1'] = 'r3'
+param_map['ppc32']['param2'] = 'r4'
+param_map['ppc32']['param3'] = 'r5'
+param_map['ppc32']['param4'] = 'r6'
+param_map['ppc32']['param5'] = 'r7'
+param_map['ppc32']['param6'] = 'r8'
 
 # Some linux use x86_64 map for enter and these for
 # computed.
@@ -272,6 +284,16 @@ class MemUtils():
         elif arch == 'arm64':
             # will use arm_regs
             pass
+        elif arch == 'ppc32':
+            for i in range(32):
+                r = 'R%d' % i
+                self.regs[r] = r
+            self.regs['pc'] = 'pc'
+            self.regs['lr'] = 'lr'
+            self.regs['sp'] = 'r1'
+            self.regs['syscall_num'] = 'r0'
+            self.regs['syscall_ret'] = 'r3'
+      
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
        
@@ -525,13 +547,24 @@ class MemUtils():
             return None
         retval = None
         v = self.getUnsigned(v)
-        cpl = getCPL(cpu)
-        if do_log:
-            self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
-        if v < self.getUnsigned(self.param.kernel_base):
-            retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
+        if cpu.architecture == 'ppc32':
+            if False and v >= self.getUnsigned(self.param.kernel_base):
+                retval = v - 0xc0000000
+            else:
+                try:
+                    phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                    retval = phys_block.address
+                except:
+                    self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
+                    return
         else:
-            retval = self.v2pKaddr(cpu, v, use_pid=use_pid)
+            cpl = getCPL(cpu)
+            if do_log:
+                self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
+            if v < self.getUnsigned(self.param.kernel_base):
+                retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
+            else:
+                retval = self.v2pKaddr(cpu, v, use_pid=use_pid)
         return retval
 
     def readByte(self, cpu, vaddr):
@@ -1036,12 +1069,16 @@ class MemUtils():
         
 
     def getCurrentTask(self, cpu):
+        # TBD distinction between this and function provided by taskUtils
+        # This used by genMonitor while booting.  Elsewhere?
         #self.lgr.debug('memUtils getCurrentTask WORD_SIZE %d cpu architecure %s' % (self.WORD_SIZE, cpu.architecture))
         retval = None 
         if self.WORD_SIZE == 4 and cpu.architecture == 'arm':
-            retval = self.getCurrentTaskARM(self.param, cpu)
+            retval = self.getCurrentTaskARM(cpu)
         elif cpu.architecture == 'arm64':
-            retval = self.getCurrentTaskARM64(self.param, cpu)
+            retval = self.getCurrentTaskARM64(cpu)
+        elif cpu.architecture == 'ppc32':
+            retval = self.getCurrentTaskPPC32(cpu)
         else:
             if self.WORD_SIZE == 4:
                 param_xs_base = self.param.fs_base
@@ -1051,7 +1088,7 @@ class MemUtils():
                 new_xs_base = cpu.ia32_gs_base
                 self.lgr.debug('memUtils getCurrentTask current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
             if param_xs_base is None:
-                cur_ptr = self.getCurrentTaskX86(self.param, cpu)
+                cur_ptr = self.getCurrentTaskX86(cpu)
                 retval = cur_ptr
             else:
                 ''' TBD generalize this, will it always be such? '''
@@ -1113,24 +1150,38 @@ class MemUtils():
         else:
     '''
 
-    def getCurrentTaskARM64(self, param, cpu):
+    def getCurrentTaskPPC32(self, cpu):
+        retval = None
+        reg_num = cpu.iface.int_register.get_number("pc")
+        pc = cpu.iface.int_register.read(reg_num)
+        if pc >= self.param.kernel_base:
+            reg_num = cpu.iface.int_register.get_number("r2")
+            value = cpu.iface.int_register.read(reg_num)
+            if value >= self.param.kernel_base:
+                self.lgr.debug('memUtils getCurrentTaskPPC32 in kernel code but r2 not in kernel space')
+                retval = value
+        else:
+            self.lgr.debug('memUtils getCurrentTaskPPC32 TBD from user space or interrupt handler')
+        return retval
+
+    def getCurrentTaskARM64(self, cpu):
         reg_num = cpu.iface.int_register.get_number("sp_el0")
         retval = cpu.iface.int_register.read(reg_num)
         #self.lgr.debug('getCurrentTaskARM64 reg_num %s retval %s' % (reg_num, retval))
         return retval
       
-    def getCurrentTaskARM(self, param, cpu):
+    def getCurrentTaskARM(self, cpu):
         reg_num = cpu.iface.int_register.get_number("sp")
         sup_sp = cpu.gprs[1][reg_num]
         #self.lgr.debug('getCurrentTaskARM sup_sp 0x%x' % sup_sp)
         if sup_sp == 0:
             return None
-        ts = sup_sp & ~(param.thread_size - 1)
+        ts = sup_sp & ~(self.param.thread_size - 1)
         #self.lgr.debug('getCurrentTaskARM ts 0x%x' % ts)
         if ts == 0:
             return None
-        if ts < param.kernel_base:
-            ts += param.kernel_base
+        if ts < self.param.kernel_base:
+            ts += self.param.kernel_base
             #self.lgr.debug('getCurrentTaskARM ts adjusted by base now 0x%x' % ts)
         task_struct = ts + 12
         #ct_addr = self.kernel_v2p(param, cpu, task_struct) 
@@ -1139,7 +1190,7 @@ class MemUtils():
         try:
             ct = SIM_read_phys_memory(cpu, ct_addr, self.WORD_SIZE)
         except:
-            #self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped? kernel_base 0x%x ram_base 0x%x' % (ct_addr, param.kernel_base, param.ram_base))
+            #self.lgr.debug('getCurrentTaskARM ct_addr 0x%x not mapped? kernel_base 0x%x ram_base 0x%x' % (ct_addr, self.param.kernel_base, self.param.ram_base))
             pass
 
      
@@ -1148,7 +1199,7 @@ class MemUtils():
         return ct
 
 
-    def getCurrentTaskX86(self, param, cpu):
+    def getCurrentTaskX86(self, cpu):
         cpl = getCPL(cpu)
         if cpl == 0:
             tr_base = cpu.tr[7]
@@ -1159,7 +1210,7 @@ class MemUtils():
         else:
             esp = self.getRegValue(cpu, 'esp')
             #self.lgr.debug('getCurrentTaskX86 user mode, esp is 0x%x' % esp)
-        ptr = esp - 1 & ~(param.stack_size - 1)
+        ptr = esp - 1 & ~(self.param.stack_size - 1)
         #self.lgr.debug('getCurrentTaskX86 ptr is 0x%x' % ptr)
         ret_ptr = self.readPtr(cpu, ptr)
         if ret_ptr is not None:
