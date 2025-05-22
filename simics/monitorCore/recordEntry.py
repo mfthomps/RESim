@@ -176,11 +176,12 @@ class RecordEntry():
         ret_cycles = None
         if self.cpu is not None:
             cur_cycles = self.cpu.cycles
-            self.lgr.debug('getRecentCycleFrame tid %s' % tid)
+            #self.lgr.debug('getRecentCycleFrame tid %s' % tid)
             if tid in self.recent_cycle:
                 ret_cycles, frame = self.recent_cycle[tid]
             else:
-                self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+                #self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+                pass
         else:
             self.lgr.debug('getRecentCycleFrame cpu was None')
         return frame, ret_cycles
