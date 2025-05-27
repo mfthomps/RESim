@@ -519,6 +519,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
     top_dir = getRootTopDir(root_prefix)
     lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
     if fname.startswith('/'):
+        fname = os.path.realpath(fname)
         analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
         lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
         if os.path.isfile(analysis_path):
@@ -529,7 +530,6 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         lgr.debug('resimUtils getAnalysis rest is %s analyis_path %s' % (rest, analysis_path))
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
-
        
     if retval is None:    
         if lgr is not None:
