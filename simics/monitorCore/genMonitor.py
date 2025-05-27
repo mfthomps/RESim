@@ -588,7 +588,7 @@ class GenMonitor():
         self.lgr.debug('genInit finished')
 
     def runPreScripts(self):
-        ''' run the PRE_INIT_SCRIPT and the one_done module, if any '''
+        ''' run the PRE_INIT_SCRIPT, if any'''
         init_script = os.getenv('PRE_INIT_SCRIPT')
         if init_script is not None:
             cmd = 'run-command-file %s' % init_script
@@ -956,17 +956,26 @@ class GenMonitor():
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
             
 
-
     def getBootCycleChunk(self):
-        run_cycles =  900000000
+        run_cycles = None
         for cell_name in self.cell_config.cell_context:
             if cell_name in self.task_utils:
                 continue
-            if 'BOOT_CHUNKS' in self.comp_dict[cell_name]:
+            if 'FIRST_BOOT_CHUNK' in self.comp_dict[cell_name]:
+               new = self.comp_dict[cell_name]['FIRST_BOOT_CHUNK']
+               del self.comp_dict[cell_name]['FIRST_BOOT_CHUNK']
+               run_cycles = int(new)
+               self.lgr.debug('getBootCycleChunk, found FIRST_BOOT_CHUNK is %d' % (run_cycles))
+            elif 'BOOT_CHUNKS' in self.comp_dict[cell_name]:
                new = self.comp_dict[cell_name]['BOOT_CHUNKS']
                new = int(new)
-               self.lgr.debug('getBootCycleChunk, yes new is %d' % new)
-               run_cycles = min(run_cycles, new)
+               self.lgr.debug('getBootCycleChunk, yes new is %d run_cycles %s' % (new, run_cycles))
+               if run_cycles is None:
+                   run_cycles = new
+               else:
+                   run_cycles = min(run_cycles, new)
+        if run_cycles is None:
+            run_cycles =  900000000
         self.lgr.debug('getBootCycle return %d' % run_cycles)
         return run_cycles
    
@@ -1124,8 +1133,10 @@ class GenMonitor():
                 cmd = 'pselect %s' % cpu.name
                 dumb, ret = cli.quiet_run_command(cmd)
                 cmd = 'c %s cycles' % run_cycles
-                dumb, ret = cli.quiet_run_command(cmd)
+                #dumb, ret = cli.quiet_run_command(cmd)
+                SIM_continue(run_cycles)
                 self.lgr.debug('back from continue dumb %s ret %s' % (dumb, ret))
+                run_cycles = self.getBootCycleChunk()
             else: 
                 self.lgr.debug('doInit done, call runScripts')
         self.runScripts()
@@ -1432,6 +1443,8 @@ class GenMonitor():
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
             else:
                 cmd = 'new-gdb-remote cpu=%s architecture=arm64 port=%d' % (cpu.name, self.gdb_port)
+        if cpu.architecture == 'ppc32':
+            cmd = 'new-gdb-remote cpu=%s architecture=ppc32 port=%d' % (cpu.name, self.gdb_port)
         #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
         elif self.isWindows(self.target):
             machine_size = self.soMap[self.target].getMachineSize(tid)
