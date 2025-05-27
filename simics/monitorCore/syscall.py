@@ -2804,7 +2804,7 @@ class Syscall():
         else:
             ''' tracing all syscalls, or watching for any syscall, e.g., during debug '''
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
-            self.lgr.debug('syscall looking for any, got %d from %s (%s) at 0x%x  exit_info %s' % (callnum, tid, comm, break_eip, str(exit_info)))
+            #self.lgr.debug('syscall looking for any, got %d from %s (%s) at 0x%x  exit_info %s' % (callnum, tid, comm, break_eip, str(exit_info)))
 
             if exit_info is not None:
                 if comm != 'tar':
