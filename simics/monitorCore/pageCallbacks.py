@@ -73,15 +73,15 @@ class PageCallbacks():
             else:
                 self.lgr.debug('pageCallbacks setTableHaps for pid %s failed to get table_base' % use_pid)
         pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
-        if pt.page_addr is not None:
-            if pt.page_addr not in self.missing_pages:
-                self.missing_pages[pt.page_addr] = []
-                break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
-                self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on page_addr 0x%x' % (addr, break_num, pt.page_addr))
+        if pt.phys_addr is not None:
+            if pt.phys_addr not in self.missing_pages:
+                self.missing_pages[pt.phys_addr] = []
+                break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.phys_addr, 1, 0)
+                self.lgr.debug('pageCallbacks setCallback no physical address for 0x%x, set break %d on phys_addr 0x%x' % (addr, break_num, pt.phys_addr))
                 self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                       None, break_num)
-            self.missing_pages[pt.page_addr].append(addr)
-            self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing pages for page addr 0x%x' % (addr, pt.page_addr))
+            self.missing_pages[pt.phys_addr].append(addr)
+            self.lgr.debug('pageCallbacks setCallback addr 0x%x added to missing pages for page addr 0x%x' % (addr, pt.phys_addr))
         elif pt.page_base_addr is not None:
             if pt.page_base_addr not in self.missing_page_bases:
                 self.missing_page_bases[pt.page_base_addr] = []
@@ -150,11 +150,11 @@ class PageCallbacks():
                 redo_addrs = []
                 for addr in self.missing_tables[physical]:
                     pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
-                    if pt.page_addr is None or pt.page_addr == 0:
+                    if pt.phys_addr is None or pt.phys_addr == 0:
                         self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                         redo_addrs.append(addr)
                         continue
-                    phys_addr = pt.page_addr | (addr & 0x00000fff)
+                    phys_addr = pt.phys_addr | (addr & 0x00000fff)
                     self.lgr.debug('callback here also?')
                     self.doCallback(addr)
                 del self.missing_tables[physical]
@@ -222,11 +222,11 @@ class PageCallbacks():
                 redo_addrs = []
                 for addr in self.missing_page_bases[physical]:
                     pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
-                    if pt.page_addr is None or pt.page_addr == 0:
+                    if pt.phys_addr is None or pt.phys_addr == 0:
                         self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                         redo_addrs.append(addr)
                         continue
-                    phys_addr = pt.page_addr | (addr & 0x00000fff)
+                    phys_addr = pt.phys_addr | (addr & 0x00000fff)
                     #print('would do callback here')
                     self.doCallback(addr)
 
@@ -268,7 +268,7 @@ class PageCallbacks():
                 #offset = memUtils.bitRange(pdir_entry, 0, 19)
                 #addr = value + offset
                 pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
-                phys_addr = pt.page_addr
+                phys_addr = pt.phys_addr
                 if phys_addr is None:
                     self.lgr.error('pageCallbacks pageHap got none for addr ofr addr 0x%x.  broken' % addr) 
                     return

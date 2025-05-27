@@ -69,7 +69,21 @@ def writePhysBytes(cpu, paddr, data):
 def getCPL(cpu):
     # return RESim cpl value (0 = kernel)
     #print('arch %s' % cpu.architecture)
-    if cpu.architecture in ['arm', 'ppc32']:
+    if cpu.architecture in ['ppc32']:
+        reg_num = cpu.iface.int_register.get_number("msr")
+        msr = cpu.iface.int_register.read(reg_num)
+        if testBit(msr, 4):
+            reg_num = cpu.iface.int_register.get_number("pc")
+            pc = cpu.iface.int_register.read(reg_num)
+            #print('sp is 0x%x' % sp)
+            if pc > 0xc0000000:
+                return 0
+            else:
+                return 1
+        else:
+            return 0
+
+    elif cpu.architecture in ['arm']:
         ''' TBD FIX this! '''
         reg_num = cpu.iface.int_register.get_number("sp")
         sp = cpu.iface.int_register.read(reg_num)
@@ -358,7 +372,7 @@ class MemUtils():
                 #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, kernel=True)
                 if ptable_info is not None:
-                    retval = ptable_info.page_addr
+                    retval = ptable_info.phys_addr
                 else:
                     retval = None
             else:
@@ -375,8 +389,8 @@ class MemUtils():
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             exec_mode_word_size = self.wordSize(cpu)
             if self.WORD_SIZE == 8 and ptable_info.page_exists:
-                #self.lgr.debug('memUtils v2pKaddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.page_addr))
-                retval = ptable_info.page_addr
+                #self.lgr.debug('memUtils v2pKaddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.phys_addr))
+                retval = ptable_info.phys_addr
             else:
                 if self.WORD_SIZE == 8:
                     if self.top.isWindows(cpu=cpu) and self.phys_cr3 is not None:
@@ -386,7 +400,7 @@ class MemUtils():
                             self.kernel_saved_cr3 = current_saved_cr3
                             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
                             if ptable_info.page_exists:
-                                retval = ptable_info.page_addr
+                                retval = ptable_info.phys_addr
                                 self.lgr.debug('memUtils v2pKaddr after change of cr3, got retval 0x%x' % retval)
                     else: 
                         retval = None
@@ -445,8 +459,8 @@ class MemUtils():
 
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=table_base)
                 if ptable_info.page_exists:
-                    #self.lgr.debug('memUtils v2pUserAddr used other proc (%d) page table, got phys 0x%x' % (use_pid, ptable_info.page_addr))
-                    retval = ptable_info.page_addr
+                    #self.lgr.debug('memUtils v2pUserAddr used other proc (%d) page table, got phys 0x%x' % (use_pid, ptable_info.phys_addr))
+                    retval = ptable_info.phys_addr
             else:
                 self.lgr.warning('memUtils v2pUserAddr ADD for arm!!!')
         elif force_cr3 is not None:
@@ -455,8 +469,8 @@ class MemUtils():
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=force_cr3, do_log=do_log)
             if ptable_info.page_exists:
                 if do_log:
-                    self.lgr.debug('memUtils v2pUserAddr force_cr3 0x%x page table, got phys 0x%x, table: %s' % (force_cr3, ptable_info.page_addr, ptable_info.valueString()))
-                retval = ptable_info.page_addr
+                    self.lgr.debug('memUtils v2pUserAddr force_cr3 0x%x page table, got phys 0x%x, table: %s' % (force_cr3, ptable_info.phys_addr, ptable_info.valueString()))
+                retval = ptable_info.phys_addr
 
         elif cpl ==0 and retval is None:
             try:
@@ -482,8 +496,8 @@ class MemUtils():
                 return None
             #self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, table_base))
             if ptable_info.page_exists:
-                #self.lgr.debug('memUtils v2pUserAddr got phys 0x%x' % (ptable_info.page_addr))
-                retval = ptable_info.page_addr
+                #self.lgr.debug('memUtils v2pUserAddr got phys 0x%x' % (ptable_info.phys_addr))
+                retval = ptable_info.phys_addr
             else:
                 self.lgr.debug('memUtils v2pUserAddr tried user CR3 and failed to get page')
         
@@ -495,7 +509,7 @@ class MemUtils():
                 retval = self.getUnsigned(phys_addr)
             elif cpu.architecture == 'arm64':
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
-                return ptable_info.page_addr
+                return ptable_info.phys_addr
             else:
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
                 # a mode of 3 is 32 bit mode
@@ -509,8 +523,8 @@ class MemUtils():
                 else:
                     if self.WORD_SIZE == 8 and ptable_info.page_exists:
                         if do_log:
-                            self.lgr.debug('memUtils v2pUserAddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.page_addr))
-                        retval = ptable_info.page_addr
+                            self.lgr.debug('memUtils v2pUserAddr exec_mode_word_size is %d ptables page exists? phys 0x%x' % (exec_mode_word_size, ptable_info.phys_addr))
+                        retval = ptable_info.phys_addr
                     else:
                         if self.WORD_SIZE == 8:
                             retval = None
@@ -548,7 +562,8 @@ class MemUtils():
         retval = None
         v = self.getUnsigned(v)
         if cpu.architecture == 'ppc32':
-            if False and v >= self.getUnsigned(self.param.kernel_base):
+            cpl = getCPL(cpu)
+            if cpl == 1 and v >= self.getUnsigned(self.param.kernel_base):
                 retval = v - 0xc0000000
             else:
                 try:
@@ -1447,7 +1462,7 @@ class MemUtils():
 
     def wordSize(self, cpu):
         retval = self.WORD_SIZE
-        if not cpu.architecture.startswith('arm'):
+        if cpu.architecture.startswith('x86'):
             ''' see api-help x86_exec_mode_t '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             if mode == 3:

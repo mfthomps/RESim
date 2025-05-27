@@ -317,16 +317,16 @@ class Coverage():
         for bb_rel in self.unmapped_addrs:
             #self.lgr.debug('handleUnmapped for 0x%x' % bb_rel)
             pt = pageUtils.findPageTable(self.cpu, bb_rel, self.lgr)
-            if pt.page_addr is not None:
-                if pt.page_addr not in self.missing_pages:
-                    self.missing_pages[pt.page_addr] = []
-                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.page_addr, 1, 0)
-                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on page_addr 0x%x' % (bb_rel, break_num, pt.page_addr))
+            if pt.phys_addr is not None:
+                if pt.phys_addr not in self.missing_pages:
+                    self.missing_pages[pt.phys_addr] = []
+                    break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.phys_addr, 1, 0)
+                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys_addr 0x%x' % (bb_rel, break_num, pt.phys_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                           None, break_num)
-                self.missing_pages[pt.page_addr].append(bb_rel)
-                #self.lgr.debug('handleUnmapped bb 0x%x added to missing pages for page addr 0x%x' % (bb_rel, pt.page_addr))
+                self.missing_pages[pt.phys_addr].append(bb_rel)
+                #self.lgr.debug('handleUnmapped bb 0x%x added to missing pages for page addr 0x%x' % (bb_rel, pt.phys_addr))
             if pt.page_base_addr is not None:
                 if pt.page_base_addr not in self.missing_page_bases:
                     self.missing_page_bases[pt.page_base_addr] = []
@@ -487,10 +487,10 @@ class Coverage():
                             got_missing=True
                             continue
                         pt = pageUtils.findPageTable(self.cpu, bb, self.lgr, use_sld=value)
-                        if pt.page_addr is None or pt.page_addr == 0:
+                        if pt.phys_addr is None or pt.phys_addr == 0:
                             self.lgr.debug('pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
-                        addr = pt.page_addr | (bb & 0x00000fff)
+                        addr = pt.phys_addr | (bb & 0x00000fff)
                         if bb not in self.dead_list:
                             got_one = True
                             #self.lgr.debug('tableHap bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
@@ -583,10 +583,10 @@ class Coverage():
                             got_missing=True
                             continue
                         pt = pageUtils.findPageTable(self.cpu, bb, self.lgr, use_sld=value)
-                        if pt.page_addr is None or pt.page_addr == 0:
+                        if pt.phys_addr is None or pt.phys_addr == 0:
                             self.lgr.debug('coverage pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (bb, pt.ptable_addr))
                             continue
-                        addr = pt.page_addr | (bb & 0x00000fff)
+                        addr = pt.phys_addr | (bb & 0x00000fff)
                         adjusted_addr = addr - self.offset
                         if adjusted_addr not in self.dead_list:
                             got_one = True
@@ -634,7 +634,7 @@ class Coverage():
                     #offset = memUtils.bitRange(pdir_entry, 0, 19)
                     #addr = value + offset
                     pt = pageUtils.findPageTable(self.cpu, bb, self.lgr)
-                    addr = pt.page_addr
+                    addr = pt.phys_addr
                     adjusted_addr = addr - self.offset
                     if addr is None:
                         self.lgr.error('coverage pageHap got none for addr ofr bb 0x%x.  broken' % bb) 
