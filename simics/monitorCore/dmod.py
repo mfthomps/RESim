@@ -6,13 +6,13 @@ from simics import *
 '''
 Manage one Dmod.  
 '''
-def nextLine(fh):
+def nextLine(fh, hash_ok=False):
    retval = None
    while retval is None:
        line = fh.readline()
        if line is None or len(line) == 0:
            break
-       if line.startswith('#'):
+       if line.startswith('#') and not hash_ok:
            continue
        if len(line.strip()) == 0:
            continue
@@ -36,15 +36,22 @@ class DmodSeek():
 
 class Dmod():
     class Fiddle():
-        def __init__(self, match, was, becomes, cmds=[]):
+        def __init__(self, match, was, becomes, cmds=[], decode=True):
             self.match = match
-            self.was = was
-            if type(becomes) == bytes:
-                becomes = becomes.decode()
-            if becomes is not None:
-                mod = becomes.replace('\\n', '\n')
-                self.becomes = mod
+            if was is not None:
+                self.was = was
+                if type(becomes) == bytes:
+                    if decode:
+                        becomes = becomes.decode()
+                    else:
+                        self.becomes = becomes
+                if becomes is not None and decode:
+                    mod = becomes.replace('\\n', '\n')
+                    self.becomes = mod
+                elif decode:
+                    self.becomes = None
             else:
+                self.was = None
                 self.becomes = None
             self.cmds = cmds        
 
@@ -58,7 +65,10 @@ class Dmod():
         self.stop_hap = None
         self.cell_name = cell_name
         self.path = path
-        self.comm = comm
+        if comm is None:
+            self.comm = []
+        else:
+            self.comm = [comm]
         self.operation = None
         self.count = 1
         self.fd = None
@@ -99,14 +109,15 @@ class Dmod():
                                self.lgr.error('Expected key=value in %s' % item)
                                return
                            if key == 'count':
-                               self.count = value
+                               self.count = int(value)
                            elif key == 'comm':
-                               self.comm = value
+                               parts = value.split(';')
+                               self.comm = parts
                            elif key == 'break':
                                if value.lower() == 'true':
                                    self.break_on_dmod = True
 
-               self.lgr.debug('Dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, self.comm))
+               self.lgr.debug('Dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, str(self.comm)))
                if self.kind == 'full_replace':
                    match = nextLine(fh) 
                    becomes=''
@@ -137,8 +148,8 @@ class Dmod():
                        if match is None:
                            done = True
                            break
-                       was = nextLine(fh)
-                       becomes = nextLine(fh) 
+                       was = nextLine(fh, hash_ok=True)
+                       becomes = nextLine(fh, hash_ok=True) 
                        self.fiddle = self.Fiddle(match, was, becomes)
                elif self.kind == 'script_replace':
                    while not done:
@@ -160,7 +171,10 @@ class Dmod():
                    with open(becomes_file, 'rb') as bf_fh:
                        becomes = bf_fh.read()
                    # hack using "was" as length
-                   self.fiddle = self.Fiddle(match, length, becomes)
+                   self.fiddle = self.Fiddle(match, length, becomes, decode=False)
+               elif self.kind == 'syscall':
+                   match = nextLine(fh) 
+                   self.fiddle = self.Fiddle(match, None, None)
 
                else: 
                    print('Unknown dmod kind: %s' % self.kind)
@@ -171,7 +185,7 @@ class Dmod():
 
     def subReplace(self, cpu, s, addr):
         rm_this = False
-        #self.lgr.debug('Dmod checkString  %s to  %s' % (fiddle.match, s))
+        self.lgr.debug('Dmod checkString  %s to  %s' % (self.fiddle.match, s))
         try:
             match = re.search(self.fiddle.match, s, re.M|re.I)
         except:
@@ -184,11 +198,13 @@ class Dmod():
                 self.lgr.error('dmod subReplace re.search failed on was: %s, str %s' % (self.fiddle.was, s))
                 return
             if was is not None:
-                new_string = re.sub(self.fiddle.was, self.fiddle.becomes, s)
+                entire_match = was.group(0)
+                new_string = re.sub(entire_match, self.fiddle.becomes, s, re.M|re.I)
                 self.lgr.debug('Dmod cell: %s replace %s with %s. Orig len %d new len %d in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, len(s), len(new_string), s))
+                self.lgr.debug('new_string: %s' % new_string)
                 self.top.writeString(addr, new_string, target_cpu=cpu)
             else:
-                #self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (fiddle.match, fiddle.was, s))
+                self.lgr.debug('Dmod found match %s but not string %s in\n%s' % (self.fiddle.match, self.fiddle.was, s))
                 pass
                  
             rm_this = True
@@ -289,7 +305,7 @@ class Dmod():
             s = ''.join(map(chr,byte_array))
         except:
             return retval
-        self.lgr.debug('dMod checkString %d bytes' % len(byte_array))
+        self.lgr.debug('dMod checkString %d bytes (%d) in s: <%s>' % (len(byte_array), len(s), s))
         rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
@@ -300,6 +316,8 @@ class Dmod():
         elif self.kind == 'match_cmd':
             rm_this = self.matchCmd(s)
         elif self.kind == 'open_replace':
+           pass
+        elif self.kind == 'syscall':
            pass
         else:
             print('Unknown kind %s' % self.kind)
@@ -328,6 +346,14 @@ class Dmod():
 
     def getComm(self):
         return self.comm
+
+    def commMatch(self, comm):
+        retval = False
+        if len(self.comm) == 0:
+            retval = True
+        elif comm in self.comm:
+            retval = True
+        return retval
 
     def setTid(self, tid):
         self.tid = tid
@@ -368,7 +394,7 @@ class Dmod():
         return self.cell_name
 
     def toString(self):
-        retval = 'path: %s comm: %s operation: %s' % (self.path, self.comm, self.operation)
+        retval = 'path: %s comm: %s operation: %s' % (self.path, str(self.comm), self.operation)
         return retval
 
     def getBreak(self):
@@ -380,11 +406,13 @@ class Dmod():
         self.call_params = call_params
 
     def scheduled(self, tid):
-        SIM_run_alone(self.scheduledAlone, tid)
+        if self.op_set is not None:
+            SIM_run_alone(self.scheduledAlone, tid)
 
     def scheduledAlone(self, tid):
         self.lgr.debug('Dmod %s scheduled tid %s' % (self.toString(), tid))
         self.top.runTo(self.op_set, self.call_params, ignore_running=True)
+        self.op_set = None
 
 if __name__ == '__main__':
     print('begin')
