@@ -31,6 +31,7 @@ import sys
 import os
 import decode
 import decodeArm
+import decodePPC32
 import memUtils
 import pageUtils
 import resimUtils
@@ -183,6 +184,9 @@ class reverseToCall():
             if cpu.architecture.startswith('arm'):
                 self.decode = decodeArm
                 self.lgr.debug('setup using arm decoder')
+            elif cpu.architecture == 'ppc32':
+                self.decode = decodePPC32
+                self.lgr.debug('setup using PPC32 decoder')
             else:
                 self.decode = decode
             if self.cpu.architecture.startswith('arm'):

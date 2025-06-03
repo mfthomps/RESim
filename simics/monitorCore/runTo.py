@@ -350,7 +350,7 @@ class RunTo():
         if self.cur_task_hap is None:
             return
 
-        cur_thread = SIM_get_mem_op_value_le(memory)
+        cur_thread = memUtils.memoryValue(self.cpu, memory)
         self.lgr.debug('runToProc cur_thread 0x%x' % cur_thread)
         tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
         # prec_tid is a list
@@ -536,7 +536,7 @@ class RunTo():
         if self.write_hap is not None:
             cpu, comm, cur_tid = self.task_utils.curThread() 
             if tid == cur_tid: 
-                value = SIM_get_mem_op_value_le(memory)
+                value = memUtils.memoryValue(self.cpu, memory)
                 self.lgr.debug('runTo writeHap saw write, value 0x%x' % value)
                 if value != 0:
                     SIM_break_simulation('writeHap')

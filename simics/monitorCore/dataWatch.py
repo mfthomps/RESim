@@ -30,6 +30,7 @@ import stopFunction
 import hapCleaner
 import decode
 import decodeArm
+import decodePPC32
 import elfText
 import memUtils
 import watchMarks
@@ -61,7 +62,7 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
             'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 
-            'String14compare_helper', 'String14compare_helper_latin', 'String17fromLatin1_helper_latin', 
+            'String14compare_helper', 'String14compare_helper_latin',
             'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'ByteArray5toInt', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 ''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
@@ -158,6 +159,9 @@ class DataWatch():
         #lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
         if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
+        elif cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
+            self.lgr.debug('dataWatch using decodePPC32')
         else:
             self.decode = decode
         self.readLib = readLibTrack.ReadLibTrack(cpu, self.mem_utils, 
@@ -325,7 +329,7 @@ class DataWatch():
     def checkFread(self, start, length):
         retval = False
         self.lgr.debug('dataWatch checkFread')
-        st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
+        st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
         if st is None:
             self.lgr.debug('stack trace is None, wrong tid?')
             return False
@@ -1796,7 +1800,7 @@ class DataWatch():
             else:
                 self.lgr.debug('%s returned error 0x%x' % (self.mem_something.fun, ret_addr))
                 wm = self.watchMarks.getopt(self.mem_something.fun, None, None, self.mem_something.length, self.mem_something.src, self.mem_something.the_string)
-        elif self.mem_something.fun in ['String16fromAscii_helper', 'String17fromLatin1_helper_latin']:
+        elif self.mem_something.fun == 'String16fromAscii_helper':
             this_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             self.mem_something.dest = this_addr + 0x10 + self.mem_something.pos
             range_count = self.mem_something.length * 2
@@ -1807,6 +1811,7 @@ class DataWatch():
                                       truncated=self.mem_something.truncated, copy_start=self.mem_something.start)
             self.setRange(self.mem_something.dest, range_count, watch_mark=wm)
             self.watchStackObject(this_addr)
+
 
         elif self.mem_something.fun == 'String5split':
             ret_struct_addr_addr = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -2017,7 +2022,7 @@ class DataWatch():
     
         # special case for memsomething functions calling memcpy.  
         if fun in ['memcpy', 'strlen']:
-            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
+            st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
             if st is None:
                 self.lgr.error('DataWatch memSomethingEntry failed to get stack trace')
                 return 
@@ -2327,7 +2332,7 @@ class DataWatch():
             return True
         orig_param_length = param_length
         # Are there multiple buffers within this copy?
-        if param_length > 4 and self.multiBuffer(param_src, param_length, param_dest):
+        if self.multiBuffer(param_src, param_length, param_dest):
             return False
         buf_start, buf_length, dumb = self.findBufForRange(param_src, param_length)
         if data_hit:
@@ -2386,9 +2391,8 @@ class DataWatch():
                 #self.lgr.debug('gatherCallParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (param_dest, param_src, 
                 #    param_length))
 
-            if not skip_fun:
-                ''' recalculate buf_start and buf_length per new param_length '''
-                skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
+            ''' recalculate buf_start and buf_length per new param_length '''
+            skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
         return skip_fun
 
     def bufferWithinBuffer(self, param_src, param_length, param_dest, orig_param_length):
@@ -2777,11 +2781,6 @@ class DataWatch():
             else:
                 self.lgr.debug('dataWatch getMemParams %s src: 0x%x string %s' % (self.mem_something.fun, param_src, self.mem_something.the_string))
                 skip_fun = self.bufferWithinBuffer(param_src, param_length, None, param_length)
-
-        elif self.mem_something.fun == 'String17fromLatin1_helper_latin':
-            param_src, param_length, dumb = self.getCallParams(sp, word_size)
-            self.mem_something.the_string = self.mem_utils.readString(self.cpu, param_src, 100)
-            skip_fun = self.bufferWithinBuffer(param_src, param_length, None, param_length)
 
         elif self.mem_something.fun == 'String5split':
             struct_addr_addr, dumb2, dumb = self.getCallParams(sp, word_size)
@@ -3497,6 +3496,12 @@ class DataWatch():
                 if self.decode.regIsPartList(op1, our_reg_list):
                     #self.lgr.debug('dataWatch getMoveDestAddr is in reg list')
                     dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+        elif self.cpu.architecture == 'ppc32':
+            if next_instruct[1].startswith('st') and self.decode.isReg(op1) and op1 in our_reg_list: 
+                self.lgr.debug('dataWatch getMoveDestAddr %s' % next_instruct[1])
+                dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                if dest_addr is not None:
+                    self.lgr.debug('dataWatch getMoveDestAddr dest_addr 0x%x' % dest_addr)
         else:
             if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
                 self.lgr.debug('dataWatch getMoveDestAddr, maybe op1 is %s' % op1)
@@ -4051,8 +4056,9 @@ class DataWatch():
         self.recent_reused_index = None
         orig_ip = self.top.getEIP(self.cpu)
         orig_cycle = self.cpu.cycles
-        if instruct[1].startswith('mov') or instruct[1].startswith('ldr'):
+        if instruct[1].startswith('mov') or instruct[1].startswith('ldr') or (self.cpu.architecture == 'ppc32' and instruct[1].startswith('l')):
             op2, op1 = self.decode.getOperands(instruct[1])
+            self.lgr.debug('dataWatch checkMove op1 %s op2 %s' % (op1, op2))
             if self.decode.isReg(op1):
                 self.lgr.debug('dataWatch checkMove is mov to reg %s eip:0x%x' % (op1, eip))
                 our_reg = op1
@@ -4453,11 +4459,11 @@ class DataWatch():
                     self.lgr.debug('dataWatch readHap is a write to dead stack buf %d, skip it' % index)
                     return
                 if memory.size <= 8:
-                    new_value = SIM_get_mem_op_value_le(memory)
+                    new_value = memUtils.memoryValue(self.cpu, memory)
                     if self.cheapReuse(eip, addr, memory.size, new_value):
                         return
                 else:
-                    buf = SIM_get_mem_op_value_buf(memory)
+                    buf = memUtils.memoryValue(self.cpu, memory)
                     if all(v == 0 for v in buf):
                         self.lgr.debug('dataWatch readHap wrote %d bytes value %s, remove buffer' % (memory.size, str(buf)))
                         self.rmRange(addr) 
@@ -4636,7 +4642,7 @@ class DataWatch():
             else:
                 ''' Get the stack frame so we can look for memsomething or frees '''
                 self.lgr.debug('DataWatch call getStackTrace from readHap fun 0x%x not in not_mem_something' % fun)
-                st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000, stop_after_clib=True)
+                st = self.top.getStackTraceQuiet(max_frames=20, max_bytes=1000)
                 if st is None:
                     self.lgr.debug('DataWatch userSpaceRef stack trace is None, wrong tid?')
                 else:

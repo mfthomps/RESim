@@ -406,13 +406,13 @@ class Coverage():
         self.did_missing_hap.append(hap)
 
     class MyMemTrans():
-        def __init__(self, memory):
+        def __init__(self, cpu, memory):
             self.length = memory.size
             self.op_type = SIM_get_mem_op_type(memory)
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
             self.physical = memory.physical_address
             if self.op_type is Sim_Trans_Store:
-                self.value = SIM_get_mem_op_value_le(memory)
+                self.value = memUtils.memoryValue(cpu, memory)
             else:
                 self.value = None
         
@@ -438,14 +438,14 @@ class Coverage():
         if break_num in self.missing_haps:
             if length == 4:
                 if op_type is Sim_Trans_Store:
-                    mem_trans = self.MyMemTrans(memory)
+                    mem_trans = self.MyMemTrans(self.cpu, memory)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
                     self.lgr.error('tableHap op_type is not store')
             else:
                 #self.lgr.error('coverage tableHap for 64 bits not yet handled')
                 if op_type is Sim_Trans_Store:
-                    mem_trans = self.MyMemTrans(memory)
+                    mem_trans = self.MyMemTrans(self.cpu, memory)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
                     self.lgr.error('tableHap op_type is not store')
@@ -534,7 +534,7 @@ class Coverage():
         if break_num in self.missing_haps:
             if True or length == 4:
                 if op_type is Sim_Trans_Store:
-                    mem_trans = self.MyMemTrans(memory)
+                    mem_trans = self.MyMemTrans(self.cpu, memory)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedPageBase, mem_trans)
                 else:
                     self.lgr.error('pageBaseHap op_type is not store')
@@ -627,7 +627,7 @@ class Coverage():
             #if length == 4 and self.cpu.architecture == 'arm':
             if True:
                 if op_type is Sim_Trans_Store:
-                    value = SIM_get_mem_op_value_le(memory)
+                    value = memUtils.memoryValue(self.cpu, memory)
                     #self.lgr.debug('pageHap value is 0x%x' % value)
                 for bb in self.missing_pages[memory.physical_address]:
                     # TBD this was broken.  Not sure if it is now fixed

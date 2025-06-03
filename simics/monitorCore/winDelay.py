@@ -235,7 +235,7 @@ class WinDelay():
         if self.count_write_hap is None or self.context_manager.isReverseContext():
             return
         if not self.did_exit and self.hack_count < 1:
-            return_count = SIM_get_mem_op_value_le(memory)
+            return_count = memUtils.memoryValue(self.cpu, memory)
             self.lgr.debug('winDelay writeCountHap tid:%s skipping first kernel write to count address, value is 0x%x.  TBD if always needed.' % (self.tid, return_count))
             self.hack_count = self.hack_count + 1
             return
@@ -243,7 +243,7 @@ class WinDelay():
             self.lgr.error('winDelay writeCountHap memory size > 8: %d  ???? module %s' % (memory.size, str(self)))
             return
         else:
-            return_count = SIM_get_mem_op_value_le(memory)
+            return_count = memUtils.memoryValue(self.cpu, memory)
         if return_count > 0: 
             tid = self.top.getTID()
             if tid != self.tid:

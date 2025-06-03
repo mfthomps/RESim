@@ -25,6 +25,7 @@
 from simics import *
 import pageUtils
 import resimUtils
+import memUtils
 from resimHaps import *
 class PageCallbacks():
     def __init__(self, top, cpu, mem_utils, lgr):
@@ -261,7 +262,7 @@ class PageCallbacks():
 
             #self.lgr.debug('pageHap phys 0x%x len %d  type %s' % (physical, length, type_name))
             if op_type is Sim_Trans_Store:
-                value = SIM_get_mem_op_value_le(memory)
+                value = memUtils.memoryValue(self.cpu, memory)
                 #self.lgr.debug('pageHap value is 0x%x' % value)
             for addr in self.missing_pages[memory.physical_address]:
                 # TBD this was broken.  Not sure if it is now fixed
@@ -291,6 +292,6 @@ class PageCallbacks():
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
             self.physical = memory.physical_address
             if self.op_type is Sim_Trans_Store:
-                self.value = SIM_get_mem_op_value_le(memory)
+                self.value = memUtils.memoryValue(self.cpu, memory)
             else:
                 self.value = None

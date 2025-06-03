@@ -279,7 +279,7 @@ class TaskUtils():
                     #    self.lgr.debug('findSwapper task is %x pid:%d com %s' % (task, pid, comm))
                     ts_real_parent = self.mem_utils.readPtr(self.cpu, task + self.param.ts_real_parent)
                     if ts_real_parent == task:
-                        if 'swap' in comm:
+                        if comm is not None and 'swap' in comm:
                             #print 'parent is same as task, done?'
                             #self.lgr.debug('findSwapper real parent same as task, assume done')
                             pass

@@ -31,6 +31,7 @@ from simics import *
 import writeData
 import aflPath
 import resimUtils
+import memUtils
 import cli
 import sys
 import os
@@ -1004,7 +1005,7 @@ class PlayAFL():
         self.lgr.debug('searchHap hit mem 0x%x' % memory.logical_address)
         print('searchHap hit mem 0x%x' % memory.logical_address)
         eip = self.top.getEIP(cpu=self.target_cpu)
-        value = SIM_get_mem_op_value_le(memory)
+        value = memUtils.memoryValue(self.cpu, memory)
         self.recordSearchFind(memory.logical_address, eip, value)
 
     def recordSearchFind(self, addr, eip, value):

@@ -71,7 +71,7 @@ class VxKTaskUtils():
         self.lgr.debug('setCurTaskBreak set on 0x%x' % addr)
 
     def curTaskHap(self, user_param, conf_object, break_num, memory):
-        new_val = SIM_get_mem_op_value_le(memory)
+        new_val = memUtils.memoryValue(self.cpu, memory)
         addr = memory.logical_address
         old_val = SIM_read_phys_memory(self.cpu, addr, 4)
         if new_val not in self.task_list:

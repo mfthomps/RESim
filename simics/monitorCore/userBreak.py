@@ -28,8 +28,9 @@ from simics import *
     any tracking.
 '''
 class UserBreak():
-    def __init__(self, top, addr, count, context_manager, lgr):
+    def __init__(self, top, cpu, addr, count, context_manager, lgr):
         self.top = top
+        self.cpu = cpu
         self.addr = addr
         self.count = count
         self.context_manager = context_manager
@@ -37,11 +38,13 @@ class UserBreak():
         self.hit = 0
         self.user_break_hap = None
         self.tid = self.top.getTID()
-
+        self.start_cycle = cpu.cycles
+        self.lgr.debug('userBreak addr: 0x%x start_cycle 0x%x' % (addr, self.start_cycle))
         self.doBreak()
 
     def userBreakHap(self, dumb, third, forth, memory):
-        if self.user_break_hap is not None:
+        if self.user_break_hap is not None and self.cpu.cycles > self.start_cycle:
+            self.lgr.debug('userBreak userBreakHap start_cycle 0x%x now 0x%x' % (self.start_cycle, self.cpu.cycles))
             tid = self.top.getTID()
             if tid != self.tid:
                 pass

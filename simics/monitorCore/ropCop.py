@@ -1,6 +1,7 @@
 from simics import *
 import decode
 import decodeArm
+import decodePPC32
 from resimHaps import *
 class RopCop():
     def __init__(self, top, cpu, cell_name, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
@@ -23,6 +24,8 @@ class RopCop():
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
         if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
+        elif self.cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
         else:
             self.decode = decode
         self.is_signal = False

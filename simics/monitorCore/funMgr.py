@@ -31,6 +31,7 @@ import os
 import json
 import decode
 import decodeArm
+import decodePPC32
 import clibFuns
 from simics import *
 class FunMgr():
@@ -50,6 +51,10 @@ class FunMgr():
             self.callmn = 'bl'
             self.jmpmn = 'bx'
             self.decode = decodeArm
+        elif cpu.architecture == 'ppc32':
+            self.callmn = 'bl'
+            self.jmpmn = 'b'
+            self.decode = decodePPC32
         else:
             self.callmn = 'call'
             self.jmpmn = 'jmp'
@@ -348,10 +353,13 @@ class FunMgr():
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
         fun_name = None
-        #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
+        self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
+            if len(parts) < 2:
+                # TBD fix for ppc32
+                return retval
             if parts[-1].strip().endswith(']'):
                 faddr, fun_name = self.indirectCall(instruct, eip)
             else:

@@ -30,6 +30,7 @@ from resimHaps import *
 import memUtils
 import decode
 import decodeArm
+import decodePPC32
 import procInfo
 import resimUtils
 import resimSimicsUtils
@@ -93,6 +94,9 @@ class findKernelWrite():
         if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
+        elif self.cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
+            self.lgr.debug('findKernelWrite using PPC32 decoder')
         else:
             self.decode = decode
         self.start_cycles = None
@@ -277,7 +281,7 @@ class findKernelWrite():
             self.top.skipAndMail()
         else:
             if memory.size <= 8:
-                value = SIM_get_mem_op_value_le(memory)
+                value = memUtils.memoryValue(self.cpu, memory)
             else:
                 self.lgr.debug('revWriteCallBack, memory transaction size > 8, addr 0x%x' % memory.logical_address)
                 value = 0xbaaabaaabaaabaaa

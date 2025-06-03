@@ -39,6 +39,7 @@ import cellConfig
 import pickle
 import decode
 import decodeArm
+import decodePPC32
 import pageUtils
 import reverseMgr
 import skipToMgr

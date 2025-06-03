@@ -24,8 +24,10 @@
 '''
 from simics import *
 import decodeArm
+import decodePPC32
 import decode
 import resimUtils
+import memUtils
 '''
 Track kernel buffers used with read/recv calls
 
@@ -257,7 +259,7 @@ class Kbuffer():
         self.lgr.debug('Kbuffer writeHap') 
         if self.write_hap is None:
             return
-        value = SIM_get_mem_op_value_le(memory)
+        value = memUtils.memoryValue(self.cpu, memory)
         '''
         if self.data_watch is not None and self.data_watch.commence_with is not None:
             first = value & 0xff

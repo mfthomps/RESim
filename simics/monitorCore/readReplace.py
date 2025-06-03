@@ -47,6 +47,7 @@ from simics import *
 from resimHaps import *
 import decode
 import decodeArm
+import decodePPC32
 import os
 import pickle
 import binascii
@@ -75,6 +76,8 @@ class ReadReplace():
         self.lgr = lgr
         if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
+        elif cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
         else:
             self.decode = decode
 

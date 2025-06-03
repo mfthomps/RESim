@@ -173,6 +173,13 @@ def isNull(value):
     else:
         return False
 
+def memoryValue(cpu, memory):
+    if cpu.architecture == 'ppc32':
+        value = SIM_get_mem_op_value_be(memory)
+    else:
+        value = SIM_get_mem_op_value_le(memory)
+    return value
+
 param_map = {}
 param_map['arm'] = {}
 param_map['arm']['param1'] = 'r0'
@@ -267,6 +274,13 @@ class MemUtils():
         self.arm64_regs.append('pc')
         self.arm64_regs.append('sp_el0')
         self.arm64_regs.append('sp_el1')
+
+        self.ppc32_regs = []
+        for i in range(32):
+            r = 'r%d' % i
+            self.ppc32_regs.append(r)
+        self.ppc32_regs.append('pc')
+        self.ppc32_regs.append('lr')
 
         self.regs = {}
         self.lgr.debug('memUtils init. cell %s word size %d  arch is %s' % (cell_name, word_size, arch))
@@ -596,7 +610,7 @@ class MemUtils():
     def readString(self, cpu, vaddr, maxlen):
         retval = None
         ps = self.v2p(cpu, vaddr)
-        if ps is not None:
+        if ps is not None and ps != 0:
             #self.lgr.debug('readString vaddr 0x%x ps is 0x%x' % (vaddr, ps))
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
@@ -754,6 +768,8 @@ class MemUtils():
                 regs = self.arm64_regs
             else:
                 regs = self.arm_regs
+        elif cpu.architecture == 'ppc32':
+                regs = self.ppc32_regs
         elif word_size == 8:
             ''' check for 32-bit compatibility mode '''
             mode = cpu.iface.x86_reg_access.get_exec_mode()
@@ -999,6 +1015,8 @@ class MemUtils():
         This will affect the params structure shared by many modules.
         '''
         if cpu.architecture.startswith('arm'):
+            return
+        if cpu.architecture.startswith('ppc32'):
             return
 
         if self.WORD_SIZE == 4:
@@ -1403,7 +1421,10 @@ class MemUtils():
                 self.lgr.error('writeString failed writing sub %s, len less than 4?' % (str(sub)))
                 continue
             try:
-                value = struct.unpack("<L", sub)[0]
+                if cpu.architecture in ['ppc32']:
+                    value = struct.unpack(">L", sub)[0]
+                else:
+                    value = struct.unpack("<L", sub)[0]
             except:
                 self.lgr.error('writeString failed unpacking sub %s,???' % (str(sub)))
                 sindex +=4

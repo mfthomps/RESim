@@ -582,7 +582,6 @@ class ReverseMgr():
         ''' 
         if len(self.break_haps) == 0:
             return
-        #value = SIM_get_mem_op_value_le(memory)
         if self.top is not None:
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)

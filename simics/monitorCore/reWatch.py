@@ -25,6 +25,7 @@
 from simics import *
 import dataWatch
 import armCond
+import memUtils
 '''
 Detect and watch regx searches.
 Preliminary, tested with arm and one boost library
@@ -97,7 +98,7 @@ class REWatch(object):
         # distinguish different function signatures
         match_type = 0
         #lgr.debug('reWatch isCharLookup evaluate hit addr 0x%x ip: 0x%x %s' % (addr, ip, instruct[1]))
-        ''' TBD generalize for x86 '''
+        ''' TBD generalize for x86 and ppc'''
         if decode.isLDRB(cpu, instruct[1]) and decode.isReg(op1):
             our_reg = op1
             next_ip = ip + instruct[0]
@@ -305,7 +306,7 @@ class REWatch(object):
 
     def resultBlockHap(self, index, an_object, breakpoint, memory):
         ''' invoked when result block is written to '''
-        value = SIM_get_mem_op_value_le(memory)
+        value = memUtils.memoryValue(self.cpu, memory)
         addr = memory.logical_address
         if value in self.char_addr_list and addr not in self.result_watch_list:
             self.lgr.debug('reWatch resultBlock wrote 0x%x to resultBlock addr 0x%x, watch addr' % (value, addr))
