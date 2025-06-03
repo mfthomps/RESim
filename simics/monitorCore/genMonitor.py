@@ -1286,7 +1286,7 @@ class GenMonitor():
                 if cpl == 0:
                     this_in_kernel = True   
             t = plist[tid]
-            if this_in_kernel or tasks[t].state > 0:
+            if this_in_kernel or (tasks[t].state > 0 and tasks[t].state != 64):
                 frame, cycles = self.record_entry[self.target].getPreviousCycleFrame(tid, cpu=force_cpu)
                 if frame is None:
                     print('Nothing in previous, try recent loaded from pickle')
@@ -2040,7 +2040,7 @@ class GenMonitor():
         self.run_to[self.target].toRunningProc(None, tid_list, flist, debug_group=True, final_fun=final_fun)
 
     def changedThread(self, cpu, third, forth, memory):
-        cur_addr = SIM_get_mem_op_value_le(memory)
+        cur_addr = memUtils.memoryValue(self.cpu, memory)
         tid = self.mem_utils[self.target].readWord32(cpu, cur_addr + self.param[self.target].ts_pid)
         if tid != 0:
             print('changedThread')
@@ -3616,18 +3616,26 @@ class GenMonitor():
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
         else:
            op_set = [operation]
-        mod_comm = mod.getComm()
-        if mod_comm is None:
-            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
-        else:
+        comm_running = False
+        comms_not_running = []
+        comm_list = mod.getComm()
+        for mod_comm in comm_list:
             tids = self.task_utils[self.target].getTidsForComm(mod_comm)
             if len(tids) == 0:
-                self.lgr.debug('runToDmod, %s has comm that is not runing, set callbacks.' % mod.toString())
-                mod.setCommCallback(op_set, call_params)
-                self.context_manager[self.target].callWhenFirstScheduled(mod_comm, mod.scheduled)
+                self.lgr.debug('runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
+                comms_not_running.append(mod_comm)
             else:
                 self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
-                self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
+                comm_running = True
+                break
+        if comm_running or len(comm_list) == 0: 
+            self.lgr.debug('runToDmod, at least one comm running (or not comm specified), call runTo')
+            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
+        else:
+            self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
+            mod.setCommCallback(op_set, call_params)
+            for mod_comm in comms_not_running:
+                self.context_manager[self.target].callWhenFirstScheduled(mod_comm, mod.scheduled)
         return retval
 
     def runToWrite(self, substring):
@@ -4515,7 +4523,7 @@ class GenMonitor():
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         word_size = self.mem_utils[self.target].wordSize(cpu)
         prog_machine_size = self.soMap[self.target].getMachineSize(tid)
-        self.lgr.debug('printRegJson prog_machine_size %s' % prog_machine_size)
+        #self.lgr.debug('printRegJson prog_machine_size %s' % prog_machine_size)
         if prog_machine_size is not None:
             if prog_machine_size == 64:
                 word_size = 8
@@ -4689,6 +4697,9 @@ class GenMonitor():
             return
 
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
+        if debug_tid is None:
+            self.lgr.error('trackIO called with no debug tid?')
+            return
         comm = self.task_utils[self.target].getCommFromTid(debug_tid)
         if not self.fun_mgr.hasIDAFuns(comm=comm):
             print('No functions defined for comm %s, needs IDA or Ghidra analysis.' % comm)
@@ -5967,14 +5978,11 @@ class GenMonitor():
     def amWatching(self, tid):
         return self.context_manager[self.target].amWatching(tid)
 
-    def userBreakHap(self, dumb, third, forth, memory):
-        self.lgr.debug('userBreakHap')
-        self.stopAndGo(self.stopTrackIO) 
-
     def doBreak(self, addr, count=1, run=False):
         ''' Set a breakpoint and optional count and stop when it is reached.  The stopTrack function will be invoked.'''
-        self.user_break = userBreak.UserBreak(self, addr, count, self.context_manager[self.target], self.lgr)
+        self.context_manager[self.target].setIdaMessage('')
         cpu = self.cell_config.cpuFromCell(self.target)
+        self.user_break = userBreak.UserBreak(self, cpu, addr, count, self.context_manager[self.target], self.lgr)
         self.lgr.debug('doBreak context %s' % cpu.current_context)
         if run:
             SIM_continue(0)
