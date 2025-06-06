@@ -361,8 +361,11 @@ class SyscallManager():
                 new_call_instance.syscall = retval
                 ''' add back old params and corresponding call lists'''
                 for param in old_call_params:
-                    self.lgr.debug('syscallManager watchSyscall add old_call_param %s' % param.name)
-                    new_call_instance.addCallParams([param], existing_param_call_list[param.name])
+                    if param.name in existing_param_call_list:
+                        self.lgr.debug('syscallManager watchSyscall add old_call_param %s' % param.name)
+                        new_call_instance.addCallParams([param], existing_param_call_list[param.name])
+                    else:
+                        self.lgr.debug('syscallManager watchSyscall old_call_param %s not in existing_param_call_list?' % param.name)
                    
                 self.syscall_dict[context][name] = new_call_instance
                 self.lgr.debug('syscallManager watchSyscall replaced old syscall, call_list and params for call instance %s syscall name %s' % (new_call_instance.name, 
