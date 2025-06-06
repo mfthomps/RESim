@@ -1707,10 +1707,10 @@ class GenContextMgr():
                 return True
         return False
 
-    def checkFirstSchedule(self, task_rec, tid, comm):
-        #self.lgr.debug('contextManager checkFirstSchedule comm %s len current_tasks %d' % (comm, len(self.current_tasks)))
-        if task_rec not in self.current_tasks or len(self.current_tasks) == 0: 
-            #self.lgr.debug('contextManager checkFirstSchedule tid:%s (%s) not yet in current tasks' % (tid, comm))
+    def checkFirstSchedule(self, task_rec, tid, comm, first=False):
+        self.lgr.debug('contextManager checkFirstSchedule comm %s len current_tasks %d' % (comm, len(self.current_tasks)))
+        if task_rec not in self.current_tasks or len(self.current_tasks) == 0 or first: 
+            self.lgr.debug('contextManager checkFirstSchedule tid:%s (%s) not yet in current tasks or first' % (tid, comm))
             if self.listStartsWith(self.watch_for_prog, comm) and self.listStartsWith(self.watch_for_prog_callback, comm):
                 self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
                 self.watch_for_prog.remove(comm)
