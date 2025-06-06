@@ -63,8 +63,11 @@ class TraceFiles():
             self.watched_files.append(path)
 
 
-    def watchFD(self, fd, outfile, raw=False, web=False):
-        tid = self.top.getTID(target=self.cell_name)
+    def watchFD(self, fd, outfile, raw=False, web=False, all=False):
+        if not all:
+            tid = self.top.getTID(target=self.cell_name)
+        else:
+            tid = 'all'
         if tid in self.open_files and fd in self.open_files[tid]:
             print('FD %d already being watched for tid %s' % (fd, tid))
             self.lgr.debug('traceFiles watchFD FD %d already being watched tid %s' % (fd, tid))
@@ -195,15 +198,18 @@ class TraceFiles():
                             self.dataWatch.markLog(s, fname)
                         did_write = True
             
-            if not did_write and tid in self.open_files and fd in self.open_files[tid]:
+            if not did_write:
                 ''' tracing fd '''
-                with open(self.open_files[tid][fd].outfile+suf, 'a') as fh:
-                    s = ''.join(map(chr,stripped))+'\n'
-                    self.lgr.debug('traceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
-                    fh.write(s)
-                    if self.dataWatch is not None:
-                        prefix = 'FD:%d' % fd
-                        self.dataWatch.markLog(s, prefix)
+                if ((tid not in self.open_files or fd not in self.open_files[tid]) and ('all' in self.open_files and fd in self.open_files['all'])):
+                    tid = 'all'
+                if tid in self.open_files and fd in self.open_files[tid]: 
+                    with open(self.open_files[tid][fd].outfile+suf, 'a') as fh:
+                        s = ''.join(map(chr,stripped))+'\n'
+                        self.lgr.debug('traceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
+                        fh.write(s)
+                        if self.dataWatch is not None:
+                            prefix = 'FD:%d' % fd
+                            self.dataWatch.markLog(s, prefix)
                 
 
     def markLogs(self, dataWatch):
