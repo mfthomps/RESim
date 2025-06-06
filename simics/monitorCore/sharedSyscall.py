@@ -31,6 +31,7 @@ import allWrite
 import syscall
 import resimUtils
 import winCallExit
+import re
 from resimHaps import *
 '''
 Handle returns to user space from system calls.  May result in call_params matching.  NOTE: stop actions (stop_action) for 
@@ -586,7 +587,8 @@ class SharedSyscall():
                         if exit_info.origin_reset:
                             self.lgr.debug('sharedSyscall found origin reset, do it')
                             SIM_run_alone(self.stopAlone, None)
-                self.checkStringMatch(exit_info, byte_array, tid)
+                for call_param in exit_info.call_params:
+                    self.checkStringMatch(call_param, exit_info, byte_array, callname, tid)
             else:
                 self.lgr.debug('sharedSyscall recvmsg no msghdr, assume return from syscall we already handled')
                 exit_info.matched_param = None
@@ -854,16 +856,27 @@ class SharedSyscall():
                 for call_param in exit_info.call_params:
                     if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
                         dmod = call_param.match_param
-                        self.lgr.debug('sharedSyscall open, dmod kind %s' % dmod.kind)
+                        if not dmod.commMatch(comm):
+                            continue
+                        #self.lgr.debug('sharedSyscall open, dmod kind %s' % dmod.kind)
                         if dmod.kind == 'open_replace':
-                            self.lgr.debug('sharedSyscall open, setting return FD to 99')
-                            self.top.writeRegValue('syscall_ret', 99, alone=True)
+                            mod = call_param.match_param
+                            mod_match = mod.getMatch() 
+                            self.lgr.debug('sharedSyscall is dmod %s, mod.getMatch is %s fname %s' % (dmod.path, mod_match, exit_info.fname))
+                            match = None 
+                            try:
+                                match = re.search(mod_match, exit_info.fname, re.M|re.I)
+                            except:
+                                self.lgr.error('sharedSyscall re search on %s failed' % mod_match)
+                                return False
+                            if match is None:
+                               continue
+                            forced_fd = dmod.setOpen(exit_info.fname, exit_info.flags, tid) 
+                            self.lgr.debug('sharedSyscall open, dmod %s setting return FD to %d for fname %s' % (dmod.path, forced_fd, exit_info.fname))
+                            self.top.writeRegValue('syscall_ret', forced_fd, alone=True)
                             if self.cpu.architecture == 'ppc32':
                                 self.top.writeRegValue('cr', 0x40000002, alone=True)
-      
-                            dmod.setFD(99)
-                            dmod.setTid(tid)
-                            trace_msg = trace_msg+('file: %s DMOD! forced return FD of 99 \n' % (exit_info.fname))
+                            trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
                         exit_info.matched_param = None
             for call_param in exit_info.call_params:
                 if type(call_param.match_param) is str:
@@ -891,21 +904,34 @@ class SharedSyscall():
                 if eax is None:
                     return
             if eax < 0: 
+                # look for dmod param whose match_param.fd is our fd
                 for call_param in exit_info.call_params:
-                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod' and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
-                        self.lgr.debug('sharedSyscall read Dmod FD and tid match')     
-                        becomes = call_param.match_param.getBecomes()
-                        length = call_param.match_param.getWas()
-                        length = int(length, 16)
-                        if length == 0:
+                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                        dmod = call_param.match_param
+                        if not dmod.commMatch(comm):
+                            continue
+                        if dmod.kind != 'open_replace':
+                            continue
+                        has_fd_open = dmod.hasFDOpen(tid, exit_info.old_fd)
+                        if has_fd_open:
+                            self.lgr.debug('sharedSyscall read Dmod FD and tid match')     
+                            becomes = dmod.readOpenReplace(tid, exit_info.old_fd, exit_info.count)
                             length = len(becomes)
-                        self.mem_utils.writeString(self.cpu, exit_info.retval_addr, becomes)
-                        self.top.writeRegValue('syscall_ret', length, alone=True)
-                        if self.cpu.architecture == 'ppc32':
-                            self.top.writeRegValue('cr', 0x40000002, alone=True)
-                        eax = length
-                        trace_msg = trace_msg+('FD: %d forced return val to %d\n' % (exit_info.old_fd, length))
-                        break
+                            if length > 0:
+                                if type(becomes) is str:
+                                    self.mem_utils.writeString(self.cpu, exit_info.retval_addr, becomes)
+                                else:
+                                    self.mem_utils.writeBytes(self.cpu, exit_info.retval_addr, becomes)
+                                self.top.writeRegValue('syscall_ret', length, alone=True)
+                                if self.cpu.architecture == 'ppc32':
+                                    self.top.writeRegValue('cr', 0x40000002, alone=True)
+                                for call_param in exit_info.call_params:
+                                    self.lgr.debug('sharedSyscall dmod open_replace read, look at call_param %s' % call_param.name)
+                                    if self.checkStringMatch(call_param, exit_info, becomes, callname, tid):
+                                        break
+                            eax = length
+                            trace_msg = trace_msg+('FD: %d forced return val to %d\n' % (exit_info.old_fd, length))
+                            break
 
             if eax >= 0 and exit_info.retval_addr is not None:
 
@@ -920,6 +946,7 @@ class SharedSyscall():
                         self.traceFiles.read(tid, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
+
                 self.lgr.debug('sharedSyscall return from read fd %d' % exit_info.old_fd)
                 trace_msg = trace_msg+('FD: %d returned length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (exit_info.old_fd, 
                               eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
@@ -935,18 +962,8 @@ class SharedSyscall():
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
                     for call_param in exit_info.call_params:
-
-                        self.lgr.debug('syscall read look at call_param %s' % call_param.name)
-                        if type(call_param.match_param) is str:
-                            self.lgr.debug('syscall read match param for tid:%s is string, check match' % tid)
-                            if byte_array is not None:
-                                if resimUtils.isPrintable(byte_array):
-                                    s = ''.join(map(chr,byte_array))
-                                    if call_param.match_param in s:
-                                       exit_info.matched_param = call_param 
-                                       self.lgr.debug('syscall read match param for tid:%s is matching string' % tid)
-
-                        elif call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                        self.lgr.debug('sharedSyscall read look at call_param %s' % call_param.name)
+                        if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
                             self.lgr.debug('sharedSyscall %s read check dmod %s count %d' % (self.cell_name, dmod.getPath(), eax))
                             if dmod is not None and not dmod.commMatch(comm): 
@@ -978,6 +995,8 @@ class SharedSyscall():
                                     print('%s performed' % dmod.getPath())
                                 if call_param.break_simulation:
                                     SIM_break_simulation('dmod break simulation')
+                        elif call_param.name.startswith('runToR') and self.checkStringMatch(call_param, exit_info, byte_array, callname, tid):
+                            self.lgr.debug('sharedSyscall read found string match')
                 
 
             elif exit_info.old_fd is not None:
@@ -1009,23 +1028,40 @@ class SharedSyscall():
                         self.lgr.debug('sharedSyscall call param NOT HANDLED type of param %s' % (type(exit_info.matched_param.match_param)))
                     if self.all_write:
                         self.allWrite.write(comm, tid, exit_info.old_fd, s)
-            elif exit_info.old_fd == 99:
-                self.lgr.debug('sharedSyscall write failed FD 99, dmod? count %d' % exit_info.count)
-                max_len = min(exit_info.count, 1000)
-                byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
-                if byte_array is not None:
-                    s = resimUtils.getHexDump(byte_array[:max_len])
-                    self.lgr.debug('sharedSyscall wanted to write: %s' % s)
-                    if s == 'none':
-                        self.top.writeRegValue('syscall_ret', 0, alone=True)
-                        self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0' % (s))
-                    else:
-                        self.top.writeRegValue('syscall_ret', exit_info.count, alone=True)
-                        self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0x%x' % (s, exit_info.count))
-                    if self.cpu.architecture == 'ppc32':
-                        self.top.writeRegValue('cr', 0x40000002, alone=True)
-                    self.lgr.debug('sharedSyscall modified return value')
-                    trace_msg = trace_msg+(" forced return of count %d\n" % exit_info.count)
+            elif eax < 0: 
+                dmod = None
+                self.lgr.debug('sharedSyscall write failed, see if it is dmod')
+                for call_param in exit_info.call_params:
+                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod': 
+                        has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
+                        if has_fd_open:
+                            dmod = call_param.match_param
+                            break
+                if dmod is not None:
+                    self.lgr.debug('sharedSyscall write failed, dmod? count %d' % exit_info.count)
+                    max_len = min(exit_info.count, 10000)
+                    max_str_len = min(max_len, 1000)
+                    byte_array = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+                    if byte_array is not None:
+                        dmod.writeOpenReplace(tid, exit_info.old_fd, byte_array)
+                        s = resimUtils.getHexDump(byte_array[:max_str_len])
+                        self.lgr.debug('sharedSyscall wanted to write: %s' % s)
+                        forced_count = exit_info.count
+                        if s == 'none':
+                            self.top.writeRegValue('syscall_ret', 0, alone=True)
+                            self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0' % (s))
+                            forced_count = 0
+                        else:
+                            self.top.writeRegValue('syscall_ret', exit_info.count, alone=True)
+                            self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0x%x' % (s, exit_info.count))
+                        if self.cpu.architecture == 'ppc32':
+                            self.top.writeRegValue('cr', 0x40000002, alone=True)
+                        self.lgr.debug('sharedSyscall modified return value')
+                        trace_msg = trace_msg+(" would write %s forced return of count %d\n" % (s, forced_count))
+                        for call_param in exit_info.call_params:
+                            self.lgr.debug('sharedSyscall dmod open_replace write, look at call_param %s' % call_param.name)
+                            if self.checkStringMatch(call_param, exit_info, byte_array, callname, tid):
+                                break
  
             else:
                 trace_msg = trace_msg+('FD: %d exception %d\n' % (exit_info.old_fd, eax))
@@ -1036,7 +1072,8 @@ class SharedSyscall():
                 add_msg, byte_tuple = self.getIOV(eax, exit_info)
                 trace_msg = trace_msg + add_msg
                 #if callname == 'writev':
-                self.checkStringMatch(exit_info, bytearray(byte_tuple), tid)
+                for call_param in exit_info.call_params:
+                    self.checkStringMatch(call_param, exit_info, bytes(byte_tuple), callname, tid)
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
@@ -1051,23 +1088,31 @@ class SharedSyscall():
 
             else:
                 for call_param in exit_info.call_params:
-                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod' \
-                            and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
-                        self.lgr.debug('sharedSyscall lseek Dmod FD and tid match, set return value to 0, tbd extend?')     
-                        self.top.writeRegValue('syscall_ret', 0, alone=True)
-                        if self.cpu.architecture == 'ppc32':
-                            self.top.writeRegValue('cr', 0x40000002, alone=True)
-                        trace_msg = trace_msg+('DMOD! FD: %d forced return to 0\n' % (exit_info.old_fd))
+                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                        has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
+                        if has_fd_open:
+                            self.lgr.debug('sharedSyscall lseek Dmod FD and tid match, set return value to 0, tbd extend?')     
+                            self.top.writeRegValue('syscall_ret', 0, alone=True)
+                            if self.cpu.architecture == 'ppc32':
+                                self.top.writeRegValue('cr', 0x40000002, alone=True)
+                            trace_msg = trace_msg+('DMOD! FD: %d forced return to 0\n' % (exit_info.old_fd))
 
         elif callname == 'ioctl':
             if exit_info.retval_addr is not None:
                 self.lgr.debug('sharedSyscall ioctl has retval_addr 0x%x' % exit_info.retval_addr)
-                if eax < 0 and exit_info.old_fd == 99:
-                    self.lgr.debug('sharedSyscall ioctl error return from FD 99 %d' % eax)
-                    self.top.writeRegValue('syscall_ret', 0, alone=True)
-                    if self.cpu.architecture == 'ppc32':
-                        self.top.writeRegValue('cr', 0x40000002, alone=True)
-                    trace_msg = trace_msg+('FD: %d DMOD changed retval to 0, cmd: 0x%x retval_addr: 0x%x \n' % (exit_info.old_fd, exit_info.cmd, exit_info.retval_addr))
+                if eax < 0: 
+                    self.lgr.debug('sharedSyscall ioctl error return %d' % eax)
+                    trace_msg = trace_msg+('FD: %d cmd: 0x%x retval_addr: 0x%x exception: %d\n' % (exit_info.old_fd, exit_info.cmd, exit_info.retval_addr, eax))
+                    for call_param in exit_info.call_params:
+                        if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                            has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
+                            if has_fd_open:
+                                self.lgr.debug('sharedSyscall lseek Dmod FD and tid match, set return value to 0, tbd extend?')     
+                                self.top.writeRegValue('syscall_ret', 0, alone=True)
+                                if self.cpu.architecture == 'ppc32':
+                                    self.top.writeRegValue('cr', 0x40000002, alone=True)
+                                trace_msg = trace_msg+('DMOD changed retval to 0\n' % (exit_info.old_fd, exit_info.cmd, exit_info.retval_addr))
+                                break
                     self.lgr.debug(trace_msg)
             
                 elif exit_info.cmd == 0x720:
@@ -1146,16 +1191,19 @@ class SharedSyscall():
                     self.traceFiles.close(exit_info.old_fd)
                 if exit_info.matched_param is not None:
                     self.dataWatch.close(exit_info.old_fd)
-            for call_param in exit_info.call_params:
-                if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod' \
-                                and call_param.match_param.tid == tid and exit_info.old_fd == call_param.match_param.fd:
-                    self.lgr.debug('sharedSyscall close Dmod FD and tid match, set return value to 0')     
-                    self.top.writeRegValue('syscall_ret', 0, alone=True)
-                    if self.cpu.architecture == 'ppc32':
-                        self.top.writeRegValue('cr', 0x40000002, alone=True)
-                    trace_msg = err_trace_msg+('DMOD!, FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
-                    got_msg = True
-                    call_param.match_param.resetOpen()
+            elif eax < 0:
+                for call_param in exit_info.call_params:
+                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                        has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
+                        if not has_fd_open or call_param.match_param.kind != 'open_replace':
+                            continue
+                        self.lgr.debug('sharedSyscall close Dmod %s FD %d and tid match, set return value to 0' % (call_param.match_param.path, exit_info.old_fd))
+                        self.top.writeRegValue('syscall_ret', 0, alone=True)
+                        if self.cpu.architecture == 'ppc32':
+                            self.top.writeRegValue('cr', 0x40000002, alone=True)
+                        trace_msg = err_trace_msg+('DMOD!, FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
+                        got_msg = True
+                        call_param.match_param.resetOpen(tid, exit_info.old_fd)
             if not got_msg:
                 trace_msg = err_trace_msg+('FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
             
@@ -1352,12 +1400,13 @@ class SharedSyscall():
                     for call_param in exit_info.call_params:
                         if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
                             dmod = call_param.match_param
-                            if dmod.kind == 'syscall' and dmod.operation == callname:
+                            if dmod.commMatch(comm) and dmod.kind == 'syscall' and dmod.operation == callname:
                                 self.lgr.debug('sharedSyscall %s, setting return value to 0' % callname)
                                 self.top.writeRegValue('syscall_ret', 0, alone=True)
                                 if self.cpu.architecture == 'ppc32':
                                     self.top.writeRegValue('cr', 0x40000002, alone=True)
                                 did_dmod = True
+                                dmod.rename(exit_info.fname, exit_info.fname2)
                 if not did_dmod:
                     trace_msg = err_trace_msg+'failed code: 0x%x cycle:0x%x\n' % (eax, self.cpu.cycles)
                 else:
@@ -1382,6 +1431,13 @@ class SharedSyscall():
                             fix_pid = int(call_param.match_param.getMatch())
                             self.lgr.debug('sharedSyscall %s, setting return value to %d' % (callname, fix_pid))
                             self.top.writeRegValue('syscall_ret', fix_pid, alone=True)
+        elif callname == 'fork':
+            if eax == 0:
+                trace_msg = trace_msg+' code:0x0 from child'
+            elif eax > 0:
+                trace_msg = trace_msg+' from parent, new tid:%d' % eax
+            else:
+                trace_msg = trace_msg+' ??? ' 
 
         else:
             trace_msg = trace_msg+('code: 0x%x\n' % (ueax))
@@ -1454,18 +1510,6 @@ class SharedSyscall():
         else:
             exit_info.matched_param = None
         return wait_for_count
-
-    def checkStringMatch(self, exit_info, byte_array, tid):
-        for call_param in exit_info.call_params:
-            if type(call_param.match_param) is str:
-                self.lgr.debug('sharedSyscall checkStringMatch match param for tid:%s is string, check match' % tid)
-                bmatch = call_param.match_param.encode()
-                if bmatch in byte_array:
-                    exit_info.matched_param = call_param 
-                    self.lgr.debug('sharedSyscall checkStringMatch match param for tid:%s is matching string' % tid)
-                else:
-                    exit_info.matched_param = None
-                break
 
     def startAllWrite(self):
         self.all_write = True
@@ -1613,3 +1657,23 @@ class SharedSyscall():
         trace_msg = trace_msg+'\n'
         return trace_msg, full_byte_tuple
 
+    def checkStringMatch(self, call_param, exit_info, byte_array, callname, tid):
+        retval = False
+        if type(call_param.match_param) is str:
+            self.lgr.debug('sharedSyscall checkStringMatch %s match param for tid:%s is string, check match' % (callname, tid))
+            if byte_array is not None:
+                if resimUtils.isPrintable(byte_array):
+                    #s = ''.join(map(chr,byte_array))
+                    s = resimUtils.getHexDump(byte_array)
+                    match = None 
+                    self.lgr.debug('sharedSyscall checkStringMatch find <%s> in %s' % (call_param.match_param, s))
+                    try:
+                        match = re.search(call_param.match_param, s, re.M|re.I)
+                    except:
+                        self.lgr.error('sharedSyscall checkStringMatch %s re search on %s failed' % (callname, mod_match))
+                        return False
+                    if match is not None:
+                       exit_info.matched_param = call_param 
+                       self.lgr.debug('sharedSyscall checkStringMatch %s match param for tid:%s is matching string' % (callname, tid))
+                       retval = True
+        return retval
