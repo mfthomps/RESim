@@ -950,7 +950,8 @@ class GenMonitor():
                                                self.run_from_snap, self.comp_dict[cell_name], self.lgr)
 
             self.page_callbacks[cell_name] = pageCallbacks.PageCallbacks(self, cpu, self.mem_utils[cell_name], self.lgr)
-            self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], self.lgr)
+            self.dmod_mgr[cell_name] = dmodMgr.DmodMgr(self, self.comp_dict[cell_name], cell_name, self.run_from_snap, self.syscallManager[cell_name], 
+                                  self.context_manager[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.skip_to_mgr[cell_name] = skipToMgr.SkipToMgr(self.reverse_mgr[cell_name], cpu, self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
@@ -1016,6 +1017,14 @@ class GenMonitor():
                     return
                 self.lgr.debug('snapInit for cell %s, now call to finishInit' % cell_name)
                 self.finishInit(cell_name)
+                # see if context manager needs to make some callbacks due the current process being scheduled
+                cpu, comm, tid = self.task_utils[cell_name].curThread() 
+                proc_rec = self.task_utils[cell_name].getCurProcRec()
+                prog = self.traceProcs[cell_name].getProg(tid)
+                self.lgr.debug('snapInit for cell %s, call checkFirstSchedule for tid:%s (%s) rec: 0x%x prog: %s' % (cell_name, tid, comm, proc_rec, prog))
+                if prog is not None:
+                     comm = os.path.basename(prog) 
+                self.context_manager[cell_name].checkFirstSchedule(proc_rec, tid, comm, first=True)
 
  
     def doInit(self):
@@ -2898,11 +2907,11 @@ class GenMonitor():
         if self.target not in self.trace_all:
             self.traceAll()
 
-    def traceFD(self, fd, raw=False, web=False):
+    def traceFD(self, fd, raw=False, web=False, all=False):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
         self.lgr.debug('traceFD %d target is %s' % (fd, self.target))
         outfile = 'logs/output-fd-%d.log' % fd
-        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web)
+        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web, all=all)
 
     def exceptHap(self, cpu, one, exception_number):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -3011,6 +3020,7 @@ class GenMonitor():
                             ''' TBD rather crude determination of context.  Assuming if debugging, then all from pickle should be resim context. '''
                             #self.trace_all[target].setExits(exit_info_list, context_override = context)
                             self.trace_all[target].setExits(frames, context_override = context)
+                    
     
                 self.lgr.debug('traceAll, call to setExits %d frames context %s' % (len(frames), context))
                 self.trace_all[target].setExits(frames, context_override=context)
@@ -3595,48 +3605,13 @@ class GenMonitor():
         self.runTo(call, call_params, name='connect')
 
     def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False):
-        retval = True
-        if not os.path.isfile(dfile):
-            print('No file found at %s' % dfile)
-            return False
-        if cell_name is None:
-            cell_name = self.target
-        mod = dmod.Dmod(self, dfile, self.mem_utils[cell_name], cell_name, self.lgr, comm=comm)
-        operation = mod.getOperation()
-        call_params = syscall.CallParams(dfile, operation, mod, break_simulation=break_simulation)        
         if cell_name is None:
             cell_name = self.target
             run = True
         else:
             run = False
-        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, cell_name, operation))
-        name = 'dmod-%s' % operation
-        if operation == 'open':
-           op_set = ['open', 'read','close','lseek','_llseek']
-           self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
-        else:
-           op_set = [operation]
-        comm_running = False
-        comms_not_running = []
-        comm_list = mod.getComm()
-        for mod_comm in comm_list:
-            tids = self.task_utils[self.target].getTidsForComm(mod_comm)
-            if len(tids) == 0:
-                self.lgr.debug('runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
-                comms_not_running.append(mod_comm)
-            else:
-                self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
-                comm_running = True
-                break
-        if comm_running or len(comm_list) == 0: 
-            self.lgr.debug('runToDmod, at least one comm running (or not comm specified), call runTo')
-            self.runTo(op_set, call_params, cell_name=cell_name, run=run, background=background, name=name, all_contexts=True)
-        else:
-            self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
-            mod.setCommCallback(op_set, call_params)
-            for mod_comm in comms_not_running:
-                self.context_manager[self.target].callWhenFirstScheduled(mod_comm, mod.scheduled)
-        return retval
+        self.dmod_mgr[cell_name].runToDmod(dfile, run=run, background=False, comm=None, break_simulation=False)
+
 
     def runToWrite(self, substring):
         call_params = syscall.CallParams('runToWrite', 'write', substring, break_simulation=True)        
