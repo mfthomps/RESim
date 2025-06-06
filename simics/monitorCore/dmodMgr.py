@@ -1,5 +1,9 @@
 import os
 import pickle
+import shutil
+import syscall
+import dmod
+import fdMgr
 '''
  * This software was created by United States Government employees
  * and may not be copyrighted.
@@ -28,15 +32,22 @@ import pickle
     Manage dynamic modifiers, read replaces and such.
 '''
 class DmodMgr():
-    def __init__(self, top, comp_dict, cell_name, run_from_snap, syscallManager, lgr):
+    def __init__(self, top, comp_dict, cell_name, run_from_snap, syscallManager, context_manager, mem_utils, task_utils, lgr):
         self.top = top
         self.comp_dict = comp_dict
         self.cell_name = cell_name
         self.run_from_snap = run_from_snap
         self.syscallManager = syscallManager
+        self.context_manager = context_manager
+        self.mem_utils = mem_utils
+        self.task_utils = task_utils
         self.lgr = lgr
         self.loaded_dmods = []
         self.removed_dmods = []
+        self.fd_mgr = fdMgr.FDMgr(self.lgr)
+        # for maintaining parallel file system, e.g. for /sys and /var/run
+        self.path_prefix = None
+        self.setupFileSystem()
         self.handleDmods()
 
     def handleDmods(self):
@@ -48,7 +59,6 @@ class DmodMgr():
         self.lgr.debug('dmodMgr handleDmods cell %s' % self.cell_name)
         if 'DMOD' in self.comp_dict:
             already_loaded = []
-            legacy = False
             
             if self.run_from_snap is not None:
 
@@ -56,61 +66,24 @@ class DmodMgr():
                 if os.path.isfile(dmod_file):
                     dmod_dict = pickle.load( open(dmod_file, 'rb') )
                     # previously loaded, so do not load again (unless in snapshot)
-                    if 'removed_dmods' in dmod_dict:
-                        self.removed_dmods = dmod_dict['removed_dmods']
-                        self.lgr.debug('dmodMgr handleDmods loaded removed_dmods from pickle %s' % (str(self.removed_dmods)))
-                    else:
-                        legacy = True
-                        # TBD this is broken nonsense. remove it after old snapshots wither
-                        self.loaded_dmods = dmod_dict['loaded_dmods']
-                        self.lgr.debug('dmodMgr loading legacy pickle %s %d previously loaded dmods' % (dmod_file, len(self.loaded_dmods)))
-                        for dmod_path in dmod_dict['paths']:
-                            if dmod_path not in self.loaded_dmods:
-                                self.loaded_dmods.append(dmod_path)
-                else:
-                    legacy = True
-                    dmod_file = os.path.join('./', self.run_from_snap, 'dmod.pickle')
-                    if os.path.isfile(dmod_file):
-                        self.lgr.debug('dmodMgr loading double legacy pickle %s' % dmod_file)
-                        dmod_dict = pickle.load( open(dmod_file, 'rb') )
-                        if self.cell_name in dmod_dict:
-                            for dmod_path in dmod_dict[self.cell_name]:
-                                already_loaded.append(dmod_path)
-                                if dmod_path not in self.loaded_dmods:
-                                    self.loaded_dmods.append(dmod_path)
-                        else:
-                            self.lgr.error('dmodMgr failed to find pickle.  nothing at legacy %s' % dmod_file)
-                            self.top.quit()
+                    self.removed_dmods = dmod_dict['removed_dmods']
+                    self.lgr.debug('dmodMgr handleDmods loaded removed_dmods from pickle %s' % (str(self.removed_dmods)))
             self.top.is_monitor_running.setRunning(False)
             dlist = self.comp_dict['DMOD'].split(';')
             for dmod in dlist:
                 dmod = dmod.strip()
                 if len(dmod) == 0:
                     continue
-                if legacy:
-                    self.lgr.debug('dmodMgr legacy now load any dmods from ini that were not either in snapshot or previously loaded.  %d previous loads' % len(self.loaded_dmods))
-                    if dmod not in already_loaded and dmod not in self.loaded_dmods:
-                        if self.run_from_snap is not None:
-                            self.lgr.debug('dmodMgr handleMods, got dmod not in snapshot: %s' % dmod)
-                        self.loaded_dmods.append(dmod)
-                        if self.top.runToDmod(dmod, cell_name=self.cell_name):
-                            self.lgr.debug('dmodMgr Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
-                            print('Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
-                        else:
-                            self.lgr.debug('dmodMgr Dmod is missing, cannot continue.')
-                            print('Dmod is missing, cannot continue.')
-                            self.top.quit()
-                else:
-                    self.lgr.debug('dmodMgr target: %s now load any dmods from ini that were not removed, this dmod %s.' % (self.cell_name, dmod))
-                    if dmod not in self.removed_dmods:
-                        self.loaded_dmods.append(dmod)
-                        if self.top.runToDmod(dmod, cell_name=self.cell_name):
-                            self.lgr.debug('dmodMgr Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
-                            print('Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
-                        else:
-                            self.lgr.debug('dmodMgr Dmod is missing, cannot continue.')
-                            print('Dmod is missing, cannot continue.')
-                            self.top.quit()
+                self.lgr.debug('dmodMgr target: %s now load any dmods from ini that were not removed, this dmod %s.' % (self.cell_name, dmod))
+                if dmod not in self.removed_dmods:
+                    self.loaded_dmods.append(dmod)
+                    if self.runToDmod(dmod):
+                        self.lgr.debug('dmodMgr Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
+                        print('Dmod %s pending for cell %s, need to run forward' % (dmod, self.cell_name))
+                    else:
+                        self.lgr.debug('dmodMgr Dmod is missing, cannot continue.')
+                        print('Dmod is missing, cannot continue.')
+                        self.top.quit()
 
             self.lgr.debug('dmodMgr cell %s done loading dmods from ini.  %d total loaded dmods (includes previous)' % (self.cell_name, len(self.loaded_dmods)))
 
@@ -146,6 +119,7 @@ class DmodMgr():
         dmod_pickle['removed_dmods'] = self.removed_dmods
         self.lgr.debug('dmodMgr pickleIt cell %s saved %d removed dmods' % (self.cell_name, len(self.removed_dmods)))
         pickle.dump(dmod_pickle, open(dmod_file, "wb"))
+        self.pickleFileSystem(name) 
 
     def rmDmod(self, path):
         self.lgr.debug('dmodMgr rmDmod cell %s path %s' % (self.cell_name, path))
@@ -155,3 +129,60 @@ class DmodMgr():
         self.lgr.debug('dmodMgr rmAllDmods cell %s' % (self.cell_name))
         for path in self.loaded_dmods:
             self.rmDmod(path)
+
+    def runToDmod(self, dfile, run=False, background=False, comm=None, break_simulation=False):
+        retval = True
+        if not os.path.isfile(dfile):
+            print('No file found at %s' % dfile)
+            return False
+        mod = dmod.Dmod(self.top, dfile, self.mem_utils, self.cell_name, comm, self.run_from_snap, self.fd_mgr, self.path_prefix, self.lgr)
+        operation = mod.getOperation()
+        call_params = syscall.CallParams(dfile, operation, mod, break_simulation=break_simulation)        
+        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, self.cell_name, operation))
+        name = 'dmod-%s' % operation
+        if operation == 'open':
+           op_set = ['open', 'read','write','close','lseek','_llseek']
+           self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
+        else:
+           op_set = [operation]
+        comm_running = False
+        comms_not_running = []
+        comm_list = mod.getComm()
+        for mod_comm in comm_list:
+            tids = self.task_utils.getTidsForComm(mod_comm)
+            if len(tids) == 0:
+                self.lgr.debug('runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
+                comms_not_running.append(mod_comm)
+            else:
+                self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
+                comm_running = True
+                break
+        if comm_running or len(comm_list) == 0: 
+            self.lgr.debug('runToDmod, at least one comm running (or not comm specified), call runTo')
+            self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True)
+        else:
+            self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
+            mod.setCommCallback(op_set, call_params)
+            for mod_comm in comms_not_running:
+                self.context_manager.callWhenFirstScheduled(mod_comm, mod.scheduled)
+        return retval
+
+    def setupFileSystem(self):
+        self.path_prefix = './dmod_files'
+        if os.path.isdir(self.path_prefix):
+            shutil.rmtree(self.path_prefix)
+        if self.run_from_snap is not None:
+            snap_path_prefix = '%s/%s/dmod_files' % (self.run_from_snap, self.cell_name)
+            if os.path.isdir(snap_path_prefix):
+                #os.makedirs(self.path_prefix, exist_ok=True)
+                wtf = shutil.copytree(snap_path_prefix, './dmod_files')
+                self.lgr.debug('dmodMgr setupFileSystem copy tree went to %s' % wtf)
+
+    def pickleFileSystem(self, snapname):
+        if os.path.isdir(self.path_prefix):
+            snap_path_prefix = '%s/%s/dmod_files' % (snapname, self.cell_name)
+            wtf = shutil.copytree(self.path_prefix, snap_path_prefix)
+            self.lgr.debug('dmodMgr pickleFileSystem copied %s to %s wtf:%s' % (self.path_prefix, snap_path_prefix, wtf))
+        else:
+            self.lgr.debug('dmodMgr pickleFileSystem no files at %s' % self.path_prefix)
+         
