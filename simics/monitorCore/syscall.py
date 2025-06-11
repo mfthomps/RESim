@@ -31,7 +31,7 @@ import magic
     is scheduled.
     Will get parameters from registers:
 x86:32
-Syscall #	Param 1	Param 2	Param 3	Param 4	Param 5	Param 6
+eyscall #	Param 1	Param 2	Param 3	Param 4	Param 5	Param 6
 eax		ebx	ecx	edx	esi	edi	ebp
 Return value
 eax
@@ -361,6 +361,7 @@ class ExitInfo():
         self.fname = None
         self.fname2 = None
         self.fname_addr = None
+        self.fname2_addr = None
         self.retval_addr = None
         self.cmd = None
         self.flags = None
@@ -1604,8 +1605,8 @@ class Syscall():
         exit_info = ExitInfo(self, cpu, tid, callnum, callname, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
-        self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
-            str(self.cpu.current_context), self.cpu.cycles))
+        #self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
+        #     str(self.cpu.current_context), self.cpu.cycles))
 
         do_stop_from_call = False
         # Optimization to see if call parameters exclude this sytem call
@@ -1614,7 +1615,7 @@ class Syscall():
             got_one = False
             bail_if_not_got = False
             for call_param in self.call_params:
-                self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
+                #self.lgr.debug('syscallParse call_param.name: %s' % call_param.name)
                 if call_param.match_param.__class__.__name__ == 'TidFilter':
                     if tid != call_param.match_param.tid:
                         #self.lgr.debug('syscall syscallParse, tid filter did not match')
@@ -1679,24 +1680,30 @@ class Syscall():
                             self.finish_hap_page[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.fnamePage, exit_info, self.finish_break[tid])
                         
                 #SIM_break_simulation('fname is none...')
-            elif exit_info.fname is not None:
+            #elif exit_info.fname is not None:
+            if True:
                 #self.lgr.debug('syscallParse got fname %s has %d call_params, ida_msg is %s' % (exit_info.fname, len(self.call_params), ida_msg))
                 for call_param in self.call_params:
                     #self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
-                         mod = call_param.match_param
-                         #self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
-                         #if mod.fname_addr is None:
-                         mod_match = mod.getMatch() 
-                         match = None 
-                         try:
-                             match = re.search(mod_match, exit_info.fname, re.M|re.I)
-                         except:
-                             self.lgr.error('syscallParse re search on %s failed' % mod_match)
-                             return False
-                         if match is not None:
-                             self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
-                             exit_info.call_params.append(call_param)
+                         if not call_param.match_param.commMatch(comm): 
+                             continue
+                         exit_info.call_params.append(call_param)
+                         # Would be optimization.  Must wait until return from call to make sure fname is read
+                         # 
+                         #mod = call_param.match_param
+                         ##self.lgr.debug('is dmod, mod.getMatch is %s' % mod.getMatch())
+                         ##if mod.fname_addr is None:
+                         #mod_match = mod.getMatch() 
+                         #match = None 
+                         #try:
+                         #    match = re.search(mod_match, exit_info.fname, re.M|re.I)
+                         #except:
+                         #    self.lgr.error('syscallParse re search on %s failed' % mod_match)
+                         #    return False
+                         #if match is not None:
+                         #    self.lgr.debug('syscallParse, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
+                         #    exit_info.call_params.append(call_param)
                     elif type(call_param.match_param) is str and (call_param.subcall is None or call_param.subcall.startswith('open') and (call_param.proc is None or call_param.proc == self.comm_cache[tid])):
                         if exit_info.fname is None:
                             self.lgr.debug('syscall open, found potential match_param %s' % call_param.match_param)
@@ -1732,6 +1739,11 @@ class Syscall():
                 self.lgr.debug('syscallParse, creat tid:%s filename not yet here... set break at 0x%x ' % (tid, exit_info.fname_addr))
                 self.finish_break[tid] = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Read, exit_info.fname_addr, 1, 0)
                 self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseOpen, exit_info, self.finish_break[tid])
+
+        elif callname == 'mknod':        
+            exit_info.fname_addr = frame['param1']
+            exit_info.mode = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info, exit_info)
@@ -2033,8 +2045,11 @@ class Syscall():
                     max_len = min(count, 1024)
                     byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
                     if byte_tuple is not None:
+                        self.lgr.debug('write has byte tuple...')
                         if resimUtils.isPrintable(byte_tuple):
                             s = ''.join(map(chr,byte_tuple))
+                            #self.lgr.debug('write is printable s is %s' % s)
+                            #self.lgr.debug('check for %s' % call_param.match_param)
                             if call_param.match_param in s:
                                 addParam(exit_info, call_param)
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
@@ -2269,13 +2284,14 @@ class Syscall():
         elif callname.startswith('stat'):
             fname_addr = frame['param1']
             retval_addr = frame['param2']
-            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
             exit_info.retval_addr = retval_addr
             exit_info.fname_addr = fname_addr
-            if fname is None:
+            if exit_info.fname is None:
                 ida_msg = '%s tid:%s (%s) path: not yet mapped? return buffer: 0x%x' % (callname, tid, comm, retval_addr) 
             else:
-                ida_msg = '%s tid:%s (%s) path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, fname_addr, fname, retval_addr)
+                ida_msg = '%s tid:%s (%s) path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, fname_addr, exit_info.fname, retval_addr)
+            self.checkDmod('stat64', exit_info, comm)
             #SIM_break_simulation(ida_msg)
             #return
         elif callname.startswith('fstat'):
@@ -2375,10 +2391,10 @@ class Syscall():
         elif callname in ['rename']:
             exit_info.fname_addr = frame['param1']
             exit_info.fname = frame['param1'] = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
-            addr2 = frame['param2']
-            exit_info.fname2 = self.mem_utils.readString(self.cpu, addr2, 256)
+            exit_info.fname2_addr = frame['param2']
+            exit_info.fname2 = self.mem_utils.readString(self.cpu, exit_info.fname2_addr, 256)
             ida_msg = '%s %s to %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, exit_info.fname2, tid, comm, self.cpu.cycles)
-            self.lgr.debug(ida_msg)
+            self.lgr.debug('syscall parseSyscall'+ida_msg)
             self.checkDmod('rename', exit_info, comm)
         elif callname in ['getpid']:
             self.checkDmod('getpid', exit_info, comm)
@@ -2429,21 +2445,24 @@ class Syscall():
                          continue
                      if not call_param.match_param.commMatch(comm):
                          continue
+                     # No point doing an re.search here since we may not have the file name yet.
+                     # Doing so would maybe be possible as some optimization...
+                     exit_info.call_params.append(call_param)
                      #self.lgr.debug('syscall checkDmod is dmod, mod.getMatch is %s' % mod.getMatch())
-                     if mod.operation != 'getpid': 
-                         mod_match = mod.getMatch() 
-                         match = None 
-                         try:
-                             match = re.search(mod_match, exit_info.fname, re.M|re.I)
-                         except:
-                             self.lgr.error('syscall checkDmod re search on %s failed' % mod_match)
-                             return False
-                         if match is not None:
-                             self.lgr.debug('syscall checkDmod, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
-                             exit_info.call_params.append(call_param)
-                     else:
-                         self.lgr.debug('syscall checkDmod getpid will return %s' % mod.getMatch())
-                         exit_info.call_params.append(call_param)
+                     #if mod.operation != 'getpid': 
+                     #    mod_match = mod.getMatch() 
+                     #    match = None 
+                     #    try:
+                     #        match = re.search(mod_match, exit_info.fname, re.M|re.I)
+                     #    except:
+                     #        self.lgr.error('syscall checkDmod re search on %s failed' % mod_match)
+                     #        return False
+                     #    if match is not None:
+                     #        self.lgr.debug('syscall checkDmod, dmod match on fname %s, cell %s' % (exit_info.fname, self.cell_name))
+                     #        exit_info.call_params.append(call_param)
+                     #else:
+                     #    self.lgr.debug('syscall checkDmod getpid will return %s' % mod.getMatch())
+                     #    exit_info.call_params.append(call_param)
 
     def rmStopHap(self, hap):
        RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
