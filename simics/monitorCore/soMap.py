@@ -229,14 +229,18 @@ class SOMap():
         tid = self.getSOTid(tid)
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
-            #self.lgr.debug('SOMap isCode, regot tid after getSOTid failed, tid:%s missing from so_file_map' % tid)
+            self.lgr.debug('SOMap isCode, regot tid after getSOTid failed, tid:%s missing from so_file_map' % tid)
             return False
         if tid in self.prog_start and self.prog_start[tid] is not None and address >= self.prog_start[tid] and address <= self.prog_end[tid]:
             prog = self.text_prog[tid]
             prog_info = self.prog_info[prog]
             #self.lgr.debug('soMap isCode prog %s info %s' % (prog, prog_info.toString()))
             code_start = None
-            code_start = self.prog_start[tid] + prog_info.plt_offset    
+            # TBD this is messed up.  Just use entry point address
+            if self.cpu.architecture == 'ppc32':
+                code_start = self.prog_start[tid] 
+            else:
+                code_start = self.prog_start[tid] + prog_info.plt_offset    
             #self.lgr.debug('soMap isCode addr 0x%x code_start 0x%x' % (address, code_start))
             if address > code_start:
                 return True
@@ -245,7 +249,7 @@ class SOMap():
         if tid not in self.so_file_map:
             tid = self.task_utils.getCurrentThreadLeaderTid()
         if tid not in self.so_file_map:
-            #self.lgr.debug('SOMap isCode, tid:%s missing from so_file_map' % tid)
+            self.lgr.debug('SOMap isCode, tid:%s missing from so_file_map' % tid)
             return False
         for load_info in self.so_file_map[tid]:
             start = load_info.addr 
@@ -365,8 +369,10 @@ class SOMap():
                         self.prog_end[tid] = None
                     else:
                         load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                        self.lgr.debug('soMap addText text_offset 0x%x' % self.prog_info[prog].text_offset)
                         self.prog_end[tid] = self.prog_info[prog].text_end
                     self.prog_start[tid] = load_addr
+                    self.lgr.debug('soMap addText setting prog_start to 0x%x' % load_addr)
                     self.text_prog[tid] = prog
                     self.checkSOWatch(load_addr, prog)
                     #size = self.prog_info[prog].text_end - self.prog_start[tid]
