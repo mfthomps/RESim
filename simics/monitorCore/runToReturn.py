@@ -48,14 +48,17 @@ class RunToReturn():
 
     def setBreaks(self):
         self.lgr.debug('RunToReturn setBreaks eip 0x%x tid:%s' % (self.eip, self.tid))
-        if self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm') or self.cpu.architecture == 'ppc32':
             prefix = "bl"
         else:
             prefix = "call"
         call_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix=prefix)
         self.call_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.callHap, None, call_break, 'run_to_return_call')
 
-        prefix = 'ret'
+        if self.cpu.architecture == 'ppc32':
+            prefix = 'blr'
+        else:
+            prefix = 'ret'
         ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, 0, self.kernel_base, 0, prefix=prefix)
         self.ret_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.retHap, None, ret_break, 'run_to_return_ret')
 
