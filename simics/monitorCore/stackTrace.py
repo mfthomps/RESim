@@ -290,7 +290,7 @@ class StackTrace():
                     try:
                         instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
                     except OverflowError:
-                        self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
+                        #self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
                         return retval 
                     if instruct[1].startswith(self.callmn):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr)
@@ -301,7 +301,7 @@ class StackTrace():
                         #elif cur_fun is not None:
                         #    self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x call_instr 0x%x' % (fun_hex, fun, cur_fun, call_instr))
                         #    pass
-                        if fun_hex is not None and fun_hex == cur_fun:
+                        if (fun_hex is not None and fun_hex == cur_fun) or fun == fun_name:
                             if fun is not None:
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 self.lgr.debug('fun not none %s' % fun)
@@ -367,7 +367,7 @@ class StackTrace():
                     self.lgr.debug('isCallToMe cur_fun is None')
                 else:
                     self.lgr.debug('isCallToMe cur_fun == ret_to 0x%x' % cur_fun)
-        ''' Function is for ARM'''
+        ''' Function is for ARM & PPC'''
         return retval
 
     def tryGot(self, lr, eip, fun_hex):
@@ -398,8 +398,10 @@ class StackTrace():
                     retval = True
         return retval
 
-    def funMatch(self, fun1, fun2):
-        ''' ad hoc hacks to match 2 function signatures '''
+    def funMatch(self, fun1, fun2, ip_of_call_instruct, been_above_clib):
+        ''' ad hoc hacks to match 2 function signatures 
+            fun1 is the function named by the call instruction.
+        '''
         if fun1 is None or fun2 is None:
             self.lgr.debug('dataWatch funMatch called with fun of None')
             return False
@@ -457,6 +459,15 @@ class StackTrace():
             fun2_entry = self.fun_mgr.getFunEntry(fun2)
             if fun1_entry == fun2_entry:
                 retval = True
+        if not retval and not been_above_clib and self.soMap.isFunNotLibc(ip_of_call_instruct):
+            # look for match in existing libc stack frames
+            for frame in self.frames:
+                #self.lgr.debug('stackTrace funMatch check clib frame %s against call %s' % (frame.fun_name, fun1))
+                if frame.fun_name is not None:
+                    if fun1.endswith(frame.fun_name):
+                        #self.lgr.debug('stackTrace funMatch check clib frame MATCHED')
+                        retval = True
+                        break
         return retval
 
     def doX86(self):
@@ -962,10 +973,10 @@ class StackTrace():
             if prev_ip is not None:
                 # TBD need explaination of why we put the word back here that was subtracted in addFrame.
                 ptr = ptr + adjust_sp + self.word_size
-                #self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
-            #else:
-            #    self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
-            #    pass
+                self.lgr.debug('doTrace back from isCallToMe prev_ip set to 0x%x ptr adjusted by 0x%x now 0x%x' % (prev_ip, adjust_sp, ptr))
+            else:
+                self.lgr.debug('doTrace back from isCallToMe prev_ip None, must not be call to me')
+                pass
         
         only_module = False
         cur_fun = None
@@ -1262,21 +1273,21 @@ class StackTrace():
                         if fun_name is None and fun_hex is not None and self.top.isVxDKM(cpu=self.cpu):
                             fun_name = self.task_utils.getGlobalSym(fun_hex)
                         self.lgr.debug('stackTrace clean this up, got fun %s for ip_of_call_instruct 0x%x instruct %s cur_fun_name %s ptr 0x%x been_above_clib %r' % (fun_name, ip_of_call_instruct, instruct_str, cur_fun_name, ptr, been_above_clib))
-                        if prev_ip is not None:
-                            self.lgr.debug('stackTrace prev_ip 0x%x, cur_fun_name %s' % (prev_ip, cur_fun_name))
-                        else:
-                            self.lgr.debug('stackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
+                        #if prev_ip is not None:
+                        #    self.lgr.debug('stackTrace prev_ip 0x%x, cur_fun_name %s' % (prev_ip, cur_fun_name))
+                        #else:
+                        #    self.lgr.debug('stackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
                         if fun_name is not None:
                             if ((not self.top.isVxDKM(cpu=self.cpu) and (been_in_main or been_above_clib)) or only_module) and fun_name in dataWatch.mem_funs:
                                 #self.lgr.debug('stackTrace function %s is a dataWatch memsomething, but we were already in main or above clib, so bail on it' % fun_name)
                                 skip_this = True
 
                             if cur_fun_name is not None:
-                                if not hacked_bp and not self.funMatch(fun_name, cur_fun_name): 
+                                if not hacked_bp and not self.funMatch(fun_name, cur_fun_name, ip_of_call_instruct, been_above_clib): 
                                     if self.cpu.architecture.startswith('x86'):
 
                                         if prev_ip is not None and call_to is not None and self.fun_mgr.inFun(prev_ip, call_to, call_ip=ip_of_call_instruct):
-                                            self.lgr.debug('stackTrace candidate function %s does not match current function %s, BUT we think 0x%x is in the fun' % (fun_name, cur_fun_name, prev_ip))
+                                            #self.lgr.debug('stackTrace candidate x86 function %s does not match current function %s, BUT we think 0x%x is in the fun' % (fun_name, cur_fun_name, prev_ip))
                                             pass
                                         elif been_above_clib or call_to is None or not self.isJumpTable(call_to):
                                             bp = self.mem_utils.getRegValue(self.cpu, 'ebp')
