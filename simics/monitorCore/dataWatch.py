@@ -2102,6 +2102,10 @@ class DataWatch():
                 retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
                 retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
                 retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
+        elif self.cpu.architecture == 'ppc32':
+                retval1 = self.mem_utils.getRegValue(self.cpu, 'r3')
+                retval2 = self.mem_utils.getRegValue(self.cpu, 'r4')
+                retval3 = self.mem_utils.getRegValue(self.cpu, 'r5')
         elif self.top.isWindows(target=self.cell_name) and word_size == 8:
             retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
             retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
@@ -2506,6 +2510,7 @@ class DataWatch():
 
         elif self.mem_something.fun in ['strchr', 'strrchr']:
             self.mem_something.src, self.mem_something.the_chr, dumb = self.getCallParams(sp, word_size)
+            self.lgr.debug('gatherCallParams fun %s src 0x%x' % (self.mem_something.fun, self.mem_something.src))
             if self.mem_something.src is None:
                 self.lgr.error('got none for src cycle: 0x%x' % (self.mem_something.fun, self.cpu.cycles))
             # TBD had this for 8 byte words  A windows thing?
