@@ -577,7 +577,9 @@ class MemUtils():
         v = self.getUnsigned(v)
         if cpu.architecture == 'ppc32':
             cpl = getCPL(cpu)
-            if cpl == 1 and v >= self.getUnsigned(self.param.kernel_base):
+            #self.lgr.debug('memUtils ppc cpl %d' % cpl)
+            #if cpl == 1 and v >= self.getUnsigned(self.param.kernel_base):
+            if v >= self.getUnsigned(self.param.kernel_base):
                 retval = v - 0xc0000000
             else:
                 try:
