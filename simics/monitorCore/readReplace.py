@@ -57,7 +57,21 @@ class ReplaceEntry():
         self.addr = addr
         # value is a hexstring
         self.value = value
-        self.comm = comm
+        self.comm = None
+        self.comm_addr = None
+        if comm is not None:
+            if ':' in comm:
+                # TBD support relocatable code
+                self.comm, addr_string = comm.split(':')
+                try:
+                    self.comm_addr = int(addr_string, 16)
+                except:
+                    print('ERROR, bad comm:addr in %s' % fname)
+                    self.addr = None
+            else:
+                self.comm = comm
+        else:
+            self.comm = None
         self.lib_addr = lib_addr
         self.operation = operation
         self.image_base = None
@@ -126,6 +140,9 @@ class ReadReplace():
         self.lgr.debug('readReplace handleEntry addr 0x%x lib %s hexstring %s' % (addr, lib, hexstring))
         image_base = self.so_map.getImageBase(lib)
         replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr, operation, fname)
+        if replace_entry.addr is None:
+            self.lgr.error('readReplace handleEntry bad entry in %s' % fname)
+            self.top.quit()
         did_write = False
         mod_fname = self.getModFname(replace_entry)
         if os.path.isfile(mod_fname):
@@ -152,7 +169,6 @@ class ReadReplace():
                     else:
                         self.lgr.debug('readReplace handleEntry addr 0x%x not yet mapped' % addr)
         if not did_write:             
-            cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu) 
             if image_base is None:
                 # No process has loaded this image.  Set a callback for each load of the library
                 self.lgr.debug('readReplace handleEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
@@ -183,7 +199,7 @@ class ReadReplace():
         #if phys_addr is not None:
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(trace_info.lib, trace_info.lib_addr)
-        if phys_addr is None:
+        if phys_addr is None or phys_addr == 0:
             self.lgr.debug('readReplace getPhys got None, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=replace_entry.lib_addr, use_pid=pid)
             self.pending_pages[replace_entry.lib_addr] = replace_entry
@@ -196,7 +212,7 @@ class ReadReplace():
             access = Sim_Access_Execute
         else:
             access = Sim_Access_Read
-        self.lgr.debug('readReplace setBreak phys_addr 0x%x for %s' % (phys_addr, replace_entry.lib_addr))
+        self.lgr.debug('readReplace setBreak phys_addr 0x%x for %s cycle: 0x%x' % (phys_addr, replace_entry.lib_addr, self.cpu.cycles))
         breakpt = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, access, phys_addr, 1, 0)
         self.breakpoints[replace_entry.lib_addr] = breakpt
         hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.readHap, replace_entry, self.breakpoints[replace_entry.lib_addr])
@@ -219,12 +235,20 @@ class ReadReplace():
  
     def readHap(self, replace_entry, context, break_num, memory):
         if break_num not in self.breakmap:
-            self.lgr.error('readReplace syscallHap break %d not in breakmap' % break_num)
+            self.lgr.debug('readReplace readHap break %d not in breakmap' % break_num)
             return
         prog = self.getProg(break_num)
-        if replace_entry.comm is not None and prog != self.breakmap[break_num].comm:
-            self.lgr.debug('readReplace: syscallHap wrong process, expected %s got %s' % (self.breakmap[break_num].comm, prog))
+        eip = self.top.getEIP()
+        phys = memory.physical_address
+        if replace_entry.comm is not None and (prog != self.breakmap[break_num].comm or \
+                         self.breakmap[break_num].comm_addr is not None and self.breakmap[break_num].comm_addr != eip):
+            if prog != self.breakmap[break_num].comm:
+                self.lgr.debug('readReplace: readHap read phys: 0x%x wrong process, expected %s got %s cycles: 0x%x' % (phys, self.breakmap[break_num].comm, prog, self.cpu.cycles))
+            else:
+                self.lgr.debug('readReplace: readHap read phys: 0x%x correct process %s but eip 0x%x and wanted 0x%x cycle: 0x%x' % (phys, self.breakmap[break_num].comm, eip, self.breakmap[break_num].comm_addr, self.cpu.cycles))
+           
         else:
+            self.lgr.debug('readReplace: readHap GOT IT')
             bstring = binascii.unhexlify(bytes(self.breakmap[break_num].value.encode())) 
             if replace_entry.operation == 'code':
                 ins_addr = self.breakmap[break_num].linear_addr
@@ -248,8 +272,9 @@ class ReadReplace():
             #SIM_break_simulation('remove me')
             done = '%s:0x%x' % (self.breakmap[break_num].comm, self.breakmap[break_num].addr)
             self.done_list.append(done) 
-            #SIM_run_alone(self.rmHap, break_num)
-            SIM_run_alone(self.rmAllHap, None)
+            SIM_run_alone(self.rmHap, break_num)
+            del self.breakmap[break_num]
+            #SIM_run_alone(self.rmAllHap, None)
             mod_fname = self.getModFname(replace_entry)
             line = '%s:0x%x %s' % (prog, mod_addr, replace_entry.value)
             with open(mod_fname, 'w') as fh:
@@ -263,12 +288,12 @@ class ReadReplace():
         map_copy = list(self.breakmap.keys())
         for break_num in map_copy:
             self.rmHap(break_num)
+        self.breakmap = []
 
     def rmHap(self, break_num):
         if break_num in self.breakmap:
             RES_delete_breakpoint(break_num)
             RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.breakmap[break_num].hap)
-            del self.breakmap[break_num]
 
     def pickleit(self, name):
         done_file = os.path.join('./', name, self.cell_name, 'read_replace.pickle')
