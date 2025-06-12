@@ -390,7 +390,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
     if cpu.architecture == 'arm64':
         return findPageTableArmV8(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, kernel=kernel, do_log=do_log)
     if cpu.architecture == 'ppc32':
-        return pageUtilsPPC32.eaTora(cpu, addr)
+        return pageUtilsPPC32.findPageTable(cpu, addr, lgr)
     elif isIA32E(cpu):
         #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr, force_cr3=force_cr3) 
