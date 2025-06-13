@@ -1,0 +1,7 @@
+README for rebuilding Simics PPC QSP kernel.
+The buildall.sh script should perform a complete build,
+including pulling all necessary files.
+
+Run the script from the parent of the directory that is to
+contain the buildroot directory, e.g.,
+    $RESIM_DIR/simics/image_build/ppc_qsp/buildall.sh

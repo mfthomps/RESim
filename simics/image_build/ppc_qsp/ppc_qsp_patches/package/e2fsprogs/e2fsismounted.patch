@@ -1,0 +1,10 @@
+--- e2fsprogs_1.42.11/lib/ext2fs/ismounted.c	2022-10-10 15:41:24.784363746 +0000
++++ e2fsprogs_1.42.11/lib/ext2fs/ismounted.c.orig	2022-10-10 15:40:38.544363562 +0000
+@@ -41,6 +41,7 @@
+ 
+ #include "ext2_fs.h"
+ #include "ext2fs.h"
++#include <sys/sysmacros.h>
+ 
+ /*
+  * Check to see if a regular file is mounted.

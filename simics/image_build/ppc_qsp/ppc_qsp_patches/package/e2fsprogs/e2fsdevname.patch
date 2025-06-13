@@ -1,0 +1,10 @@
+--- e2fsprogs_1.42.11/lib/blkid/devname.c	2022-10-10 15:33:21.476361827 +0000
++++ e2fsprogs_1.42.11/lib/blkid/devname.c.orig	2022-10-10 15:31:39.248361421 +0000
+@@ -35,6 +35,8 @@
+ #endif
+ #if HAVE_SYS_MKDEV_H
+ #include <sys/mkdev.h>
++#elif HAVE_SYS_SYSMACROS_H
++#include <sys/sysmacros.h>
+ #endif
+ #include <time.h>

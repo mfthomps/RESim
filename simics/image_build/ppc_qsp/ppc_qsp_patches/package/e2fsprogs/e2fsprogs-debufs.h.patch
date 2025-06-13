@@ -1,0 +1,13 @@
+--- e2fsprogs_1.42.11/debugfs/debugfs.h	2022-10-10 17:10:35.820384992 +0000
++++ e2fsprogs_1.42.11/debugfs/debugfs.h.orig	2022-10-10 16:58:50.812382193 +0000
+@@ -119,8 +119,9 @@
+ 
+ /* unused.c */
+ extern void do_dump_unused(int argc, char **argv);
+-
+ /* debugfs.c */
++extern ss_request_table *extra_cmds;
++extern const char *debug_prog_name;
+ extern void internal_dump_inode(FILE *, const char *, ext2_ino_t,
+ 				struct ext2_inode *, int);
+

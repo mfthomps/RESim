@@ -1,0 +1,10 @@
+--- package/Config.in.orig	2022-12-01 23:32:50.551968195 +0000
++++ package/Config.in	2022-12-01 23:33:22.959968324 +0000
+@@ -158,7 +158,6 @@
+ 	source "package/mtools/Config.in"
+ 	source "package/nfs-utils/Config.in"
+ 	source "package/ntfs-3g/Config.in"
+-	source "package/simicsfs/Config.in"
+ 	source "package/squashfs/Config.in"
+ 	source "package/sshfs/Config.in"
+ 	source "package/sunxi-tools/Config.in"
