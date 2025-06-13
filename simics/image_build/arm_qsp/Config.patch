@@ -8,10 +8,3 @@
  	source "package/squashfs/Config.in"
  	source "package/sshfs/Config.in"
  	source "package/sunxi-tools/Config.in"
-@@ -1205,6 +1204,5 @@
- endmenu
- 
- 
--	source "package/simics-agent/Config.in"
- 
- endmenu

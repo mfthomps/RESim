@@ -4,4 +4,4 @@ including pulling all necessary files.
 
 Run the script from the parent of the directory that is to
 contain the buildroot directory, e.g.,
-    $RESIM_DIR/image_build/arm-qsp/buildall.sh
+    $RESIM_DIR/simics/image_build/arm_qsp/buildall.sh

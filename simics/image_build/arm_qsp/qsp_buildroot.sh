@@ -5,7 +5,8 @@ TARGET_ARCH=arm
 
 # checkout buildroot branch and apply patch
 if [ ! -d buildroot ]; then
-    git clone git://git.buildroot.net/buildroot
+    #git clone git://git.buildroot.net/buildroot
+    git clone git://git.busybox.net/buildroot
 fi
 
 cd buildroot
@@ -29,9 +30,11 @@ if [ ! -e configs/qsp_${TARGET_ARCH}_linux_defconfig ]; then
         echo Patch $PATCH missing
         exit 1
     fi
-    git apply -p1 ../$PATCH
+    #cd package
+    git apply -p1 $PATCH
     chmod 755 board/windriver/qsp_fs_post.sh
     echo Patched with $PATCH
+    #cd ..
 fi
  
 make qsp_${TARGET_ARCH}_linux_defconfig

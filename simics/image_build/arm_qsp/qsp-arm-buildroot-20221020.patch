@@ -31,9 +31,9 @@ diff -pNur buildroot.2014.08/board/windriver/qsp-arm/linux-0001-simicsfs-Add-sim
 + source "fs/ufs/Kconfig"
 + source "fs/exofs/Kconfig"
 ++source "fs/simicsfs/Kconfig"
-+ 
++
 + endif # MISC_FILESYSTEMS
-+ 
++
 +diff --git a/fs/Makefile b/fs/Makefile
 +index 2fb9779..a9b00d8 100644
 +--- a/fs/Makefile
@@ -230,16 +230,16 @@ diff -pNur buildroot.2014.08/board/windriver/qsp-arm/linux-0001-simicsfs-Add-sim
 ++        uint gid;       /* group id */
 ++        uint link;      /* number of references */
 ++        uint size_hi;   /* file size */
-++        uint size_lo;   
+++        uint size_lo;
 ++        uint atime_hi;  /* access time */
-++        uint atime_lo;  
+++        uint atime_lo;
 ++        uint mtime_hi;  /* modification time */
-++        uint mtime_lo;  
+++        uint mtime_lo;
 ++        uint ctime_hi;  /* creation time */
-++        uint ctime_lo;  
+++        uint ctime_lo;
 ++        uint blksize;   /* fundamental block size */
 ++        uint blocks_hi; /* blocks allocated */
-++        uint blocks_lo; 
+++        uint blocks_lo;
 ++};
 ++
 ++struct hf_setattr_data {
@@ -267,7 +267,7 @@ diff -pNur buildroot.2014.08/board/windriver/qsp-arm/linux-0001-simicsfs-Add-sim
 ++        uint set_uid;
 ++        uint set_gid;
 ++        uint atime_hi;  /* access time */
-++        uint atime_lo;  
+++        uint atime_lo;
 ++        uint mtime_hi;  /* modification time */
 ++        uint mtime_lo;
 ++        uint mode;
@@ -841,7 +841,7 @@ diff -pNur buildroot.2014.08/board/windriver/qsp-arm/linux-0001-simicsfs-Add-sim
 ++                oflag = HF_FREAD;
 ++                break;
 ++        case O_RDWR:
-++                oflag = HF_FREAD; 
+++                oflag = HF_FREAD;
 ++                /* fallthrough */
 ++        case O_WRONLY:
 ++                oflag |= HF_FWRITE;
@@ -21349,10 +21349,3 @@ diff -pNur buildroot.2014.08/configs/qsp_arm_linux_defconfig buildroot/configs/q
 +# BR2_PACKAGE_INPUT_TOOLS_EVTEST is not set
 +# BR2_BFIN_FDPIC is not set
 +# BR2_BFIN_FLAT is not set
-diff -pNur buildroot.2014.08/package/Config.in buildroot/package/Config.in
---- buildroot.2014.08/package/Config.in	2014-09-01 19:20:56.000000000 +0800
-+++ buildroot/package/Config.in	2014-12-09 13:13:16.853722249 +0800
-@@ -1204,4 +1204,7 @@ if BR2_PACKAGE_BUSYBOX_SHOW_OTHERS
- endif
- endmenu
- 
