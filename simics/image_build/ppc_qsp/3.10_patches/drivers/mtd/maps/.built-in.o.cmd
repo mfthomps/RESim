@@ -1,0 +1,1 @@
+cmd_drivers/mtd/maps/built-in.o :=  /home/mike/qsp_buildroot/buildroot/output/host/usr/bin/ccache /home/mike/qsp_buildroot/buildroot/output/host/usr/bin/arm-none-linux-gnueabi-ld -EL   -r -o drivers/mtd/maps/built-in.o drivers/mtd/maps/physmap.o drivers/mtd/maps/physmap_of.o 

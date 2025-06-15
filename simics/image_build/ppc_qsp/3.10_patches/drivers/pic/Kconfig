@@ -1,0 +1,16 @@
+menuconfig PIC_SUPPORT
+	bool "Support for programmable interrupt controllers"
+	help
+	  Say Y to enable Linux PIC support.  This allows control of supported
+	  programmable intterupt controllers. Note that these are normally
+	  enabled by the platform/machine support.
+
+config QSP_PIC
+	boolean "QSP Programmable interrupt controller"
+	default y if QSP
+	depends on PIC_SUPPORT
+	help
+	  QSP Programmable interrupt controller
+	  This driver is required if you want to use any QSP style boards.
+
+	  Say Y here to compile support for QSP PIC into the kernel.

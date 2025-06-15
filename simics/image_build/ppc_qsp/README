@@ -5,3 +5,7 @@ including pulling all necessary files.
 Run the script from the parent of the directory that is to
 contain the buildroot directory, e.g.,
     $RESIM_DIR/simics/image_build/ppc_qsp/buildall.sh
+
+
+This should build the kernel, uboot and the device tree.
+Simics agent and FS were taken out of the kernel build.

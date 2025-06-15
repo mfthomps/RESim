@@ -1,4 +1,4 @@
-LINUX_VERSION=3.4
+LINUX_VERSION=3.10
 BUILDROOT_VERSION=2014.08
 TARGET_ARCH=ppc
 
@@ -6,7 +6,8 @@ TARGET_ARCH=ppc
 # checkout buildroot branch and apply patch
 if [ ! -d buildroot ]; then
     #git clone git://git.buildroot.net/buildroot
-    git clone git://git.busybox.net/buildroot
+    #git clone git://git.busybox.net/buildroot
+    git clone https://gitlab.com/buildroot.org/buildroot.git/
 fi
 
 cd buildroot
@@ -36,6 +37,8 @@ if [ ! -e configs/qsp_${TARGET_ARCH}_linux_defconfig ]; then
     echo Patched with $PATCH
     #cd ..
 fi
+mkdir -p board/windriver/qsp-ppc
+cp ../qsp_linux_simics_3_10.patch board/windriver/qsp-ppc/linux-0031-combined.patch
  
 make qsp_${TARGET_ARCH}_linux_defconfig
 ../dopatches.sh
