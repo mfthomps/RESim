@@ -110,13 +110,14 @@ class StackTrace():
         self.max_bytes = max_bytes 
         if cpu.architecture in ['arm', 'arm64']:
             self.callmn = 'bl'
-            self.jmpmn = 'bx'
-        if cpu.architecture in ['ppc32']:
+        elif cpu.architecture == 'ppc32':
             self.callmn = 'bl'
-            self.jmpmn = 'b'
         else:
             self.callmn = 'call'
-            self.jmpmn = 'jmp'
+
+        if tid == 0:
+            lgr.error('stackTrace asked to trace tid 0?')
+            return
 
         if tid == 0:
             lgr.error('stackTrace asked to trace tid 0?')
@@ -134,6 +135,33 @@ class StackTrace():
         else:
             self.doTrace()
 
+    def isCall(self, instruct):
+        mn = self.decode.getMn(instruct)
+        retval = False
+        if self.cpu.architecture in ['arm', 'arm64']:
+            if mn.startswith('bl'):
+                retval = True
+        elif self.cpu.architecture in ['ppc32']:
+            if mn == 'bl':
+                retval = True
+        else:
+            if mn == 'call':
+                retval = True
+        return retval
+
+    def isJmp(self, mn):
+        mn = self.decode.getMn(instruct)
+        retval = False
+        if self.cpu.architecture in ['arm', 'arm64']:
+            if mn in ['b', 'bx']:
+                retval = True
+        elif self.cpu.architecture in ['ppc32']:
+            if mn == 'b':
+                retval = True
+        else:
+            if mn.startswith('j'):
+                retval = True
+        return retval
             
     def followCall(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
@@ -146,7 +174,8 @@ class StackTrace():
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
-            if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+            #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
+            if self.isCall(instruct[1]):
                 #self.lgr.debug('followCall arm eip 0x%x' % eip)
                 retval = eip
         else:
@@ -165,7 +194,7 @@ class StackTrace():
                     instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
                     #self.lgr.debug('stackTrace followCall count %d eip 0x%x instruct %s len %d' % (count, eip, instruct[1], instruct[0]))
                     # TBD hack.  Fix this by getting bb start and walking forward? only if we have the analysis. if not then rely on hack. 
-                    if instruct[1].startswith(self.callmn) and 'call far ' not in instruct[1] and (eip + instruct[0]) == return_to:
+                    if self.isCall(instruct[1]) and 'call far ' not in instruct[1] and (eip + instruct[0]) == return_to:
                         parts = instruct[1].split()
                         if len(parts) == 2:
                             if self.decode.isReg(parts[1]):
@@ -275,6 +304,7 @@ class StackTrace():
             ''' TBD also for 64-bit? '''
             call_instr = lr-4
             #self.lgr.debug("isCallToMe lr was 0x%x call_instr 0x%x  eip 0x%x" % (lr, call_instr, eip))
+            fun_name = None
             if self.fun_mgr is not None:
                 cur_fun = self.fun_mgr.getFun(eip)
                 if cur_fun is not None:
@@ -292,7 +322,7 @@ class StackTrace():
                     except OverflowError:
                         #self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
                         return retval 
-                    if instruct[1].startswith(self.callmn):
+                    if self.isCall(instruct[1]):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr)
                         op2, op1 = self.decode.getOperands(instruct[1])
                         #if fun_hex is None:
@@ -309,13 +339,13 @@ class StackTrace():
                                 new_instruct = '%s   0x%x' % (self.callmn, fun_hex)
                             frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, fun_hex, fun, lr, None, msg='isCallToMe fun_hex == cur_fun')
                             retval = (lr, adjust_sp)
-                        elif cur_fun is not None and fun_hex is None and (instruct[1].startswith('blr') or (instruct[1].startswith('call') and self.decode.isReg(op1))):
+                        elif cur_fun is not None and fun_hex is None and (not sefl.cpu.architecture == 'pp32' and (instruct[1].startswith('blr')) or (instruct[1].startswith('call') and self.decode.isReg(op1))):
                             blr_fun_name = self.fun_mgr.getBlr(call_instr) 
                             if blr_fun_name is not None:
                                if blr_fun_name != fun_name:
-                                   self.lgr.debug('stackTrace isCallToMe is a blr funs do not match, fun_name is %s, set fun_of_ip of previous frame to %s' % (fun_name, blr_fun_name))
+                                   #self.lgr.debug('stackTrace isCallToMe is a blr funs do not match, fun_name is %s, set fun_of_ip of previous frame to %s' % (fun_name, blr_fun_name))
                                    self.frames[-1].fun_of_ip = blr_fun_name 
-                               self.lgr.debug('stackTrace isCallToMe is a blr, getBlr got %s, was in fun is 0x%x (name %s)' % (blr_fun_name, cur_fun, fun_name)) 
+                               #self.lgr.debug('stackTrace isCallToMe is a blr, getBlr got %s, was in fun is 0x%x (name %s)' % (blr_fun_name, cur_fun, fun_name)) 
                                cur_fun = self.fun_mgr.getFunEntry(blr_fun_name)
                                new_instruct = '%s (%s)' % (instruct[1], blr_fun_name)
                                frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, cur_fun, blr_fun_name, lr, None, msg='isCallToMe is blr')
@@ -852,14 +882,13 @@ class StackTrace():
             retval = True
         return retval
  
-
     def getCallTo(self, call_ip): 
         fun_name = None
         call_to = None
         instruct = SIM_disassemble_address(self.cpu, call_ip, 1, 0)[1]
         op2, op1 = self.decode.getOperands(instruct)
-        self.lgr.debug('stackTrace getCallTo call_ip 0x%x instruct %s op1 %s' % (call_ip, instruct, op1))
-        if instruct.startswith('blr') or (instruct.startswith('call') and self.decode.isReg(op1)):
+        #self.lgr.debug('stackTrace getCallTo call_ip 0x%x instruct %s op1 %s' % (call_ip, instruct, op1))
+        if (not self.cpu.architecture == 'ppc32' and instruct.startswith('blr')) or (instruct.startswith('call') and self.decode.isReg(op1)):
             #self.lgr.debug('stackTrace getCallTo is blr call_ip 0x%x %s' % (call_ip, instruct))
             fun_name = self.fun_mgr.getBlr(call_ip) 
             #self.lgr.debug('stackTrace getCallTo fun name from getblr is %s' % fun_name)
@@ -1006,7 +1035,7 @@ class StackTrace():
                 elif cur_fun_name.startswith('_'):
                     cur_fun_name = cur_fun_name[1:]
                 prev_ip = eip
-                #self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
+                self.lgr.debug('doTrace starting eip: 0x%x is in fun %s 0x%x forcing prev_ip to eip' % (eip, cur_fun_name, cur_fun))
 
         ''' See if BP register should be used to find frames and/or adjust sp '''
         hacked_bp = False
@@ -1131,6 +1160,7 @@ class StackTrace():
                 cur_fun = self.frames[-1].fun_addr_of_ip 
                 cur_fun_name = self.frames[-1].fun_of_ip 
                 prev_ip = self.frames[-1].ip
+                #self.lgr.debug('stackTrace after mindTheGap prev_ip 0x%x' % prev_ip)
             else:
                 self.lgr.error('stackTrace after mindTheGap no stack frames?')
                 SIM_break_simulation('remove this')
@@ -1267,7 +1297,7 @@ class StackTrace():
                     fun_addr = None 
                     fun_name = None 
                     instruct_str = instruct[1]
-                    if instruct_str.startswith(self.callmn):
+                    if self.isCall(instruct_str):
                         # fun_hex and fun are who we think we might be calling
                         fun_hex, fun_name = self.fun_mgr.getFunNameFromInstruction(instruct, ip_of_call_instruct)
                         if fun_name is None and fun_hex is not None and self.top.isVxDKM(cpu=self.cpu):
@@ -1592,7 +1622,7 @@ class StackTrace():
         frame = self.FrameEntry(called_from_address, fname, instruction, stack_ptr, fun_addr=called_to_address, fun_name=called_fun_name, 
                                ret_addr=return_addr, ret_to_addr=addr_of_ret_addr)
         adjust_sp = self.addFrame(frame)
-        #self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x called_fun_name %s frame: %s' % (msg, adjust_sp, called_fun_name, frame.dumpString()))
+        self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x called_fun_name %s frame: %s' % (msg, adjust_sp, called_fun_name, frame.dumpString()))
         return frame, adjust_sp
 
     def addFrame(self, frame):
@@ -1613,7 +1643,7 @@ class StackTrace():
                 frame.fun_addr_of_ip = self.fun_mgr.getFun(frame.ip)
                 #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
 
-                if frame.instruct.startswith(self.callmn):
+                if self.isCall(frame.instruct):
                     parts = frame.instruct.split()
                     call_addr = None
                     if len(parts) == 2:
