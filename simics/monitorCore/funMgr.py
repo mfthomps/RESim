@@ -154,6 +154,25 @@ class FunMgr():
                    if f1 == f2 and f_from != f1:
                        #self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
                        retval = True
+                   elif self.cpu.architecture == 'ppc32':
+                       prev_ip_fun_addr = self.getFun(prev_ip)
+                       ip = call_to
+                       for i in range(50):
+                           instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+                           if instruct[1].startswith('blr'):
+                               break
+                           if instruct[1].startswith('b '):
+                               try:
+                                   addr = int(instruct[1].split()[1], 16)
+                               except:
+                                   break
+                               if addr == prev_ip_fun_addr:
+                                   retval = True
+                                   self.lgr.debug('funMgr inFun ppc fu b to function')
+                                   break 
+                           ip = ip + instruct[0]
+                           
+          
         return retval
 
     def funFromAddr(self, addr):
