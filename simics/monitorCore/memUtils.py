@@ -1193,10 +1193,17 @@ class MemUtils():
             reg_num = cpu.iface.int_register.get_number("r2")
             value = cpu.iface.int_register.read(reg_num)
             if value >= self.param.kernel_base:
-                self.lgr.debug('memUtils getCurrentTaskPPC32 in kernel code but r2 not in kernel space')
-                retval = value
+                phys = self.v2p(cpu, self.param.current_task)
+                value_at_current = self.getUnsigned(SIM_read_phys_memory(cpu, phys, 4))
+                if value == value_at_current:
+                    retval = value
+                else:
+                    self.lgr.debug('memUtils getCurrentTaskPPC32 in kernel code but r2 0x%x does not match current_task 0x%x read from 0x%x' % (value, value_at_current, self.param.current_task))
+                    retval = 0xdeadbeef
+            else:
+                self.lgr.debug('memUtils getCurrentTaskPPC32 in kernel code but r2 0x%x not in kernel space' % value)
         else:
-            self.lgr.debug('memUtils getCurrentTaskPPC32 TBD from user space or interrupt handler')
+            self.lgr.debug('memUtils getCurrentTaskPPC32 TBD from user space or interrupt handler pc: 0x%x' % pc)
         return retval
 
     def getCurrentTaskARM64(self, cpu):
