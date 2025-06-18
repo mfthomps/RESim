@@ -43,6 +43,7 @@ import decodePPC32
 import pageUtils
 import reverseMgr
 import skipToMgr
+import ppcKernelParams
 import os
 
 import w7Params
@@ -117,15 +118,7 @@ class GetKernelParams():
             self.page_fault = 4
             self.data_abort = 1
         elif self.cpu.architecture == 'ppc32':
-            #self.param.current_task = 0xc07fe39c
-            self.param.current_task = 0xc07c239c
-            #self.current_task_phys = 0x7fe39c
-            self.current_task_phys = 0x7c239c
-            addr = self.param.current_task
             self.page_fault = 5
-            self.param.page_fault = 0x400
-            self.param.ppc32_entry = 0xc000f430
-            self.param.ppc32_exit = 0xc000f4e4
         else:
             self.page_fault = 14
       
@@ -192,6 +185,7 @@ class GetKernelParams():
 
         self.reverse_mgr = reverseMgr.ReverseMgr(conf, self.cpu, self.lgr, top=self)
         self.skip_to_mgr = skipToMgr.SkipToMgr(self.reverse_mgr, self.cpu, self.lgr)
+        self.ppc_kparams = ppcKernelParams.PPCKernelParams(self, self.cpu, self.cell, self.mem_utils, self.reverse_mgr, self.skip_to_mgr, self.lgr)
   
     def searchCurrentTaskAddr(self, cur_task):
         ''' Look for the Linux data addresses corresponding to the current_task symbol 
@@ -1437,10 +1431,7 @@ class GetKernelParams():
             self.continueAhead()
         
         elif self.cpu.architecture == 'ppc32':
-            #val = self.mem_utils.getUnsigned(-16386)
-            #val = val | 0x84cc
-            val = 0xc00084cc
-            self.param.syscall_jump = val
+            # already gotten from ppcKernelParams
             self.saveParam()
         else:
             if compat32:
@@ -1955,7 +1946,9 @@ class GetKernelParams():
         self.force = force
         self.only_64 = only_64
         cpl = memUtils.getCPL(self.cpu)
-        if cpl != 0:
+        if self.cpu.architecture == 'ppc32':
+            self.ppc_kparams.getParams()
+        elif cpl != 0:
             self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.startInKernel, True)
             SIM_continue(0)
             #print('not in kernel, please run forward until in kernel')
@@ -2174,6 +2167,16 @@ class GetKernelParams():
         else:
             self.lgr.debug('arm64 current_task phys at 0x%x' % self.current_task_phys)
             self.findSwapper()
+
+    def ppcParams(self, kernel_enter, kernel_exit, current_task, phys_addr, compute_jump):
+        self.param.current_task = current_task
+        self.current_task_phys = phys_addr
+        self.param.page_fault = 0x400
+        self.param.ppc32_entry = kernel_enter
+        self.param.ppc32_exit = kernel_exit
+        self.param.syscall_jump = compute_jump
+        print('think current_task is 0x%x phys: 0x%x' % (current_task, self.current_task_phys))
+        self.findSwapper()
 
 
 if __name__ == '__main__':
