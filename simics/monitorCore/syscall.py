@@ -1805,6 +1805,7 @@ class Syscall():
 
             flags = frame['param1']
             child_stack = frame['param2']
+            # HACK store child stack addr as fname_addr
             exit_info.fname_addr = child_stack
             ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
                 child_stack, frame['param3'], frame['param4'], frame['param5'])
@@ -2931,7 +2932,7 @@ class Syscall():
             if (killed or last_one or (exit_group and am_watching)) and self.debugging:
                 if self.top.hasProcHap():
                     ''' exit before we got to text section '''
-                    self.lgr.debug('syscall handleExit  exit of %d before we got to text section ' % tid)
+                    self.lgr.debug('syscall handleExit  exit of %s before we got to text section ' % tid)
                     SIM_run_alone(self.top.undoDebug, None)
                 self.lgr.debug('syscall handleExit exit or exit_group or tgkill tid:%s' % tid)
                 self.sharedSyscall.stopTrace()
