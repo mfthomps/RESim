@@ -133,7 +133,7 @@ class SyscallInstance():
                     if call in self.call_names:
                         self.call_names.remove(call)
                     else:
-                        self.lgr.error('syscallManager rmCallParam call %s not in call_names' % call)
+                        self.lgr.debug('syscallManager rmCallParam call %s not in call_names %s' % (call, str(self.call_names)))
         del self.param_call_list[call_param_name]
         return retval
 
