@@ -1041,6 +1041,7 @@ class GenMonitor():
     def initCells(self, dumb=None):
         done = False
         run_cycles = self.getBootCycleChunk()
+        hack_count = 0
         while not done:
             done = True
             for cell_name in self.cell_config.cell_context:
@@ -1079,7 +1080,15 @@ class GenMonitor():
                 self.lgr.debug('doInit cell %s get current task from mem_utils eip: 0x%x cpl: %d' % (cell_name, eip, cpl))
                 cur_task_rec = None
                 cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
-                if cur_task_rec is None or cur_task_rec == 0:
+                if cur_task_rec == 0xdeadbeef:
+                    self.lgr.debug('doInit cell hack count %d' % hack_count)
+                    if hack_count > 10:
+                        SIM_break_simulation('remove this')
+                        done = True
+                    else:
+                        hack_count = hack_count+1
+                        done = False
+                elif cur_task_rec is None or cur_task_rec == 0:
                     #print('Current task not yet defined, continue')
                     self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
                     done = False
@@ -1106,6 +1115,8 @@ class GenMonitor():
                         if swapper is None:
                             self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
                             done = False
+                            #SIM_break_simulation('remove this')
+                            #done = True
                         else: 
                             tasks = task_utils.getTaskStructs()
                             if len(tasks) == 1:
@@ -2414,6 +2425,7 @@ class GenMonitor():
             SIM_run_command('pselect %s' % cpu.name)
             self.context_manager[self.target].setIdaMessage('Stopped at debugger breakpoint?')
             retval = 'mailbox:0x%x' % eip
+            self.is_monitor_running.setRunning(False)
 
         elif not resim_status:
             if cpu is None:
@@ -3620,8 +3632,8 @@ class GenMonitor():
             call_list = ['WriteFile']
         else:
             call_list = ['write', 'writev']
-        self.runTo(call_list, call_params, name='write')
         self.lgr.debug('runToWrite to %s' % substring)
+        self.runTo(call_list, call_params, name='write')
 
     def runToOpen(self, substring, run=True):
         #if self.track_threads is not None and self.target in self.track_threads:
@@ -5111,7 +5123,10 @@ class GenMonitor():
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
-        if ptable_info.entry is not None:
+        if cpu.architecture == 'ppc32':
+            if ptable_info is not None:
+                print(ptable_info.valueString())
+        elif ptable_info.entry is not None:
             pei = pageUtils.PageEntryInfo(ptable_info.entry, cpu.architecture)
             if not quiet:
                 print('writable? %r' % pei.writable)
@@ -6031,6 +6046,7 @@ class GenMonitor():
         self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopStepN, None)
         cmd = 'c %d' % n
         SIM_run_alone(SIM_run_command, cmd)
+        self.lgr.debug('stepN ran command %s' % cmd)
 
     def getProgName(self, tid, target=None):
         if target is None:
