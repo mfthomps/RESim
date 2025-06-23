@@ -206,6 +206,7 @@ class DataWatch():
         self.stopped = False
         # TBD multithread?
         self.strtok_ptr = None
+        self.ignore_entry_cycle = None
 
     def resetState(self):
         self.lgr.debug('resetState')
@@ -1973,6 +1974,8 @@ class DataWatch():
     def memSomethingEntry(self, fun, an_object, the_breakpoint, memory):
         ''' HAP hit when a memsomething entry is hit (assumes break has been set based on previous data hit or 
             pickled fun_entries '''
+        if self.cpu.cycles == self.ignore_entry_cycle:
+            return
         eip = memory.logical_address
         if eip in self.skip_entries:
             return
@@ -2043,7 +2046,7 @@ class DataWatch():
         #    self.lgr.debug('memSomethingEntry, fun %s called from 0x%x, not main text' % (fun, ret_to))
         #    return
         self.lgr.debug('memSomethingEntry, sp 0x%x' % (sp))
-        if self.cpu.architecture not in ['arm', 'arm64']:
+        if self.cpu.architecture not in ['arm', 'arm64', 'ppc32']:
             ret_addr = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
             self.lgr.debug('memSomethingEntry, ret_addr 0x%x' % (ret_addr))
         elif self.mem_fun_entries[fun][eip].ret_addr_offset is not None:
@@ -2057,7 +2060,7 @@ class DataWatch():
                     self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x, but lr is 0x%x' % (addr_of_ret_addr, ret_addr, lr))
         else: 
             ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
-            self.lgr.debug('memSomthingEntry ARM ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
+            self.lgr.debug('memSomthingEntry ARM or ppc32 ret_addr_offset is None, use lr value of 0x%x' % ret_addr)
         self.mem_something = MemSomething(fun, eip, None, ret_addr, None, None, None, None, None, None)
         #                                     (fun, addr, ret_ip, src, dest, count, called_from_ip, op_type, length, start, ret_addr_addr=None, run=False, trans_size=None): 
 
@@ -2124,6 +2127,23 @@ class DataWatch():
             retval3 = self.mem_utils.readAppPtr(self.cpu, sp+2*word_size, size=word_size)
         return retval1, retval2, retval3
 
+    def skipIntoFun(self):
+        ''' skip forward at least 1 cycle to get to either the function entry point, or the link table call
+            If ppc32, many need to go forward after r3 adjust...'''
+        retval = True
+        next_cycle = self.cpu.cycles+1
+        if self.top.skipToCycle(next_cycle, cpu=self.cpu, disable=True):
+            if self.cpu.architecture == 'ppc32':
+                pc = self.top.getEIP(self.cpu)
+                instruct = self.top.disassembleAddress(self.cpu, pc)
+                if instruct[1].strip().startswith('addi'):
+                    next_cycle = self.cpu.cycles+1
+                    if not self.top.skipToCycle(next_cycle, cpu=self.cpu, disable=True):
+                        retval = False
+        else:
+            retval = False
+        return retval
+            
     def getMemParams(self, data_hit):
             ''' data_hit is true if a read hap led to this call.  otherwise we simply broke on entry to 
                 the memcpy-ish routine and came here via the memSomethingEntry hap, and we are running alone.
@@ -2138,12 +2158,14 @@ class DataWatch():
             dum_cpu, comm, tid = self.task_utils.curThread()
             word_size = self.top.wordSize(tid, target=self.cell_name)
             if data_hit:
-                next_instruct = self.cpu.cycles+1
-                status = SIM_simics_is_running() 
-                self.lgr.debug('dataWatch getMemParams, try skipToTest to get to 0x%x simics running? %r' % (next_instruct, status)) 
-                if not self.top.skipToCycle(next_instruct, cpu=self.cpu, disable=True):
-                    self.lgr.error('getMemParams, tried going forward, failed')
+                if not self.skipIntoFun(): 
+                    self.lgr.error('getMemParams, tried going forward into function, failed')
                     return
+                #status = SIM_simics_is_running() 
+                #self.lgr.debug('dataWatch getMemParams, try skipToTest to get to 0x%x simics running? %r' % (next_instruct, status)) 
+                #if not self.top.skipToCycle(next_instruct, cpu=self.cpu, disable=True):
+                #    self.lgr.error('getMemParams, tried going forward, failed')
+                #    return
                 eip = self.top.getEIP(self.cpu)
                 ''' TBD parse the va_list and look for sources so we can handle sprintf'''
                 fun = self.mem_something.fun
@@ -2277,6 +2299,7 @@ class DataWatch():
                 self.lgr.debug('getMemParams tid:%s (%s) eip: 0x%x fun %s set hap on ret_ip at 0x%x context %s hit: %r cycle: 0x%x Now run!' % (tid, comm, eip, 
                      self.mem_something.fun, self.mem_something.ret_ip, str(self.cpu.current_context), data_hit, self.cpu.cycles))
                 if data_hit:
+                    self.ignore_entry_cycle = self.cpu.cycles
                     SIM_run_command('c')
             else:
                 self.lgr.debug('dataWatch getMemParams skip fun.')
@@ -2966,7 +2989,7 @@ class DataWatch():
                     # TBD better way to know this is our stack frame 
                     sp = self.mem_utils.getRegValue(self.cpu, 'sp') - 0x10
                     if self.mem_something.ret_addr_addr is not None:
-                        self.lgr.debug('dataWatch dataWatch histCallStopHap cycle past latest.  sp is 0x%x ret_addr_addr 0x%x' % (sp, self.mem_something.ret_addr_addr))
+                        self.lgr.debug('dataWatch dataWatch hitCallStopHap cycle past latest.  sp is 0x%x ret_addr_addr 0x%x' % (sp, self.mem_something.ret_addr_addr))
                     if self.mem_something.ret_addr_addr is None or (self.top.isVxDKM(cpu=self.cpu) and sp < self.mem_something.ret_addr_addr):
                         self.lgr.debug('dataWatch hitCallStopHap stopped at 0x%x, prior to most recent watch mark having cycle: 0x%x, no ret_addr_addr or sp retval still good, so assume recent watch mark is a subfunction of the memsomething.  Remove the subfunction' % (self.cpu.cycles, latest_cycle))
                         self.watchMarks.rmLast(1)
