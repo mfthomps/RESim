@@ -281,6 +281,10 @@ class MemUtils():
             self.ppc32_regs.append(r)
         self.ppc32_regs.append('pc')
         self.ppc32_regs.append('lr')
+        self.ppc32_regs.append('xer')
+        self.ppc32_regs.append('ctr')
+        self.ppc32_regs.append('cr')
+        self.ppc32_regs.append('msr')
 
         self.regs = {}
         self.lgr.debug('memUtils init. cell %s word size %d  arch is %s' % (cell_name, word_size, arch))
@@ -1429,6 +1433,7 @@ class MemUtils():
             if len(sub) < 4:
                 self.lgr.error('writeString failed writing sub %s, len less than 4?' % (str(sub)))
                 continue
+            value = struct.unpack(">L", sub)[0]
             try:
                 if cpu.architecture in ['ppc32']:
                     value = struct.unpack(">L", sub)[0]
