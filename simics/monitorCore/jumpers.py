@@ -184,7 +184,7 @@ class Jumpers():
                         
         elif image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
-            self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
+            self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s prog %s' % (lib_addr, prog))
             self.so_map.addSOWatch(jump_rec.prog, self.libLoadCallback, name=lib_addr)
             self.pending_libs[lib_addr] = jump_rec
         elif self.top.isVxDKM(cpu=self.cpu):
@@ -259,7 +259,7 @@ class Jumpers():
         #if phys_addr is not None:
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(jump_rec.prog, jump_rec.lib_addr)
-        if phys_addr is None:
+        if phys_addr is None or phys_addr == 0:
             self.lgr.debug('jumper getPhys no phys for above, call pageCallback')
             self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr, use_pid=pid)
             self.pending_pages[jump_rec.lib_addr] = jump_rec
