@@ -955,6 +955,10 @@ class GenMonitor():
             self.skip_to_mgr[cell_name] = skipToMgr.SkipToMgr(self.reverse_mgr[cell_name], cpu, self.lgr)
 
             self.lgr.debug('finishInit is done for cell %s' % cell_name)
+
+            load_jumpers = self.getCompDict(cell_name, 'LOAD_JUMPERS')
+            if load_jumpers is not None and (load_jumpers.lower() == 'yes' or load_jumpers.lower() == 'true'):
+                self.loadJumpersTarget(cell_name)
             
 
     def getBootCycleChunk(self):
