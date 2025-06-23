@@ -320,7 +320,7 @@ class StackTrace():
                     try:
                         instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
                     except OverflowError:
-                        #self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
+                        self.lgr.debug('stackTrace isCallToMe could not get instruct from 0x%x' % call_instr)
                         return retval 
                     if self.isCall(instruct[1]):
                         fun_hex, fun = self.fun_mgr.getFunNameFromInstruction(instruct, call_instr)
@@ -391,14 +391,46 @@ class StackTrace():
                                 self.lgr.debug('stackTrace isCallToMe confused. fun_hex 0x%x cur_fun is None instruct %s' % (fun_hex, instruct[1]))
                             else:
                                 self.lgr.debug('stackTrace isCallToMe confused. fun_hex None cur_fun is None instruct %s' % (instruct[1]))
+                    elif self.cpu.architecture == 'ppc32' and instruct[1] == 'bctrl':
+                        retval = self.ppc32Ctrl(lr, cur_fun, fun_name, call_instr, eip, ptr)
                     else:
-                        self.lgr.debug('not a call %s' % (instruct[1]))
+                        self.lgr.debug('stackTrace isCallToMe not a call %s' % (instruct[1]))
                 elif cur_fun is None:
                     self.lgr.debug('isCallToMe cur_fun is None')
                 else:
                     self.lgr.debug('isCallToMe cur_fun == ret_to 0x%x' % cur_fun)
         ''' Function is for ARM & PPC'''
         return retval
+
+    def ppc32Ctrl(self, lr, cur_fun, cur_fun_name, call_instr, eip, ptr):
+        retval = None, None
+        ''' is a ppc32 ctrl instruction. get the reg value to see who we called '''
+        #self.lgr.debug('stackTrace ppc32Ctrl lr 0x%x cur_fun 0x%x cur_fun_name %s eip 0x%x' % (lr, cur_fun, cur_fun_name, eip))
+        reg_instruct = lr-8
+        instruct = SIM_disassemble_address(self.cpu, reg_instruct, 1, 0)
+        if not instruct[1].startswith('mtctr'):
+            self.lgr.error('stackTrace ppc32Ctrl expected mtctr, got %s.' % instruct[1])
+        else:
+            op = instruct[1].strip().split()[1] 
+            reg_value = self.decode.getValue(op, self.cpu)
+            #self.lgr.debug('stackTrace ppc32Ctrl reg %s value: 0x%x' % (op, reg_value))
+            called_pc = reg_value
+            for i in range(4):
+                called_instruct = SIM_disassemble_address(self.cpu, called_pc, 1, 0)
+                if called_instruct[1].startswith('b '):
+                    branch_to = int(called_instruct[1].strip().split()[1], 16)
+                    new_call_addr, fun_name = self.fun_mgr.getFunNameFromInstruction(called_instruct, called_pc)
+                    #self.lgr.debug('stackTrace ppc32Ctrl branch to 0x%x fun_name %s' % (new_call_addr, fun_name))
+                    if self.funMatch(fun_name, cur_fun_name, called_pc, False): 
+                        #self.lgr.debug('stackTrace ppc32Ctrl fun match')
+                        new_instruct = 'ctrl %s' % fun_name
+                        frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, branch_to, fun_name, lr, None, msg='isCallToMe ppc ctrl')
+                        retval = (lr, adjust_sp)
+                        break
+                called_pc = called_pc+4
+            
+        return retval
+        
 
     def tryGot(self, lr, eip, fun_hex):
         retval = False
@@ -483,6 +515,11 @@ class StackTrace():
         if not retval:
             if fun1 == 'strchr' and fun2 == 'strstr':
                 # well, true for Windows mvscrt.dll anyway
+                retval = True
+            elif fun1 == 'atoi' and fun2 == 'strtoul':
+                # true for ppc32
+                retval = True
+            elif fun1 == 'strcmp' and fun2 == 'strcoll':
                 retval = True
         if not retval:
             fun1_entry = self.fun_mgr.getFunEntry(fun1)
