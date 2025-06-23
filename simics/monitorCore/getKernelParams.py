@@ -648,7 +648,6 @@ class GetKernelParams():
         ''' look for what might be a real_parent and subsequent parent pointer fields that point to the
             given task.  if found, assume this is swaper and record those offsets.'''
         self.lgr.debug('isSwapper check task 0x%x ' % (task))
-        #SIM_break_simulation('remove me')
         real_parent_offset = self.isThisSwapper(task)
         if real_parent_offset is not None:
             self.lgr.debug('isSwapper (maybe) real_parent at 0x%x looks like swapper at 0x%x' % (real_parent_offset, task))
@@ -1167,8 +1166,6 @@ class GetKernelParams():
         SIM_delete_breakpoint(self.task_break)
         SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.task_hap)
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-        #print('remove this')
-        #return
         self.task_hap = None
         self.stop_hap = None
         count = 0
@@ -2173,7 +2170,12 @@ class GetKernelParams():
         self.current_task_phys = phys_addr
         self.param.page_fault = 0x400
         self.param.ppc32_entry = kernel_enter
-        self.param.ppc32_exit = kernel_exit
+        self.param.ppc32_ret = kernel_exit[0]
+        if len(kernel_exit) > 1:
+            self.param.ppc32_ret2 = kernel_exit[1]
+        if len(kernel_exit) > 2:
+            self.lgr.error('More than 2 kernel exits.  fix this')
+            return
         self.param.syscall_jump = compute_jump
         print('think current_task is 0x%x phys: 0x%x' % (current_task, self.current_task_phys))
         self.findSwapper()
