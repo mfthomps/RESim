@@ -80,6 +80,7 @@ class Kparams():
         self.arm_ret2 = None
         self.ppc32_entry = None
         self.ppc32_ret = None
+        self.ppc32_ret2 = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None
