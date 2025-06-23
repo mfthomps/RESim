@@ -78,6 +78,7 @@ class Dmod():
         self.fname_addr = None
         self.break_on_dmod = False
         self.path_prefix = path_prefix
+        self.length = None
 
         # used for callback when comm of the dmod is first scheduled
         self.op_set = None
@@ -122,6 +123,8 @@ class Dmod():
                            elif key == 'break':
                                if value.lower() == 'true':
                                    self.break_on_dmod = True
+                           elif key == 'length':
+                               self.length = int(value)
 
                self.lgr.debug('dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, str(self.comm)))
                if self.kind == 'full_replace':
@@ -189,7 +192,7 @@ class Dmod():
 
     def subReplace(self, cpu, s, addr):
         rm_this = False
-        self.lgr.debug('dmod checkString  %s to  %s' % (self.fiddle.match, s))
+        self.lgr.debug('dmod subReplace  %s to  %s' % (self.fiddle.match, s))
         try:
             match = re.search(self.fiddle.match, s, re.M|re.I)
         except:
@@ -301,6 +304,8 @@ class Dmod():
     def checkString(self, cpu, addr, count, tid=None, fd=None):
         ''' Modify content at the given addr if content meets the Dmod criteria '''
         retval = False
+        if self.length is not None and count != self.length:
+            return retval
         byte_array = self.mem_utils.getBytes(cpu, count, addr)
         if byte_array is None:
             self.lgr.debug('dmod checkstring bytearray None from 0x%x' % addr)
