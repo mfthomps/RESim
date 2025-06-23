@@ -45,9 +45,11 @@ class PPCKernelParams():
         self.super_enter_cycle = None
         self.stop_hap = None
         self.hits = {}
-        self.kernel_exit = None
+        self.kernel_exit = []
         self.kernel_entry = None
         self.compute_jump = None
+        self.is_syscall = False
+        self.exit_count = 0
 
     def getParams(self):
         self.reverse_manager.enableReverse()
@@ -128,6 +130,7 @@ class PPCKernelParams():
                 self.searchCurrentTaskAddr(r2)
                 single = self.findSingle()
                 if single is not None:
+                    # We have the the current_task pointer address.  Move on to finding kernel syscall exit adresses
                     self.lgr.debug('ppcKernelParm thinks current task ptr is at 0x%x' % single)
                     self.current_task = single
                     phys_block = self.cpu.iface.processor_info.logical_to_physical(self.current_task, Sim_Access_Read)
@@ -227,15 +230,27 @@ class PPCKernelParams():
         print('Done with search, final addr is 0x%x num hits %d num different tasks %d' % ((start+offset), len(self.hits[cur_task]), len(self.hits)))
 
     def setModeExitHap(self):
+        ''' Find syscall exit addresses.  We are in the kernel via a syscall. '''
+        self.is_syscall = True
         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedExit, None)
+        self.setSyscallBreak()
+
         SIM_continue(0)
 
     def modeChangedExit(self, cpu, one, old, new):
-        if new != Sim_CPU_Mode_Supervisor:
-            self.kernel_exit = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('ppcKernelParam modeChangedGetExit user pc 0x%x' % (self.kernel_exit))
-            self.deleteModeExitHap()
-            SIM_run_alone(self.setExitStop, None)
+        if new != Sim_CPU_Mode_Supervisor and self.is_syscall:
+            # exiting to user space. If this is a new exit address, record it
+            pc = self.mem_utils.getRegValue(self.cpu, 'pc')
+            if pc not in self.kernel_exit:
+                self.kernel_exit.append(pc)
+                self.lgr.debug('ppcKernelParam modeChangedGetExit user new exit pc 0x%x' % (pc))
+            if self.exit_count > 100:
+                self.deleteModeExitHap()
+                SIM_run_alone(self.setExitStop, None)
+                self.deleteKernelHap()
+            else:
+                self.exit_count += 1
+            self.is_syscall = False
 
     def deleteModeExitHap(self):
         if self.mode_hap is not None:
@@ -262,3 +277,15 @@ class PPCKernelParams():
             hap = self.stop_hap
             SIM_run_alone(RES_delete_stop_hap, hap)
             self.stop_hap = None
+
+    def setSyscallBreak(self, dumb=None):
+        self.kernel_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.kernel_entry, 1, 0)
+        self.kernel_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, None, self.kernel_break)
+
+    def syscallHap(self, dumb, the_object, break_num, memory):
+        if self.kernel_hap is None:
+            return
+        pc = self.mem_utils.getRegValue(self.cpu, 'pc')
+        #self.lgr.debug('ppcKernelParam syscallHap pc 0x%x' % pc)
+        self.is_syscall = True
+
