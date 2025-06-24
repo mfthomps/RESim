@@ -3094,8 +3094,10 @@ class GenMonitor():
         #        precs[tid].prog = 'comm: %s' % (self.proc_list[self.target][tid])
         
         self.traceProcs[self.target].showAll()
- 
-    def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False):
+
+    def trackExecve(self):
+        self.toExecve(any_exec=True, run=False, linger=True) 
+    def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False, run=True, linger=False):
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
             params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
@@ -3111,8 +3113,9 @@ class GenMonitor():
         call_list = ['execve']
         if watch_exit:
             call_list.append('exit_group')
-        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'execve', flist=flist)
-        SIM_continue(0)
+        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'execve', flist=flist, linger=linger)
+        if run:
+            SIM_continue(0)
 
     def clone(self, nth=1):
         ''' Run until we are in the child of the Nth clone of the current process'''
