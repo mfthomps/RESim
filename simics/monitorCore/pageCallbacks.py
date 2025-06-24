@@ -75,7 +75,7 @@ class PageCallbacks():
                 self.lgr.debug('pageCallbacks setTableHaps for pid %s table_base is 0x%x' % (use_pid, table_base))
             else:
                 self.lgr.debug('pageCallbacks setTableHaps for pid %s failed to get table_base' % use_pid)
-                return
+                #return
         pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
         if pt is None:
             self.lgr.error('pageCallbacks, no page table info found for address 0x%x' % (addr))
