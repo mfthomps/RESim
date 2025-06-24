@@ -244,10 +244,12 @@ class PPCKernelParams():
             if pc not in self.kernel_exit:
                 self.kernel_exit.append(pc)
                 self.lgr.debug('ppcKernelParam modeChangedGetExit user new exit pc 0x%x' % (pc))
-            if self.exit_count > 100:
+            if self.exit_count > 10000 or len(self.kernel_exit)>1:
                 self.deleteModeExitHap()
                 SIM_run_alone(self.setExitStop, None)
                 self.deleteKernelHap()
+                if len(self.kernel_exit) < 2:
+                    print('ERROR ******* failed to get 2 syscall exits')
             else:
                 self.exit_count += 1
             self.is_syscall = False
@@ -270,7 +272,10 @@ class PPCKernelParams():
         SIM_run_alone(self.recordExitAlone, None)
 
     def recordExitAlone(self, dumb):
-        self.top.ppcParams(self.kernel_entry, self.kernel_exit, self.current_task, self.current_phys_addr, self.compute_jump)
+        if len(self.kernel_exit) < 2:
+            print('kernel parameters failed to get 2 syscall exits for ppc')
+        else:
+            self.top.ppcParams(self.kernel_entry, self.kernel_exit, self.current_task, self.current_phys_addr, self.compute_jump)
 
     def delExitStopHap(self):
         if self.stop_hap is not None:
