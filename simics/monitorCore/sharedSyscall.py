@@ -1742,3 +1742,32 @@ class SharedSyscall():
         else:
             trace_msg = err_trace_msg+('DMOD! forced return to 0 cycle:0x%x\n' % self.cpu.cycles)
         return trace_msg
+
+    def openReplaceDmod(self, err_trace_msg, callname, eax, exit_info, comm):
+        # TBD not yet used. If you want dmods on stat of an open_replace file, use a syscall dmod.
+        trace_msg = err_trace_msg
+        for call_param in exit_info.call_params:
+            if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                dmod = call_param.match_param
+                if not dmod.commMatch(comm):
+                    continue
+                #self.lgr.debug('sharedSyscall open, dmod kind %s' % dmod.kind)
+                if dmod.kind == 'open_replace':
+                    mod = call_param.match_param
+                    mod_match = mod.getMatch() 
+                    self.lgr.debug('sharedSyscall openReplaceDmod is dmod %s, mod.getMatch is %s fname %s' % (dmod.path, mod_match, exit_info.fname))
+                    match = None 
+                    try:
+                        match = re.search(mod_match, exit_info.fname, re.M|re.I)
+                    except:
+                        self.lgr.error('sharedSyscall openReplaceDmod re search on %s failed' % mod_match)
+                        return False
+                    if match is None:
+                       continue
+                    self.lgr.debug('sharedSyscall openReplaceDmod , dmod %s setting return value to zero for fname %s' % (dmod.path, exit_info.fname))
+                    self.top.writeRegValue('syscall_ret', 0, alone=True)
+                    if self.cpu.architecture == 'ppc32':
+                        self.top.writeRegValue('cr', 0x40000002, alone=True)
+                    trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
+                exit_info.matched_param = None
+        return trace_msg
