@@ -404,8 +404,8 @@ class Dmod():
             pflags = 'r'
         # TBD ??
         if len(pflags) == 0:
-            self.lgr.debug('dmod %s setOpen pathname %s nothing in flag string we recognize yet, force w' % (self.path, use_path))
-            pflags = 'w'
+            self.lgr.debug('dmod %s setOpen pathname %s nothing in flag string we recognize yet, force r+' % (self.path, use_path))
+            pflags = 'r+'
         pflags = pflags+'b'
         key = '%s:%d' % (tid, retval)
         self.lgr.debug('dmod %s setOpen pathname %s pflags: %s key: %s' % (self.path, use_path, pflags, key))
