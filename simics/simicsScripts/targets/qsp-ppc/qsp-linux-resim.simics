@@ -1,0 +1,16 @@
+#
+# Top level Simics script for RESim qsp-ppc platform
+#
+decl {
+    param board_name : string
+    param default_system_info : string
+    param root_disk_image : string
+    result eth0 : string
+    result eth1 : string
+}
+$create_network = FALSE
+$num_cores=1
+#echo "board_name is "+$board_name
+run-command-file ./targets/qsp-ppc/qsp-linux.simics
+$eth0 = $system.eth[0]
+$eth1 = $system.eth[1]
