@@ -4,6 +4,7 @@ O_WRONLY = 0o00000001
 O_RDWR = 0o00000002
 O_CREAT = 0o00000100  
 O_TRUNC = 0o00001000
+O_DIRECTORY = 0o200000
 
 def getFlags(flags):
     retval = ''
@@ -18,6 +19,8 @@ def getFlags(flags):
             retval = retval + ' CREAT'
         if flags & O_TRUNC > 0:
             retval = retval + ' TRUNC'
+        if flags & O_DIRECTORY > 0:
+            retval = retval + ' DIRECTORY'
     if len(retval) == 0:
         retval = '0o%o' % flags
     return retval

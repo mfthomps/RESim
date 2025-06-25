@@ -389,6 +389,12 @@ class Dmod():
                 os.makedirs(os.path.dirname(use_path), exist_ok=True)
             elif 'RD' in flag_string:
                 use_path = self.fiddle.becomes
+            elif 'DIRECTORY' in flag_string:
+                os.makedirs(os.path.dirname(pathname), exist_ok=True)
+                dir_fh = open(pathname, 'w')
+                dir_fh.write('dumb_dir')
+                dir_fh.close()
+                use_path = pathname
             else:
                 self.lgr.debug('dmod setOpen pathname mkdirs to parent %s' % (os.path.dirname(pathname)))
                 os.makedirs(os.path.dirname(pathname), exist_ok=True)
@@ -402,10 +408,13 @@ class Dmod():
             pflags = 'r+'
         elif 'RDONLY' in flag_string:
             pflags = 'r'
+        elif 'DIRECTORY' in flag_string:
+            pflags = 'r'
         # TBD ??
         if len(pflags) == 0:
-            self.lgr.debug('dmod %s setOpen pathname %s nothing in flag string we recognize yet, force r+' % (self.path, use_path))
-            pflags = 'r+'
+            os.makedirs(os.path.dirname(use_path), exist_ok=True)
+            self.lgr.debug('dmod %s setOpen pathname %s nothing in flag string we recognize yet, force w' % (self.path, use_path))
+            pflags = 'w'
         pflags = pflags+'b'
         key = '%s:%d' % (tid, retval)
         self.lgr.debug('dmod %s setOpen pathname %s pflags: %s key: %s' % (self.path, use_path, pflags, key))
