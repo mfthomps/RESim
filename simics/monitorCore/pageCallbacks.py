@@ -256,7 +256,8 @@ class PageCallbacks():
                 for addr in self.missing_ptegs[physical]:
                     pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
                     if pt.phys_addr is None or pt.phys_addr == 0:
-                        self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
+                        if self.cpu.architecture != 'ppc32':
+                            self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                         redo_addrs.append(addr)
                         continue
                     phys_addr = pt.phys_addr | (addr & 0x00000fff)
