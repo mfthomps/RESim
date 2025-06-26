@@ -1502,7 +1502,7 @@ class Syscall():
             
         elif socket_callname == "sendmsg":
             # TBD Not complete
-            if self.cpu.architecture.startswith('arm'):
+            if self.cpu.architecture.startswith('arm') or self.cpu.architecture == 'ppc32':
                 exit_info.old_fd = frame['param1']
                 msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
@@ -1745,6 +1745,7 @@ class Syscall():
             exit_info.fname_addr = frame['param1']
             exit_info.mode = frame['param2']
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            ida_msg = '%s tid:%s (%s) fname_addr: 0x%x mode 0x%x fname %s' % (callname, tid, comm, exit_info.fname_addr, exit_info.mode, exit_info.fname)
 
         elif callname == 'execve':        
             retval = self.parseExecve(syscall_info, exit_info)
