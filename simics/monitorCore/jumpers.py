@@ -246,10 +246,13 @@ class Jumpers():
             return
         jump_rec = self.pending_pages[name]
         load_addr = self.so_map.getLoadAddr(jump_rec.prog)
-        self.lgr.debug('jumper paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
-        phys = self.getPhys(jump_rec, load_addr, None)
-        if phys is not None and phys != 0:
-            self.setBreak(self.pending_pages[name], phys)
+        if load_addr is None:
+            self.lgr.error('jumper paged_in load_addr None for prog %s handle %s' % (jump_rec.prog, name))
+        else:
+            self.lgr.debug('jumper paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
+            phys = self.getPhys(jump_rec, load_addr, None)
+            if phys is not None and phys != 0:
+                self.setBreak(self.pending_pages[name], phys)
 
     def getPhys(self, jump_rec, load_addr, pid):
         offset = load_addr - jump_rec.image_base
