@@ -113,7 +113,7 @@ class TraceFiles():
     def close(self, fd):
         
         tid = self.top.getTID(target=self.cell_name)
-        self.lgr.debug('traceFiles close tid:%s %d'  % (tid, fd))
+        self.lgr.debug('traceFiles close tid:%s FD: %d'  % (tid, fd))
         if tid in self.binders and fd in self.binders[tid]:
             del self.binders[tid][fd] 
             self.lgr.debug('traceFiles close removed binders %d for tid:%s'  % (fd, tid))
@@ -145,13 +145,13 @@ class TraceFiles():
                 index += 1
         return retval 
 
-    def read(self, tid, fd_in, the_bytes):
+    def read(self, tid, comm, fd_in, the_bytes):
         if tid in self.binders and fd_in in self.binders[tid]:
             fd = self.binders[tid][fd_in]
             self.lgr.debug('traceFiles read tid:%s fd_in: %d fd: %d len %d' % (tid, fd_in, fd, len(the_bytes)))
         else:
             fd = fd_in 
-        self.lgr.debug('traceFiles read fd: 0x%x len of bytes %d' % (fd, len(the_bytes)))
+        self.lgr.debug('traceFiles tid:%s (%s) read FD: 0x%x len of bytes %d' % (tid, comm, fd, len(the_bytes)))
         self.io(tid, fd, the_bytes, read=True, fd_in=fd_in)
 
     def write(self, tid, fd_in, the_bytes):
