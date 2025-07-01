@@ -2388,7 +2388,7 @@ class DataWatch():
                     param_length = self.mem_utils.getRegValue(self.cpu, 'x2')
                 else:
                     param_length = self.mem_utils.getRegValue(self.cpu, 'r2')
-            else:
+            elif self.cpu.architecture != 'ppc32': 
                 if self.mem_something.fun == 'mempcpy':
                     so_file = self.top.getSOFile(eip)
                     if so_file is not None and 'libc' in so_file.lower():
@@ -2558,7 +2558,7 @@ class DataWatch():
             nparams = format_str.count('%')
             for i in range(nparams):
                 offset = (i)*word_size
-                param = self.mem_utils.readAppPtr(self.cpu, param_addr+offset, size=word_size)
+                param = self.mem_utils.readAppPtr(self.cpu, format_addr+offset, size=word_size)
                 self.mem_something.dest_list.append(param) 
             ''' TBD fix this '''
             self.mem_something.length = 1
