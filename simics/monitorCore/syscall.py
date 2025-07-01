@@ -1999,35 +1999,7 @@ class Syscall():
             ''' check runToIO '''
             self.lgr.debug('syscall read loop %d call_params ' % len(self.call_params))
             ''' Look for matching params, preference to non-Dmods.  TBD refine this to allow Dmods with other call params.'''
-            for call_param in self.call_params:
-                ''' look for matching FD '''
-                if call_param.match_param is None:
-                    continue
-                if type(call_param.match_param) is int:
-                    if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
-                        if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
-                            self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
-                        else:
-                            if self.kbuffer is not None:
-                                self.lgr.debug('syscall read kbuffer for addr 0x%x' % exit_info.retval_addr)
-                                self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
-                        addParam(exit_info, call_param)
-                elif call_param.match_param.__class__.__name__ == 'Dmod':
-                    ''' handle read dmod during syscall return '''
-                    if not call_param.match_param.commMatch(comm): 
-                        self.lgr.debug('syscall read, is dmod %s, but comm does not match,  match' % call_param.match_param.path) 
-                        continue
-                    if call_param.match_param.kind == 'open_replace':
-                        has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
-                        if not has_fd_open:
-                            self.lgr.debug('syscall read, is dmod %s, but tid or fd does not match, tid:%s fd:%d ' % (call_param.match_param.path, tid, exit_info.old_fd ))
-                            continue
-                    self.lgr.debug('syscall read dmod %s FD: %d add call param' % (call_param.match_param.path, exit_info.old_fd))
-                    exit_info.call_params.append(call_param)
-                if type(call_param.match_param) is str:
-                    exit_info.call_params.append(call_param)
-
+            self.checkReadParams(exit_info, tid, comm, frame)
         elif callname == 'write':        
             exit_info.old_fd = frame['param1']
             count = frame['param3']
@@ -2070,9 +2042,13 @@ class Syscall():
                     else: 
                         if mod.operation != 'write':
                             continue
-                        if count < 4028:
+
+                        max_len = min(count, 1024)
+                        byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
+                        if byte_tuple is not None:
+
                             self.lgr.debug('syscall write check dmod %s count %d' % (mod.path, count))
-                            if mod.checkString(self.cpu, frame['param2'], count):
+                            if mod.checkString(self.cpu, byte_tuple, count):
                                 if mod.getCount() == 0:
                                     self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
                                     self.top.rmDmod(self.cell_name, mod.getPath())
@@ -2125,8 +2101,8 @@ class Syscall():
             exit_info.retval_addr = frame['param2']
             # iovcnt
             exit_info.count = frame['param3']
+            self.checkReadParams(exit_info, tid, comm, frame)
             ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
-            self.lgr.debug(ida_msg)
  
         elif callname == 'mmap' or callname == 'mmap2':        
             #self.lgr.debug('syscall mmap')
@@ -2419,6 +2395,12 @@ class Syscall():
             exit_info.fname_addr = frame['param1']
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
             ida_msg = '%s %s tid:%s (%s) cycle:0x%x' % (callname, exit_info.fname, tid, comm, self.cpu.cycles)
+        elif callname == 'query_module':
+            exit_info.fname_addr = frame['param1']
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            which = frame['param2']
+            ida_msg = '%s tid:%s (%s) fname: %s which: %d cycle:0x%x' % (callname, tid, comm, exit_info.fname, which, self.cpu.cycles)
+            
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
@@ -3397,3 +3379,33 @@ class Syscall():
     def noExitMaze(self):
         self.lgr.debug('syscall noExitMaze') 
         self.no_exit_maze = True
+
+    def checkReadParams(self, exit_info, tid, comm, frame):
+        for call_param in self.call_params:
+            ''' look for matching FD '''
+            if call_param.match_param is None:
+                continue
+            if type(call_param.match_param) is int:
+                if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
+                    if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
+                        self.lgr.debug('syscall checkCallParams kbuffer for addr 0x%x' % exit_info.retval_addr)
+                        self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                    else:
+                        if self.kbuffer is not None:
+                            self.lgr.debug('syscall checkCallParams kbuffer for addr 0x%x' % exit_info.retval_addr)
+                            self.kbuffer.read(exit_info.retval_addr, exit_info.count, exit_info.old_fd)
+                    addParam(exit_info, call_param)
+            elif call_param.match_param.__class__.__name__ == 'Dmod':
+                ''' handle checkCallParams dmod during syscall return '''
+                if not call_param.match_param.commMatch(comm): 
+                    self.lgr.debug('syscall read, is dmod %s, but comm does not match,  match' % call_param.match_param.path) 
+                    continue
+                if call_param.match_param.kind == 'open_replace':
+                    has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
+                    if not has_fd_open:
+                        self.lgr.debug('syscall read, is dmod %s, but tid or fd does not match, tid:%s fd:%d ' % (call_param.match_param.path, tid, exit_info.old_fd ))
+                        continue
+                self.lgr.debug('syscall checkCallParams dmod %s FD: %d add call param' % (call_param.match_param.path, exit_info.old_fd))
+                exit_info.call_params.append(call_param)
+            if type(call_param.match_param) is str:
+                exit_info.call_params.append(call_param)
