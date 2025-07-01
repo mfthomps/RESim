@@ -4,6 +4,7 @@ import elfText
 import doInUser
 import breakAndCall
 from resimHaps import *
+import os
 ''' TBD rework scheme of when to track shared code loading.  maybe this should only be for linux clone '''
 class TrackThreads():
     def __init__(self, top, cpu, cell_name, tid, context_manager, task_utils, mem_utils, param, traceProcs, soMap, targetFS, sharedSyscall, syscallManager, compat32, lgr):
@@ -37,7 +38,9 @@ class TrackThreads():
         self.so_track = None
         self.cur_comm = None
         self.last_call_cycle = None
-
+        self.ignore_progs = context_manager.getIgnoredProgs()
+        for prog in syscall.exec_skip_list:
+            self.ignore_progs.append(prog)
 
         ''' NOTHING AFTER THIS CALL! '''
         self.startTrack()
@@ -140,6 +143,13 @@ class TrackThreads():
         if tid not in self.finish_hap:
             return
         prog_string, arg_string_list = self.task_utils.readExecParamStrings(call_info.tid, call_info.cpu)
+        if prog_string is None:
+            self.lgr.debug('trackThreads finishParseExecve failed to get prog, comm %s' % comm)
+            return
+        prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
+        if prog_comm in self.ignore_progs:
+            self.lgr.debug('trackThreads finishParseExecve tid:%s skipping (%s)' % (tid, prog_string))
+            return 
         if cpu.architecture.startswith('arm') and prog_string is None:
             self.lgr.debug('trackThreads finishParseExecve progstring None, arm fu?')
             return
@@ -211,6 +221,10 @@ class TrackThreads():
             self.finish_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.finishParseExecve, call_info, self.finish_break[tid])
             return
         else:
+            prog_comm = os.path.basename(prog_string)[:self.task_utils.commSize()]
+            if prog_comm in self.ignore_progs:
+                self.lgr.debug('trackThreads parseExecve tid:%s skipping (%s)' % (tid, prog_string))
+                return False
             self.traceProcs.setName(tid, prog_string, None)
             param = (prog_string, tid)
             self.cur_comm = comm
