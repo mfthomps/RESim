@@ -705,3 +705,27 @@ def getFullPath(prog, ini, lgr=None):
         lgr('resimUtils getFullPath %s' % prog)
     full = target_fs.getFull(prog, lgr=lgr)
     return full
+
+def getKeyValue(item):
+    key = None
+    value = None
+    if '=' in item:
+        parts = item.split('=', 1)
+        key = parts[0].strip()
+        value = parts[1].strip()
+    return key, value
+
+def yesNoTrueFalse(item):
+    item = item.lower()
+    if item in ['yes', 'true']:
+        return True
+    else:
+        return False 
+
+def isSO(prog):
+    prog = prog.lower()
+    if prog.endswith('.so') or '.so.' in prog or prog.endswith('.dll'):
+        return True
+    else:
+        return False
+
