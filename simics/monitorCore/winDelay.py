@@ -182,8 +182,7 @@ class WinDelay():
             if byte_array is not None:
                 read_data = resimUtils.getHexDump(byte_array[:max_read])
                 if self.traceFiles is not None:
-                    tid = self.top.getTID()
-                    self.traceFiles.read(tid, self.exit_info.old_fd, byte_array)
+                    self.traceFiles.read(self.tid, self.comm, self.exit_info.old_fd, byte_array)
             else:
                 read_data = '<< NOT MAPPED >>'
 
