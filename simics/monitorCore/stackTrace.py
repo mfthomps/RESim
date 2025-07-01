@@ -1312,7 +1312,8 @@ class StackTrace():
                         else:
                             #self.lgr.debug('stackTrace call_to 0x%x is not a fun' % (call_to))
                             tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
-                            if tmp_instruct.startswith(self.jmpmn):
+
+                            if self.isJmp(tmp_instruct):
                                 skip_this = True
                                 #self.lgr.debug('stackTrace 0x%x is jump table? skip_this' % call_to)
                             elif self.fun_mgr.isRelocate(call_to):
