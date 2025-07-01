@@ -1339,3 +1339,7 @@ class TaskUtils():
         for t in task_list:
             retval.append(t)
         return retval
+
+    def progComm(self, prog_string):
+        prog_comm = os.path.basename(prog_string)[:self.commSize()]
+        return prog_comm
