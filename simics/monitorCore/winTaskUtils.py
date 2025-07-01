@@ -945,4 +945,6 @@ class WinTaskUtils():
             self.phys_saved_cr3 = self.mem_utils.v2p(self.cpu, gs_base+self.param.saved_cr3)
             self.lgr.debug('winTaskUtils saved phys_saved_cr3 value 0x%x' % self.phys_saved_cr3)
 
-
+    def progComm(self, prog_string):
+        prog_comm = os.path.basename(prog_string)[:self.commSize()]
+        return prog_comm
