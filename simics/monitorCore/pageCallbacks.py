@@ -38,6 +38,7 @@ class PageCallbacks():
         self.missing_pages = {}
         self.missing_page_bases = {}
         self.missing_tables = {}
+        # ppc32 page entries, keyed by phys of pteg, values are lists of va that may map to the ptegs
         self.missing_ptegs = {}
         self.other_pteg_break = {}
         self.missing_haps = {}
@@ -65,7 +66,8 @@ class PageCallbacks():
 
     def setTableHaps(self, addr, use_pid=None):
         table_base = None
-        self.lgr.debug('pageCallbacks setTableHaps for 0x%x' % addr)
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('pageCallbacks setTableHaps for 0x%x tid:%s (%s)' % (addr, tid, comm))
         if use_pid is not None:
             if self.top.isWindows():
                 table_base = self.mem_utils.getWindowsTableBase(self.cpu, use_pid)
@@ -94,13 +96,13 @@ class PageCallbacks():
                 self.missing_ptegs[pt.pteg1] = []
                 # 8 entries of 8 bytes each
                 break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.pteg1, 64, 0)
-                self.lgr.debug('pageCallbacks no physical address for 0x%x, set break %d on pteg1 0x%x' % (addr, break_num, pt.pteg1))
+                self.lgr.debug('pageCallbacks tid:%s no physical address for 0x%x, set break %d on pteg1 0x%x' % (tid, addr, break_num, pt.pteg1))
                 self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.ptegHap, 
-                      None, break_num)
+                      tid, break_num)
                 break_num2 = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.pteg2, 64, 0)
-                self.lgr.debug('pageCallbacks no physical address for 0x%x, set break %d on pteg2 0x%x' % (addr, break_num2, pt.pteg2))
+                self.lgr.debug('pageCallbacks tid:%s no physical address for 0x%x, set break %d on pteg2 0x%x' % (tid, addr, break_num2, pt.pteg2))
                 self.missing_haps[break_num2] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.ptegHap, 
-                      None, break_num2)
+                      tid, break_num2)
                 self.other_pteg_break[break_num] = break_num2
                 self.other_pteg_break[break_num2] = break_num
 
@@ -194,79 +196,84 @@ class PageCallbacks():
         del self.missing_haps[break_num]
         SIM_run_alone(self.rmBreakHap, hap)
 
-    def ptegHap(self, dumb, third, break_num, memory):
+    def ptegHap(self, want_tid, third, break_num, memory):
         ''' hit when an entry in a pteg is updated '''
         if break_num not in self.missing_haps:
             return
         if self.mode_hap is not None:
             #self.lgr.debug('pageCallbacks pageBaseHap already has a mode_hap, bail')
             return
-        length = memory.size
         op_type = SIM_get_mem_op_type(memory)
-        if op_type is Sim_Trans_Store:
-            type_name = SIM_get_mem_op_type_name(op_type)
-            physical = memory.physical_address
-            #cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-            #if cpu is None:
-            #    self.lgr.debug('pageCallbacks ptegHap, failed to get curThread info.  maybe ppc limbo')
-            #    return
-            self.lgr.debug('pageCallbacks ptegHap phys 0x%x len %d  type %s cycle: 0x%x' % (physical, length, type_name, self.cpu.cycles))
-            ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all assocaited addresses are mapped. '''
-            self.rmTableHap(break_num)
-            other_break = self.other_pteg_break[break_num]
-            self.rmTableHap(self.other_pteg_break[break_num])
-            del self.other_pteg_break[break_num]
-            del self.other_pteg_break[other_break]
-            ''' Set a mode hap so we recheck page entries after kernel finishes its mappings. '''
-            mem_trans = self.MyMemTrans(self.cpu, memory)
-            self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedPteg, mem_trans)
-        else:
-            self.lgr.error('pageCallbacks ptegHap op_type is not store')
+        if op_type is not Sim_Trans_Store:
+            return
+        if memory.physical_address == 0:
+            return
+
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        if tid != want_tid:
+            self.lgr.debug('pageCallback ptegHap tid:%s expected:%s, bail' % (tid, want_tid))
+            return
+        length = memory.size
+        type_name = SIM_get_mem_op_type_name(op_type)
+        self.lgr.debug('pageCallbacks ptegHap tid:%s (%s) phys 0x%x len %d  type %s cycle: 0x%x' % (tid, comm, memory.physical_address, length, type_name, self.cpu.cycles))
+        ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all assocaited addresses are mapped. '''
+        self.rmTableHap(break_num)
+        other_break = self.other_pteg_break[break_num]
+        self.rmTableHap(self.other_pteg_break[break_num])
+        del self.other_pteg_break[break_num]
+        del self.other_pteg_break[other_break]
+        ''' Set a mode hap so we recheck page entries after kernel finishes its mappings. '''
+        mem_trans = self.MyMemTrans(self.cpu, memory, tid)
+        self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedPteg, mem_trans)
 
     def modeChangedPteg(self, mem_trans, one, old, new):
         ''' In user mode after seeing that kernel was updating ppc pteg entry '''
         if self.mode_hap is None:
             return
-        self.lgr.debug('pageCallbacks modeChanged after pteg updated')
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        if tid != mem_trans.tid:
+            self.lgr.debug('pageCallbacks modeChangedPteg, wrong tid:%s wanted %s' % (tid, mem_trans.tid))
+            return 
+        self.lgr.debug('pageCallbacks modeChangedPteg tid:%s (%s) after pteg updated' % (tid, comm))
         self.ptegUpdated(mem_trans)
         hap = self.mode_hap
         self.mode_hap = None
         SIM_run_alone(self.delModeAlone, hap)
 
     def ptegUpdated(self, mem_trans):
-            '''
-            Called when a pteg is updated.  We've returned to the user since the hap was hit.
-            The hap was already removed.  Remove all assocaited entries and recreate those that need it.
-            '''
-            length = mem_trans.length
-            op_type = mem_trans.op_type
-            type_name = mem_trans.type_name
-            physical = mem_trans.physical
-            if physical not in self.missing_ptegs:
-                self.lgr.error('pageCallbacks ptegUpdated physical 0x%x not in missing ptegs' % physical)
-                return
-            self.lgr.debug('ptegUpdated phys 0x%x len %d  type %s len of missing_ptegs[physical] %d' % (physical, length, type_name, len(self.missing_ptegs[physical])))
-            #if length == 4 and self.cpu.architecture == 'arm':
-            if op_type is Sim_Trans_Store:
-                value = mem_trans.value
-                if value == 0:
-                    #self.lgr.debug('tableHap value is zero')
-                    return
-                redo_addrs = []
-                for addr in self.missing_ptegs[physical]:
-                    pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
-                    if pt.phys_addr is None or pt.phys_addr == 0:
-                        if self.cpu.architecture != 'ppc32':
-                            self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
-                        redo_addrs.append(addr)
-                        continue
-                    phys_addr = pt.phys_addr | (addr & 0x00000fff)
-                    #print('would do callback here')
-                    self.doCallback(addr)
+        '''
+        Called when a pteg is updated.  We've returned to the user since the hap was hit.
+        The hap was already removed.  Remove all assocaited entries and recreate those that need it.
+        '''
+        length = mem_trans.length
+        type_name = mem_trans.type_name
+        physical = mem_trans.physical
 
-                del self.missing_ptegs[physical]
-                for addr in redo_addrs:
-                    self.setTableHaps(addr)
+        # find the missing pteg entry for this hit.  Each break range is 64 bytes
+        for missing_addr in self.missing_ptegs:
+            if physical >= missing_addr and physical < (missing_addr+64):
+                missing_entry = missing_addr
+                break            
+        if missing_entry is None:
+            self.lgr.error('pageCallback ptegUpdated, failed to find missing_pteg for phys 0x%x' % physical)
+            return
+
+        redo_addrs = []
+        for addr in self.missing_ptegs[missing_entry]:
+            pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
+            if pt.phys_addr is None or pt.phys_addr == 0:
+                if self.cpu.architecture != 'ppc32':
+                    self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
+                redo_addrs.append(addr)
+                continue
+            phys_addr = pt.phys_addr | (addr & 0x00000fff)
+            #print('would do callback here')
+            self.doCallback(addr)
+
+        del self.missing_ptegs[missing_entry]
+        for addr in redo_addrs:
+            self.setTableHaps(addr)
+        
 
     def pageBaseHap(self, dumb, third, break_num, memory):
         ''' hit when a page base address is updated'''
@@ -382,11 +389,12 @@ class PageCallbacks():
 
 
     class MyMemTrans():
-        def __init__(self, cpu, memory):
+        def __init__(self, cpu, memory, tid):
             self.length = memory.size
             self.op_type = SIM_get_mem_op_type(memory)
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
             self.physical = memory.physical_address
+            self.tid = tid
             if self.op_type is Sim_Trans_Store:
                 self.value = memUtils.memoryValue(cpu, memory)
             else:
