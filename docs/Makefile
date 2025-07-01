@@ -11,4 +11,4 @@ RESimRemote.pdf: RESimRemote.tex
 all: RESim-UsersGuide.pdf RESimRemote.pdf
 clean:
 	rm -fr auto
-	rm -f *.aux *.log *.pdf *.ps *.dvi
+	rm -f *.aux *.log *.ps *.dvi
