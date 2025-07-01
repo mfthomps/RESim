@@ -140,6 +140,7 @@ import reverseMgr
 import skipToMgr
 import defaultConfig
 import watchWrite
+import doInUser
 
 #import fsMgr
 import json
@@ -6007,7 +6008,8 @@ class GenMonitor():
         ''' Set a control flow jumper '''
         if self.target not in self.jumper_dict:
             cpu = self.cell_config.cpuFromCell(self.target)
-            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], cpu, self.lgr)
+            self.jumper_dict[self.target] = jumpers.Jumpers(self, self.context_manager[self.target], self.soMap[self.target], self.mem_utils[self.target], 
+                  self.task_utils[self.target], cpu, self.lgr)
         self.jumper_dict[self.target].setJumper(from_addr, to_addr)
         self.lgr.debug('jumper set')
 
@@ -6141,7 +6143,8 @@ class GenMonitor():
             if jumper_file is not None:
                 if target not in self.jumper_dict:
                     cpu = self.cell_config.cpuFromCell(target)
-                    self.jumper_dict[target] = jumpers.Jumpers(self, self.context_manager[target], self.soMap[target], self.mem_utils[target], cpu, self.lgr)
+                    self.jumper_dict[target] = jumpers.Jumpers(self, self.context_manager[target], self.soMap[target], self.mem_utils[target], 
+                             self.task_utils[self.target], cpu, self.lgr)
                     self.jumper_dict[target].loadJumpers(jumper_file)
                     print('Loaded jumpers from %s' % jumper_file)
                 else:
@@ -7027,6 +7030,12 @@ class GenMonitor():
                 cpu = self.cell_config.cpuFromCell(cell_name)
                 self.mem_utils[cell_name].adjustParam(cpu)
 
+    def doInUser(self, callback, param, tid=None, target=None):
+        if target is None:
+            target = self.target
+        cpu = self.cell_config.cpuFromCell(target)
+        self.lgr.debug('doInUser')
+        doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.lgr, tid=tid)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
