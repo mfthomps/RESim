@@ -548,7 +548,7 @@ class SOMap():
 
     def listSO(self, filter=None):
         for tid in self.so_file_map:
-            self.lgr.debug('soMap listSO tid %s in so_file_map')
+            self.lgr.debug('soMap listSO tid %s in so_file_map' % tid)
             for load_info in self.so_file_map[tid]:
                 prog = self.so_file_map[tid][load_info]
                 if filter is None or filter in prog:
@@ -932,10 +932,11 @@ class SOMap():
         else:
             #self.lgr.debug('soMap getLoadAddr prog %s tid:%s file_map size %d' % (prog, tid, len(self.so_file_map[map_tid])))
             for load_info in self.so_file_map[map_tid]:
+                #self.lgr.debug('soMap getLoadAddr compare %s to %s' % (self.so_file_map[map_tid][load_info], os.path.basename(prog)))
                 if os.path.basename(self.so_file_map[map_tid][load_info]) == os.path.basename(prog):
                     retval = load_info.addr
                     ret_size = load_info.size
-                    #self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
+                    self.lgr.debug('soMap got match for %s address 0x%x tid:%s' % (prog, retval, tid))
                     break 
 
         if retval is None and map_tid in self.text_prog:
@@ -964,12 +965,16 @@ class SOMap():
         prog = self.fullProg(in_fname)
         retval = None
         if prog in self.prog_info:
-            if self.prog_info[prog].text_start == 0:
-                retval = 0
-            elif self.prog_info[prog].text_start is not None:
-               retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+            tid_list = self.task_utils.getTidsForComm(in_fname)
+            if len(tid_list) == 0:
+                self.lgr.debug('soMap gteImageBase has prog %s in prog_info, but no program running.  Do not mislead' %prog)
             else:
-                retval = self.prog_info[prog].text_offset
+                if self.prog_info[prog].text_start == 0:
+                    retval = 0
+                elif self.prog_info[prog].text_start is not None:
+                   retval = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
+                else:
+                    retval = self.prog_info[prog].text_offset
         else:
             self.lgr.debug('soMap getImageBase not in prog_info: %s' % prog)
 
