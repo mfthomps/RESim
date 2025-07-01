@@ -4,6 +4,7 @@ import re
 import syscall
 from simics import *
 import openFlags
+import resimUtils
 '''
 Manage one Dmod.  
 '''
@@ -19,15 +20,6 @@ def nextLine(fh, hash_ok=False):
            continue
        retval = line.strip('\n')
    return retval
-
-def getKeyValue(item):
-    key = None
-    value = None
-    if '=' in item:
-        parts = item.split('=', 1)
-        key = parts[0].strip()
-        value = parts[1].strip()
-    return key, value
 
 class DmodSeek():
     def __init__(self, delta, tid, fd):
@@ -110,7 +102,7 @@ class Dmod():
                    self.lgr.debug('dmod start_part is %d len %d' % (start_part, len(parts)))
                    if len(parts) > start_part:
                        for item in parts[start_part:]:
-                           key, value = getKeyValue(item)
+                           key, value = resimUtils.getKeyValue(item)
                            self.lgr.debug('dmod key <%s> value %s' % (key, value))
                            if key is None:
                                self.lgr.error('Expected key=value in %s' % item)
@@ -301,20 +293,18 @@ class Dmod():
             #    self.lgr.debug('did NOT found match in was of %s in %s' % (self.fiddle.was, s))
         return rm_this
 
-    def checkString(self, cpu, addr, count, tid=None, fd=None):
+    def checkString(self, cpu, addr, byte_array, count, tid=None, fd=None):
         ''' Modify content at the given addr if content meets the Dmod criteria '''
         retval = False
         if self.length is not None and count != self.length:
-            return retval
-        byte_array = self.mem_utils.getBytes(cpu, count, addr)
-        if byte_array is None:
-            self.lgr.debug('dmod checkstring bytearray None from 0x%x' % addr)
+            self.lgr.debug('dmod checkString, length match fail byte array %s' % (str(byte_array)))
             return retval
         try:
             s = ''.join(map(chr,byte_array))
         except:
+            self.lgr.debug('dMod checkString %d bytes failed join %s' % (len(byte_array), str(byte_array)))
             return retval
-        #self.lgr.debug('dMod checkString %d bytes (%d) in s: <%s>' % (len(byte_array), len(s), s))
+        self.lgr.debug('dMod checkString %d bytes (%d) in s: <%s>' % (len(byte_array), len(s), s))
         rm_this = False
         if self.kind == 'sub_replace':
             rm_this = self.subReplace(cpu, s, addr)
