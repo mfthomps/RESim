@@ -496,7 +496,7 @@ class SharedSyscall():
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:nbytes])
                     if self.traceFiles is not None:
-                        self.traceFiles.read(tid, exit_info.old_fd, byte_array)
+                        self.traceFiles.read(tid, comm, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
                 src = ''
@@ -985,7 +985,7 @@ class SharedSyscall():
                     s = resimUtils.getHexDump(byte_array[:max_len])
                     if self.traceFiles is not None:
                         self.lgr.debug('sharedSyscall call traceFiles read')
-                        self.traceFiles.read(tid, exit_info.old_fd, byte_array)
+                        self.traceFiles.read(tid, comm, exit_info.old_fd, byte_array)
                 else:
                     s = '<<NOT MAPPED>>'
 
@@ -1003,43 +1003,7 @@ class SharedSyscall():
                 # TBD make a config parameter
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
-                    for call_param in exit_info.call_params:
-                        self.lgr.debug('sharedSyscall read look at call_param %s' % call_param.name)
-                        if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
-                            dmod = call_param.match_param
-                            self.lgr.debug('sharedSyscall %s read check dmod %s count %d' % (self.cell_name, dmod.getPath(), eax))
-                            if dmod is not None and not dmod.commMatch(comm): 
-                                self.lgr.debug('sharedSyscall read is dmod, but wrong comm, wanted str(%s), this is %s' % (dmod.getComm(), comm))
-                            elif dmod.checkString(self.cpu, exit_info.retval_addr, eax, tid, exit_info.old_fd):
-                                self.lgr.debug('sharedSyscall read did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
-                                trace_msg = trace_msg+('DMOD! changed read to %s\n' % dmod.getBecomes())
-                                
-                                if dmod.getCount() == 0:
-                                    self.lgr.debug('sharedSyscall read found final dmod %s' % dmod.getPath())
-                                    if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
-                                        self.lgr.debug('sharedSyscall read Dmod stopping trace dmod %s' % dmod.getPath())
-                                        self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
-                                        #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
-                                        self.stopTrace()
-                                        # note rmDmod simply notes it has been removed so we know if future snapshot loads
-                                        self.top.rmDmod(self.cell_name, dmod.getPath())
-                                        #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
-                                        if dmod.getBreak():
-                                            self.top.notRunning(quiet=True)
-                                            SIM_break_simulation('dmod break_on_dmod,  on cell %s file: %s' % (self.cell_name, dmod.getPath()))
-                                        elif not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
-                                            self.top.notRunning(quiet=True)
-                                            SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
-                                    else:
-                                        self.top.rmDmod(self.cell_name, dmod.getPath())
-                                        exit_info.syscall_instance.rmCallParam(call_param)
-                                else:
-                                    print('%s performed' % dmod.getPath())
-                                if call_param.break_simulation:
-                                    SIM_break_simulation('dmod break simulation')
-                        elif call_param.name.startswith('runToR') and self.checkStringMatch(call_param, exit_info, byte_array, callname, tid):
-                            self.lgr.debug('sharedSyscall read found string match')
-                
+                    trace_msg = self.checkReadParams(exit_info, trace_msg, eax, tid, comm, byte_array, exit_info.retval_addr)
 
             elif exit_info.old_fd is not None:
                 trace_msg = trace_msg+('FD: %d exception %d\n' % (exit_info.old_fd, eax))
@@ -1047,6 +1011,7 @@ class SharedSyscall():
 
         elif callname == 'write':
             if eax >= 0 and exit_info.retval_addr is not None:
+                    # successfull write parameters, e.g., dmods are checked in syscall
                     max_len = min(eax, 1024)
                     max_max_len = min(eax, 10000)
                     byte_array = self.mem_utils.getBytes(self.cpu, max_max_len, exit_info.retval_addr)
@@ -1112,11 +1077,17 @@ class SharedSyscall():
 
         elif callname == 'writev' or callname == 'readv':
             if eax >= 0:
-                add_msg, byte_tuple = self.getIOV(eax, exit_info)
+                add_msg, byte_array, iov_set = self.getIOV(eax, exit_info)
                 trace_msg = trace_msg + add_msg
+                self.lgr.debug(trace_msg)
                 #if callname == 'writev':
-                for call_param in exit_info.call_params:
-                    self.checkStringMatch(call_param, exit_info, bytes(byte_tuple), callname, tid)
+                if callname == 'readv' and len(iov_set)>1:
+                    self.lgr.debug('sharedSyscall readv iov_set len %d  addr[1] 0x%x  len array[1] 0x%x' % (len(iov_set), iov_set[1].addr, len(iov_set[1].byte_array)))
+                    #TBD only supports dmods on second????? IOVector
+                    buf_start = iov_set[1].addr
+                    buf_len = len(iov_set[1].byte_array)
+                    self.lgr.debug('sharedSyscall tid:%s (%s)  %s call checkReadParams add_msg %s' % (tid, comm, callname, add_msg))
+                    trace_msg = self.checkReadParams(exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start)
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
@@ -1465,6 +1436,12 @@ class SharedSyscall():
                             fix_pid = int(call_param.match_param.getMatch())
                             self.lgr.debug('sharedSyscall %s, setting return value to %d' % (callname, fix_pid))
                             self.top.writeRegValue('syscall_ret', fix_pid, alone=True)
+        elif callname == 'query_module':
+            if exit_info.fname is None:
+                exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+                trace_msg = trace_msg+(' name: %s ' % exit_info.fname)
+            trace_msg = trace_msg+'return code 0x%x cycle:0x%x\n' % (eax, self.cpu.cycles)
+            self.lgr.debug(trace_msg.strip()) 
         elif callname == 'fork':
             if eax == 0:
                 trace_msg = trace_msg+' code:0x0 from child\n'
@@ -1654,15 +1631,21 @@ class SharedSyscall():
     def preserveExit(self):
         self.preserve_exit = True
 
+    class IOV():
+        def __init__(self, addr, byte_array):
+            self.addr = addr
+            self.byte_array = byte_array
+
     def getIOV(self, count, exit_info):
        
         limit = min(10, exit_info.count)
         iov_size = 2*self.mem_utils.WORD_SIZE
         iov_addr = exit_info.retval_addr
         remain = count 
-        self.lgr.debug('sharedSyscall %s return count %d iov_addr 0x%x' % (exit_info.callname, count, iov_addr))
+        self.lgr.debug('sharedSyscall getIOV call %s return count %d iov_addr 0x%x' % (exit_info.callname, count, iov_addr))
         trace_msg = 'FD: %d count: %d' % (exit_info.old_fd, count)
         full_byte_tuple = ()
+        iov_set = []
         for i in range(limit):
             base = self.mem_utils.readPtr(self.cpu, iov_addr)
             if base == 0:
@@ -1681,15 +1664,17 @@ class SharedSyscall():
                 if self.traceFiles is not None:
                     self.traceFiles.write(exit_info.tid, exit_info.old_fd, byte_tuple)
                 full_byte_tuple = full_byte_tuple + byte_tuple
+                iov_set.append(self.IOV(base, byte_tuple[:max_len]))
+                self.lgr.debug('sharedSyscall getIOV base 0x%x s: %s' % (base, s))
             else:
                 s = '<<NOT MAPPED>>'
 
-            self.lgr.debug('sharedSyscall %s base: 0x%x length: %d data: %s' % (exit_info.callname, base, length, s))
+            self.lgr.debug('sharedSyscall getIOV call %s base: 0x%x length: %d data(s): %s' % (exit_info.callname, base, length, s))
             trace_msg = trace_msg+' buffer: 0x%x len: %d data: %s' % (base, length, s)
             remain = remain - data_len 
             iov_addr = iov_addr+iov_size
         trace_msg = trace_msg+'\n'
-        return trace_msg, full_byte_tuple
+        return trace_msg, full_byte_tuple, iov_set
 
     def checkStringMatch(self, call_param, exit_info, byte_array, callname, tid):
         retval = False
@@ -1770,4 +1755,45 @@ class SharedSyscall():
                         self.top.writeRegValue('cr', 0x40000002, alone=True)
                     trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
                 exit_info.matched_param = None
+        return trace_msg
+
+    def checkReadParams(self, exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start):
+        self.lgr.debug('sharedSyscall checkReadParams tid:%s (%s)' % (tid, comm))
+        for call_param in exit_info.call_params:
+                self.lgr.debug('sharedSyscall tid:%s (%s) checkReadParams look at call_param %s' % (tid, comm, call_param.name))
+                if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                    dmod = call_param.match_param
+                    self.lgr.debug('sharedSyscall %s checkReadParams check dmod %s count %d' % (self.cell_name, dmod.getPath(), buf_len))
+                    self.lgr.debug('sharedSyscall checkReadParams buf_start 0x%x buf_len 0x%x' % (buf_start, buf_len))
+                    if dmod is not None and not dmod.commMatch(comm): 
+                        self.lgr.debug('sharedSyscall checkReadParams is dmod, but wrong comm, wanted str(%s), this is %s' % (dmod.getComm(), comm))
+                    elif dmod.checkString(self.cpu, buf_start, byte_array, buf_len, tid, exit_info.old_fd):
+                        self.lgr.debug('sharedSyscall checkReadParams did dmod %s count now %d' % (dmod.getPath(), dmod.getCount()))
+                        trace_msg = trace_msg+('DMOD! changed checkReadParams to %s\n' % dmod.getBecomes())
+                        
+                        if dmod.getCount() == 0:
+                            self.lgr.debug('sharedSyscall checkReadParams found final dmod %s' % dmod.getPath())
+                            if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
+                                self.lgr.debug('sharedSyscall checkReadParams Dmod stopping trace dmod %s' % dmod.getPath())
+                                self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
+                                #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
+                                self.stopTrace()
+                                # note rmDmod simply notes it has been removed so we know if future snapshot loads
+                                self.top.rmDmod(self.cell_name, dmod.getPath())
+                                #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
+                                if dmod.getBreak():
+                                    self.top.notRunning(quiet=True)
+                                    SIM_break_simulation('dmod break_on_dmod,  on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+                                elif not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
+                                    self.top.notRunning(quiet=True)
+                                    SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+                            else:
+                                self.top.rmDmod(self.cell_name, dmod.getPath())
+                                exit_info.syscall_instance.rmCallParam(call_param)
+                        else:
+                            print('%s performed' % dmod.getPath())
+                        if call_param.break_simulation:
+                            SIM_break_simulation('dmod break simulation')
+                elif call_param.name.startswith('runToR') and self.checkStringMatch(call_param, exit_info, byte_array, callname, tid):
+                    self.lgr.debug('sharedSyscall checkReadParams found string match')
         return trace_msg
