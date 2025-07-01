@@ -25,9 +25,13 @@ class IdaSIM():
         self.reg_list = reg_list
         self.origAnalysis = origAnalysis.OrigAnalysis(idaversion.get_input_file_path())
         proc_info = idaapi.get_inf_structure()
+        #print('********************************** procname %s' % proc_info.procname)
         if proc_info.procname == 'ARM':
             self.PC='pc'
             self.SP='sp'
+        elif proc_info.procname == 'PPC':
+            self.PC='PC'
+            self.SP='R1'
         else:
             self.PC='eip'
             self.SP='esp'
@@ -59,11 +63,24 @@ class IdaSIM():
             self.signalClient()
             print('simicsString back from signalClient')
 
+    def doRunToCursor(self):
+        cursor = idaversion.get_screen_ea()
+        curAddr = idaversion.get_reg_value(self.PC)
+        #doRevToAddr(cursor)
+        command = '@cgc.doBreak(0x%x, run=True)' % (cursor)
+        print('command <%s>' % command)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("%s");' % command)
+        print('simicsString <%s>' % simicsString)
+        print('simicsString call geteip when stopped')
+        eip = gdbProt.getEIPWhenStopped()
+        print('simicsString back from geteip when stopped')
+        self.signalClient()
+        print('simicsString back from signalClient')
 
     def signalClient(self, norev=False):
         start_eip = idaversion.get_reg_value(self.PC)
             #print('signalClient eip was at 0x%x, then after rev 1 0x%x call setAndDisable string is %s' % (start_eip, eip, simicsString))
-        print('signalClient start_eip 0x%x' % start_eip)
+        #print('signalClient start_eip 0x%x' % start_eip)
         if norev:
             idaversion.step_into()
             idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
@@ -78,7 +95,7 @@ class IdaSIM():
             except:
                 print('failed to get regs from %s' % simicsString)
                 return
-        print('signalClient update regs')
+        #print('signalClient update regs')
         for reg in regs:
             r = str(reg.upper())
             if r == 'EFLAGS':
@@ -91,9 +108,9 @@ class IdaSIM():
                 continue
             #print('set %s to 0x%x' % (r, regs[reg]))
             idaversion.set_reg_value(r, regs[reg])
-        print('signalClient refresh memory')
+        #print('signalClient refresh memory')
         idaversion.refresh_debugger_memory()
-        print('signalClient back from refresh memory')
+        #print('signalClient back from refresh memory')
 
         new_eip = idaversion.get_reg_value(self.PC)
         if new_eip >= self.kernel_base:
@@ -695,13 +712,25 @@ class IdaSIM():
                 print('text at 0x%x - 0x%x' % (start, end))
                 gdbProt.Evalx('SendGDBMonitor("@cgc.recordText(0x%x, 0x%x)");' % (start, end)) 
                 break
-                
-    
     
     def doStepInto(self):
-        #print('in doInto')
-        idaversion.step_into()
-        idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
+        print('in doInto')
+        proc_info = idaapi.get_inf_structure()
+        if proc_info.procname == 'PPC':
+            cur_addr = idaversion.get_reg_value(self.PC)
+            instruct = idc.generate_disasm_line(cur_addr, 0)
+            print('is ppc, instruct %s' % instruct)
+            if instruct.startswith('bl '):
+                print('is ppc do step')
+                gdbProt.Evalx('SendGDBMonitor("@cgc.stepN(1)");')
+                eip = gdbProt.getEIPWhenStopped()
+                self.signalClient()
+            else: 
+                idaversion.step_into()
+                idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
+        else:
+            idaversion.step_into()
+            idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x kernel_base 0x%x' % (cur_addr, self.kernel_base))
         if cur_addr > self.kernel_base:
@@ -709,10 +738,25 @@ class IdaSIM():
             self.runToUserSpace()
    
     def doStepOver(self):
-        #print('in doStepOver')
-        idaversion.step_over()
-        #print('back from step over')
-        idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
+        print('in doStepOver')
+
+        proc_info = idaapi.get_inf_structure()
+        if proc_info.procname == 'PPC':
+            cur_addr = idaversion.get_reg_value(self.PC)
+            instruct = idc.generate_disasm_line(cur_addr, 0)
+            print('is ppc, instruct %s' % instruct)
+            if instruct.startswith('b') and not instruct.startswith('bl '):
+                print('is ppc b, do step')
+                gdbProt.Evalx('SendGDBMonitor("@cgc.stepN(1)");')
+                eip = gdbProt.getEIPWhenStopped()
+                self.signalClient()
+            else: 
+                idaversion.step_over()
+                idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
+        else:
+            idaversion.step_over()
+            idaversion.wait_for_next_event(idc.WFNE_SUSP, -1)
+
         #print('back getDebuggerEvent')
         cur_addr = idaversion.get_reg_value(self.PC)
         #print('cur_addr is 0x%x' % cur_addr)
