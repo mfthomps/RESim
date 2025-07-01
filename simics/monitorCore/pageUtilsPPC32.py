@@ -119,7 +119,7 @@ def findPageTable(cpu, ea, lgr):
     if rpn is None:
         hash2 = ~ hash1
         pteg = getPTEG(hash2, sdr1, lgr)
-        print('pteg 0x%x' % pteg)
+        #print('pteg 0x%x' % pteg)
         rpn, pp = findPTE(pteg, vsid, 1, api, cpu, lgr)
     if rpn is None:
         # TBD equivalent of page table entry?  This is very incomplete
