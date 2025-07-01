@@ -141,6 +141,8 @@ class DmodMgr():
         self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, self.cell_name, operation))
         name = 'dmod-%s' % operation
         if operation == 'open':
+           # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
+           # Use a syscall dmod if you want to
            op_set = ['open', 'read','write','close','lseek','_llseek']
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
         else:
@@ -158,7 +160,7 @@ class DmodMgr():
                 comm_running = True
                 break
         if comm_running or len(comm_list) == 0: 
-            self.lgr.debug('runToDmod, at least one comm running (or not comm specified), call runTo')
+            self.lgr.debug('runToDmod, at least one comm running (or no comm specified), call runTo')
             self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True)
         else:
             self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
