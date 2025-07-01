@@ -340,7 +340,8 @@ class ReadReplace():
             self.lgr.error('readReplace pagedIn name %s not in pending_pages' % name)
             return
         replace_entry = self.pending_pages[name]
-        load_addr = self.so_map.getLoadAddr(replace_entry.lib)
+        tid = self.top.getTID(target=self.cell_name)
+        load_addr = self.so_map.getLoadAddr(replace_entry.lib, tid)
         self.lgr.debug('readReplace pagedIn load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
         phys = self.getPhys(replace_entry, load_addr, None)
         if phys is not None and phys != 0:
