@@ -88,7 +88,7 @@ class Dmod():
                if len(parts) > 1:
                    self.operation = parts[1]
                else:
-                   self.lgr.error('dmod command missing operation %s' % kind_line)
+                   self.lgr.error('dmod %s command missing operation %s' % (path, kind_line))
                    return
                start_part = 2
                if len(parts) > start_part:
