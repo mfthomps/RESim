@@ -591,7 +591,7 @@ class MemUtils():
                     retval = phys_block.address
                 except:
                     self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
-                    return
+                    return None
         else:
             cpl = getCPL(cpu)
             if do_log:
