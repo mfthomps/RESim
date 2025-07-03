@@ -177,14 +177,14 @@ class DmodMgr():
             snap_path_prefix = '%s/%s/dmod_files' % (self.run_from_snap, self.cell_name)
             if os.path.isdir(snap_path_prefix):
                 #os.makedirs(self.path_prefix, exist_ok=True)
-                wtf = shutil.copytree(snap_path_prefix, './dmod_files')
-                self.lgr.debug('dmodMgr setupFileSystem copy tree went to %s' % wtf)
+                where = shutil.copytree(snap_path_prefix, './dmod_files')
+                self.lgr.debug('dmodMgr setupFileSystem copy tree went to %s' % where)
 
     def pickleFileSystem(self, snapname):
         if os.path.isdir(self.path_prefix):
             snap_path_prefix = '%s/%s/dmod_files' % (snapname, self.cell_name)
-            wtf = shutil.copytree(self.path_prefix, snap_path_prefix)
-            self.lgr.debug('dmodMgr pickleFileSystem copied %s to %s wtf:%s' % (self.path_prefix, snap_path_prefix, wtf))
+            where = shutil.copytree(self.path_prefix, snap_path_prefix)
+            self.lgr.debug('dmodMgr pickleFileSystem copied %s to %s where:%s' % (self.path_prefix, snap_path_prefix, where))
         else:
             self.lgr.debug('dmodMgr pickleFileSystem no files at %s' % self.path_prefix)
          
