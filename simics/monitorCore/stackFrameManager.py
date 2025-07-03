@@ -187,7 +187,7 @@ class StackFrameManager():
             self.stack_base[tid] = sp
 
     def recordStackClone(self, tid, parent):
-        self.lgr.debug('recordStackClone tid: %s parent: %s' % (tid, parent))
+        self.lgr.debug('stackFrameManager recordStackClone tid: %s parent: %s' % (tid, parent))
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     ''' TBD remove, only here for compatability with old snapshots'''
