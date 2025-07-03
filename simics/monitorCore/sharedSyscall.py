@@ -1463,7 +1463,7 @@ class SharedSyscall():
             self.lgr.debug('sharedSyscall adding clone %d to watched tids' % eax)
             self.context_manager.addTask(eax)
 
-        if exit_info.matched_param is not None and exit_info.matched_param.match_param is not None and exit_info.matched_param.break_simulation:
+        if exit_info.matched_param is not None and (exit_info.matched_param.match_param is not None or exit_info.matched_param.name == 'runToCall') and exit_info.matched_param.break_simulation:
             '''  Use syscall module that got us here to handle stop actions '''
             self.lgr.debug('exitHap found matching call parameter %s' % str(exit_info.matched_param.match_param))
             self.matching_exit_info = exit_info
