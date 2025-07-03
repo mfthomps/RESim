@@ -603,7 +603,7 @@ class GenContextMgr():
             return False
         retval = False       
         if comm.startswith('kworker'):
-            comm == 'kworker'
+            comm = 'kworker'
         #self.lgr.debug('onlyOrIgnore comm %s' % comm)
         if tid in self.ignore_threads:
             #self.lgr.debug('onlyOrIgnore tid:%s in ignore_threads' % tid)
@@ -1721,7 +1721,7 @@ class GenContextMgr():
 
     def checkFirstSchedule(self, task_rec, tid, comm, first=False):
         # NOTE may be called during memory transaction, i.e., info from taskUtils not reliable
-        self.lgr.debug('contextManager checkFirstSchedule comm %s' % (comm))
+        #self.lgr.debug('contextManager checkFirstSchedule comm %s' % (comm))
         #if task_rec not in self.current_tasks or len(self.current_tasks) == 0 or first: 
         if True:
             if comm in self.watch_for_prog and comm in self.watch_for_prog_callback:
