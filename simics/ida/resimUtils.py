@@ -374,6 +374,8 @@ def renameFromLogger():
 def adjustStack(fun_ea):
     # Search end of function for indications of stack adjustment.  Used as an aide to stack tracing
     info = idaapi.get_inf_structure()
+    if info.procname == 'PPC':
+        return 0
     if info.is_32bit():
         word_size = 4
     else:
