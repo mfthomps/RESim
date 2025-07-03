@@ -119,7 +119,7 @@ class PrepInject():
         #else:
         #    self.lgr.error('prepInject finishNoCall falled to get syscall ?')
 
-    def tidScheduled(self, dumb):
+    def tidScheduled(self, dumb=None):
         self.lgr.debug('prepInject tidScheduled')
         pinfo = self.top.pageInfo(self.exit_info.retval_addr, quiet=True)
         self.lgr.debug('%s' % pinfo.valueString())
