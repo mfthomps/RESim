@@ -156,7 +156,7 @@ class Jumpers():
             for item in parts[2:]:
                 key, value = resimUtils.getKeyValue(item)
                 if key is None:
-                    self.lgr.error('jumpers do not not what to do with %s in %s' (item, fname)) 
+                    self.lgr.error('jumpers do not not what to do with %s in %s' % (item, fname)) 
                     self.top.quit()
                 if key == 'comm':
                     comm = value 
