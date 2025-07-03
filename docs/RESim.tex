@@ -1611,6 +1611,7 @@ The first field is the kind, which can be:
 \item {\tt full\_replace} -- Replace an entire read or write buffer.
 \item {\tt match\_cmd} -- Execute a series of Simics commands when a given string is read or written.
 \item {\tt open\_replace} -- Mask a failure to open an named file, and spoof subsequent reads from that file with content of a named file.
+\item {\tt syscall} -- Change return value of a system call.
 \end{itemize}
 The second field in the first line of the directive is the operation type, e.g., {\tt read}, {\tt write}, {\tt open}.
 The operation can be followed by the following keyed options, e.g., {\tt key=value}
@@ -1702,8 +1703,21 @@ uboot_params.data
 \end{verbatim}
 \noindent The \textit{becomes} field is the name of a data file whose content is returned to the application when reading from the FD associated with
 the missing file.  
-\end{itemize}
 Note that open\_replace does not affect stat64 calls.  Use syscall dmods if you wish to force a no-error return to the application.
+
+\item {\tt syscall} Set the return value of a syscall.  Behavior depends on the named syscall.   Calls having an filename parameter (1st parameter) 
+that matches a given string will return zero.  The getpid call will return a given value.
+\begin{verbatim}
+syscall stat64
+/var/proc/net/xt_recent
+\end{verbatim}
+\noindent causes the stat64 call to return zero instead of an error when stating that file.
+\begin{verbatim}
+syscall getpid comm=must-run-as-pid1
+1
+\end{verbatim}
+\noindent causes the the returned value of getpid to be 1 when called from {\tt must-run-as-pid1}
+\end{itemize}
 
 \subsubsection{Dynamic modifications to multiple computers}
 Dynamic modifications (Dmods) to system state are often performed early in the boot process, e.g.,
