@@ -923,7 +923,7 @@ class SOMap():
         prog = self.fullProg(in_fname)
         if prog is None:
             self.lgr.error('soMap getLoadAddr got no prog for %s' % in_fname)
-            return None
+            return None, None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         map_tid = self.getSOTid(tid)
