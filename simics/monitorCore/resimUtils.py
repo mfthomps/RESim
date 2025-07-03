@@ -584,7 +584,7 @@ def isClib(in_lib_file, lgr=None):
     if in_lib_file is None:
         return False
     retval = False
-    if 'c:\windows' in in_lib_file.lower():
+    if 'c:\\windows' in in_lib_file.lower():
         retval = True
     else:
         lib_file = ntpath.basename(in_lib_file) 
