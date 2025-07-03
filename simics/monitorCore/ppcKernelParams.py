@@ -186,6 +186,8 @@ class PPCKernelParams():
         self.lgr.debug('ppcKernelParam findSingle %d hits' % len(hit_list))
         if len(hit_list) == 1:
             retval =  hit_list[0]
+            self.setCurrent(hit_list[0])
+            self.setModeExitHap() 
         else:
             self.maybe_current = []
             for hit in hit_list:
