@@ -266,7 +266,6 @@ class PageCallbacks():
                     self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                 redo_addrs.append(addr)
                 continue
-            phys_addr = pt.phys_addr | (addr & 0x00000fff)
             #print('would do callback here')
             self.doCallback(addr)
 
