@@ -149,6 +149,7 @@ class StackFrameManager():
         if os.path.isfile(stack_base_file):
             self.lgr.debug('stackFrameManager stack_base pickle from %s' % stack_base_file)
             self.stack_base = pickle.load( open(stack_base_file, 'rb') ) 
+            self.lgr.debug('stackFrameManager loadPickle %d entries in stack_base' % (len(self.stack_base)))
             for tid in self.stack_base:
                 self.lgr.debug('stackFrameManager loadPickle tid:%s stack_base 0x%x' % (tid, self.stack_base[tid]))
 
@@ -189,10 +190,6 @@ class StackFrameManager():
     def recordStackClone(self, tid, parent):
         self.lgr.debug('stackFrameManager recordStackClone tid: %s parent: %s' % (tid, parent))
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
-
-    ''' TBD remove, only here for compatability with old snapshots'''
-    def initStackBase(self, stack_base):
-        self.stack_base = stack_base
 
     def up(self):
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
