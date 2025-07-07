@@ -937,9 +937,6 @@ class GenMonitor():
                                         self.soMap[cell_name], self.traceMgr[cell_name], self.param[cell_name], self.lgr)
             self.stackFrameManager[cell_name] = stackFrameManager.StackFrameManager(self, cpu, cell_name, self.task_utils[cell_name], self.mem_utils[cell_name], 
                                         self.context_manager[cell_name], self.soMap[cell_name], self.targetFS[cell_name], self.run_from_snap, self.disassemble_instruct[cell_name], self.lgr)
-            ''' TBD compatability remove this'''
-            if self.stack_base is not None and cell_name in self.stack_base:
-                self.stackFrameManager[cell_name].initStackBase(self.stack_base[cell_name])
 
             if self.isWindows(target=cell_name):
                 self.winMonitor[cell_name] = winMonitor.WinMonitor(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
@@ -955,7 +952,6 @@ class GenMonitor():
                                   self.context_manager[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.skip_to_mgr[cell_name] = skipToMgr.SkipToMgr(self.reverse_mgr[cell_name], cpu, self.lgr)
 
-            self.lgr.debug('finishInit is done for cell %s' % cell_name)
 
             load_jumpers = self.getCompDict(cell_name, 'LOAD_JUMPERS')
             if load_jumpers is not None and (load_jumpers.lower() == 'yes' or load_jumpers.lower() == 'true'):
@@ -3114,6 +3110,7 @@ class GenMonitor():
         call_list = ['execve']
         if watch_exit:
             call_list.append('exit_group')
+            call_list.append('exit')
         self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'execve', flist=flist, linger=linger)
         if run:
             SIM_continue(0)
@@ -3177,7 +3174,7 @@ class GenMonitor():
                 if context is None: 
                     context=self.context_manager[self.target].getRESimContextName()
 
-                exit_calls = ['exit_group', 'tgkill']
+                exit_calls = ['exit_group', 'tgkill', 'exit']
                 self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
                 retval = self.exit_group_syscall[self.target]
                 #self.lgr.debug('debugExitHap')
