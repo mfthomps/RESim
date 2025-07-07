@@ -2551,7 +2551,7 @@ class Syscall():
                 frame_string = taskUtils.stringFromFrame(frame)
                 #SIM_break_simulation(frame_string)
         #elif break_eip == syscall_info.calculated:
-        elif break_eip == self.param.ppc32_entry:
+        elif self.cpu.architecture == 'ppc32' and break_eip == self.param.ppc32_entry:
             exit_eip1 = self.param.ppc32_ret
             exit_eip2 = self.param.ppc32_ret2
             if frame is None:
@@ -2949,6 +2949,7 @@ class Syscall():
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
                     self.lgr.debug('syscall handleExit %s HAD pending fault, do something!' % tid)
+                self.context_manager.checkExitCallback()
 
 
     def getBinders(self):
