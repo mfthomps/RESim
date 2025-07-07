@@ -702,7 +702,7 @@ def getFullPath(prog, ini, lgr=None):
     else:
         target_fs = targetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
     if lgr is not None:
-        lgr('resimUtils getFullPath %s' % prog)
+        lgr.debug('resimUtils getFullPath %s' % prog)
     full = target_fs.getFull(prog, lgr=lgr)
     return full
 
