@@ -225,6 +225,11 @@ class AFL():
             self.lgr.debug('afl use target proc %s on cell %s, call debug' % (target_proc, target_cell))
             self.top.debugProc(target_proc, self.aflInitCallback, track_threads=False)
         #self.coverage.watchExits()
+        self.context_manager.setExitCallback(self.didExit)
+
+    def didExit(self, dumb=None):
+        self.lgr.debug('afl didExit, break simulation')
+        SIM_break_simulation('didExit')
     
     def ranToIO(self, dumb):
         ''' callback after completing runToIO '''
@@ -393,6 +398,7 @@ class AFL():
                 #self.lgr.debug('afl finishup cksum is 0x%x' % cksum)
                 if self.empty_trace_bits is None:
                     self.empty_trace_bits = trace_bits
+            self.coverage.rmModeHap()
             new_hits = self.coverage.getHitCount() 
             self.total_hits += new_hits
             delta_cycles = self.target_cpu.cycles-self.starting_cycle
@@ -795,7 +801,7 @@ class AFL():
         self.counter_bp = None
 
     def stopHapCycle(self, dumb, one, exception, error_string):
-        self.lgr.debug('afl stopHapCycle cycle 0x%x' % self.target_cpu.cycles)
+        #self.lgr.debug('afl stopHapCycle cycle 0x%x' % self.target_cpu.cycles)
         if self.stop_hap_cycle is not None:
             SIM_run_alone(self.rmStopHapCycle, None)
             SIM_run_alone(self.finishCallback, None)
