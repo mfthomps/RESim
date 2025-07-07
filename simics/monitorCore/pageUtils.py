@@ -395,7 +395,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
         #lgr.debug('findPageTable is IA32E')
         return findPageTableIA32E(cpu, addr, lgr, force_cr3=force_cr3) 
     else:
-        lgr.debug('findPageTable not IA32E')
+        #lgr.debug('findPageTable not IA32E')
         ptable_info = PtableInfo(cpu)
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
