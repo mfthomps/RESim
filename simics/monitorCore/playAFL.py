@@ -138,6 +138,7 @@ class PlayAFL():
         if packet_count > 1 and not (self.udp_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return None
+        self.one_off = False
         if os.path.isfile(dfile):
             ''' single file to play '''
             self.dfile = 'oneplay'
@@ -148,6 +149,7 @@ class PlayAFL():
             else:
                 self.afl_list = [dfile]
                 self.lgr.debug('playAFL, single file, abs path is %s' % dfile)
+            self.one_off = True
         elif os.path.isdir(dfile) and not os.path.isfile(os.path.join(dfile, 'version.pickle')):
             # avoid snapshot directories
 
@@ -753,6 +755,7 @@ class PlayAFL():
 
     def getHitsPath(self, index):
         fname = None
+        self.lgr.debug('playAFL getHitsPath index %d, len(afl_list) %d' % (index, len(self.afl_list)))
         if index < len(self.afl_list):
             queue_dir = os.path.dirname(self.afl_list[index])
             queue_parent = os.path.dirname(queue_dir)
@@ -771,6 +774,7 @@ class PlayAFL():
             except:
                 pass
             fname = os.path.join(coverage_dir, os.path.basename(self.afl_list[self.index])) 
+            self.lgr.debug('playAFL getHitsPath returning fname %s coverage_dir was %s' % (fname, coverage_dir))
         return fname
 
     def getExitsPath(self, index):
@@ -791,24 +795,23 @@ class PlayAFL():
         ''' hits will go in a "coverage" directory along side queue, etc. '''
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
-        fname = self.getHitsPath(self.index)
-        if fname is not None: 
-            if not os.path.isfile(fname):
-                self.lgr.debug('playAFL record hits, assume ad-hoc path')
-                print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
-                fname = '/tmp/playAFL.hits'
-            self.lgr.debug('playAFL recordHits to file %s' % fname)
-            with open(fname, 'w') as fh:
-                #json.dump(hit_list, fh) 
-                json.dump(hit_bbs, fh) 
-            #for hit in hit_list:
-            for hit in hit_bbs:
-                hit = int(hit)
-                if hit not in self.all_hits:
-                    self.all_hits.append(hit)
-            base = os.path.basename(fname)
-            print('%d hits in this play for %s.' % (len(hit_bbs), base))
-            self.reportNewHits()
+        if self.one_off:
+            print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
+            fname = '/tmp/playAFL.hits'
+        else:
+            fname = self.getHitsPath(self.index)
+        self.lgr.debug('playAFL recordHits to file %s' % fname)
+        with open(fname, 'w') as fh:
+            #json.dump(hit_list, fh) 
+            json.dump(hit_bbs, fh) 
+        #for hit in hit_list:
+        for hit in hit_bbs:
+            hit = int(hit)
+            if hit not in self.all_hits:
+                self.all_hits.append(hit)
+        base = os.path.basename(fname)
+        print('%d hits in this play for %s.' % (len(hit_bbs), base))
+        self.reportNewHits()
 
     def reportNewHits(self):
             prog_path = self.top.getProgName(self.target_tid, target=self.target_cell)
