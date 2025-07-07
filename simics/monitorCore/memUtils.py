@@ -1419,6 +1419,7 @@ class MemUtils():
             lcount += 1
         
         sindex = 0
+        #self.lgr.debug('memUtils writeString lcount %d' % lcount)
         for i in range(lcount):
             eindex = min(sindex+4, len(string))
             if sys.version_info[0] > 2 and type(string) != bytearray and type(string) != bytes:
@@ -1427,7 +1428,10 @@ class MemUtils():
                 sub = string[sindex:eindex]
             count = len(sub)
             #sub = sub.zfill(4)
-            sub = sub.ljust(4, b'0')
+            if cpu.architecture in ['ppc32']:
+                sub = sub.rjust(4, b'0')
+            else:
+                sub = sub.ljust(4, b'0')
             #print('sub is %s' % sub)
             #value = int(sub.encode('hex'), 16)
             if len(sub) < 4:
@@ -1453,7 +1457,7 @@ class MemUtils():
             #SIM_write_phys_memory(cpu, phys_block.address, value, count)
             try:
                 SIM_write_phys_memory(cpu, phys, value, count)
-                #self.lgr.debug('writeString wrote %d bytes' % count)
+                #self.lgr.debug('writeString wrote %d bytes value: 0x%x' % (count, value))
             except TypeError:
                 self.lgr.error('writeString failed writing to phys 0x%x (vert 0x%x), value %s' % (phys, address, value))
                 return
