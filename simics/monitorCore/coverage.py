@@ -861,11 +861,14 @@ class Coverage():
 
     def saveHits(self, fname):
         ''' save blocks_hit to named file '''
-        save_name = '%s.%s.hits' % (self.hits_path, fname)
-        try:
-            os.makedirs(os.path.dirname(self.hits_path))
-        except:
-            pass
+        if fname.startswith(os.sep):
+            save_name = fname
+        else:
+            save_name = '%s.%s.hits' % (self.hits_path, fname)
+            try:
+                os.makedirs(os.path.dirname(self.hits_path))
+            except:
+                pass
         with open(save_name, 'w') as outj:
             json.dump(self.blocks_hit, outj)
             self.lgr.debug('coveraged saveHits saved blocks_hit to %s' % save_name)
