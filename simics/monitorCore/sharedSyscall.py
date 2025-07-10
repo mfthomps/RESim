@@ -448,7 +448,7 @@ class SharedSyscall():
                 if exit_info.retval_addr is None:
                     self.lgr.error('sharedSyscall %s failed to get retval addr' % socket_callname)
                     return
-                trace_msg = trace_msg+('FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x\n%s\n' % (exit_info.old_fd, 
+                trace_msg = trace_msg+('FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x data:\n%s\n' % (exit_info.old_fd, 
                     eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
             else:
                 trace_msg = err_trace_msg+('FD: %d, exception: %d\n' % (exit_info.old_fd, eax))
@@ -515,7 +515,7 @@ class SharedSyscall():
                 #else:
                 #    count = exit_info.sock_struct.length
                 count = exit_info.count
-                trace_msg = trace_msg+('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s\n%s\n' % (socket_callname, tid, 
+                trace_msg = trace_msg+('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s data:\n%s\n' % (socket_callname, tid, 
                      exit_info.old_fd, count, eax, exit_info.retval_addr, src, s))
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
@@ -990,8 +990,8 @@ class SharedSyscall():
                     s = '<<NOT MAPPED>>'
 
                 self.lgr.debug('sharedSyscall return from read fd %d' % exit_info.old_fd)
-                trace_msg = trace_msg+('FD: %d returned length: %d into 0x%x given count: %d cycle: 0x%x \n\t%s\n' % (exit_info.old_fd, 
-                              eax, exit_info.retval_addr, exit_info.count, self.cpu.cycles, s))
+                trace_msg = trace_msg+('FD: %d returned length: %d into 0x%x given count: %d data:\n\t%s\n' % (exit_info.old_fd, 
+                              eax, exit_info.retval_addr, exit_info.count, s))
                 self.lgr.debug(trace_msg)
 
                 my_syscall = exit_info.syscall_instance
@@ -1027,7 +1027,7 @@ class SharedSyscall():
                             self.traceFiles.write(tid, exit_info.old_fd, byte_array)
                     else:
                         s = '<<NOT MAPPED>>'
-                    trace_msg = trace_msg+('FD: %d count: %d\n\t%s\n' % (exit_info.old_fd, eax, s))
+                    trace_msg = trace_msg+('FD: %d count: %d data:\n\t%s\n' % (exit_info.old_fd, eax, s))
                     self.lgr.debug(trace_msg)
                     if exit_info.matched_param is not None and type(exit_info.matched_param.match_param) is str:
                         self.lgr.debug('sharedSyscall write call_param %s string already matched in syscall' % exit_info.matched_param.name)
@@ -1312,15 +1312,17 @@ class SharedSyscall():
                         trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 
                         self.dataWatch.markCall(trace_msg, exit_info.old_fd)
                 else:
+                    # Unlike reads, we do not know if the FD matches the param until we return.
                     for call_param in exit_info.call_params:
                         if type(call_param.match_param) is int:
                             if exit_info.syscall_instance.name == 'runToIO':
                                 if exit_info.select_info.setHasFD(call_param.match_param, exit_info.select_info.readfds):
                                     self.lgr.debug('sharedSyscall select for runToIO fd %d in read fds, has match' % call_param.match_param)
                                     exit_info.matched_param = call_param
-                                    if self.dataWatch is not None:
-                                        msg = trace_msg
-                                        self.dataWatch.markCall(msg, call_param.match_param)
+                                    if not self.checkCount(0, exit_info, '', ''):
+                                        if self.dataWatch is not None:
+                                            msg = trace_msg
+                                            self.dataWatch.markCall(msg, call_param.match_param)
                                     break
                             elif exit_info.select_info.hasFD(call_param.match_param):
                                 self.lgr.debug('sharedSyscall select fd %d found' % call_param.match_param)
@@ -1487,8 +1489,9 @@ class SharedSyscall():
         return True
 
     def checkCount(self, eax, exit_info, trace_msg, data_string):
-        # determine if a runToInput type syscall has an associated count; and if so, 
-        # whether that count has been reached
+        '''determine if a runToInput type syscall has an associated count; and if so, 
+            whether that count has been reached.  NOTE, may set exit_info.matched_param to None, and increment its count.
+        '''
         self.lgr.debug('sharedSyscall checkCount sub_match: %s data_string %s' % (exit_info.matched_param.sub_match, data_string))
         wait_for_count = False
         my_syscall = exit_info.syscall_instance
