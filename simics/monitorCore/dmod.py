@@ -275,7 +275,7 @@ class Dmod():
         return rm_this
 
     def stopAlone(self, fiddle):
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, fiddle)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, fiddle)
         SIM_break_simulation('matchCmd')
 
     def matchCmd(self, s):
@@ -328,7 +328,7 @@ class Dmod():
         return retval
 
     def stopHap(self, fiddle, one, exception, error_string):
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.top.RES_delete_stop_hap(self.stop_hap)
         self.lgr.debug('dmod stop hap')
         for cmd in fiddle.cmds:
             self.lgr.debug('run command %s' % cmd)

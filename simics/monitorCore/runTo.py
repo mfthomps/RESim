@@ -50,16 +50,13 @@ class RunTo():
         self.want_tid = None
         self.so_haps = {}
 
-    def delStopHap(self, dumb):
-        if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
-            self.stop_hap = None
-
     def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runTo stopHap ip: 0x%x stop_action %s' % (eip, str(self.stop_action)))
-            SIM_run_alone(self.delStopHap, None)
+            hap = self.stop_hap
+            self.top.RES_delete_stop_hap_run_alone(hap)
+            self.stop_hap = None
             if self.stop_action is not None:
                 self.stop_action.run()
             else:
@@ -70,7 +67,7 @@ class RunTo():
             if self.debug_group:
                 self.context_manager.watchTasks(set_debug_tid=True)
             self.top.skipAndMail()
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
             self.top.show()
             '''
@@ -88,8 +85,7 @@ class RunTo():
     def stopIt(self, dumb=None):
         self.lgr.debug('runTo stopIt')
         self.rmHaps(None)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, None)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, None)
         SIM_break_simulation('soMap')
 
     def knownHap(self, tid, the_obj, break_num, memory):
@@ -340,8 +336,7 @@ class RunTo():
             self.lgr.debug('runTo toRunningProc thinks it is already running')
       
     def stopAlone(self, dumb=None): 
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, None)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, None)
         SIM_run_alone(self.cleanToProcHaps, None)
         SIM_break_simulation('runTo stopAlone')
 

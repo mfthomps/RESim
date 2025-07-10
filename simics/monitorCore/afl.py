@@ -380,7 +380,7 @@ class AFL():
 
     def rmStopHap(self):
         if self.stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
             #self.lgr.debug('afl removed stop hap')
 
@@ -607,7 +607,7 @@ class AFL():
         #self.lgr.debug('afl, did coverage, cycle: 0x%x' % self.target_cpu.cycles)
         if self.stop_hap is None:
             #self.lgr.debug('afl added stop hap')
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         if status == AFL_CRASH or status == AFL_HANG:
             self.lgr.debug('afl goN after crash or hang, watch exits, cpu cycle was 0x%x context %s' % (self.target_cpu.cycles, self.target_cpu.current_context))
             self.coverage.watchExits(tid=self.target_tid)
@@ -791,7 +791,7 @@ class AFL():
     def doCycleStop(self, dumb):
         SIM_event_cancel_time(self.target_cpu, self.cycle_event, self.target_cpu, None, None)
         self.cycle_event = None
-        self.stop_hap_cycle = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapCycle,  None)
+        self.stop_hap_cycle = self.top.RES_add_stop_callback(self.stopHapCycle,  None)
         SIM_break_simulation('afl cycle_handler')
 
     def rmCounterHap(self, hap):
@@ -803,12 +803,14 @@ class AFL():
     def stopHapCycle(self, dumb, one, exception, error_string):
         #self.lgr.debug('afl stopHapCycle cycle 0x%x' % self.target_cpu.cycles)
         if self.stop_hap_cycle is not None:
-            SIM_run_alone(self.rmStopHapCycle, None)
+            hap = self.stop_hap_cycle
+            self.top.RES_delete_stop_hap_run_alone(hap)
+            self.stop_hap_cycle = None
             SIM_run_alone(self.finishCallback, None)
 
     def rmStopHapCycle(self, dumb):
         if self.stop_hap_cycle is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
+            self.top.RES_delete_stop_hap(self.stop_hap_cycle)
             self.stop_hap_cycle = None
 
     def functionBackstop(self):

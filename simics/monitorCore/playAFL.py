@@ -482,7 +482,7 @@ class PlayAFL():
     def backstopCallbackAlone(self, cycles):
         self.lgr.info('playAFL backstop detected')
         if self.stop_hap is None:
-               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('backstop')
 
     def hangCallback(self, cycles):
@@ -492,13 +492,13 @@ class PlayAFL():
         self.lgr.info('playAFL hang detected')
         print('playAFL hang detected')
         if self.stop_hap is None:
-               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('hang')
 
     def stopOnRead(self, counter):
         self.lgr.info('playAFL stopOnRead callback counter %d' % counter)
         if self.stop_hap is None:
-               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('stopOnRead')
 
     def goAlone(self, clear_hits):
@@ -606,7 +606,7 @@ class PlayAFL():
                 self.context_manager.setExitCallback(self.reportExit)
             self.context_manager.watchTasks()
             #if self.stop_hap is None:
-            #    self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            #    self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
 
             self.lgr.debug('playAFL goAlone watch page faults for tid:%s cell %s' % (self.target_tid, self.target_cell))
             if not self.no_page_faults:
@@ -675,7 +675,7 @@ class PlayAFL():
             elif self.parallel:
                 self.top.quit()
             hap = self.stop_hap
-            self.delStopHap(hap)
+            self.top.RES_delete_stop_hap_run_alone(hap)
             self.stop_hap = None
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
@@ -878,7 +878,7 @@ class PlayAFL():
                     self.recordHits(hit_bbs)
                     self.coverage.saveDeadFile()
                     hap = self.stop_hap
-                    SIM_run_alone(self.delStopHap, hap)
+                    self.top.RES_delete_stop_hap_run_alone(hap)
                     self.stop_hap = None
                     self.lgr.debug('playAFL stopHap, not repeat, should be done.')
                 if self.coverage.didExit() or self.did_exit:
@@ -896,10 +896,6 @@ class PlayAFL():
             if self.repeat or self.dfile != 'oneplay':
                 self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
-
-    def delStopHap(self, hap):
-        if hap is not None:
-            SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
 
     def loadPickle(self, name):
         retval = False
@@ -924,8 +920,9 @@ class PlayAFL():
 
     def reportExitAlone(self, dumb):
         print('Process exit  cycles 0x%x' % self.target_cpu.cycles)
+        self.lgr.debug('playAFL reportExitAlone Process exit  cycles 0x%x' % self.target_cpu.cycles)
         if self.stop_hap is None:
-               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('process exit')
  
     def reportSuspend(self):
@@ -934,8 +931,9 @@ class PlayAFL():
 
     def reportSuspendAlone(self, dumb):
         print('Process suspend, bail. cycles 0x%x' % self.target_cpu.cycles)
+        self.lgr.debug('playAFL reportSuspendAlone Process suspend, bail. cycles 0x%x' % self.target_cpu.cycles)
         if self.stop_hap is None:
-               self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('process suspend')
  
     def setCycleHap(self, dumb=None):
@@ -975,7 +973,7 @@ class PlayAFL():
         SIM_event_cancel_time(self.target_cpu, self.cycle_event, self.target_cpu, None, None)
         self.cycle_event = None
         self.lgr.debug('playAFL doCycleStop cycle_event set to None')
-        self.stop_hap_cycle = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHapCycle,  None)
+        self.stop_hap_cycle = self.top.RES_add_stop_callback(self.stopHapCycle,  None)
         SIM_break_simulation('playAFL cycle_handler')
 
     def rmCounterHap(self, hap):
@@ -991,7 +989,7 @@ class PlayAFL():
 
     def rmStopHapCycle(self, dumb):
         if self.stop_hap_cycle is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap_cycle)
+            self.top.RES_delete_stop_hap(self.stop_hap_cycle)
             self.lgr.debug('playAFL stop_hap_cycle removed')
             self.stop_hap_cycle = None
 

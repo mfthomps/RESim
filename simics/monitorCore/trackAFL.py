@@ -75,7 +75,7 @@ class TrackAFL():
     def go(self, dumb=None):
         cpu = self.top.getCPU()
         if self.stop_hap is not None:
-            SIM_hap_delete_callback_id('Core_Simulation_Stopped', self.stop_hap)
+            self.top.RES_add_stop_callback(self.stop_hap)
             self.stop_hap = None
             eip = self.top.getEIP(cpu)
             self.lgr.debug('trackAFL go, bout to go to origin.  eip 0x%x cycles 0x%x' % (eip, cpu.cycles))
@@ -111,7 +111,7 @@ class TrackAFL():
     def setStopAlone(self, dumb):
         if self.stop_hap is None:
             self.lgr.debug('trackAFL setStopAlone')
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap,  None)
+            self.stop_hap = self.top.RES_delete_stop_hap(self.stopHap,  None)
             SIM_break_simulation('trackafl')
 
     def reportExit(self):

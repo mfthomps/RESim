@@ -171,7 +171,7 @@ class PageFaultGen():
         self.top.removeDebugBreaks(keep_coverage=False)
         self.top.stopTrackIO(immediate=True)
        
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, prec)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, prec)
         self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
         self.top.undoDebug(None)
         SIM_break_simulation('SEGV, task rec for %s (%s) modified mem reference was 0x%x' % (prec.tid, prec.comm, prec.cr2))
@@ -674,7 +674,7 @@ class PageFaultGen():
         self.top.skipAndMail(restore_debug=False)
 
     def stopAlone(self, prec):
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.top.RES_delete_stop_hap(self.stop_hap)
         self.stop_hap = None
         self.context_manager.setIdaMessage('SEGV access to memory 0x%x' % prec.cr2)
         self.lgr.debug('SEGV access to memory 0x%x' % prec.cr2)

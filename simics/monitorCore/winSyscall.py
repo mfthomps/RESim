@@ -1382,8 +1382,7 @@ class WinSyscall():
         eip = self.top.getEIP()
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, msg)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, msg)
         self.lgr.debug('winSyscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
@@ -1392,7 +1391,7 @@ class WinSyscall():
              a break in the simulation
         '''
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.stop_action is not None:
@@ -1524,7 +1523,7 @@ class WinSyscall():
     def stopTraceAlone(self, dumb):
         #self.lgr.debug('winSyscall stopTraceAlone')
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id(self.stop_hap)
             self.stop_hap = None
 
         #self.lgr.debug('winSyscall stopTraceAlone2')
@@ -1551,11 +1550,11 @@ class WinSyscall():
     def stopMazeHap(self, syscall, one, exception, error_string):
         if self.stop_maze_hap is not None:
             SIM_run_alone(self.top.exitMaze, syscall)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_maze_hap)
+            self.top.RES_delete_stop_hap(self.stop_maze_hap)
             self.stop_maze_hap = None
 
     def stopForMazeAlone(self, syscall):
-        self.stop_maze_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopMazeHap, syscall)
+        self.stop_maze_hap = self.top.RES_add_stop_callback(self.stopMazeHap, syscall)
         self.lgr.debug('winSyscall added stopMazeHap Now stop, syscall: %s' % (syscall))
         SIM_break_simulation('automaze')
 

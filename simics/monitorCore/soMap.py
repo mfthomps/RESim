@@ -827,13 +827,12 @@ class SOMap():
             eip = self.top.getEIP(cpu)
             self.lgr.debug('soMap stopHap ip: 0x%x' % eip)
             self.top.skipAndMail()
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
 
     def stopAlone(self, cpu):
         if len(self.hap_list) > 0:
-            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, cpu)
+            self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
             self.lgr.debug('soMap stopAlone')
             for hap in self.hap_list:
                 self.context_manager.genDeleteHap(hap)

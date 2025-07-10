@@ -46,7 +46,7 @@ class runToSyscall():
             self.syscall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, 
                 syscall_address, 1, 0)
             self.lgr.debug('runToSyscall, using linear break ')
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stoppedExecution, None)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stoppedExecution, None)
         self.is_monitor_running.setRunning(True)
         if forward:
             self.lgr.debug('runToSyscall, continue')
@@ -77,7 +77,7 @@ class runToSyscall():
             eip = self.top.getEIP(self.cpu)
             self.lgr.debug('runToSyscall, stoppedExecution at 0x%x, expect client to run/rev to user space' % eip)
             print('runToSyscall, stoppedExecution, expect client to run/rev to user space')
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             RES_delete_breakpoint(self.syscall_break)
             self.is_monitor_running.setRunning(False)
             self.top.skipAndMail(cycles=0)

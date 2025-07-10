@@ -101,7 +101,7 @@ class VxKMonitor():
         pc = self.getPC(self.cpu)
         next_instruct = pc + 4
         bp = SIM_breakpoint(self.cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, next_instruct, 1, 0)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, bp)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, bp)
         SIM_continue(0)
 
     def stopHap(self, bp, one, exception, error_string):
@@ -115,7 +115,7 @@ class VxKMonitor():
 
     def rmStopHap(self, hap):
         if hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+            self.top.RES_delete_stop_hap(hap)
 
     def disassemble(self, count=1):
         pc = self.getPC(self.cpu)

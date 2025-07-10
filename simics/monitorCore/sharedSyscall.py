@@ -1535,13 +1535,13 @@ class SharedSyscall():
             return self.matching_exit_info 
 
     def stopAlone(self, Dumb):
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHapReset, None)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHapReset, None)
         self.lgr.debug('sharedSyscall stopAlone for origin reset, added hap, now stop')
         SIM_break_simulation('origin reset')
 
     def delStopAlone(self, dumb):
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
 
     def stopHapReset(self, stop_action, one, exception, error_string):

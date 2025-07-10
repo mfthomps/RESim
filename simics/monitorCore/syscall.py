@@ -598,8 +598,7 @@ class Syscall():
         eip = self.top.getEIP()
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, msg)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, msg)
         self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
@@ -736,7 +735,7 @@ class Syscall():
     def stopTraceAlone(self, dumb):
         #self.lgr.debug('stopTraceAlone')
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
 
         #self.lgr.debug('stopTraceAlone2')
@@ -2453,7 +2452,7 @@ class Syscall():
                      #    exit_info.call_params.append(call_param)
 
     def rmStopHap(self, hap):
-       RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+       self.top.RES_delete_stop_hap_alone(hap)
 
     def stopHap(self, msg, one, exception, error_string):
         '''  Invoked when a syscall (or more typically its exit back to user space) triggers
@@ -2465,7 +2464,7 @@ class Syscall():
             self.lgr.debug('syscall stopHap removed %d queued call params' % len(self.rm_param_queue))
             self.rm_param_queue = []
             hap = self.stop_hap
-            SIM_run_alone(self.rmStopHap, hap)
+            self.top.RES_delete_stop_hap_run_alone(hap)
             self.stop_hap = None
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.stop_action is not None:
@@ -2944,8 +2943,8 @@ class Syscall():
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
                     self.lgr.debug('syscall handleExit killed or group exit %s HAD pending fault, do something!' % tid)
-                SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
-                self.context_manager.checkExitCallback()
+                if not self.context_manager.checkExitCallback():
+                    SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
             else:
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
@@ -2973,7 +2972,7 @@ class Syscall():
             self.stop_maze_hap = None
 
     def stopForMazeAlone(self, syscall):
-        self.stop_maze_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopMazeHap, syscall)
+        self.stop_maze_hap = self.top.RES_add_stop_callback(self.stopMazeHap, syscall)
         self.lgr.debug('Syscall added stopMazeHap Now stop, syscall: %s' % (syscall))
         SIM_break_simulation('automaze')
 

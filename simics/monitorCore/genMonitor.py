@@ -367,6 +367,8 @@ class GenMonitor():
         # ad hoc watch for exits
         self.watchingExitTIDs = []
         self.SIMICS_VER = resimSimicsUtils.version()
+        # for diagnostics
+        self.pending_stop_hap = None
 
         ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -757,7 +759,7 @@ class GenMonitor():
 
         if self.stop_hap is not None:
             self.lgr.debug('genMonitor stopHap will delete hap %s' % str(self.stop_hap))
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
         self.is_compat32 = self.compat32()
         ''' check functions in list '''
@@ -785,14 +787,13 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         ''' when we stop, rev 1 to revert the current task value '''
         stop_action = hapCleaner.StopAction(hap_clean, breakpoints=[self.proc_break], tid=tid, prelude=self.rev1NoMail)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('revToTid hap set, break on 0x%x now reverse' % phys_current_task)
         SIM_run_command('rev')
 
     def stopAndAction(self, stop_action):
         self.lgr.debug('stopAndAction')
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = RES_hap_add_callback(self.stopHap, stop_action)
         self.lgr.debug('stopAndAction set stop_hap is now %d  now stop' % self.stop_hap)
         SIM_break_simulation('stopAndAction')
 
@@ -805,8 +806,7 @@ class GenMonitor():
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+            self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
             SIM_continue(0)
         else:
             self.lgr.debug('run2Kernel, already in kernel')
@@ -848,8 +848,7 @@ class GenMonitor():
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+            self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
             self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
             simics_status = SIM_simics_is_running()
             if not simics_status:
@@ -1783,8 +1782,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", self.scall_hap)
         stop_action = hapCleaner.StopAction(hap_clean)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
             SIM_continue(0)
@@ -1806,8 +1804,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("Core_Exception", sig_hap)
         stop_action = hapCleaner.StopAction(hap_clean)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         status = self.is_monitor_running.isRunning()
         if not status:
             SIM_continue(0)
@@ -2326,8 +2323,7 @@ class GenMonitor():
         eip = self.getEIP()
         self.lgr.debug('reservseStepInstruction starting at %x' % eip)
         my_args = procInfo.procInfo(comm, cpu, tid, None, False)
-        self.stopped_reverse_instruction_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-		    self.stoppedReverseInstruction, my_args)
+        self.stopped_reverse_instruction_hap = self.RES_add_stop_callback(self.stoppedReverseInstruction, my_args)
         self.lgr.debug('reverseStepInstruction, added stop hap')
         SIM_run_alone(SIM_run_command, 'reverse-step-instruction %d' % num)
 
@@ -2339,7 +2335,7 @@ class GenMonitor():
             self.lgr.debug('stoppedReverseInstruction at %x' % eip)
             print('stoppedReverseInstruction stopped at ip:%x' % eip)
             self.gdbMailbox('0x%x' % eip)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stopped_reverse_instruction_hap)
+            self.RES_delete_stop_hap(self.stopped_reverse_instruction_hap)
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong tid (%s), try again' % tid)
             SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
@@ -3362,8 +3358,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         ''' if we land in the wrong tid, rev to the right tid and then revToText again...'''
         stop_action = hapCleaner.StopAction(hap_clean, flist=flist, tid=tid, wrong_tid_action=self.revToText)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-          self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('hap set, now reverse')
         SIM_run_command('rev')
 
@@ -3474,8 +3469,7 @@ class GenMonitor():
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("GenContext", self.proc_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-            self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-              self.stopHap, stop_action)
+            self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
             self.lgr.debug('runToText hap set, now run. flist in stophap is %s breakpoint set on 0x%x' % (stop_action.listFuns(), start))
 
         self.proc_hap = self.context_manager[self.target].genHapIndex("Core_Breakpoint_Memop", self.textHap, prec, proc_break, 'text_hap')
@@ -3492,7 +3486,7 @@ class GenMonitor():
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
             self.proc_hap = None
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
         self.lgr.debug('undoDebug done')
             
@@ -4554,7 +4548,7 @@ class GenMonitor():
         
         self.lgr.debug('reportMode for tid:%s' % tid)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, tid)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopModeChanged, None)
+        self.stop_hap = self.RES_add_stop_callback(self.stopModeChanged, None)
 
     def setTarget(self, target):
         if target not in self.cell_config.cell_context:
@@ -5240,8 +5234,7 @@ class GenMonitor():
         hap_clean = hapCleaner.HapCleaner(cpu)
         hap_clean.add("GenContext", self.proc_hap)
         stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-          self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
 
         self.context_manager[self.target].watchTasks()
         self.lgr.debug('runToStack hap set, now run. flist in stophap is %s' % stop_action.listFuns())
@@ -5858,8 +5851,7 @@ class GenMonitor():
         self.lgr.debug('goAddr break set on 0x%x cell %s' % (addr, cell))
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, [bp])
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         SIM_continue(0)
 
     def stopAndMail(self):
@@ -5885,27 +5877,22 @@ class GenMonitor():
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(cpu)
         stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('stopAndGoAlone, hap set now stop it')
         SIM_break_simulation('Stopping simulation')
 
     def stopAndCall(self, callback):
         self.lgr.debug('stopAndCall')
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopAndCallHap, callback)
+        self.stop_hap = self.RES_add_stop_callback(self.stopAndCallHap, callback)
         SIM_break_simulation('stopAndCall')
 
     def stopAndCallHap(self, callback, one, exception, error_string):
         if self.stop_hap is not None:
             self.lgr.debug('stopAndCallHap callback is %s' % str(callback))
             hap = self.stop_hap
-            SIM_run_alone(self.rmStopHapAlone, hap)
+            self.RES_delete_stop_hap_alone(hap)
             self.stop_hap = None
             SIM_run_alone(callback, None)
-
-    def rmStopHapAlone(self, hap):
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", hap)
 
     def foolSelect(self, fd):
         self.sharedSyscall[self.target].foolSelect(fd)
@@ -6042,7 +6029,7 @@ class GenMonitor():
     def stopStepN(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             self.lgr.debug('stopStepN delete stop_hap %d' % self.stop_hap)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
             self.lgr.debug('stopStepN call skipAndMail')
             self.skipAndMail()
@@ -6052,7 +6039,7 @@ class GenMonitor():
         self.lgr.debug('stepN %d' % n)
         flist = [self.skipAndMail]
         f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopStepN, None)
+        self.stop_hap = self.RES_add_stop_callback(self.stopStepN, None)
         cmd = 'c %d' % n
         SIM_run_alone(SIM_run_command, cmd)
         self.lgr.debug('stepN ran command %s' % cmd)
@@ -6316,7 +6303,7 @@ class GenMonitor():
         self.found_entries = []
         cpu = self.cell_config.cpuFromCell(self.target)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeFindEntry, None)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopFindEntry, None)
+        self.stop_hap = self.RES_add_stop_callback(self.stopFindEntry, None)
 
     def modeChangeFindEntry(self, dumb, one, old, new):
         target_cpu = self.cell_config.cpuFromCell(self.target)
@@ -7038,10 +7025,25 @@ class GenMonitor():
         doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.lgr, tid=tid)
 
     def RES_delete_stop_hap(self, hap):
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+        self.pending_stop_hap = None
+        SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
+        self.lgr.debug('RES_delete_stop_hap')
 
-    def RES_hap_add_callback(callback, param):
-        retval = SIM_hap_add_callback("Core_Simulation_Stopped", callback, param)
+    def RES_delete_stop_hap_run_alone(self, hap):
+        # race condition of 2 stop haps existing?
+        self.pending_stop_hap = None
+        self.lgr.debug('RES_delete_stop_hap_alone')
+        SIM_run_alone(RES_delete_stop_hap, hap)
+
+    def RES_add_stop_callback(self, callback, param):
+        retval = None
+        if self.pending_stop_hap is not None:
+            self.lgr.error('RES_add_stop_callback called for %s, but already pending stop with callback %s!' % (str(callback), str(self.pending_stop_hap)))
+            self.quit()
+        else:
+            retval = SIM_hap_add_callback('Core_Simulation_Stopped', callback, param)
+            self.pending_stop_hap = callback
+            self.lgr.debug('RES_add_stop_callback for %s' % str(callback))
         return retval
 
 if __name__=="__main__":        

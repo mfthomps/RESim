@@ -158,7 +158,7 @@ class RopCop():
                     SIM_run_alone(self.stopAlone, ret_addr)
 
     def stopAlone(self, ret_addr):
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, ret_addr)
         if self.is_signal:
             print('Possible signal handler')
             SIM_break_simulation('Signal handler ?')
@@ -169,7 +169,7 @@ class RopCop():
     def stopHap(self, ret_addr, one, exception, error_string):
         if self.stop_hap is None:  
             return
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.top.RES_delete_stop_hap(self.stop_hap)
         self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')

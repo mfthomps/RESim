@@ -1698,9 +1698,12 @@ class GenContextMgr():
         return retval
 
     def checkExitCallback(self):
+        retval = False
         self.lgr.debug('contextManager checkExitCallback callback is %s' % str(self.exit_callback))
         if self.exit_callback is not None:
             self.exit_callback()
+            retval = True
+        return retval
 
 
     def callWhenFirstScheduled(self, prog, callback):

@@ -324,7 +324,7 @@ class DataWatch():
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.freadCallback)
+        self.stop_hap = self.top.RES_add_stop_callback(self.memstuffStopHap, self.freadCallback)
         SIM_break_simulation('addFreadAlone')
 
     def checkFread(self, start, length):
@@ -356,7 +356,7 @@ class DataWatch():
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
             #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
+            self.top.RES_delete_stop_hap(self.call_stop_hap)
             #self.rmCallHap()
             if self.call_break is not None:
                 self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
@@ -1000,7 +1000,8 @@ class DataWatch():
         #    self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
         #    self.finish_check_move_hap = None
         if self.call_stop_hap is not None:
-            SIM_run_alone(self.delStopHap, self.call_stop_hap)
+            hap = self.call_stop_hap
+            self.top.RES_delete_stop_hap(hap)
             self.call_stop_hap = None
 
         if self.append_char_returns is not None:
@@ -1221,7 +1222,7 @@ class DataWatch():
           
      
     def startUndoAlone(self, dumb):
-        self.undo_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.undoHap, self.mem_something)
+        self.undo_hap = self.top.RES_add_stop_callback(self.undoHap, self.mem_something)
         # TBD ever case of mark created before we decide it is a ghost?
         #self.watchMarks.undoMark()
         self.lgr.debug('dataWatch startUndoAlone')
@@ -2895,7 +2896,7 @@ class DataWatch():
         
         if self.undo_hap is not None:
             self.lgr.debug('dataWatch undoHap')
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.undo_hap)
+            self.top.RES_delete_stop_hap(self.undo_hap)
             self.undo_hap = None
             SIM_run_alone(self.undoAlone, None)
 
@@ -2952,7 +2953,7 @@ class DataWatch():
         cycle_dif = self.cycles_was - self.cpu.cycles
         #self.lgr.debug('hitCallStopHap will delete call_stop_hap %d cycle_dif 0x%x' % (self.call_stop_hap, cycle_dif))
         if called_from_reverse_mgr is None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
+            self.top.RES_delete_stop_hap(self.call_stop_hap)
         self.call_stop_hap = None
         #self.rmCallHap()
         self.lgr.debug('hitCallStopHap remove call_break %d' % self.call_break)
@@ -3076,12 +3077,12 @@ class DataWatch():
             if not self.reverse_mgr.nativeReverse():
                 self.reverse_mgr.setCallback(self.hitCallStopHap)
             else:
-                self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.hitCallStopHap, None)
+                self.call_stop_hap = self.top.RES_add_stop_callback(self.hitCallStopHap, None)
         else:
             if not self.reverse_mgr.nativeReverse():
                 self.reverse_mgr.setCallback(alternate_callback)
             else:
-                self.call_stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", alternate_callback, None)
+                self.call_stop_hap = self.top.RES_add_stop_callback(alternate_callback, None)
         SIM_run_command('disable-vmp') 
         self.context_manager.setReverseContext()
         #if delta > 1000:
@@ -3119,11 +3120,11 @@ class DataWatch():
        
     def deleteGhostStopHap(self, dumb): 
         if self.ghost_stop_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.ghost_stop_hap)
+            self.top.RES_delete_stop_hap(self.ghost_stop_hap)
             self.ghost_stop_hap = None
 
     def rmStopHap(self, hap):
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+        self.top.RES_delete_stop_hap(hap)
 
     def memstuffStopHap(self, alternate_callback, one, exception, error_string):
         ''' We may have been in a memsomething and have stopped.  Set a break on the address 
@@ -3132,7 +3133,7 @@ class DataWatch():
         if self.stop_hap is not None:
             #self.lgr.debug('memstuffStopHap stopHap will delete hap %s' % str(self.stop_hap))
             hap = self.stop_hap
-            SIM_run_alone(self.rmStopHap, hap)
+            self.top.RES_delete_stop_hap_run_alone(hap)
             self.stop_hap = None
         else:
             return
@@ -3184,8 +3185,7 @@ class DataWatch():
                 self.lgr.warning('dataWatch handleMemStuff but entry for fun %s already in mem_fun_entires addr 0x%x' % (self.mem_something.fun, self.mem_something.fun_addr))
 
                 # Do reverse to call anyway.  TBD why was entry not caught.  alternate entry?  Usually due to bad stack frame generation.
-                self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.memstuffStopHap, None)
+                self.stop_hap = self.top.RES_add_stop_callback(self.memstuffStopHap, None)
                 self.lgr.debug('handleMemStuff fun in mem_fun_entries now stop')
                 SIM_break_simulation('handle memstuff')
 
@@ -3204,8 +3204,7 @@ class DataWatch():
                 return
         else: 
             ''' run back to the call '''
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.memstuffStopHap, None)
+            self.stop_hap = self.top.RES_add_stop_callback(self.memstuffStopHap, None)
             self.lgr.debug('handleMemStuff now stop to run back to call')
             SIM_break_simulation('handle memstuff')
             
@@ -4988,7 +4987,8 @@ class DataWatch():
 
         if self.stop_hap is not None:
             self.lgr.debug('dataWatch stopHap will delete hap %s' % str(self.stop_hap))
-            SIM_run_alone(self.delStopHap, self.stop_hap)
+            hap = self.stop_hap
+            self.top.RES_delete_stop_hap_run_alone(hap)
             self.stop_hap = None
             ''' check functions in list '''
             self.lgr.debug('stopHap now run actions %s' % str(stop_action.flist))
@@ -4996,15 +4996,14 @@ class DataWatch():
 
     def delStopHap(self, hap):
         self.lgr.debug('dataWatch delStopHap delete hap %d' % hap)
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+        self.top.RES_delete_stop_hap(hap)
          
     def setStopHap(self, dumb):
         f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(self.cpu)
         stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('dataWatch setStopHap set actions %s' % str(stop_action.flist))
 
     def setShow(self):
@@ -5424,8 +5423,7 @@ class DataWatch():
         flist = [f1]
         hap_clean = hapCleaner.HapCleaner(self.cpu)
         stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, stop_action)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('setFileStopHap set actions %s' % str(stop_action.flist))
 
     def trackFile(self, callback, compat32):
@@ -5950,7 +5948,7 @@ class DataWatch():
         cycle_dif = self.cycles_was - self.cpu.cycles
         #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
         if called_from_reverse_mgr is None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.call_stop_hap)
+            self.top.RES_delete_stop_hap(self.call_stop_hap)
         #self.rmCallHap()
         if self.call_break is not None:
             self.reverse_mgr.SIM_delete_breakpoint(self.call_break)
@@ -6013,7 +6011,7 @@ class DataWatch():
             return
         self.context_manager.genDeleteHap(self.finish_check_move_hap, immediate=True)
         self.finish_check_move_hap = None
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.memstuffStopHap, self.memcpyCheck)
+        self.stop_hap = self.top.RES_add_stop_callback(self.memstuffStopHap, self.memcpyCheck)
         self.lgr.debug('stopForMemcpyCheck, is big move, look for memcpy')
         SIM_break_simulation('stopForMemcpyCheck')
 

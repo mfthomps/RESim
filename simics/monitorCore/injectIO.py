@@ -545,7 +545,7 @@ class InjectIO():
     
             if self.stop_hap is not None:
                 self.lgr.debug('injectIO resetReverseAlone delete stop hap')
-                RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+                self.top.RES_delete_stop_hap(self.stop_hap)
                 self.stop_hap = None
             if count > 0:
                 SIM_run_command('c')
@@ -577,8 +577,7 @@ class InjectIO():
     def writeCallbackAlone(self, count):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('injectIO writeCallback eip: 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, count)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, count)
         SIM_break_simulation('writeCallback')
 
     def writeCallback(self, count):
