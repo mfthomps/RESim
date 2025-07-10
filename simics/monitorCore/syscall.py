@@ -1937,7 +1937,8 @@ class Syscall():
             if cmd == 'F_SETFD':
                 ida_msg = 'fcntl64 tid:%s (%s) FD: %d %s flags: 0%o' % (tid, comm, fd, cmd, arg)
             else:
-                ida_msg = 'fcntl64 tid:%s (%s) FD: %d command: %s arg: %d\n\t%s' % (tid, comm, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
+                #ida_msg = 'fcntl64 tid:%s (%s) FD: %d command: %s arg: %d\n\t%s' % (tid, comm, fd, cmd, arg, taskUtils.stringFromFrame(frame)) 
+                ida_msg = 'fcntl64 tid:%s (%s) FD: %d command: %s arg: %d' % (tid, comm, fd, cmd, arg)
             exit_info.old_fd = fd
             exit_info.cmd = cmd_val
             
