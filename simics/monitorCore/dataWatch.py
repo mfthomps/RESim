@@ -127,7 +127,7 @@ class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
     def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, 
-                 back_stop, compat32, comp_dict, so_map, reverse_mgr, lgr):
+                 backstop, compat32, comp_dict, so_map, reverse_mgr, lgr, backstop_cycles=None):
         ''' data watch structures reflecting what we are watching '''
         self.rev_to_call = rev_to_call
         self.top = top
@@ -140,7 +140,7 @@ class DataWatch():
         self.lgr = lgr
         self.compat32 = compat32
         self.page_size = page_size
-        self.back_stop = back_stop
+        self.backstop = backstop
         self.comp_dict = comp_dict
         self.so_map = so_map
         self.reverse_mgr = reverse_mgr
@@ -149,14 +149,14 @@ class DataWatch():
         self.buffer_length = None
         self.finish_check_move_hap = None
         self.watchMarks = watchMarks.WatchMarks(top, mem_utils, cpu, cell_name, run_from_snap, lgr)
-        self.back_stop_cycles = defaultConfig.backstopCycles()
-        self.lgr.debug('dataWatch back_stop_cycles %s' % self.back_stop_cycles)
+        self.backstop_cycles = defaultConfig.backstopCycles()
+        self.lgr.debug('dataWatch backstop_cycles %s' % self.backstop_cycles)
         read_loop_string = os.getenv('READ_LOOP_MAX')
         if read_loop_string is None:
             self.read_loop_max = 10000
         else:
             self.read_loop_max = int(read_loop_string)
-        #lgr.debug('DataWatch init with back_stop_cycles %d compat32: %r' % (self.back_stop_cycles, compat32))
+        #lgr.debug('DataWatch init with backstop_cycles %d compat32: %r' % (self.backstop_cycles, compat32))
         if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
         elif cpu.architecture == 'ppc32':
@@ -240,7 +240,7 @@ class DataWatch():
         self.cycles_was = 0
         self.undo_hap = None
         # Do not set backstop until first read, otherwise accept followed by writes will trigger it. '''
-        self.use_back_stop = False
+        self.use_backstop = False
         
         self.malloc_dict = {}
         self.pending_call = False
@@ -372,7 +372,7 @@ class DataWatch():
         #MFTMFT self.top.restoreDebugBreaks(was_watching=True)
         #MFTMFT self.watch()
         self.context_manager.enableAll()
-        self.back_stop.setFutureCycle(self.back_stop_cycles)
+        self.backstop.setFutureCycle(self.backstop_cycles)
         SIM_run_alone(SIM_run_command, 'c')
 
     def isCopyMark(self, watch_mark):
@@ -458,7 +458,7 @@ class DataWatch():
             pass
             self.lgr.debug('DataWatch manageStackBuf stack buffer, but return address was NONE, so buffer reuse will cause hits')
 
-    def setRange(self, start, length, msg=None, max_len=None, back_stop=True, recv_addr=None, no_backstop=False, 
+    def setRange(self, start, length, msg=None, max_len=None, backstop=True, recv_addr=None, no_backstop=False, 
                  watch_mark=None, fd=None, is_lib=False, no_extend=False, ignore_commence=False, data_stream=False, kbuffer=None):
         ''' set a data watch range.  fd only set for readish syscalls as a way to track bytes read when simulating internal kernel buffer '''
         ''' TBD try forcing watch to maxlen '''
@@ -527,8 +527,8 @@ class DataWatch():
                 self.buffer_offset = None
                 self.buffer_length = None
                 self.lgr.debug('dataWatch setRange adjusted start/length per buffer_offset to 0x%x %d' % (start, length))
-        if not self.use_back_stop and back_stop:
-            self.use_back_stop = True
+        if not self.use_backstop and backstop:
+            self.use_backstop = True
             #self.lgr.debug('DataWatch, backstop set, start data session')
 
         if max_len is None or max_len == 0:
@@ -544,7 +544,7 @@ class DataWatch():
                 my_len = max_len
 
         self.lgr.debug('DataWatch set range start 0x%x watch length 0x%x actual count %d back_stop: %r total_read %d fd: %s callback: %s' % (start, 
-               my_len, length, back_stop, self.total_read, str(fd), str(self.read_limit_callback)))
+               my_len, length, backstop, self.total_read, str(fd), str(self.read_limit_callback)))
         end = start+(my_len-1)
         overlap = False
         if not no_extend:
@@ -887,9 +887,9 @@ class DataWatch():
         self.show_cmp = show_cmp         
         if break_simulation is not None:
             self.break_simulation = break_simulation         
-        self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_back_stop), str(no_backstop)))
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop and not no_backstop:
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+        self.lgr.debug('watch alone %r break_sim %s  use_back %s  no_back %s' % (i_am_alone, str(break_simulation), str(self.use_backstop), str(no_backstop)))
+        if self.backstop is not None and not self.break_simulation and self.use_backstop and not no_backstop:
+            self.backstop.setFutureCycle(self.backstop_cycles)
         self.watchFunEntries()
         if len(self.start) > 0:
             if i_am_alone:
@@ -980,8 +980,8 @@ class DataWatch():
                 self.context_manager.genDeleteHap(self.destroy_hap, immediate=immediate)
                 self.destroy_hap = None
       
-        if self.back_stop is not None and not leave_backstop:
-            self.back_stop.clearCycle()
+        if self.backstop is not None and not leave_backstop:
+            self.backstop.clearCycle()
         self.pending_call = False
         for re_watch in self.re_watch_list:
             re_watch.stopMapWatch(immediate=immediate)
@@ -1124,8 +1124,8 @@ class DataWatch():
             buf_start = self.findRange(kernel_return_info.addr)
             self.watchMarks.kernelMod(kernel_return_info.addr, eax, frame, callnum, call, buf_start)
  
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+        if self.backstop is not None and not self.break_simulation and self.use_backstop:
+            self.backstop.setFutureCycle(self.backstop_cycles)
         for hap in self.kernel_return_hap:
             SIM_run_alone(self.deleteReturnHap, hap)
         self.kernel_return_hap = []
@@ -1303,7 +1303,7 @@ class DataWatch():
         self.return_hap = None
         eip = self.top.getEIP(self.cpu)
         self.context_manager.enableAll()
-        self.back_stop.setFutureCycle(self.back_stop_cycles)
+        self.backstop.setFutureCycle(self.backstop_cycles)
         if self.cpu.cycles < self.cycles_was:
             if self.mem_something.addr is None:
                 '''  Not due to a readHap, just restore breaks and continue '''
@@ -1459,7 +1459,7 @@ class DataWatch():
                        self.mem_something.dest, self.mem_something.length))
             self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
             self.setBreakRange()
-        elif self.mem_something.fun in ['fprintf', 'printf', 'syslog', 'output_processor','fputs']:
+        elif self.mem_something.fun in ['fprintf', 'printf', 'vfprintf', 'syslog', 'output_processor','fputs']:
             if self.mem_something.src is None:
                 self.mem_something.src = self.mem_something.addr
             self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x ' % (self.mem_something.fun, self.mem_something.src))
@@ -2578,7 +2578,7 @@ class DataWatch():
                 dumb2, self.mem_something.dest, dumb = self.getCallParams(sp, word_size)
             else:
                 self.mem_something.dest, dumb2 , dumb = self.getCallParams(sp, word_size)
-        elif self.mem_something.fun in ['fprintf', 'printf', 'syslog']:
+        elif self.mem_something.fun in ['fprintf', 'printf', 'vfprintf', 'syslog']:
             dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
 
         elif self.mem_something.fun in ['output_processor']:
@@ -2870,9 +2870,9 @@ class DataWatch():
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memcpy_return_hap')
         self.context_manager.restoreDebugContext()
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        if self.backstop is not None and not self.break_simulation and self.use_backstop:
             self.lgr.debug('dataWatch runToReturn clear backstop')
-            self.back_stop.clearCycle()
+            self.backstop.clearCycle()
 
     def runToReturnAndGo(self, skip_this=False):
         self.runToReturn(skip_this=skip_this)
@@ -2887,9 +2887,9 @@ class DataWatch():
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memsomething_return_hap')
         self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
         self.context_manager.restoreDebugContext()
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        if self.backstop is not None and not self.break_simulation and self.use_backstop:
             self.lgr.debug('dataWatch runToReturnAlone clear backstop')
-            self.back_stop.clearCycle()
+            self.backstop.clearCycle()
 
     def undoHap(self, dumb, one, exception, error_string):
         
@@ -2921,7 +2921,7 @@ class DataWatch():
             self.lgr.debug('dataWatch undoAlone eip: 0x%x would run forward, first restore debug context' % eip)
             self.context_manager.restoreDebugContext()
             self.context_manager.enableAll()
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles)
             #MFTMFT self.top.restoreDebugBreaks()
             #self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, tid)
             self.lgr.debug('dataWatch undoAlone now run forward')
@@ -3094,12 +3094,15 @@ class DataWatch():
         #    return
 
         if reverse_to:
-            self.lgr.debug('dataWatch revAlone is reverse_to, cycle 0x%x' % self.prev_mark_cycle)
+            self.lgr.debug('dataWatch revAlone is reverse_to, reverse to previous cycle 0x%x expecting to hit breakpoint before we reach that cycle.' % self.prev_mark_cycle)
 
             #if self.prev_mark_cycle == 0x610b4c9943:
             #    print('remove this')
             #    return
-            self.reverse_mgr.reverseTo(self.prev_mark_cycle)
+            if self.save_cycle != 0x41f8a4964:
+                self.reverse_mgr.reverseTo(self.prev_mark_cycle)
+            else:
+                print('remove this')
         else:
             self.lgr.debug('dataWatch revAlone just reverse')
             self.reverse_mgr.reverse()
@@ -4407,7 +4410,7 @@ class DataWatch():
                     self.lgr.debug('readHap index %d not in self.linear_breaks comm is %s  self.comm %s phys mem hit 0x%x' % (index, comm, self.comm, memory.physical_address))
                     if self.data_watch_manager is None:
                         self.data_watch_manager = dataWatchManager.DataWatchManager(self.top, self, self.cpu, self.cell_name, self.page_size, 
-                        self.context_manager, self.mem_utils, self.task_utils, self.rev_to_call, self.param, self.run_from_snap, self.back_stop, 
+                        self.context_manager, self.mem_utils, self.task_utils, self.rev_to_call, self.param, self.run_from_snap, self.backstop, 
                         self.compat32, self.comp_dict, self.so_map, self.lgr)
                     if self.data_watch_manager.failedCreate():
                         self.data_watch_manager = None
@@ -4594,10 +4597,10 @@ class DataWatch():
             self.finish_check_move_hap = None
         dum_cpu, comm, tid = self.task_utils.curThread()
 
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop and addr not in self.no_backstop:
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+        if self.backstop is not None and not self.break_simulation and self.use_backstop and addr not in self.no_backstop:
+            self.backstop.setFutureCycle(self.backstop_cycles)
         else:
-            self.lgr.debug('dataWatch readHap NO backstop set.  break sim %r  use back %r' % (self.break_simulation, self.use_back_stop))
+            self.lgr.debug('dataWatch readHap NO backstop set.  break sim %r  use back %r' % (self.break_simulation, self.use_backstop))
         if index >= len(self.read_hap):
             self.lgr.error('dataWatch readHap tid:%s invalid index %d, only %d read haps' % (tid, index, len(self.read_hap)))
             return
@@ -4972,9 +4975,9 @@ class DataWatch():
         if len(self.start) != len(self.read_hap):
             self.lgr.error('dataWatch setBreakRange start len is %d while read_hap is %d' % (len(self.start), len(self.read_hap)))
 
-        #if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        #if self.backstop is not None and not self.break_simulation and self.use_backstop:
         #    #self.lgr.debug('dataWatch, setBreakRange call to setFutureCycle')
-        #    self.back_stop.setFutureCycle(self.back_stop_cycles, now=i_am_alone)
+        #    self.backstop.setFutureCycle(self.backstop_cycles, now=i_am_alone)
 
     def stopHap(self, stop_action, one, exception, error_string):
         if stop_action is None or stop_action.hap_clean is None:
@@ -5345,7 +5348,7 @@ class DataWatch():
     def setCallback(self, callback):
         ''' what should backStop call when no activity for N cycles?  Or if max marks exceeded'''
         self.lgr.debug('dataWatch setCallback, call to backstop to set callback %s' % str(callback))
-        self.back_stop.setCallback(callback)
+        self.backstop.setCallback(callback)
         # use if max marks exceeded
         if self.callback is None:
             self.callback = callback
@@ -5384,13 +5387,13 @@ class DataWatch():
         return False
 
     def rmBackStop(self):
-        self.use_back_stop = False
+        self.use_backstop = False
 
     def setRetrack(self, value, use_backstop=True):
         self.lgr.debug('DataWatch setRetrack %r' % value)
         self.retrack = value
         if value and use_backstop:
-            self.use_back_stop = True
+            self.use_backstop = True
 
     def fileStopHap(self):
         self.lgr.debug('fileStopHap')
@@ -5432,7 +5435,7 @@ class DataWatch():
         self.setCallback(callback)
 
 
-    def trackIO(self, fd, callback, compat32, max_marks, quiet=False, offset = None, length = None):
+    def trackIO(self, fd, callback, compat32, max_marks, quiet=False, offset = None, length = None, backstop_cycles=None):
         self.lgr.debug('DataWatch trackIO for fd %d' % fd)
         self.buffer_offset = offset
         self.buffer_length = length
@@ -5442,17 +5445,21 @@ class DataWatch():
         # to receive.
         #self.rev_to_call.preCallFD(fd) 
         if max_marks is not None:
-           self.max_marks = max_marks
-           self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % self.max_marks)
+            self.max_marks = max_marks
+            self.lgr.debug('DataWatch trackIO watch max_marks set to %s' % self.max_marks)
         elif self.max_marks is None:
-           self.max_marks = 2000
-           self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
+            self.max_marks = 2000
+            self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
+        if backstop_cycles is not None and backstop_cycles != 0:
+            self.backstop_cycles = backstop_cycles
+            self.lgr.debug('DataWatch trackIO backstop_cycles set to %d' % self.backstop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles)
         self.watch(break_simulation=False)
         ''' what to do when backstop is reached (N cycles with no activity '''
         self.setCallback(callback)
         self.enable()
         report_backstop = not quiet
-        self.back_stop.reportBackstop(report_backstop)
+        self.backstop.reportBackstop(report_backstop)
         fun_mgr = self.top.getFunMgr()
         self.readLib.trackReadLib(fun_mgr)
 
@@ -6215,14 +6222,14 @@ class DataWatch():
         self.watchMarks.markCall(msg, fd=fd)
 
     def setBackstop(self):
-        if self.back_stop is not None and not self.break_simulation and self.use_back_stop:
+        if self.backstop is not None and not self.break_simulation and self.use_backstop:
             self.lgr.debug('dataWatch setBackstop')
-            self.back_stop.setFutureCycle(self.back_stop_cycles)
+            self.backstop.setFutureCycle(self.backstop_cycles)
 
     def clearBackstop(self):
-        if self.back_stop is not None:
+        if self.backstop is not None:
             self.lgr.debug('dataWatch clearBackstop')
-            self.back_stop.clearCycle()
+            self.backstop.clearCycle()
 
     def ignoreAddrList(self, ignore_addr_file):
         if ignore_addr_file is not None:
