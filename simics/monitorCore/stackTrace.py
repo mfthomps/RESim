@@ -311,8 +311,8 @@ class StackTrace():
                     fun_name = self.fun_mgr.getFunName(cur_fun)
                     #self.lgr.debug('isCallToMe eip: 0x%x is in cur fun %s 0x%x' % (eip, fun_name, cur_fun))
                 ret_to = self.fun_mgr.getFun(lr)
-                #if ret_to is None:
-                #    self.lgr.debug('isCallToMe lr of 0x%x is not a fun?' % lr)
+                if ret_to is None:
+                    self.lgr.debug('isCallToMe lr of 0x%x is not a fun?' % lr)
                 #if cur_fun is not None and ret_to is not None:
                 #    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
                 #    pass
@@ -331,7 +331,7 @@ class StackTrace():
                         #elif cur_fun is not None:
                         #    self.lgr.debug('isCallToMe is call fun_hex is 0x%x fun %s cur_fun %x call_instr 0x%x' % (fun_hex, fun, cur_fun, call_instr))
                         #    pass
-                        if (fun_hex is not None and fun_hex == cur_fun) or fun == fun_name:
+                        if (fun_hex is not None and fun_hex == cur_fun) or (fun is not None and self.funMatch(fun, fun_name, call_instr, False)):
                             if fun is not None:
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 self.lgr.debug('fun not none %s' % fun)
@@ -465,10 +465,11 @@ class StackTrace():
             fun1 is the function named by the call instruction.
         '''
         if fun1 is None or fun2 is None:
-            self.lgr.debug('dataWatch funMatch called with fun of None')
+            self.lgr.debug('stackTrace funMatch called with fun of None')
             return False
         # TBD make data files for libc fu?
         retval = False
+        self.lgr.debug('stackTrace funMatch fun1 %s fun2 %s' % (fun1, fun2))
 
         if '(' in fun1 and '(' in fun2:
             fun1 = fun1.split('(')[0]
@@ -520,6 +521,8 @@ class StackTrace():
                 # true for ppc32
                 retval = True
             elif fun1 == 'strcmp' and fun2 == 'strcoll':
+                retval = True
+            elif fun1 == 'memmove' and fun2 == 'memcpy':
                 retval = True
         if not retval:
             fun1_entry = self.fun_mgr.getFunEntry(fun1)
