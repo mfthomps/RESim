@@ -836,7 +836,10 @@ class PlayAFL():
     def recordExits(self, path):
         ''' exits will go in a "exits" directory along side queue, etc. '''
         self.lgr.debug('playAFL recordExits for %s' % path)
-        fname = self.getExitsPath(self.index)
+        if not self.one_off:
+            fname = self.getExitsPath(self.index)
+        else:
+            fname = '/tmp/exit.msg'
         with open(fname, 'w') as fh:
             #json.dump(hit_list, fh) 
             msg = '%s : %s\n' % (path, self.context_manager.getIdaMessage())
