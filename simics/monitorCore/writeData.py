@@ -115,6 +115,9 @@ class WriteData():
         elif self.cpu.architecture == 'arm64':
             lenreg = 'x0'
             pcreg = 'pc'
+        elif self.cpu.architecture == 'ppc32':
+            lenreg = 'r3'
+            pcreg = 'pc'
         else:
             lenreg = 'eax'
             pcreg = 'eip'
