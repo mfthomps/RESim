@@ -2198,7 +2198,9 @@ class GenMonitor():
             
             self.lgr.debug('skipAndMail call saveCoverage')
             self.coverage.saveCoverage()
-            self.coverage = None
+            # Cannot delete because we may wish to save block coverage
+            #self.coverage = None
+            self.coverage.disableCoverage()
         if self.command_callback is not None:
             self.lgr.debug('skipAndMail do callback to %s' % str(self.command_callback))
             cb = self.command_callback
@@ -4674,7 +4676,8 @@ class GenMonitor():
         print('Track IO has stopped at a backstop or max marks.  Use continue if you expect more data, or goToDataWatch to begin analysis at a watch mark.')
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
-                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, offset=None, length=None, commence_offset=0, track_calls=False):
+                quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, 
+                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None):
         if max_marks is None:
             max_marks = self.max_marks
         self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
@@ -4723,7 +4726,7 @@ class GenMonitor():
                 self.dataWatch[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
 
-        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet, offset=offset, length=length)
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet, offset=offset, length=length, backstop_cycles=backstop_cycles)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
 
         if self.coverage is not None:
@@ -7033,6 +7036,13 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('doInUser')
         doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.lgr, tid=tid)
+
+    def RES_delete_stop_hap(self, hap):
+        SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+
+    def RES_hap_add_callback(callback, param):
+        retval = SIM_hap_add_callback("Core_Simulation_Stopped", callback, param)
+        return retval
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
