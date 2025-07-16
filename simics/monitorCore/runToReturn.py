@@ -70,8 +70,18 @@ class RunToReturn():
         if tid != self.tid:
             return
         eip = self.top.getEIP()
-        self.lgr.debug('RunToReturn callHap calls:%d rets:%d eip: 0x%x' % (self.call_count, self.ret_count, eip))
-        self.call_count = self.call_count+1
+        sp = self.top.getReg('sp', self.cpu)
+        instruct = self.top.disassembleAddress(self.cpu, eip)
+        if instruct[1].startswith('blr'):
+            self.lgr.debug('RunToReturn callHap hacked BLR, so really a retHap calls:%d rets:%d  sp: 0x%x eip: 0x%x' % (self.call_count, self.ret_count, sp, eip))
+            self.ret_count = self.ret_count+1
+            if self.call_count == self.ret_count:
+                SIM_run_alone(self.rmHaps, None)
+                self.top.stopAndGo(self.stepOne)
+        
+        elif not instruct[1].startswith('blt') and not instruct[1].startswith('ble'):
+            self.lgr.debug('RunToReturn callHap calls:%d rets:%d eip: 0x%x %s' % (self.call_count, self.ret_count, eip, instruct[1]))
+            self.call_count = self.call_count+1
 
     def retHap(self, dumb, context, break_num, memory):
         if self.ret_hap is None:
