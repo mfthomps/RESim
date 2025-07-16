@@ -1444,6 +1444,9 @@ class SharedSyscall():
                 trace_msg = trace_msg+(' name: %s ' % exit_info.fname)
             trace_msg = trace_msg+'return code 0x%x cycle:0x%x\n' % (eax, self.cpu.cycles)
             self.lgr.debug(trace_msg.strip()) 
+        elif callname == 'sendfile':
+            trace_msg = trace_msg+'return code 0x%x cycle:0x%x\n' % (eax, self.cpu.cycles)
+            self.lgr.debug(trace_msg.strip()) 
         elif callname == 'fork':
             if eax == 0:
                 trace_msg = trace_msg+' code:0x0 from child\n'

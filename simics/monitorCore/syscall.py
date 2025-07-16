@@ -2400,6 +2400,13 @@ class Syscall():
             exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
             which = frame['param2']
             ida_msg = '%s tid:%s (%s) fname: %s which: %d cycle:0x%x' % (callname, tid, comm, exit_info.fname, which, self.cpu.cycles)
+        elif callname == "sendfile":
+            exit_info.old_fd = frame['param1']
+            exit_info.new_fd = frame['param2']
+            offset = frame['param3']
+            exit_info.count = frame['param4']
+            ida_msg = '%s tid:%s (%s) out_fd: 0x%x in_fd: 0x%x offset_addr 0x%x count 0x%x' % (callname, tid, comm, exit_info.old_fd, exit_info.new_fd, offset, exit_info.count)
+
             
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
