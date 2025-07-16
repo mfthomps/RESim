@@ -40,6 +40,7 @@ class BackStop():
                 self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
             self.clearCycle()
             SIM_break_simulation('hit final cycle')
+            self.top.notRunning()
             '''
             cmd_callback = self.top.getCommandCallback()
             if cmd_callback is not None:
