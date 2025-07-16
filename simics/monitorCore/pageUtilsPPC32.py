@@ -12,11 +12,19 @@ class PtableInfo():
         self.cpu = cpu
         self.page_base_addr = None
         # physical address including offset. 
-        self.phys_addr = phys_addr
+        if phys_addr is not None and phys_addr != 0:
+            self.phys_addr = phys_addr
+        else:
+            self.phys_addr = None
         self.protect = protect
+        self.writable = False
+        if protect is not None:
+            if protect & 1 == 0:
+                self.writable = True
         self.nx = nx 
         self.pteg1 = None
         self.pteg2 = None
+        self.entry = None
     def valueString(self):
         if self.phys_addr is not None:
             retval =  'phys_addr: 0x%x nx: %s protect: %s' % (self.phys_addr, self.nx, self.protect)
@@ -115,18 +123,19 @@ def findPageTable(cpu, ea, lgr):
     pteg = getPTEG(hash1, sdr1, lgr)
     #lgr.debug('pageUtilsPPC32 findPageTable pteg 0x%x' % pteg)
     first_pteg = pteg
+    second_pteg = None
     rpn, pp  = findPTE(pteg, vsid, 0, api, cpu, lgr)
     if rpn is None:
         hash2 = ~ hash1
-        pteg = getPTEG(hash2, sdr1, lgr)
+        second_pteg = getPTEG(hash2, sdr1, lgr)
         #print('pteg 0x%x' % pteg)
-        rpn, pp = findPTE(pteg, vsid, 1, api, cpu, lgr)
+        rpn, pp = findPTE(second_pteg, vsid, 1, api, cpu, lgr)
     if rpn is None:
         # TBD equivalent of page table entry?  This is very incomplete
         #lgr.debug('pageUtilsPPC32 findPageTable Failed to find PTE for addr 0x%x pteg1 0x%x pteg2 0x%x' % (ea, first_pteg, pteg))
         retval = PtableInfo(cpu, None, None, None) 
         retval.pteg1 = first_pteg
-        retval.pteg2 = pteg
+        retval.pteg2 = second_pteg
     else:
         #lgr.debug('pageUtilsPPC32 findPageTable rpn 0x%x pp 0x%x' % (rpn, pp))
         ra = None
@@ -135,4 +144,6 @@ def findPageTable(cpu, ea, lgr):
         if rpn is not None:
             ra = (rpn << 12) | (ea & 0x00000fff)
         retval = PtableInfo(cpu, ra, pp, nx)
+        retval.pteg1 = first_pteg
+        retval.pteg2 = second_pteg
     return retval
