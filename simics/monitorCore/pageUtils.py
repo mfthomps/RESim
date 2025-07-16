@@ -43,6 +43,7 @@ class PtableInfo():
         self.phys_addr = None
         self.entry_size = 4
         self.nx = 0
+        self.writable = False
         self.entry = None
     def valueString(self):
         retval =  'pdir_protect: %s ptable_protect: %s page_protect %s  ptable_exists: %r  page_exists: %r ' % (str(self.pdir_protect), 
@@ -53,7 +54,7 @@ class PtableInfo():
             if self.phys_addr is not None:
                 retval = retval + ' phys_addr: 0x%x  nx:%d entry:0x%x' % (self.phys_addr, self.nx, self.entry)
                 other_info = PageEntryInfo(self.entry, self.cpu.architecture)
-                retval = retval + ' writeable: %r accessed: %r' % (other_info.writable, other_info.accessed) 
+                retval = retval + ' writable: %r accessed: %r' % (other_info.writable, other_info.accessed) 
         else:
               
             if self.phys_addr is not None:
@@ -377,6 +378,8 @@ def findPageTableArm(cpu, va, lgr, force_cr3=None, use_sld=None, do_log=False):
     s_shifted = small_page_base << 12
     offset = memUtils.bitRange(va, 0, 11)
     ptable_info.phys_addr = s_shifted + offset
+    page_entry_info = PageEntryInfo(sld, cpu.architecture)
+    ptable_info.writable = page_entry_info.writable
     ptable_info.nx = memUtils.testBit(sld, 0)
     ptable_info.entry = sld
     return ptable_info 
@@ -446,6 +449,8 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
             paddr = page_base + offset
             ptable_info.phys_addr = paddr
             ptable_info.entry = entry
+            entry_info = PageEntryInfo(entry, cpu.architecture)
+            ptable_info.writable = entry_info.writable
             #lgr.debug('phys addr is 0x%x' % paddr)
             return ptable_info
         else:
@@ -614,6 +619,8 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
             else:
                 table_entry = memUtils.bitRange(addr, 12, 20)
                 ptable_info.entry = table_entry
+                entry_info = PageEntryInfo(table_entry, cpu.architecture)
+                ptable_info.writable = entry_info.writable
                 page_base_addr = table_base + (table_entry * 8)
                 #lgr.debug('page_base_addr 0x%x ' % (page_base_addr))
                 page_base, present, page_size, nx = get40(cpu, page_base_addr, lgr) 
