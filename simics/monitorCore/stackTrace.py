@@ -310,9 +310,10 @@ class StackTrace():
                 if cur_fun is not None:
                     fun_name = self.fun_mgr.getFunName(cur_fun)
                     #self.lgr.debug('isCallToMe eip: 0x%x is in cur fun %s 0x%x' % (eip, fun_name, cur_fun))
+                # Name of the function we'd return to via LR
                 ret_to = self.fun_mgr.getFun(lr)
-                if ret_to is None:
-                    self.lgr.debug('isCallToMe lr of 0x%x is not a fun?' % lr)
+                #if ret_to is None:
+                #    self.lgr.debug('isCallToMe lr of 0x%x is not a fun?' % lr)
                 #if cur_fun is not None and ret_to is not None:
                 #    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
                 #    pass
@@ -356,7 +357,7 @@ class StackTrace():
                                retval = (lr, adjust_sp)
                         elif fun_hex is not None and fun is not None and fun != 'None':
                             ''' LR does not suggest call to current function. Is current a different library then LR? '''
-                            #self.lgr.debug('try got with eip: 0x%x fun_hex 0x%x' % (eip, fun_hex))
+                            self.lgr.debug('try got with eip: 0x%x fun_hex 0x%x' % (eip, fun_hex))
                             if self.tryGot(lr, eip, fun_hex):
                                 new_instruct = '%s   %s' % (self.callmn, fun)
                                 frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, fun_hex, fun, lr, None, msg='isCalToMe got from got')
@@ -523,6 +524,8 @@ class StackTrace():
             elif fun1 == 'strcmp' and fun2 == 'strcoll':
                 retval = True
             elif fun1 == 'memmove' and fun2 == 'memcpy':
+                retval = True
+            elif 'printf' in fun1 and fun2 == 'write':
                 retval = True
         if not retval:
             fun1_entry = self.fun_mgr.getFunEntry(fun1)
