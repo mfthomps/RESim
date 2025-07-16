@@ -180,6 +180,13 @@ def memoryValue(cpu, memory):
         value = SIM_get_mem_op_value_le(memory)
     return value
 
+def setMemoryValue(cpu, memory, value):
+    if cpu.architecture == 'ppc32':
+        SIM_set_mem_op_value_be(memory, value)
+    else:
+        SIM_get_mem_op_value_le(memory, value)
+    return value
+
 param_map = {}
 param_map['arm'] = {}
 param_map['arm']['param1'] = 'r0'
@@ -604,7 +611,7 @@ class MemUtils():
 
     def readByte(self, cpu, vaddr):
         phys = self.v2p(cpu, vaddr)
-        if phys is not None:
+        if phys is not None and phys != 0:
             return SIM_read_phys_memory(cpu, phys, 1)
         else:
             return None
