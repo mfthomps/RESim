@@ -2054,8 +2054,20 @@ class GenMonitor():
             self.debugger_target = self.target
         #self.setDebugBookmark('origin', cpu)
         self.bookmarks.setOrigin(cpu)
+        # reset jumpers and read replace which may have been disabled by stopDebug
+        self.lgr.debug('debugTidList restoring jumpers and readReplace')
+        self.jumperEnable()
+        self.enableOtherBreaks()
 
         self.run_to[self.target].toRunningProc(None, tid_list, flist, debug_group=True, final_fun=final_fun)
+
+    def enableOtherBreaks(self):
+        if self.target in self.read_replace:
+            self.read_replace[self.target].enableBreaks()
+        if self.target in self.trace_buffers:
+            self.trace_buffers[self.target].restoreHaps()
+        if self.target in self.page_callbacks:
+            self.page_callbacks[self.target].enableBreaks()
 
     def changedThread(self, cpu, third, forth, memory):
         cur_addr = memUtils.memoryValue(self.cpu, memory)
@@ -3329,13 +3341,18 @@ class GenMonitor():
                 self.lgr.debug('genMon removeDebugBreaks magic')
                 self.magic_origin[self.target].deleteMagicHap()
             self.jumperDisable()
-            if self.target in self.read_replace:
-                self.read_replace[self.target].disableBreaks()
-            if self.target in self.trace_buffers:
-                self.trace_buffers[self.target].rmAllHaps(immediate=immediate)
+            self.disableOtherBreaks()
         else:
             retval = False
         return retval
+
+    def disableOtherBreaks(self):
+        if self.target in self.read_replace:
+            self.read_replace[self.target].disableBreaks()
+        if self.target in self.trace_buffers:
+            self.trace_buffers[self.target].rmAllHaps(immediate=immediate)
+        if self.target in self.page_callbacks:
+            self.page_callbacks[self.target].disableBreaks()
 
     def revToText(self):
         self.is_monitor_running.setRunning(True)
@@ -4095,20 +4112,24 @@ class GenMonitor():
             self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
     def clearBookmarks(self, reuse_msg=False):
-        tid, cpu = self.context_manager[self.target].getDebugTid() 
-        self.lgr.debug('genMonitor clearBookmarks')
-        if tid is None:
-            #print('** Not debugging?? **')
-            self.lgr.debug('clearBookmarks, Not debugging?? **')
-            return False
+        if self.reverseEnabled():
+            tid, cpu = self.context_manager[self.target].getDebugTid() 
+            self.lgr.debug('genMonitor clearBookmarks')
+            if tid is None:
+                #print('** Not debugging?? **')
+                self.lgr.debug('clearBookmarks, Not debugging?? **')
+                return False
        
-        self.bookmarks.clearMarks()
-        SIM_run_alone(self.resetOrigin, cpu)
-        #self.resetOrigin(cpu)
-        self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True)
-        cpu, comm, tid = self.task_utils[self.target].curThread() 
-        #self.stopTrackIO()
-        self.lgr.debug('genMonitor clearBookmarks call clearWatches')
+            self.bookmarks.clearMarks()
+            SIM_run_alone(self.resetOrigin, cpu)
+            #self.resetOrigin(cpu)
+            self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True)
+            cpu, comm, tid = self.task_utils[self.target].curThread() 
+            #self.stopTrackIO()
+            self.lgr.debug('genMonitor clearBookmarks call clearWatches')
+        else:
+            self.lgr.debug('genMonitor clearBookmarks reverse not enabled')
+            pass
         return True
 
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
@@ -4123,11 +4144,10 @@ class GenMonitor():
             target = self.cell_config.cellFromCPU(target_cpu)
         self.mem_utils[target].setRegValue(target_cpu, reg, value)
         #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
-        if self.reverseEnabled():
-            if alone:
-                SIM_run_alone(self.clearBookmarks, reuse_msg) 
-            else:
-                self.clearBookmarks(reuse_msg=reuse_msg)
+        if alone:
+            SIM_run_alone(self.clearBookmarks, reuse_msg) 
+        else:
+            self.clearBookmarks(reuse_msg=reuse_msg)
 
     def writeWord(self, address, value, target_cpu=None, word_size=None):
         if self.no_reset:
@@ -4149,9 +4169,8 @@ class GenMonitor():
             self.mem_utils[target].writeWord32(target_cpu, address, value)
         else:
             self.mem_utils[target].writeWord(target_cpu, address, value)
-        if self.reverseEnabled():
-            self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
-            self.clearBookmarks()
+        self.lgr.debug('writeWord(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
+        self.clearBookmarks()
 
     def writeByte(self, address, value, target_cpu=None):
         if self.no_reset:
@@ -4167,9 +4186,8 @@ class GenMonitor():
         self.mem_utils[target].writeByte(cpu, address, value)
         #phys_block = cpu.iface.processor_info.logical_to_physical(address, Sim_Access_Read)
         #SIM_write_phys_memory(cpu, phys_block.address, value, 4)
-        if self.reverseEnabled():
-            self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
-            self.clearBookmarks()
+        self.lgr.debug('writeByte(0x%x, 0x%x), disable reverse execution to clear bookmarks, then set origin' % (address, value))
+        self.clearBookmarks()
 
     def writeString(self, address, string, target_cpu=None):
         if self.no_reset:
@@ -4185,11 +4203,8 @@ class GenMonitor():
             cpu, comm, tid = self.task_utils[target].curThread() 
             self.lgr.debug('writeString 0x%x %s' % (address, string))
             self.mem_utils[target].writeString(cpu, address, string)
-            if self.reverseEnabled():
-                self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
-                self.clearBookmarks()
-            else:
-                self.lgr.debug('writeString reverse execution was not enabled.')
+            self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
+            self.clearBookmarks()
 
     def writeBytes(self, cpu, address, bstring, target_cpu=None):
         if self.no_reset:
@@ -4204,11 +4219,8 @@ class GenMonitor():
             ''' NOTE: wipes out bookmarks! '''
             cpu, comm, tid = self.task_utils[target].curThread() 
             self.mem_utils[target].writeBytes(cpu, address, bstring)
-            if self.reverseEnabled():
-                self.lgr.debug('writeBytes, disable reverse execution to clear bookmarks, then set origin')
-                self.clearBookmarks()
-            else:
-                self.lgr.debug('writeBytes reverse execution was not enabled.')
+            self.lgr.debug('writeBytes, disable reverse execution to clear bookmarks, then set origin')
+            self.clearBookmarks()
 
     def stopDataWatch(self, immediate=False, leave_backstop=False):
         self.lgr.debug('genMonitor stopDataWatch immediate %r leave_backstop %r' % (immediate, leave_backstop))
@@ -4835,6 +4847,9 @@ class GenMonitor():
     def stopTracking(self, keep_watching=False, keep_coverage=False):
         self.lgr.debug('stopTracking')
         self.stopTrackIO(immediate=True, check_crash=False)
+        if self.dataWatch[self.target].didSomething():
+            self.disableOtherBreaks()
+            self.rmAllDmods()
         self.dataWatch[self.target].removeExternalHaps(immediate=True)
         self.dataWatch[self.target].disable()
 
@@ -6313,7 +6328,7 @@ class GenMonitor():
 
     def stopFindEntry(self, stop_action, one, exception, error_string):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        eip = self.getEIP()
         if eip in self.found_entries:
             SIM_run_alone(SIM_continue, 0)
             return
@@ -6558,16 +6573,19 @@ class GenMonitor():
             cpu = self.cell_config.cpuFromCell(self.target)
             # assumption called by user, so reset watches
             self.stopTracking()
+            self.lgr.debug('skipToCycle did stopTracking')
         self.context_manager[self.target].setReverseContext()
         if disable:
             self.context_manager[self.target].disableAll()
         else:
             # assume user invoked, make sure we are not tracking, or that will mess things up
             self.stopTracking()
+            self.lgr.debug('skipToCycle assume user invoked did stopTracking')
         retval = self.skip_to_mgr[self.target].skipToTest(cycle)
         self.context_manager[self.target].clearReverseContext()
         if disable:
             self.context_manager[self.target].enableAll()
+        self.lgr.debug('skipToCycle done wanted cycle 0x%x' % cycle)
         return retval
 
     def cutRealWorld(self):
@@ -6725,10 +6743,10 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         rle = recordLogEvents.RecordLogEvents(fname, obj, 4, cpu, self.lgr)
 
-    def pageCallback(self, addr, callback, name=None, use_pid=None):
+    def pageCallback(self, addr, callback, name=None, use_pid=None, writable=True):
         # TBD pass cell name and set for any target!
         if self.target in self.page_callbacks:
-            self.page_callbacks[self.target].setCallback(addr, callback, name=name, use_pid=use_pid)
+            self.page_callbacks[self.target].setCallback(addr, callback, name=name, use_pid=use_pid, writable=writable)
         else:
             self.lgr.error('pageCallback called, but no page_callbacks are set')
 
@@ -7045,6 +7063,18 @@ class GenMonitor():
             self.pending_stop_hap = callback
             self.lgr.debug('RES_add_stop_callback for %s' % str(callback))
         return retval
+
+    def stepOver(self):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.getEIP()
+        instruct = SIM_disassemble_address(cpu, eip, 1, 0)
+        if instruct[1].startswith('call') or instruct[1].startswith('bl '):
+            next_eip = eip + instruct[0]
+            self.doBreak(next_eip)
+            SIM_continue(0)
+        else:
+            self.stepN(1)
+
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
