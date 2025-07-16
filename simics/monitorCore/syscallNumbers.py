@@ -108,6 +108,7 @@ class SyscallNumbers():
                      
         if hack_query_module:
             # some libcs are broken
-            self.lgr.debug('syscallNumbers hacking call 167 to be poll')
+            self.lgr.debug('syscallNumbers hacking call 167 to be poll and 186 to be sendfile')
             self.syscalls[167] = 'poll'
+            self.syscalls[186] = 'sendfile'
 
