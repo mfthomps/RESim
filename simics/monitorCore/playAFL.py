@@ -792,12 +792,12 @@ class PlayAFL():
         return fname
 
     def recordHits(self, hit_bbs):
-        ''' hits will go in a "coverage" directory along side queue, etc. '''
+        ''' Record coverage, including cycles.  File will go in a "coverage" directory along side queue, etc. unless it is a one-off'''
         self.lgr.debug('playAFL recordHits %d' % len(hit_bbs))
         #hit_list = list(hit_bbs.keys())
         if self.one_off:
-            print('Assume ad-hoc path, hits stored in /tmp/playAFL.hits')
-            fname = '/tmp/playAFL.hits'
+            print('Assume ad-hoc path, coverage (hits & cycles) stored in /tmp/playAFL.coverage')
+            fname = '/tmp/playAFL.coverage'
         else:
             fname = self.getHitsPath(self.index)
         self.lgr.debug('playAFL recordHits to file %s' % fname)
@@ -809,8 +809,14 @@ class PlayAFL():
             hit = int(hit)
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
-        base = os.path.basename(fname)
-        print('%d hits in this play for %s.' % (len(hit_bbs), base))
+        if self.one_off:
+            print('Hits list (for IDA) stored in /tmp/playAFL.hits')
+            fname = '/tmp/playAFL.hits'
+            with open(fname, 'w') as fh:
+                json.dump(self.all_hits, fh) 
+        else:
+            base = os.path.basename(fname)
+            print('%d hits in this play for %s.' % (len(hit_bbs), base))
         self.reportNewHits()
 
     def reportNewHits(self):
