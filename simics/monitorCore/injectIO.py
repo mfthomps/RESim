@@ -373,7 +373,7 @@ class InjectIO():
                     ''' per trackIO, look at entire buffer for ref to old data '''
                     if not self.mem_utils.isKernel(self.addr):
                         #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
-                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.orig_max_len)
+                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.orig_max_len, data_stream=True)
                         if self.addr_of_count is not None:
                             self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', backstop=False, recv_addr=self.addr_of_count, max_len = 4)
                             self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
@@ -536,7 +536,7 @@ class InjectIO():
                 self.dataWatch.clearWatchMarks(record_old=True)
             if count != 0:
                 self.lgr.debug('resetReverseAlone call setRange')
-                self.dataWatch.setRange(self.addr, count, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
+                self.dataWatch.setRange(self.addr, count, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len, data_stream=True)
                 ''' special case'''
                 if self.max_len == 1:
                     self.addr += 1
