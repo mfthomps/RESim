@@ -1,0 +1,2 @@
+@cgc.injectIO('/tmp/tri.io', trace_all=True)
+@cgc.quit()

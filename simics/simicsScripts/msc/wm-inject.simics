@@ -1,0 +1,3 @@
+@cgc.injectIO('/tmp/tri.io')
+@cgc.saveWatchMarks('/tmp/tri.wm')
+@cgc.quit()
