@@ -353,9 +353,10 @@ class PollInfo():
         return 'poll, %d FDs: %s Timeout: %d' % (self.nfds, fd_list, self.timeout) 
 
 class ExitInfo():
-    def __init__(self, syscall_instance, cpu, tid, callnum, callname, compat32, frame):
+    def __init__(self, syscall_instance, cpu, tid, comm, callnum, callname, compat32, frame):
         self.cpu = cpu
         self.tid = tid
+        self.comm = comm
         self.callnum = callnum
         self.callname = callname
         self.fname = None
@@ -586,6 +587,8 @@ class Syscall():
         self.clone_fd_count = 1
 
         self.no_exit_maze = False
+
+        self.execve_cycle = self.cpu.cycles
 
     def breakOnExecve(self):
         for call in self.call_params:
@@ -1051,6 +1054,7 @@ class Syscall():
                             self.lgr.debug('checkExecve not tracking threads, remove the syscall param')
                             self.top.rmSyscall(cp.name)
                         self.lgr.debug('checkExecve execve of %s now stop alone ' % prog_string)
+                        self.context_manager.setIdaMessage('execve of %s' % (prog_string))
                         SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
                     elif missing_file:
                         self.lgr.debug('syscall checkExecve missing file.  prog %s  param %s' % (prog_string, cp.match_param))
@@ -1059,6 +1063,7 @@ class Syscall():
                                 self.lgr.debug('checkExecve missing file not tracking threads, remove the syscall param')
                                 self.top.rmSyscall(cp.name)
                             self.lgr.debug('checkExecve missing file execve of %s now stop alone ' % prog_string)
+                            self.context_manager.setIdaMessage('execve of %s' % (prog_string))
                             SIM_run_alone(self.stopAlone, 'execve of %s' % prog_string)
                         else:
                             print('Did not find a file relative to the Root Prefix, and the program string of %s does not match %s, maybe try an absolute path' % (prog_string, cp.match_param)) 
@@ -1073,6 +1078,7 @@ class Syscall():
                     #self.lgr.debug('syscall execve compare %s to %s' % (base, sw))
                     if base.startswith(sw):
                         self.lgr.debug('checkExecve execve of %s %s' % (prog_string, sw))
+                        self.context_manager.setIdaMessage('execve of %s %s' % (prog_string, sw))
                         SIM_run_alone(self.stopAlone, 'execve of %s %s' % (prog_string, sw))
 
     def parseExecve(self, syscall_info, exit_info):
@@ -1602,7 +1608,7 @@ class Syscall():
         Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
         syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
         '''
-        exit_info = ExitInfo(self, cpu, tid, callnum, callname, syscall_info.compat32, frame)
+        exit_info = ExitInfo(self, cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         ida_msg = None
         #self.lgr.debug('syscallParse syscall name: %s tid:%s (%s) callname <%s> (%d) params: %s context: %s cycle: 0x%x' % (self.name, tid, comm, callname, callnum, str(self.call_params), 
@@ -2651,6 +2657,7 @@ class Syscall():
             return
         if tid == '0':
             return
+
         # beware some systems execv init to some other process that you may care about
         #if tid == '1':
         #    return
@@ -2838,6 +2845,15 @@ class Syscall():
 
         frame_string = taskUtils.stringFromFrame(frame)
         self.lgr.debug('syscallHap in tid:%s (%s), callnum: 0x%x (%s)  EIP: 0x%x' % (tid, comm, callnum, callname, break_eip))
+        # Hack to allow repeated toProc(new=True) calls
+        if self.name == 'execve' and callname == 'execve': 
+            self.lgr.debug('hap name %s comm %s is execve cycles 0x%x current 0x%x' % (self.name, comm, self.execve_cycle, self.cpu.cycles))
+            if self.cpu.cycles == self.execve_cycle:
+                self.lgr.debug('syscallHap execve but already hit, ignore')
+                return
+            else:
+                self.execve_cycle = self.cpu.cycles
+                self.lgr.debug('setting execve cycles to 0x%x' % (self.execve_cycle))
         #self.lgr.debug('syscallHap frame: %s syscall_info.callnum %s' % (frame_string, str(self.syscall_info.callnum)))
 
         # Set exit breaks, if wanted 
@@ -3143,7 +3159,7 @@ class Syscall():
                     self.lgr.debug('sharedSyscall  tid:%s setExits is current thread about to exit, skip this one' % tid)
                     continue   
 
-            exit_info = ExitInfo(self, self.cpu, tid, callnum, callname, False, frame)
+            exit_info = ExitInfo(self, self.cpu, tid, comm, callnum, callname, False, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
