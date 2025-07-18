@@ -63,23 +63,28 @@ class TraceFiles():
             self.watched_files.append(path)
 
 
-    def watchFD(self, fd, outfile, raw=False, web=False, all=False):
+    def watchFD(self, fd, outfile, raw=False, web=False, all=False, comm=None):
         if not all:
             tid = self.top.getTID(target=self.cell_name)
         else:
             tid = 'all'
-        if tid in self.open_files and fd in self.open_files[tid]:
+        fd_rec = self.getFDRec(tid, tid, comm)
+        if fd_rec is not None:
             print('FD %d already being watched for tid %s' % (fd, tid))
             self.lgr.debug('traceFiles watchFD FD %d already being watched tid %s' % (fd, tid))
             return
+        if comm is None:
+            key = tid
+        else:
+            key = comm
         self.web = web
         self.raw = raw
         if self.web:
             self.raw = True
-        if tid not in self.open_files:
-            self.open_files[tid] = {}
-        self.open_files[tid][fd] = self.FileWatch(None, outfile)
-        self.open_files[tid][fd].fd = fd
+        if key not in self.open_files:
+            self.open_files[key] = {}
+        self.open_files[key][fd] = self.FileWatch(None, outfile)
+        self.open_files[key][fd].fd = fd
         if not self.raw:
             with open(outfile+'-read', 'w') as fh:
                     fh.write('start of RESim copy of FD %d\n' % fd) 
@@ -91,9 +96,9 @@ class TraceFiles():
             with open(outfile+'-write', 'wb') as fh:
                 pass
         self.lgr.debug('traceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
-        if tid not in self.tracing_fd:
-            self.tracing_fd[tid] = []
-        self.tracing_fd[tid].append(fd)
+        if key not in self.tracing_fd:
+            self.tracing_fd[key] = []
+        self.tracing_fd[key].append(fd)
 
     def accept(self, tid, fd, new_fd):
         if tid in self.open_files and fd in self.open_files[tid]:
@@ -112,21 +117,24 @@ class TraceFiles():
 
     def close(self, fd):
         
-        tid = self.top.getTID(target=self.cell_name)
+        cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
         self.lgr.debug('traceFiles close tid:%s FD: %d'  % (tid, fd))
         if tid in self.binders and fd in self.binders[tid]:
             del self.binders[tid][fd] 
             self.lgr.debug('traceFiles close removed binders %d for tid:%s'  % (fd, tid))
-        if tid not in self.tracing_fd or fd not in self.tracing_fd[tid]:
-            if tid in self.open_files and fd in self.open_files[tid] and (tid not in self.tracing_fd or fd not in self.tracing_fd[tid]):
-                self.open_files[tid][fd].fd = None
-                del self.open_files[tid][fd]
+        tracing_rec = self.getTracingRec(tid, comm, fd)
+        if tracing_rec is None:
+            fd_rec = self.getFDRec(tid, comm, fd)
+            if fd_rec is not None:
+                fd_rec.fd = None
+                del fd_rec
                 self.lgr.debug('traceFiles close tid:%s FD: %d num open files %d'  % (tid, fd, len(self.open_files)))
         elif not self.raw:
-            if tid in self.open_files:
-                with open(self.open_files[tid][fd].outfile+'-read', 'a') as fh:
+            fd_rec = self.getFDRec(tid, comm, fd)
+            if fd_rec is not None:
+                with open(fd_rec.outfile+'-read', 'a') as fh:
                     fh.write('\nFile closed.\n')
-                with open(self.open_files[tid][fd].outfile+'-write', 'a') as fh:
+                with open(fd_rec.outfile+'-write', 'a') as fh:
                     fh.write('\nFile closed.\n')
 
     def nonull(self, the_bytes):
@@ -152,25 +160,42 @@ class TraceFiles():
         else:
             fd = fd_in 
         self.lgr.debug('traceFiles tid:%s (%s) read FD: 0x%x len of bytes %d' % (tid, comm, fd, len(the_bytes)))
-        self.io(tid, fd, the_bytes, read=True, fd_in=fd_in)
+        self.io(tid, comm, fd, the_bytes, read=True, fd_in=fd_in)
 
-    def write(self, tid, fd_in, the_bytes):
+    def write(self, tid, comm, fd_in, the_bytes):
         if tid in self.binders and fd_in in self.binders[tid]:
             fd = self.binders[tid][fd_in]
         else:
             fd = fd_in 
         self.lgr.debug('traceFiles write')
-        self.io(tid, fd, the_bytes, read=False, fd_in=fd_in)
+        self.io(tid, comm, fd, the_bytes, read=False, fd_in=fd_in)
 
-    def io(self, tid, fd, the_bytes, read=False, fd_in=None):
+    def getFDRec(self, tid, comm, fd):
+        retval = None
+        if tid in self.open_files and fd in self.open_files[tid]:
+            retval = self.open_files[tid][fd]
+        elif comm is not None and comm in self.open_files and fd in self.open_files[comm]:
+            retval = self.open_files[comm][fd]
+        return retval
+
+    def getTracingRec(self, tid, comm, fd):
+        retval = None
+        if tid in self.tracing_fd and fd in self.tracing_fd[tid]:
+            retval = self.tracing_fd[tid][fd]
+        elif comm is not None and comm in self.tracing_fd and fd in self.tracing_fd[comm]:
+            retval = self.tracing_fd[comm][fd]
+        return retval
+
+    def io(self, tid, comm, fd, the_bytes, read=False, fd_in=None):
         suf = '-write'
         if read:
             suf = '-read'
         if the_bytes is None or len(the_bytes) == 0:
             return
         if self.raw:
-            if tid in self.open_files and fd in self.open_files[tid]:
-                with open(self.open_files[tid][fd].outfile+suf, 'ab') as fh:
+            fd_rec = self.getFDRec(tid, comm, fd)
+            if fd_rec is not None:
+                with open(fd_rec.outfile+suf, 'ab') as fh:
                     #cycles = b'cycle: 0x%x FD: %d --' % (self.cpu.cycles, fd_in)
                     #fh.write(cycles+bytearray(the_bytes)+b'*DONE*')
                     b_array = bytearray(the_bytes)
@@ -202,10 +227,11 @@ class TraceFiles():
                 ''' tracing fd '''
                 if ((tid not in self.open_files or fd not in self.open_files[tid]) and ('all' in self.open_files and fd in self.open_files['all'])):
                     tid = 'all'
-                if tid in self.open_files and fd in self.open_files[tid]: 
-                    with open(self.open_files[tid][fd].outfile+suf, 'a') as fh:
+                fd_rec = self.getFDRec(tid, comm, fd)
+                if fd_rec is not None:
+                    with open(fd_rec.outfile+suf, 'a') as fh:
                         s = ''.join(map(chr,stripped))+'\n'
-                        self.lgr.debug('traceFiles writing to %s %s'  % (self.open_files[tid][fd].outfile, s))
+                        self.lgr.debug('traceFiles writing to %s %s'  % (fd_rec.outfile, s))
                         fh.write(s)
                         if self.dataWatch is not None:
                             prefix = 'FD:%d' % fd
@@ -229,7 +255,7 @@ class TraceFiles():
 
     def dup(self, old, new):
         self.lgr.debug('traceFiles dup old: %s new: %s' % (old, new))
-        tid = self.top.getTID(target=self.cell_name)
+        cpu, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
         if tid in self.open_files and old in self.open_files[tid]:
             self.open_files[tid][new] = self.open_files[tid][old]
         if tid in self.binders and old in self.binders[tid]:
