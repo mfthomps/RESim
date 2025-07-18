@@ -478,8 +478,9 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             tid = self.watch_rec_list[rec]
-            #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
-            retval.append(tid)
+            if tid != '0': 
+                #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
+                retval.append(tid)
         return retval
 
     def getWatchList(self):
@@ -1387,6 +1388,8 @@ class GenContextMgr():
         if tid is None:
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
+        elif tid == '0':
+            return False
         elif rec is None:
             self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
             rec = self.task_utils.getRecAddrForTid(tid)
