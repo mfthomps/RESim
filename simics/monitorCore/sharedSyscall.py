@@ -441,7 +441,7 @@ class SharedSyscall():
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:nbytes])
                     if self.traceFiles is not None:
-                        self.traceFiles.write(tid, exit_info.old_fd, byte_array)
+                        self.traceFiles.write(tid, comm, exit_info.old_fd, byte_array)
                 else:
                     s = '<< NOT MAPPED >>'
                 eip = self.getEIP()
@@ -1024,7 +1024,7 @@ class SharedSyscall():
                             self.lgr.error('now         : %s' % s)
                         '''
                         if self.traceFiles is not None:
-                            self.traceFiles.write(tid, exit_info.old_fd, byte_array)
+                            self.traceFiles.write(tid, comm, exit_info.old_fd, byte_array)
                     else:
                         s = '<<NOT MAPPED>>'
                     trace_msg = trace_msg+('FD: %d count: %d data:\n\t%s\n' % (exit_info.old_fd, eax, s))
@@ -1668,7 +1668,7 @@ class SharedSyscall():
             if byte_tuple is not None:
                 s = resimUtils.getHexDump(byte_tuple[:max_len])
                 if self.traceFiles is not None:
-                    self.traceFiles.write(exit_info.tid, exit_info.old_fd, byte_tuple)
+                    self.traceFiles.write(exit_info.tid, exit_info.comm, exit_info.old_fd, byte_tuple)
                 full_byte_tuple = full_byte_tuple + byte_tuple
                 iov_set.append(self.IOV(base, byte_tuple[:max_len]))
                 self.lgr.debug('sharedSyscall getIOV base 0x%x s: %s' % (base, s))
