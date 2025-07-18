@@ -745,7 +745,10 @@ class IdaSIM():
             cur_addr = idaversion.get_reg_value(self.PC)
             instruct = idc.generate_disasm_line(cur_addr, 0)
             print('is ppc, instruct %s' % instruct)
-            if instruct.startswith('b') and not instruct.startswith('bl '):
+            if instruct.startswith('bl '):
+                gdbProt.Evalx('SendGDBMonitor("@cgc.stepOver()");')
+                self.signalClient()
+            elif instruct.startswith('b'):
                 print('is ppc b, do step')
                 gdbProt.Evalx('SendGDBMonitor("@cgc.stepN(1)");')
                 eip = gdbProt.getEIPWhenStopped()
