@@ -822,6 +822,7 @@ class GenMonitor():
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
             tid = self.task_utils[self.target].curTID() 
+            self.lgr.debug('run2User want_tid %s tid:%s' % (want_tid, tid))
             ''' use debug process if defined, otherwise default to current process '''
             if want_tid is not None:
                 want_tid = str(want_tid)
@@ -1877,10 +1878,16 @@ class GenMonitor():
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
             if self.isWindows():
-                self.lgr.debug('toProc no process %s found, run until CreateUserProcess' % proc)
+                if new:
+                    self.lgr.debug('toProc want new process %s, run until CreateUserProcess' % proc)
+                else:
+                    self.lgr.debug('toProc no process %s found, run until CreateUserProcess' % proc)
                 self.winMonitor[self.target].toCreateProc(comm=proc, run=run)
             else:
-                self.lgr.debug('toProc no process %s found, run until execve' % proc)
+                if new:
+                    self.lgr.debug('toProc want new process %s, run until execve cycles now 0x%x' % (proc, cpu.cycles))
+                else:
+                    self.lgr.debug('toProc no process %s found, run until execve' % proc)
                 self.toExecve(prog=proc, flist=[], binary=binary, any_exec=True)
 
         
@@ -2930,11 +2937,11 @@ class GenMonitor():
         if self.target not in self.trace_all:
             self.traceAll()
 
-    def traceFD(self, fd, raw=False, web=False, all=False):
+    def traceFD(self, fd, raw=False, web=False, all=False, comm=None):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
         self.lgr.debug('traceFD %d target is %s' % (fd, self.target))
         outfile = 'logs/output-fd-%d.log' % fd
-        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web, all=all)
+        self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web, all=all, comm=comm)
 
     def exceptHap(self, cpu, one, exception_number):
         cpu, comm, tid = self.task_utils[self.target].curThread() 
@@ -3121,7 +3128,16 @@ class GenMonitor():
         if watch_exit:
             call_list.append('exit_group')
             call_list.append('exit')
-        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, 'execve', flist=flist, linger=linger)
+        scall_name = 'execve'
+        # alter name so syscall knows difference between toProc and debugProc
+        if flist is not None:
+            for f in flist:
+                self.lgr.debug('toExecve flist fun str(%s)' % f.getFun())
+                if f.getFun() == self.debug:
+                    scall_name = 'execve_debug'
+                    self.lgr.debug('toExecve found debug, set scall_name to execve_debug')
+                    break
+        self.syscallManager[self.target].watchSyscall(None, call_list, call_params, scall_name, flist=flist, linger=linger)
         if run:
             SIM_continue(0)
 
@@ -5784,10 +5800,12 @@ class GenMonitor():
 
     def debugIfNot(self):
         ''' warning, assumes current tid is the one to be debugged. '''
+        self.lgr.debug('debugIfNot')
         self.rmDebugWarnHap()
         if self.bookmarks is None:
             cpu, comm, this_tid = self.task_utils[self.target].curThread() 
             print('Will debug tid: %s (%s)' % (this_tid, comm))
+            self.lgr.debug('debugIfNot Will debug tid: %s (%s)' % (this_tid, comm))
             self.debug(group=True)
         else:
             print('Already debugging.')
@@ -5905,7 +5923,7 @@ class GenMonitor():
         if self.stop_hap is not None:
             self.lgr.debug('stopAndCallHap callback is %s' % str(callback))
             hap = self.stop_hap
-            self.RES_delete_stop_hap_alone(hap)
+            self.RES_delete_stop_hap_run_alone(hap)
             self.stop_hap = None
             SIM_run_alone(callback, None)
 
@@ -7050,7 +7068,7 @@ class GenMonitor():
     def RES_delete_stop_hap_run_alone(self, hap):
         # race condition of 2 stop haps existing?
         self.pending_stop_hap = None
-        self.lgr.debug('RES_delete_stop_hap_alone')
+        self.lgr.debug('RES_delete_stop_hap_run_alone')
         SIM_run_alone(RES_delete_stop_hap, hap)
 
     def RES_add_stop_callback(self, callback, param):
