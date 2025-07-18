@@ -361,6 +361,9 @@ class InjectIO():
                 self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
                 trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
                 self.top.traceWrite(trace_msg)
+                if self.trace_fd is not None:
+                    self.lgr.debug('injectIO target_prog none, traceFD 0x%x' % self.trace_fd)
+                    self.top.traceFD(self.trace_fd)
 
             self.commonGo()
             if not self.stay:
@@ -404,6 +407,9 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        if self.trace_fd is not None:
+                            self.lgr.debug('injectIO traceFD 0x%x' % self.trace_fd)
+                            self.top.traceFD(self.trace_fd)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
