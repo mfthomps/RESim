@@ -275,6 +275,7 @@ class PageCallbacks():
         physical = mem_trans.physical
 
         # find the missing pteg entry for this hit.  Each break range is 64 bytes
+        missing_entry = None
         for missing_addr in self.missing_ptegs:
             if physical >= missing_addr and physical < (missing_addr+64):
                 missing_entry = missing_addr
