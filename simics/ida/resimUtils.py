@@ -7,6 +7,7 @@ import idautils
 import ida_segment
 import ida_loader
 import ida_bytes
+import ida_funcs
 import os
 import sys
 import logging
@@ -372,10 +373,19 @@ def renameFromLogger():
                     break
                     
 def adjustStack(fun_ea):
-    # Search end of function for indications of stack adjustment.  Used as an aide to stack tracing
+    ''' Search end of function for indications of stack adjustment.  Used as an aide to stack tracing '''
+    # TBD can't all architectures use pfn.points like PPC32?
     info = idaapi.get_inf_structure()
     if info.procname == 'PPC':
-        return 0
+        pfn = ida_funcs.get_fchunk(fun_ea)
+        if pfn.pntqty == 0:
+            return 0
+        adjust_total = 0
+        for i in range(pfn.pntqty):
+            adjust = pfn.points[i].spd * -1
+            print('ppc adjust 0x%x index %d set to 0x%x' % (fun_ea, i, adjust))
+            adjust_total = adjust_total + adjust 
+        return adjust_total
     if info.is_32bit():
         word_size = 4
     else:
