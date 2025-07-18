@@ -69,7 +69,9 @@ class FunMgr():
             ''' Returns the loaded function address of the fuction containing a given ip '''
             return self.ida_funs[comm].getFun(addr)
         else:
-            self.lgr.error('funMgr getFun no funs for comm %s' % comm)
+            self.lgr.error('funMgr getFun no funs for comm %s. comms for:' % comm)
+            for comm in self.ida_funs:
+                self.lgr.error('\t %s' % comm)
             return None
 
     def getName(self, addr):
