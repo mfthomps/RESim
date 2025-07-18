@@ -810,7 +810,7 @@ class PlayAFL():
             if hit not in self.all_hits:
                 self.all_hits.append(hit)
         if self.one_off:
-            print('Hits list (for IDA) stored in /tmp/playAFL.hits')
+            print('Hits list (for IDA) stored %d hits in /tmp/playAFL.hits' % len(self.all_hits))
             fname = '/tmp/playAFL.hits'
             with open(fname, 'w') as fh:
                 json.dump(self.all_hits, fh) 
