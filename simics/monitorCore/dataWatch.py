@@ -372,8 +372,6 @@ class DataWatch():
         self.lgr.debug('freadCallback call setRange with start 0x%x len %d' % (start, self.mem_something.length))
         msg = 'fread to 0x%x %d bytes' % (start, self.mem_something.length)
         self.setRange(start, self.mem_something.length, msg=msg)
-        #MFTMFT self.top.restoreDebugBreaks(was_watching=True)
-        #MFTMFT self.watch()
         self.enableBreaks()
         self.backstop.setFutureCycle(self.backstop_cycles)
         SIM_run_alone(SIM_run_command, 'c')
@@ -1205,6 +1203,23 @@ class DataWatch():
                             self.move_cycle = self.cpu.cycles
                             self.move_cycle_max = self.cpu.cycles+1
                             self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
+            elif self.cpu.architecture == 'ppc32':
+                if next_instruct[1].startswith('st'):
+                    op2, op1 = self.decode.getOperands(next_instruct[1])
+                    ret_reg =  self.mem_utils.getCallRetReg(self.cpu)
+                    if self.decode.regIsPart(op1, ret_reg):
+                        self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
+                        addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                        if addr is not None:
+                            self.lgr.debug('dataWatch checkNumericStore got addr 0x%x' % addr)
+                            count = self.mem_utils.wordSize(self.cpu)
+                            if next_instruct[1].startswith('strh'):
+                                count = int(self.mem_utils.wordSize(self.cpu)/2)
+                            self.setRange(addr, count, 'fun result')
+                            self.last_fun_result = addr
+                            self.move_cycle = self.cpu.cycles
+                            self.move_cycle_max = self.cpu.cycles+1
+                            self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
             else:
                 count = 0
                 while(count < 4):
@@ -1327,7 +1342,6 @@ class DataWatch():
         self.lgr.debug('dataWatch returnHap should be at return from memsomething fun %s, eip 0x%x cycles: 0x%x skip_this %r' % (self.mem_something.fun, eip, self.cpu.cycles, skip_this))
         hap = self.return_hap
         self.pending_call = False
-        #MFTMFT SIM_run_alone(self.top.restoreDebugBreaks, True)
 
         if skip_this:
             self.lgr.debug('dataWatch returnHap skip_this, bail')
@@ -2228,8 +2242,9 @@ class DataWatch():
 
             if data_hit: 
                 ''' Assume we have disabled debugging in context manager while fussing with parameters. '''
-                #MFTMFT self.top.restoreDebugBreaks(was_watching=True)
-                self.lgr.debug('dataWatch getMemParams, back from restore debug')
+                #self.top.restoreDebugBreaks(was_watching=True)
+                #self.lgr.debug('dataWatch getMemParams, back from restore debug')
+                pass
             elif self.mem_something.src is None:
                 self.lgr.debug('dataWatch getMemParams src is None and data not hit, bail')
                 self.pending_call = False
@@ -2257,7 +2272,6 @@ class DataWatch():
                 if buf_start is None:
                     ''' handle ambigous calls such as strcmp '''
                     if self.mem_something.dest is not None:
-                        self.lgr.debug('wtf length is 0x%x' % self.mem_something.length)
                         buf_start, buf_length, dumb = self.findBufForRange(self.mem_something.dest, self.mem_something.length)
                     if buf_start is None:
                         self.lgr.debug('dataWatch getMemParams buf_start none, ambigous call like strcmp')
@@ -2304,9 +2318,7 @@ class DataWatch():
                     self.lgr.error('dataWatch getMemParams ret_ip is zero, bail')
                     self.pending_call = False
                     return
-                #MFTMFT
                 self.disableBreaks(filter='dataWatch')
-                #self.stopWatch(immediate=True)
                 self.lgr.debug('call runToReturn')
                 self.runToReturn()
                 dum_cpu, comm, tid = self.task_utils.curThread()
@@ -2593,7 +2605,9 @@ class DataWatch():
             else:
                 self.mem_something.dest, dumb2 , dumb = self.getCallParams(sp, word_size)
         elif self.mem_something.fun in ['fprintf', 'printf', 'vfprintf', 'syslog']:
-            dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
+            #dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
+            # TBD parse args
+            pass
 
         elif self.mem_something.fun in ['output_processor']:
             dumb2, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
@@ -2936,8 +2950,6 @@ class DataWatch():
             self.context_manager.restoreDebugContext()
             self.enableBreaks()
             self.backstop.setFutureCycle(self.backstop_cycles)
-            #MFTMFT self.top.restoreDebugBreaks()
-            #self.finishReadHap(self.mem_something.op_type, self.mem_something.trans_size, eip, addr, self.mem_something.length, self.mem_something.start, tid)
             self.lgr.debug('dataWatch undoAlone now run forward')
 
             SIM_run_command('c')
@@ -2952,10 +2964,10 @@ class DataWatch():
     def hitCallStopHap(self, called_from_reverse_mgr, one, exception, error_string):
         #self.lgr.debug('dataWatch hitCallStopHap execption %s  error_string %s cycle: 0x%x' % (exception, error_string, self.cpu.cycles))
         if self.call_stop_hap is not None or called_from_reverse_mgr is not None:
+            self.enableBreaks()
             SIM_run_alone(self.hitCallStopHapAlone, called_from_reverse_mgr)
  
     def hitCallStopHapAlone(self, called_from_reverse_mgr):
-        self.enableBreaks()
         self.context_manager.clearReverseContext()
         SIM_run_command('enable-vmp') 
         
@@ -3104,20 +3116,11 @@ class DataWatch():
         #else:
         #    SIM_run_command(rev_cmd)
 
-        #if self.mem_something.called_from_ip == 0x7f9732f2ac:
-        #    print('remove this')
-        #    return
 
         if reverse_to:
             self.lgr.debug('dataWatch revAlone is reverse_to, reverse to previous cycle 0x%x expecting to hit breakpoint 0x%x before we reach that cycle.' % (self.prev_mark_cycle, self.mem_something.called_from_ip))
 
-            #if self.prev_mark_cycle == 0x610b4c9943:
-            #    print('remove this')
-            #    return
-            if self.save_cycle != 0x41f8a4964:
-                self.reverse_mgr.reverseTo(self.prev_mark_cycle)
-            else:
-                print('remove this')
+            self.reverse_mgr.reverseTo(self.prev_mark_cycle)
         else:
             self.lgr.debug('dataWatch revAlone just reverse')
             self.reverse_mgr.reverse()
@@ -4357,7 +4360,10 @@ class DataWatch():
                     else:
                         ''' TBD deleting buffer, sometimes, in finishReadHap, here too?'''
                         self.lgr.debug('dataWatch did mem mod, call rmSubRange for 0x%x len 0x%x' % (addr, trans_size))
-                        self.rmSubRange(addr, trans_size)
+                        if trans_size > 1:
+                            self.rmSubRange(addr, trans_size)
+                        else:
+                            self.lgr.debug('********remove this*********************REMOVE THIS**********************')
                         pass
                 else:
                     self.lgr.debug('dataWatch did mem mod, but recent byteswap, assume messing with read values.')
@@ -4384,7 +4390,11 @@ class DataWatch():
         When memsomethings are found, we set a break on their entry so that future hits on that memsomething can be caught
         without triggering the readHap.  TBD trade off between setting breaks beforehand?  Save for rerun of runTrack operations?
         '''
-        if self.return_hap is not None or self.context_manager.isReverseContext():
+        if self.return_hap is not None: 
+            self.lgr.debug('readHap return_hap not none, bail')
+            return
+        if self.context_manager.isReverseContext():
+            self.lgr.debug('readHap is reverse context, bail')
             return
         if index >= len(self.start):
             self.lgr.debug('dataWatch readHap index %d but len of start is %d addr 0x%x' % (index, len(self.start), memory.logical_address))
@@ -4399,6 +4409,9 @@ class DataWatch():
 
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
+        #if self.cpu.cycles == 0x3de4883da:
+        #    SIM_break_simulation('remove this')
+        #    return
         #if self.top.isVxDKM(target=self.cell_name) and self.so_map.inVxWorks(eip): 
         #    start, length = self.findBufForRange(memory.logical_address, memory.size)
         #    self.lgr.debug('dataWatch readHap in VxWorks addr 0x%x op_type %d cycles: 0x%x.' % (memory.logical_address, op_type, self.cpu.cycles))
@@ -4408,6 +4421,7 @@ class DataWatch():
 
         dum_cpu, comm, tid = self.task_utils.curThread()
         if comm != self.comm:
+            self.lgr.debug('readHap tid:%s comm %s, but we are %s' % (tid, comm, self.comm))
           
             if self.start[index] is None:
                 latest_index = self.findRangeIndexPhys(memory.physical_address)
@@ -4443,12 +4457,11 @@ class DataWatch():
         # may be multiple overlapping buffer ranges, index is simply first reported by Simics.  Find
         # the most recently defined range
         latest_index = self.findRangeIndex(addr)
-        self.lgr.debug('readHap latest index for addr 0x%x is %s' % (addr, latest_index))
+        self.lgr.debug('readHap tid:%s latest index for addr 0x%x is %s' % (tid, addr, latest_index))
         if latest_index is not None and latest_index != index:
             self.lgr.debug('readHap altering index from %d to more recently defined buffer at index %d' % (index, latest_index))
             index = latest_index
 
-        tid = self.task_utils.curTID()
         cpl = memUtils.getCPL(self.cpu)
 
         if cpl > 0:
@@ -4609,7 +4622,6 @@ class DataWatch():
             hap = self.finish_check_move_hap
             self.context_manager.genDeleteHap(hap, immediate=False)
             self.finish_check_move_hap = None
-        dum_cpu, comm, tid = self.task_utils.curThread()
 
         if self.backstop is not None and not self.break_simulation and self.use_backstop and addr not in self.no_backstop:
             self.backstop.setFutureCycle(self.backstop_cycles)
@@ -4630,7 +4642,10 @@ class DataWatch():
             addr_s = 'None'
         else:
             addr_s = '0x%x' % addr
-        self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x eip 0x%x cycles: 0x%x op_type: %s current_context %s cpl: %d memory.size(trans_size)=%d' % (tid, index, addr, eip, self.cpu.cycles, op_type, self.cpu.current_context, cpl, memory.size))
+        self.lgr.debug('****X dataWatch readHap tid:%s index %d addr 0x%x (phys: 0x%x) eip 0x%x cycles: 0x%x op_type: %s current_context %s cpl: %d memory.size(trans_size)=%d' % (tid, index, addr, phys_addr, eip, self.cpu.cycles, op_type, self.cpu.current_context, cpl, memory.size))
+        #if self.cpu.cycles == 0x3ddf59392:
+        #    SIM_break_simulation('remove this')
+        #    return
         if self.show_cmp:
             self.showCmp(addr)
 
@@ -5189,10 +5204,12 @@ class DataWatch():
                 ret_start = recv_addr
                 ret_length = recv_length
                 ret_start, ret_length = self.getIntersect(addr, length, recv_addr, recv_length)
-                #self.lgr.debug('dataWatch findBufForRange found 0x%x in orig 0x%x' % (addr, ret_start))
+                ret_index = self.findRangeIndex(addr)
+                self.lgr.debug('dataWatch findBufForRange found 0x%x in orig 0x%x' % (addr, ret_start))
                 if ret_length is None:
                     self.lgr.debug('dataWatch findbufForRange ret_length None for addr 0x%x' % addr)
             else:
+                self.lgr.debug('findBuffForRange 0x%x not in orig' % addr)
                 for index in reversed(range(len(self.start))):
                     if self.start[index] is not None:
                         ret_start, ret_length = self.getIntersect(addr, length, self.start[index], self.length[index])
@@ -5792,6 +5809,7 @@ class DataWatch():
             self.disabled = False
 
     def disable(self):
+        self.lgr.debug('dataWatch disable')
         self.disabled=True
         self.top.rmSyscall('dataWatchMmap')
         
