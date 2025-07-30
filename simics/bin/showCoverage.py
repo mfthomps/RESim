@@ -135,7 +135,8 @@ def main():
                 pass
         sorted_hits = dict(sorted(hit_dict.items(), key=lambda item: item[1]))
         for f in sorted_hits:
-            print('%d %s' % (sorted_hits[f], f))
+            size = os.path.getsize(f)
+            print('%d \t%d \t%s' % (size, sorted_hits[f], f))
         blocks = getBlocks(analysis_path)
         total_blocks = totalBlocks(blocks)
         print('%d sessions' % len(flist))
