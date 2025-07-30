@@ -3604,7 +3604,7 @@ class GenMonitor():
                 cpu = self.cell_config.cpuFromCell(self.target)
                 eip = self.getEIP(cpu=cpu)
                 self.lgr.debug('runTo, %d frames eip 0x%x' % (len(frames), eip))
-                if not self.mem_utils[self.target].isKernel(eip):
+                if not self.mem_utils[self.target].isKernel(eip) and self.bookmarks is not None:
                     first_cycle  = self.getFirstCycle() 
                     current_cycle = cpu.cycles
                     self.lgr.debug('runTo, not in kernel first_cycle: 0x%x current: 0x%x' % (first_cycle, current_cycle))
@@ -5019,7 +5019,10 @@ class GenMonitor():
             self.traceBufferTarget(target_cell, msg='injectIO traceAll')
 
         cell_name = self.getTopComponentName(cpu)
-        self.dataWatch[target_cell].resetWatch()
+        if no_track:
+            self.dataWatch[target_cell].disable()
+        else:
+            self.dataWatch[target_cell].resetWatch()
         if max_marks is not None:
             self.dataWatch[target_cell].setMaxMarks(max_marks) 
         if target_prog is None:
