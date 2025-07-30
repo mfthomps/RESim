@@ -552,7 +552,7 @@ class StackTrace():
             bctrl_fun = self.fun_mgr.getFunName(self.recent_bctrl)
             self.lgr.debug('stackTrace funMatch check bctrl 0x%x fun is %s' % (self.recent_bctrl, bctrl_fun))
             if bctrl_fun == fun2:
-                self.lgr.debug('stackTrace funMatch check bctrl GOT it')
+                self.lgr.debug('stackTrace funMatch check bctrl got match')
                 retval = True
         return retval
 
@@ -1241,7 +1241,7 @@ class StackTrace():
                 count += 1
                 ptr = ptr + self.mem_utils.wordSize(self.cpu)
                 continue
-            self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
+            #self.lgr.debug('ptr 0x%x val 0x%x' % (ptr, val))    
             if hacked_bp and len(self.frames)>1:
                 hacked_bp = False
             if self.soMap.isCode(val, self.tid):
