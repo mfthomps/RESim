@@ -107,7 +107,7 @@ class RecordEntry():
 
     def sysenterHap(self, prec, the_object, the_break, memory):
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
+        self.lgr.debug('recordEntry sysenterHap tid:%s cycle: 0x%x' % (tid, self.cpu.cycles))
         if tid is not None:
             if True:
                 cycles = self.cpu.cycles
