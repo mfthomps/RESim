@@ -27,13 +27,20 @@ def main():
         qfiles = aflPath.getTargetQueue(source_target)    
         print('got %d unique queue files, copy to %s' % (len(qfiles), seeds_dir))
         for q in qfiles:
-            shutil.copy(q, seeds_dir)
+            # TBD no idea why this error would happen, but it does.
+            try:
+                shutil.copy(q, seeds_dir)
+            except shutil.SameFileError:
+                pass
         if args.auto_seeds is not None and os.path.isdir(args.auto_seeds):
             add_seeds = os.listdir(args.auto_seeds)
             print('Will add %d seeds from %s' % (len(add_seeds), args.auto_seeds))
             for f in add_seeds:
                 src = os.path.join(args.auto_seeds, f)
-                shutil.copy(src, seeds_dir)
+                try:
+                    shutil.copy(src, seeds_dir)
+                except shutil.SameFileError:
+                    pass
     else:
         print('No seeds dir found at: %s' % seeds_dir)
 if __name__ == '__main__':

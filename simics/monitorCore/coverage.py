@@ -199,11 +199,12 @@ class Coverage():
             if bb_rel not in self.dead_list:
             
                 if phys_addr == 0 or phys_addr is None:
-                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     bp = self.setPhysBreak(phys_addr)
                     self.addr_map[bp] = bb_rel
+                    self.lgr.debug('coverage setBreak phys_addr 0x%x set to bp %d' % (phys_addr, bp))
             else:
                 self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_addr)
                 pass
@@ -263,6 +264,7 @@ class Coverage():
         #missed_funs = []
         #with open(missed_fun_file) as fh:
         #    missed_funs = json.load(fh)
+        did_breaks_at = []
         for fun in self.blocks:
         #    fun_addr = int(fun)
         #    if fun_addr in missed_funs:
@@ -280,8 +282,11 @@ class Coverage():
                 if self.afl:
                     rand = random.randrange(0, self.map_size)
                     self.afl_map[bb_rel] = rand
+                if bb_rel in did_breaks_at:
+                    continue
                 bp = self.setBreak(bb_rel)
                 if bp is not None:
+                    did_breaks_at.append(bb_rel)
                     self.bp_list.append(bp)                 
                     #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                     #   int(fun), bb, self.offset, bp))
@@ -713,11 +718,20 @@ class Coverage():
             if tid != self.tid:
                 self.lgr.debug('coverage bbHap, wrong thread: %s' % tid)
                 return
+
+        #if addr == 0x1de095a8:
+        #    tid = self.top.getTID(target=self.cell_name)
+        #    self.lgr.debug('coverage bbHap, GOT IT 0x%x bp %d tid:%s cycle:0x%x' % (addr, break_num, tid, self.cpu.cycles))
         
         if addr == 0:
-            self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d' % (memory.physical_address, break_num))
             if memory.physical_address is not None:
                 addr = memory.physical_address
+                if addr == 0:
+                    #self.top.brokenAFL()
+                    self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d deleted.  Simics broken?' % (memory.physical_address, break_num))
+                    SIM_run_alone(SIM_delete_breakpoint, break_num)
+                    #SIM_disable_breakpoint(break_num) 
+                    return
             else:
                 return
         this_addr = addr
@@ -945,7 +959,7 @@ class Coverage():
         for bb in self.blocks_hit:
             breakpoint = self.setBreak(bb)
             if breakpoint is not None:
-                #self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
+                self.lgr.debug('coverage restoreBreaks bb 0x%x break num %d' % (bb, breakpoint))
                 if prev_break is not None and breakpoint != (prev_break+1):
                     self.lgr.debug('coverage restoreBreaks discontinuous first bb bp is %d last %d' % (tmp_list[0], tmp_list[-1]))
                     hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, tmp_list[0], tmp_list[-1])
