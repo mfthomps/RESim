@@ -154,7 +154,8 @@ class InjectIO():
         else:
             self.select_count_max = None
         self.break_on_hap = None
-        if not self.coverage and not self.trace_all:
+        self.no_track = no_track
+        if not self.coverage and not self.trace_all and not no_track:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
@@ -166,7 +167,6 @@ class InjectIO():
             self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
         self.no_iterators = no_iterators
         self.only_thread = only_thread
-        self.no_track = no_track
         self.hit_break_on = False
         self.no_reset = no_reset
         self.no_page_faults = no_page_faults
