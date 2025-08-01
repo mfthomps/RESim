@@ -76,8 +76,9 @@ class InjectIO():
                 self.lgr.error('injectIO unable to break on given block.')
                 return
         self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s callback %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname, self.callback))
-        self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
-        if not self.top.hasAFL():
+        if self.backstop is not None:
+            self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
+        if not self.top.hasAFL() and self.backstop is not None:
             self.backstop.reportBackstop(True)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
@@ -298,7 +299,7 @@ class InjectIO():
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
-        elif self.trace_all and self.target_prog is None:
+        elif self.trace_all and self.target_prog is None and self.backstop is not None:
             self.backstop.setFutureCycle(self.backstop_cycles)
 
         self.bookmarks = self.top.getBookmarksInstance()
