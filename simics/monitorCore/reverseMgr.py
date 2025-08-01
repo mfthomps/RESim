@@ -172,13 +172,25 @@ class ReverseMgr():
 
     def takeSnapshot(self, name):
         if not self.version().startswith('7'):
-            VT_take_snapshot(name)
+            if self.version().startswith('6.0.146'):
+                self.lgr.debug('reverseMgr 6.0.146 take %s' % name)
+                cmd = 'save-snapshot %s' % name
+                #SIM_run_alone(cli.quiet_run_command, cmd)
+                cli.quiet_run_command(cmd)
+            else:
+                VT_take_snapshot(name)
         else:
             SIM_take_snapshot(name)
 
     def restoreSnapshot(self, name):
         if not self.version().startswith('7'):
-            VT_restore_snapshot(name)
+            if self.version().startswith('6.0.146'):
+                self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
+                cmd = 'restore-snapshot %s' % name
+                #SIM_run_alone(cli.quiet_run_command, cmd)
+                cli.quiet_run_command(cmd)
+            else:
+                VT_restore_snapshot(name)
         else:
             SIM_restore_snapshot(name)
 
@@ -200,10 +212,13 @@ class ReverseMgr():
         Retun the number of bytes consumed by snapshots
         '''
         retval = 0
-        size_list = VT_snapshot_size_used()
-        for item in size_list:
-            #self.lgr.debug('size item %s' % str(item)) 
-            retval = retval + item
+        if self.version().startswith('6.0.146'):
+            pass
+        else:
+            size_list = VT_snapshot_size_used()
+            for item in size_list:
+                #self.lgr.debug('size item %s' % str(item)) 
+                retval = retval + item
         return retval
 
     def enableReverse(self, two_step=False):
@@ -216,6 +231,8 @@ class ReverseMgr():
         elif not self.reverseEnabled():
             self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
+            if self.version().startswith('6.0.146'):
+                cli.quiet_run_command('enable-unsupported-feature internals')
             self.takeSnapshot('origin')
             size = self.snapSize()
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
@@ -231,6 +248,21 @@ class ReverseMgr():
             self.lgr.error('reverseMgr enableReverse, already enabled')
 
 
+    def parselist(self, the_list):
+        retval = []
+        for line in the_list.splitlines():
+            self.lgr.debug('line is %s' % line)
+            parts = line.split()
+            i = None
+            try:
+                i = int(parts[0])
+            except:
+                pass
+            if i is not None:
+                name = parts[1]
+                retval.append(name)
+        return retval 
+
     def disableReverse(self):
         '''
         Disable reverse execution and stop recording snapshots.
@@ -242,7 +274,15 @@ class ReverseMgr():
             self.cancelSpanCycle()
             self.origin_cycle = None
          
-            if not self.version().startswith('7'):
+            if self.version().startswith('6.0.146'):
+                raw_list = cli.quiet_run_command('list-snapshots')[1]
+                snap_list = self.parselist(raw_list)
+                self.lgr.debug('snap_list %s' % str(snap_list))
+                for name in snap_list:
+                    cmd = 'delete-snapshot %s' % name
+                    self.lgr.debug('disableReverse %s' % cmd)
+                    SIM_run_command(cmd)
+            elif not self.version().startswith('7'):
                 snap_list = VT_list_snapshots()
                 for snap in snap_list:
                     VT_delete_snapshot(snap)
@@ -432,8 +472,9 @@ class ReverseMgr():
         if first_skip:
             self.current_span_start = self.getMasked(self.cpu.cycles)
         else:
-            # Assume we are on a span boundary and must go back 2 spans
-            self.current_span_start = self.cpu.cycles - (2 *  self.cycle_span)
+            # We may or may not be on a span boundary and must go back 2 spans from the boundary
+            masked_current = self.getMasked(self.cpu.cycles)
+            self.current_span_start = masked_current - (2 *  self.cycle_span)
         if self.current_span_start < self.origin_cycle:
             self.lgr.debug('reverseMgr skipBackAndRunForward current_span start was less than origin, set it to origin')
             self.current_span_start = self.origin_cycle
@@ -445,13 +486,20 @@ class ReverseMgr():
         self.restoreSnapshot(cycle_mark)
         self.lgr.debug('reverseMgr skipBackAndRunForward was at 0x%x restored snapshot %s, cycles now 0x%x' % (was_at, cycle_mark, self.cpu.cycles))
         if self.cpu.cycles != self.current_span_start:
-            self.lgr.error('reverseMgr skipBackAndRunForward restored %s but got 0x%x' % (cycle_mark, self.cpu.cycles)) 
+            self.lgr.error('reverseMgr skipBackAndRunForward restored %s but got 0x%x bail' % (cycle_mark, self.cpu.cycles)) 
             return
-        if self.reverse_to is not None and self.reverse_to < self.current_span_start:
-            delta = self.current_span_start - self.reverse_to
-            self.lgr.debug('reverseMgr skipBackAndRunForward reverse_to of 0x%x less than current span start, run forward 0x%x cycles' % (self.reverse_to, delta))
+        if self.reverse_to is not None and self.reverse_to > self.current_span_start:
+            delta = self.reverse_to - self.current_span_start
+            if delta > self.cycle_span:
+                self.lgr.error('reverseMgr skipBackAndRunForward hit reverse_to 0x%x without hitting break.' % self.reverse_to)
+                self.skipToCycle(self.reverse_to)
+                return
+
+            self.lgr.debug('reverseMgr skipBackAndRunForward reverse_to of 0x%x greater than current span start 0x%x, run forward 0x%x cycles' % (self.reverse_to, 
+                           self.current_span_start, delta))
             self.reverse_to = None
             SIM_continue(delta)
+            self.lgr.debug('reverseMgr skipBackAndRunForward ran forward to the reverse_to point so we can set breaks and run from there.  cycles now 0x%x' % self.cpu.cycles)
 
         #self.enableAll()
         if self.current_span_end == self.cpu.cycles:
@@ -794,7 +842,11 @@ class ReverseMgr():
         #TBD remove this
         #return False
         if not self.version().startswith('7'):
-           return True
+           if self.version().startswith('6.0.146'):
+               return False
+               #return True
+           else:
+               return True
         else:
            return False
 
