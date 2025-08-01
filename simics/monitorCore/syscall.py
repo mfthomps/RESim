@@ -2862,6 +2862,7 @@ class Syscall():
                  callnum, self.stop_on_call))
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
             if exit_info is not None:
+                self.lgr.debug('syscall exit_info not none callname %s my name %s' % (callname, self.name))
                 if comm != 'tar':
                         ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
                         tracing_all = False 
@@ -2869,10 +2870,11 @@ class Syscall():
                             tracing_all = self.top.tracingAll(self.cell_name, tid)
                         if self.callback is None:
                             if not hasParamMatchRequest(self.call_params) or len(exit_info.call_params)>0 or tracing_all or tid in self.tid_sockets:
+                                self.lgr.debug('syscall first if')
                                 if self.stop_on_call:
                                     cp = CallParams('stop_on_call', None, None, break_simulation=True)
                                     exit_info.call_params.append(cp)
-                                #self.lgr.debug('exit_info.call_params tid %s self.name %s is %s' % (tid, self.name, str(exit_info.call_params)))
+                                self.lgr.debug('exit_info.call_params tid %s self.name %s is %s' % (tid, self.name, str(exit_info.call_params)))
                                 if tracing_all or len(exit_info.call_params) > 0:
                                     if len(self.call_params) > 0:
                                         self.lgr.debug('syscallHap %s cell: %s call to addExitHap for tid %s call  %d len %d trace_all %r tid_sockes? %s' % (self.name, 
@@ -2893,11 +2895,12 @@ class Syscall():
                                 else:
                                     self.lgr.debug('syscallHap not trace all and no exit_info call params, so no exit hap')
                                     pass
-                            elif callname.startswith('mmap') and self.name == 'runToText':
+                            elif callname.startswith('mmap') and self.name in ['runToText', 'trackSO']:
                                 # TBD this is broken, what about so added after we hit text segment.  Problem is syscall that includes multiple param requests.
+                                self.lgr.debug('syscall second if')
                                 self.sharedSyscall.addExitHap(self.cpu.current_context, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name)
                             else:
-                                #self.lgr.debug('did not add exitHap')
+                                self.lgr.debug('did not add exitHap')
                                 pass
                         else:
                             self.lgr.debug('syscall invoking callback')
