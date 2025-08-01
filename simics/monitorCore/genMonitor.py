@@ -4983,7 +4983,7 @@ class GenMonitor():
             sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
+            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None, no_backstop=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -5035,7 +5035,11 @@ class GenMonitor():
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
         self.lgr.debug('genMonitor injectIO create instance')
-        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, self.back_stop[self.target], dfile, self.dataWatch[target_cell], self.bookmarks, 
+        if no_backstop:
+            backstop = None
+        else:
+            backstop = self.back_stop[self.target]
+        self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, backstop, dfile, self.dataWatch[target_cell], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.soMap[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, 
                   target_cell=target_cell, target_prog=target_prog, targetFD=targetFD, trace_all=trace_all, 
