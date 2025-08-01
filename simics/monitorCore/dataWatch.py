@@ -374,7 +374,8 @@ class DataWatch():
         self.setRange(start, self.mem_something.length, msg=msg)
         self.enableBreaks()
         self.backstop.setFutureCycle(self.backstop_cycles)
-        SIM_run_alone(SIM_run_command, 'c')
+        #SIM_run_alone(SIM_run_command, 'c')
+        SIM_run_alone(SIM_continue, 0)
 
     def enableBreaks(self, dumb=None):
         self.context_manager.enableAll()
@@ -2326,7 +2327,8 @@ class DataWatch():
                      self.mem_something.fun, self.mem_something.ret_ip, str(self.cpu.current_context), data_hit, self.cpu.cycles))
                 if data_hit:
                     self.ignore_entry_cycle = self.cpu.cycles
-                    SIM_run_command('c')
+                    SIM_continue(0)
+                    #SIM_run_command('c')
             else:
                 self.lgr.debug('dataWatch getMemParams skip fun.')
                 self.pending_call = False
@@ -2343,7 +2345,8 @@ class DataWatch():
                     if data_hit:
                         dum_cpu, comm, tid = self.task_utils.curThread()
                         self.lgr.debug('getMemParams tid:%s (%s) eip: 0x%x cycle: 0x%x skip fun from stop to gather, now run' % (tid, comm, eip, self.cpu.cycles))
-                        SIM_run_command('c')
+                        SIM_continue(0)
+                        #SIM_run_command('c')
 
     def multiBuffer(self, src, length, dest):
         '''
@@ -2913,7 +2916,7 @@ class DataWatch():
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memsomething_return_hap')
-        self.lgr.debug('runToReturnAlone set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
+        self.lgr.debug('runToReturn set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
         self.context_manager.restoreDebugContext()
         if self.backstop is not None and not self.break_simulation and self.use_backstop:
             self.lgr.debug('dataWatch runToReturnAlone clear backstop')
@@ -2952,7 +2955,8 @@ class DataWatch():
             self.backstop.setFutureCycle(self.backstop_cycles)
             self.lgr.debug('dataWatch undoAlone now run forward')
 
-            SIM_run_command('c')
+            #SIM_run_command('c')
+            SIM_continue(0)
 
     def rmCallHap(self):
         if self.call_hap is not None:
