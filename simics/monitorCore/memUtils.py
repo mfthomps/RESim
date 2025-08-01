@@ -72,6 +72,7 @@ def getCPL(cpu):
     if cpu.architecture in ['ppc32']:
         reg_num = cpu.iface.int_register.get_number("msr")
         msr = cpu.iface.int_register.read(reg_num)
+        # bit 4 of msr is set if not in supervisor
         if testBit(msr, 4):
             reg_num = cpu.iface.int_register.get_number("pc")
             pc = cpu.iface.int_register.read(reg_num)
