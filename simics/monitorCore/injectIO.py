@@ -367,30 +367,32 @@ class InjectIO():
 
             self.commonGo()
             if not self.stay:
-                if not self.trace_all and not self.instruct_trace and not self.no_track:
+                #if not self.trace_all and not self.instruct_trace and not self.no_track:
+                if not self.trace_all and not self.instruct_trace: 
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
                     did_origin_reset = True
                     self.lgr.debug('injectIO back from resetOrigin eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
-                    if not self.mem_utils.isKernel(self.addr):
-                        #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
-                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.orig_max_len, data_stream=True)
-                        if self.addr_of_count is not None:
-                            self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', backstop=False, recv_addr=self.addr_of_count, max_len = 4)
-                            self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
+                    if not self.no_track:
+                        if not self.mem_utils.isKernel(self.addr):
+                            #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
+                            self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.orig_max_len, data_stream=True)
+                            if self.addr_of_count is not None:
+                                self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', backstop=False, recv_addr=self.addr_of_count, max_len = 4)
+                                self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
      
-                        ''' special case'''
-                        if self.max_len == 1:
-                            self.addr += 1
-                        if self.addr_addr is not None:
-                            self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
-                    else:
-                        if self.addr_of_count is not None and not self.top.isWindows():
-                            if self.dataWatch is not None:
-                                self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                                self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
+                            ''' special case'''
+                            if self.max_len == 1:
+                                self.addr += 1
+                            if self.addr_addr is not None:
+                                self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+                        else:
+                            if self.addr_of_count is not None and not self.top.isWindows():
+                                if self.dataWatch is not None:
+                                    self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                                    self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -399,7 +401,7 @@ class InjectIO():
                     self.top.traceMalloc()
 
                 if self.trace_all or self.instruct_trace or self.no_track:
-                    self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
+                    self.lgr.debug('injectIO trace_all or instruct_trace or no_track requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
                         cli.quiet_run_command('c')
 
