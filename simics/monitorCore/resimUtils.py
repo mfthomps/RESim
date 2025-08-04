@@ -376,11 +376,11 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
     if '/' in path:
         parts = path.split('/')
         for p in parts[:-1]:
-            #lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
             dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
 
             for d in dlist:
-                #lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
+                lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
                 if '~' in p:
                     tilda_parts = p.split('~')
                     if d.lower().startswith(tilda_parts[0].lower()): 
@@ -392,7 +392,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():
@@ -518,12 +518,19 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
     top_dir = getRootTopDir(root_prefix)
     lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
+    fname_startswith_root = fname.startswith(root_prefix)
     if fname.startswith('/'):
-        fname = os.path.realpath(fname)
+        fname_abs = os.path.realpath(fname)
+        if fname_startswith_root and not fname_abs.startswith(root_prefix):
+            # hack on hack.  revert because it is the root prefix that has the evil sym link
+            pass
+        else:
+            fname = fname_abs
         analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
         lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
+    lgr.debug('wtf root_prefix %s  fname %s' % (root_prefix, fname))
     if retval is None and root_prefix is not None and fname.startswith(root_prefix):
         rest = fname[len(root_prefix):]        
         analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
@@ -539,12 +546,13 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             if lgr is not None:
                 lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
-        fname = fname.replace('\\', '/')
-        if root_prefix is None:
-            if fname.startswith('/??/C:/'):
-                fname = fname[7:]
-        else:
-            fname = getWinPath(fname, root_prefix, lgr=lgr)
+        if '\\' in fname:
+            fname = fname.replace('\\', '/')
+            if root_prefix is None:
+                if fname.startswith('/??/C:/'):
+                    fname = fname[7:]
+            else:
+                fname = getWinPath(fname, root_prefix, lgr=lgr)
 
         base = os.path.basename(fname)+'.funs'
         #if base.upper() in map(str.upper, fun_list_cache):
@@ -555,7 +563,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
             if lgr is not None:
-                lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+                lgr.debug('resimUtils getAnalyssisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, [], lgr, force_look=True)
             if retval is not None:
                 if lgr is not None:
