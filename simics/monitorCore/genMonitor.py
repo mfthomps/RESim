@@ -2411,8 +2411,7 @@ class GenMonitor():
         if self.reverseEnabled():
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
-            self.removeDebugBreaks(immediate=True)
-            self.stopTrackIO(immediate=True)
+            self.stopTracking()
             reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
                            self.reverse_mgr[self.target], self.lgr, extra_back=extra_back)
             self.lgr.debug('back from reverseToAddr')
@@ -4873,6 +4872,7 @@ class GenMonitor():
         self.noWatchSysEnter()
 
         self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
+        self.injectIOInstance.delCallHap()
         self.track_finished = True
 
     def goToWatchMark(self, index):
