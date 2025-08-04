@@ -55,10 +55,10 @@ class reverseToAddr():
             return
         self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
        
-        self.one_stop_hap = None
-        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
+        #self.one_stop_hap = None
+        #self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
         self.lgr.debug('reverseToAddr now call reverse')
-        self.reverse_mgr.reverse()
+        self.reverse_mgr.reverse(callback=self.stopHap)
 
     def goBackAlone(self, dumb):
         backone = self.cpu.cycles - 1 
@@ -79,17 +79,17 @@ class reverseToAddr():
         self.top.RES_delete_stop_hap(hap)
 
     def stopHap(self, cpu, one, exception, error_string):
-        if self.stop_hap is None:
-            return
+        #if self.stop_hap is None:
+        #    return
         cpu, comm, tid  = self.task_utils.curThread()
         eip = self.top.getEIP()
         first = self.top.getFirstCycle()
         self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x first cycle: 0x%x' % (eip, cpu.cycles, first))
         if cpu.cycles <= first:
             self.lgr.error('reverseToAddr stopHap eip: %x cycles: 0x%x at first cycle' % (eip, cpu.cycles))
-            hap = self.stop_hap
-            self.top.RES_delete_stop_hap_run_alone(hap)
-            self.stop_hap = None 
+            #hap = self.stop_hap
+            #self.top.RES_delete_stop_hap_run_alone(hap)
+            #self.stop_hap = None 
             self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
             self.the_break = None
             return
@@ -99,9 +99,9 @@ class reverseToAddr():
                  self.tid, cpu.cycles, str(exception), str(error_string)))
             SIM_run_alone(self.goBackAlone, None)
             return
-        hap = self.stop_hap
-        self.top.RES_delete_stop_hap_run_alone(hap)
-        self.stop_hap = None 
+        #hap = self.stop_hap
+        #self.top.RES_delete_stop_hap_run_alone(hap)
+        #self.stop_hap = None 
         self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         self.the_break = None
         origin = self.top.getFirstCycle()
