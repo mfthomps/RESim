@@ -101,6 +101,9 @@ class TargetFS():
                     #    self.lgr.debug('targetFS getFull got %s' % f)
                 else:
                     retval = full_insensitive
+            if retval is None and path.lower() == 'msvcrt.dll':
+                # windows makes this assumption, so can we
+                retval = os.path.join(self.root_prefix, 'Windows', 'System32', 'msvcrt.dll')
         if retval is not None:
             self.lgr.debug('winTargetFS getFull retval %s, now get abs path?' % path)
             retval = os.path.abspath(retval)
