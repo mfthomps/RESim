@@ -1276,8 +1276,8 @@ class DataWatch():
         self.lgr.debug('dataWatch handleMemCpyReturn, return from %s src: 0x%x dest: 0x%x count %d ' % (self.mem_something.fun, self.mem_something.src, 
                self.mem_something.dest, self.mem_something.length))
         if self.mem_something.length == 0:
-            self.lgr.error('got zero count for memcpy')
-            SIM_break_simulation('mempcpy')
+            self.lgr.debug('dataWatch got zero count for memcpy, just bail')
+            #SIM_break_simulation('mempcpy')
             return
         skip_it = False          
         if len(self.mem_something.multi_index_list) == 0:
@@ -3052,7 +3052,7 @@ class DataWatch():
                 self.rmRange(self.mem_something.addr) 
                 SIM_continue(0)
                 return
-            elif self.mem_something.fun in ['strlen'] and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
+            elif self.mem_something.fun in ['strlen','strchr'] and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
                 # very obscure, see declaration of last_buffer_not_found
                 SIM_continue(0)
                 return
