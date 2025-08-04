@@ -129,7 +129,7 @@ class ReverseMgr():
         self.reverse_to =  None
         # for debugging storage/performance
         self.test_cycles = 0
-        # hack for catching attempts to restor snapshots not net recorded due to runAlone
+        # hack for catching attempts to restore snapshots not net recorded due to runAlone
         self.snapshot_names = []
 
     def cancelSpanCycle(self):
@@ -251,7 +251,7 @@ class ReverseMgr():
                                 cli.quiet_run_command(cmd)
                                 self.lgr.debug('reverseMgr restoreSnapshot took long way to get to cycle 0x%x after running ahead 0x%x cycles' % (self.cpu.cycles, cycles))
                                 break
-                            if count > 3:
+                            if count > 30:
                                 self.lgr.error('reverseMgr restoreSnapshot, missing %d snapshots???' % count) 
                                 break
                     else:
@@ -421,12 +421,20 @@ class ReverseMgr():
         else:
             if our_cycles > self.latest_span_end:
                 #print('Cycle 0x%x is after last recorded cycle of 0x%x, will just run ahead' % (cycle, self.latest_span_end))
-                self.lgr.debug('reverseMgr Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (our_cycles, self.latest_span_end))
-                cycle_mark = 'cycle_%x' % self.latest_span_end
+                self.lgr.debug('reverseMgr skipToCycle Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (our_cycles, self.latest_span_end))
+
+                missing_snapshots = False
+                if not self.hasSnapFor(self.latest_span_end):
+                    missing_snapshots = True
+                    cycle_mark = 'cycle_%x' % self.getLatestSnapCycle() 
+                    self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle mark %s' % cycle_mark)
+                else:
+                    cycle_mark = 'cycle_%x' % self.latest_span_end
+
                 self.restoreSnapshot(cycle_mark)
                 #self.lgr.debug('reverseMgr after restore %s cycle now 0x%x' % (cycle_mark, self.cpu.cycles))
-                if self.cpu.cycles != self.latest_span_end:
-                    self.lgr.error('reverseMgr did restore to %s, but now at 0x%x' % (cycle_mark, self.cpu.cycles))
+                if not missing_snapshots and self.cpu.cycles != self.latest_span_end:
+                    self.lgr.error('reverseMgr skipToCycle did restore to %s, but now at 0x%x' % (cycle_mark, self.cpu.cycles))
                     return False
                 if use_cell is not None:
                     current_cycle = self.cpu_map[use_cell].cycles
@@ -495,7 +503,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
             self.enableAll()
 
-    def reverse(self, dumb=None, reverse_to=None):
+    def reverse(self, dumb=None, reverse_to=None, callback=None):
         '''
         Reverse until either a breakpoint is hit, or we hit the origin.  If multiple breakpoionts are set, execution
         is set at the most recent.
@@ -509,6 +517,8 @@ class ReverseMgr():
             else:
                 SIM_run_command('reverse')
         else:
+            if callback is not None:
+                self.setCallback(callback)
             self.cancelSpanCycle()
             self.break_cycles = {}
             self.reverse_from = self.cpu.cycles
@@ -531,29 +541,69 @@ class ReverseMgr():
                 self.lgr.debug('reverseMgr reverse, bp list %s' % self.bp_list)
                 self.skipBackAndRunForward(True)
 
+    def hasSnapFor(self, cycles):
+        cycle_mark = 'cycle_%x' % cycles
+        raw_list = cli.quiet_run_command('list-snapshots')[1]
+        snap_list = self.parselist(raw_list)
+        if cycle_mark in snap_list:
+            return True
+        else:
+            return False
+
+    def getLatestSnapCycle(self):
+        retval = None
+        raw_list = cli.quiet_run_command('list-snapshots')[1]
+        snap_list = self.parselist(raw_list)
+        if len(snap_list)>1:
+            name = snap_list[-1]
+            try:
+                retval = int(name[6:], 16)
+            except:
+                self.lgr.error('reverseMgr getLatestSnapCycle failed on name %s' % name)
+        return retval
+
     def skipBackAndRunForward(self, first_skip):
         '''
          Skip back to previous snapshot and run forward to see if we hit a breakpoint.
 
          Parameter first_skip: If false, we need to skip back two cycle spans.  Otherwise, we just skip back to previous span
         '''
-        self.lgr.debug('reverseMgr skipBackAndRunForward first_skip %r, current cycle 0x%x' % (first_skip, self.cpu.cycles))
-        # Where should we stop running forward?
-        self.current_span_end = self.cpu.cycles
-        # Where do we skip back to before running forward?
+        self.lgr.debug('reverseMgr skipBackAndRunForward first_skip %r, current cycle 0x%x origin_cycle 0x%x' % (first_skip, self.cpu.cycles, self.origin_cycle))
+        missing_snapshots = False
         if first_skip:
+            # Where do we skip back to before running forward?
+            # NOTE for older simics with only cli for snapshots, the runAlones may not be recorded.
             self.current_span_start = self.getMasked(self.cpu.cycles)
+            if not self.hasSnapFor(self.current_span_start): 
+                self.lgr.debug('reverseMgr skipBackAndRunForward missing current_span_start 0x%x' % self.current_span_start)
+                missing_snapshots = True
+                recent = self.getLatestSnapCycle() 
+                if recent is None:
+                    # assume no snaps other than origin
+                    self.current_span_start = self.origin_cycle
+                    cycle_mark = 'origin'
+                    self.lgr.debug('reverseMgr skipBackAndRunForward latest recorded snap is origin,') 
+                else:
+                    self.lgr.debug('reverseMgr skipBackAndRunForward wanted span start 0x%x, but not recorded, most recent is 0x%x' % (self.current_span_start, recent))
+                    self.current_span_start = recent
+                    cycle_mark = 'cycle_%x' % self.current_span_start
+            # Where should we stop running forward?
+            self.current_span_end = self.cpu.cycles
         else:
             # We may or may not be on a span boundary and must go back 2 spans from the boundary
             masked_current = self.getMasked(self.cpu.cycles)
             self.current_span_start = masked_current - (self.cycle_span)
-        if self.current_span_start < self.origin_cycle:
-            self.lgr.debug('reverseMgr skipBackAndRunForward current_span start was less than origin, set it to origin')
-            self.current_span_start = self.origin_cycle
-            cycle_mark = 'origin'
-        else:
-            cycle_mark = 'cycle_%x' % self.current_span_start
-        #self.disableAll()
+            self.current_span_end = self.current_span_start + self.cycle_span - 1
+            self.lgr.debug('reverseMgr skipBackAndRunForward current_span start set to 0x%x, cycle_span 0x%x masked_current was 0x%x' % (self.current_span_start, self.cycle_span, masked_current))
+        if not missing_snapshots:
+            if self.current_span_start <= self.origin_cycle:
+                self.lgr.debug('reverseMgr skipBackAndRunForward current_span start was less than origin, set it to origin')
+                self.current_span_start = self.origin_cycle
+                cycle_mark = 'origin'
+                self.current_span_end = self.current_span_start + self.cycle_span
+            else:
+                cycle_mark = 'cycle_%x' % self.current_span_start
+    
         was_at = self.cpu.cycles
         self.restoreSnapshot(cycle_mark)
         self.lgr.debug('reverseMgr skipBackAndRunForward was at 0x%x restored snapshot %s, cycles now 0x%x (should match current_span_start)' % (was_at, cycle_mark, self.cpu.cycles))
@@ -562,8 +612,8 @@ class ReverseMgr():
             return
         if self.reverse_to is not None and self.reverse_to > self.current_span_start:
             delta = self.reverse_to - self.current_span_start
-            if delta > self.cycle_span:
-                self.lgr.error('reverseMgr skipBackAndRunForward reached reverse_to 0x%x without hitting break delta would have been 0x%x.' % (self.reverse_to, delta))
+            if delta > self.cycle_span and not missing_snapshots:
+                self.lgr.error('reverseMgr skipBackAndRunForward reached reverse_to 0x%x without hitting break, delta would have been 0x%x.' % (self.reverse_to, delta))
                 self.skipToCycle(self.reverse_to)
                 return
 
