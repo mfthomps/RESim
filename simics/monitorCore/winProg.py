@@ -105,6 +105,8 @@ def getSizeAndMachine(full_path, lgr):
                 lgr.error('winProg getSizeAndMachine failed to get size for path %s' % full_path)
     else:
         lgr.debug('winProg getSizeAndMachine failed find file at path %s' % full_path)
+    if size is None:
+        lgr.error('winProg failed to get size for %s' % full_path)
     return size, machine, image_base, addr_of_text
 
 def getText(full_path, lgr):
