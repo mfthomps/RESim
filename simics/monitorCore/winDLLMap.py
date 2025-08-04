@@ -645,11 +645,12 @@ class WinDLLMap():
         if pid in self.section_map:
             for fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
-                end = section.load_addr+section.size - 1
-                #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
-                if addr_in >= section.load_addr and addr_in <= end:
-                    retval = (fname, section.load_addr, end)
-                    #break 
+                if section.size is not None:
+                    end = section.load_addr+section.size - 1
+                    #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
+                    if addr_in >= section.load_addr and addr_in <= end:
+                        retval = (fname, section.load_addr, end)
+                        #break 
         return retval
 
     def getCodeSections(self, tid):
@@ -973,11 +974,12 @@ class WinDLLMap():
 
     def findPendingProg(self, comm):
         retval = None
-        for pp in self.pending_procs:
-            proc_base = ntpath.basename(pp)
-            self.lgr.debug('winDLL findPendingProg does %s start with %s' % (proc_base, comm))
-            if proc_base.startswith(comm):
-                retval = pp
+        if comm is not None:
+            for pp in self.pending_procs:
+                proc_base = ntpath.basename(pp)
+                self.lgr.debug('winDLL findPendingProg does %s start with %s' % (proc_base, comm))
+                if proc_base.startswith(comm):
+                    retval = pp
         return retval
 
     def checkClibAnalysis(self, tid):
