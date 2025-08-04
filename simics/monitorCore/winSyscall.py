@@ -2136,6 +2136,9 @@ class WinSyscall():
     def doRecordLoadAddr(self, tid):
         # WARNING this is a contextManager callback on a reschedule.  The task info is not yet loaded
         comm = self.task_utils.getCommFromTid(tid) 
+        if comm is None:
+            self.lgr.debug('winSyscall doRecordLoad called with comm of None, bail')
+            return
         eproc = self.task_utils.getProcRecForTid(tid)
         self.lgr.debug('winSyscall doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
         load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
