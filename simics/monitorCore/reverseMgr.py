@@ -169,11 +169,17 @@ class ReverseMgr():
         elif self.cpu.cycles == self.latest_span_end:
             self.cancelSpanCycle()
             go_cycles = self.cycle_span
-            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x equals latest_span_end, did cancel go cycles will be 0x%x' % (self.cpu.cycles, go_cycles))
-        else:
+            reach = self.cpu.cycles + go_cycles
+            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x equals latest_span_end, did cancel go cycles will be 0x%x to reach 0x%x' % (self.cpu.cycles, go_cycles, reach))
+        elif self.cpu.cycles > self.latest_span_end:
             self.cancelSpanCycle()
             go_cycles = self.cycle_span - (self.cpu.cycles % self.cycle_span)
-            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x not the latet span end, assume after end and go 0x%x cycles' % (self.cpu.cycles, go_cycles))
+            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x after latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
+        else:
+            self.cancelSpanCycle()
+            want_cycle = self.latest_span_end + self.cycle_span
+            go_cycles = want_cycle - self.cpu.cycles
+            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x prior to latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, go_cycles, go_cycles)
 
     def cycle_handler(self, obj, cycles):
@@ -484,7 +490,7 @@ class ReverseMgr():
                 cli.quiet_run_command(cmd)
                 
             SIM_continue(0)
-            self.setNextIfAfterLatest()
+            self.setNextCycle()
             #SIM_continue(delta)
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
             self.enableAll()
@@ -605,13 +611,9 @@ class ReverseMgr():
             sorted_list = sorted(cycle_list)
             latest_cycle = sorted_list[-1]
             latest_bp = self.break_cycles[latest_cycle].bp
-            self.lgr.debug('reverseMgr stopHap latest cycle 0x%x bp %d' % (latest_cycle, latest_bp))
+            self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_bp))
             SIM_run_alone(self.skipAndCallback, latest_cycle)
 
-    def setNextIfAfterLatest(self):
-        if self.latest_span_end is not None and self.cpu.cycles > self.latest_span_end:
-            self.lgr.debug('reverseMgr setNextIfAfterLatest current cycle after latest span end, set next cycle')
-            self.setNextCycle()
 
     def skipAndCallback(self, skip_to_cycle):
         '''
@@ -627,7 +629,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr skipAndCallback using different cell %s' % use_cell)
         self.skipToCycle(skip_to_cycle, use_cell=use_cell, object_cycles=object_cycles)
 
-        self.setNextIfAfterLatest()
+        self.setNextCycle()
         if self.callback is None:
             print('Reversing hit breakpoint %d at cycle 0x%x' % (latest_bp, skip_to_cycle))
             SIM_run_command('disassemble')
