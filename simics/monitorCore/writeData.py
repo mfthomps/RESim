@@ -41,7 +41,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, ioctl_count_max=None, select_count_max=None, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True, backstop_delay=None):
+                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True, backstop_delay=None, stop_callback=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -141,6 +141,8 @@ class WriteData():
 
         # for windows
         self.addr_of_count = None
+
+        self.stop_callback = stop_callback
 
         self.loadPickle(snapshot_name)
 
@@ -376,6 +378,8 @@ class WriteData():
         if self.current_packet > 1 and self.no_reset:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
+             if self.stop_callback is not None:
+                 self.stop_callback()
              return
         if self.expected_packet_count <= 1 and self.udp_header is None:
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
@@ -545,6 +549,8 @@ class WriteData():
             else:
                 #self.lgr.debug('writeData selectHap break simulation')
                 SIM_break_simulation('writeData selectHap stop on read callback is None')
+                if self.stop_callback is not None:
+                    self.stop_callback()
             return
         tid = self.top.getTID()
         if self.stop_on_read and len(self.in_data) == 0:
@@ -557,6 +563,8 @@ class WriteData():
             else:
                 self.lgr.debug('writeData selectHap stop on read and no more data write callback is None')
                 SIM_break_simulation('writeData selectHap stop on read and no more data')
+                if self.stop_callback is not None:
+                    self.stop_callback()
             return
         if tid != self.tid:
             #self.lgr.debug('writeData callHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
@@ -660,6 +668,8 @@ class WriteData():
             # TBD leave it up to playAFL, inject and others?
             #SIM_run_alone(self.delCallHap, None)
             SIM_break_simulation(msg+' no write_callback')
+            if self.stop_callback is not None:
+                 self.stop_callback()
             #self.lgr.debug(msg+' no write_callback')
 
     def handleCall(self, callname):
@@ -792,6 +802,8 @@ class WriteData():
                         cb()
                     else:
                         SIM_break_simulation('writeData doRetIOCtl would adjust count to zero, but no reset')
+                        if self.stop_callback is not None:
+                            self.stop_callback()
         return retval
 
     def doRetSelect(self, select_info):
@@ -836,7 +848,9 @@ class WriteData():
 
         if self.total_read >= self.read_limit and self.stop_on_read:
             self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (eax, self.read_limit, self.total_read, remain))
-            SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
+            SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation stop_callback %s' % (self.total_read, self.read_limit, self.stop_callback))
+            if self.stop_callback is not None:
+                self.stop_callback()
             return None
         self.total_read = self.total_read + eax
         self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
@@ -883,6 +897,8 @@ class WriteData():
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
                  SIM_break_simulation('Over read limit')
+                 if self.stop_callback is not None:
+                     self.stop_callback()
                  return None
         return eax
 
@@ -894,6 +910,8 @@ class WriteData():
         if self.total_read >= self.read_limit and self.stop_on_read:
             self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d past limit and stop_on_read, stop' % (count, self.read_limit, self.total_read, remain))
             SIM_break_simulation('writeData windowsReadFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation' % (self.total_read, self.read_limit))
+            if self.stop_callback is not None:
+                self.stop_callback()
             return None
         self.total_read = self.total_read + count
         self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (count, self.read_limit, self.total_read, remain, self.no_reset))
@@ -926,6 +944,8 @@ class WriteData():
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  self.lgr.debug('writeData windowsReadFixup read over limit of %d' % self.read_limit)
                  SIM_break_simulation('Over read limit')
+                 if self.stop_callback is not None:
+                     self.stop_callback()
                  return None
 
     def retHap(self, dumb, third, break_num, memory):

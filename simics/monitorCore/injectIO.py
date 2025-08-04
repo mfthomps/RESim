@@ -326,7 +326,7 @@ class InjectIO():
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, 
                  select_count_max=self.select_count_max,
                  force_default_context=force_default_context, write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
-                 shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
+                 shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset, stop_callback=self.callback)
 
         #bytes_wrote = self.writeData()
         self.write_data.tracingIO()
