@@ -1464,7 +1464,7 @@ class GenMonitor():
                 cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
             else:
                 cmd = 'new-gdb-remote cpu=%s architecture=arm64 port=%d' % (cpu.name, self.gdb_port)
-        if cpu.architecture == 'ppc32':
+        elif cpu.architecture == 'ppc32':
             cmd = 'new-gdb-remote cpu=%s architecture=ppc32 port=%d' % (cpu.name, self.gdb_port)
         #elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
         elif self.isWindows(self.target):
@@ -4872,7 +4872,8 @@ class GenMonitor():
         self.noWatchSysEnter()
 
         self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
-        self.injectIOInstance.delCallHap()
+        if self.injectIOInstance is not None:
+            self.injectIOInstance.delCallHap()
         self.track_finished = True
 
     def goToWatchMark(self, index):
