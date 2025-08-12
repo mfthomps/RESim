@@ -70,7 +70,7 @@ class TrackThreads():
                 self.setExecveBreaks()
 
         self.trackSO()
-        self.context_manager.watchTasks(restore_debug=False)
+        #self.context_manager.watchTasks(restore_debug=False)
         #self.trackClone()
 
     def setExecveBreaks(self, arm64_app=None):
