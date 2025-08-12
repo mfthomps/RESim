@@ -63,7 +63,11 @@ class Disassemble():
         try:
             if cpu.architecture.startswith('arm'):
                 self.md32 = Cs(CS_ARCH_ARM, CS_MODE_ARM)
-                self.md64 = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
+                try:
+                    self.md64 = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
+                except:
+                    self.lgr.debug('disassemble no support for CS_MOD_ARM64, use CS_MODE_ARM')
+                    self.md64 = self.md32
             else:
                 self.md32 = Cs(CS_ARCH_X86, CS_MODE_32)
                 self.md64 = Cs(CS_ARCH_X86, CS_MODE_64)
