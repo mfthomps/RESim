@@ -376,7 +376,10 @@ class SOMap():
                         self.lgr.debug('soMap addText text_offset 0x%x' % self.prog_info[prog].text_offset)
                         self.prog_end[tid] = self.prog_info[prog].text_end
                     self.prog_start[tid] = load_addr
-                    self.lgr.debug('soMap addText setting prog_start to 0x%x for prog %s' % (load_addr, prog))
+                    if load_addr is not None:
+                        self.lgr.debug('soMap addText setting prog_start to 0x%x for prog %s' % (load_addr, prog))
+                    else:
+                        self.lgr.debug('soMap addText load_addr is none for prog %s' % (prog))
                     self.text_prog[tid] = prog
                     # do not check so watch here, the program is not yet loaded.
                     #self.checkSOWatch(load_addr, prog)

@@ -94,8 +94,12 @@ class MarkCompare():
                 inbracket = self.decode.inBracket(next_op2)
                 if inbracket is not None:
                     parts = inbracket.split(',')
-                    #self.lgr.debug('MarkCompare charLookup inBracket %s look for our_reg %s' % (inbracket, our_reg))
-                    if parts[1].strip() == our_reg:
+                    self.lgr.debug('MarkCompare charLookup inBracket %s look for our_reg %s' % (inbracket, our_reg))
+                    if len(parts) == 1:
+                       check_reg = inbracket
+                    else:
+                        check_reg = parts[1].strip()
+                    if check_reg == our_reg:
                         #self.lgr.debug('MarkCompare charLookup matches our_reg')
                         test_eip = next_eip + next_instruct[0]
                         test_instruct = SIM_disassemble_address(self.cpu, test_eip, 1, 0)
@@ -113,7 +117,7 @@ class MarkCompare():
                         else:
                             self.lgr.debug('MarkCompare charLookup expected tst got %s' % test_instruct[1])
                     else:
-                        self.lgr.debug('MarkCompare charLookup inBracket %s not our reg %s' % (parts[1], our_reg))
+                        self.lgr.debug('MarkCompare charLookup inBracket %s not our reg %s' % (check_reg, our_reg))
                 else:
                     self.lgr.debug('MarkCompare charLookup inBracket None %s' % op2)
         return retval

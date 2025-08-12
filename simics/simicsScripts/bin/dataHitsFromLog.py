@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+'''
+Read a given log file and generate a file containing
+The EIP and the cycles for each.
+'''
 import sys
 import os
 logfile = sys.argv[1]
