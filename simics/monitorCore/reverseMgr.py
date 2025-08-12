@@ -86,6 +86,8 @@ class ReverseMgr():
         parts = cli.quiet_run_command('version')
         self.version_string = parts[0][0][2]
         self.lgr.debug('reverseMgr simics version %s' % self.version_string)
+        if self.oldSimics():
+            cli.quiet_run_command('enable-unsupported-feature internals')
 
         # map cell names to cpu's for use if reverse finds break on some other cell
         self.our_cell = cpu.name.split('.')[0]
@@ -194,7 +196,7 @@ class ReverseMgr():
 
     def takeSnapshot(self, name):
         if not self.version().startswith('7'):
-            if self.version().startswith('6.0.146'):
+            if self.oldSimics():
                 self.lgr.debug('reverseMgr 6.0.146 take %s' % name)
                 cmd = 'save-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
@@ -219,7 +221,7 @@ class ReverseMgr():
     def restoreSnapshot(self, name):
         self.disableSimBreaks()
         if not self.version().startswith('7'):
-            if self.version().startswith('6.0.146'):
+            if self.oldSimics():
                 self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
                 cmd = 'restore-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
@@ -283,7 +285,7 @@ class ReverseMgr():
         Retun the number of bytes consumed by snapshots
         '''
         retval = 0
-        if self.version().startswith('6.0.146'):
+        if self.oldSimics():
             pass
         else:
             size_list = VT_snapshot_size_used()
@@ -302,8 +304,6 @@ class ReverseMgr():
         elif not self.reverseEnabled():
             self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
-            if self.version().startswith('6.0.146'):
-                cli.quiet_run_command('enable-unsupported-feature internals')
             self.takeSnapshot('origin')
             size = self.snapSize()
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
@@ -334,6 +334,12 @@ class ReverseMgr():
                 retval.append(name)
         return retval 
 
+    def oldSimics(self):
+        if self.cpu.architecture == 'ppc32' and self.version().startswith('6.0.146'):
+            return True
+        else:
+            return False
+
     def disableReverse(self):
         '''
         Disable reverse execution and stop recording snapshots.
@@ -345,7 +351,7 @@ class ReverseMgr():
             self.cancelSpanCycle()
             self.origin_cycle = None
          
-            if self.version().startswith('6.0.146'):
+            if self.oldSimics():
                 raw_list = cli.quiet_run_command('list-snapshots')[1]
                 snap_list = self.parselist(raw_list)
                 self.lgr.debug('snap_list %s' % str(snap_list))
@@ -979,7 +985,7 @@ class ReverseMgr():
         #TBD remove this
         #return False
         if not self.version().startswith('7'):
-           if self.version().startswith('6.0.146'):
+           if self.oldSimics():
                return False
                #return True
            else:
