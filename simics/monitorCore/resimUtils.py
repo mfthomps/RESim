@@ -520,17 +520,18 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
     lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
     fname_startswith_root = fname.startswith(root_prefix)
     if fname.startswith('/'):
-        fname_abs = os.path.realpath(fname)
-        if fname_startswith_root and not fname_abs.startswith(root_prefix):
-            # hack on hack.  revert because it is the root prefix that has the evil sym link
-            pass
-        else:
-            fname = fname_abs
+        if fname_startswith_root:
+            fname_abs = os.path.realpath(fname)
+            if not fname_abs.startswith(root_prefix):
+                # hack on hack.  revert because it is the root prefix that has the evil sym link
+                pass
+            else:
+                fname = fname_abs
         analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
         lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
-    lgr.debug('wtf root_prefix %s  fname %s' % (root_prefix, fname))
+    lgr.debug('getAnalsysPath root_prefix %s  fname %s' % (root_prefix, fname))
     if retval is None and root_prefix is not None and fname.startswith(root_prefix):
         rest = fname[len(root_prefix):]        
         analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
