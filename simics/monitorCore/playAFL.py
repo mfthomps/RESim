@@ -257,7 +257,7 @@ class PlayAFL():
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
         else:
-            if self.count > 1 or self.commence_params is not None:
+            if True or self.count > 1 or self.commence_params is not None:
                 if self.commence_params is not None and os.path.isfile(self.commence_params):
                     self.loadCommenceParams()
                 # assumes process is ready to injest data, e.g., a driver ready to read a json
@@ -517,7 +517,7 @@ class PlayAFL():
             ''' skip files if already have coverage (or have been create by another drone in parallel'''
             while not done and self.index < len(self.afl_list):
                 fname = self.getHitsPath(self.index)
-                self.lgr.debug('playAFL goAlone file %s' % fname)
+                self.lgr.debug('playAFL goAlone hits path file %s' % fname)
                 ''' python 2 does not have FileExistsError,fly blind '''
                 try:
                     os.open(fname, os.O_CREAT | os.O_EXCL)
@@ -637,7 +637,7 @@ class PlayAFL():
         else:
             self.lgr.info('playAFL did all sessions.')
             ''' did all sessions '''
-            if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel:
+            if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel and not os.path.isdir(self.dfile):
                 hits = self.coverage.getHitCount()
                 self.lgr.info('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.dfile))
                 hits_path = self.coverage.getHitsPath()
@@ -674,9 +674,10 @@ class PlayAFL():
                     print('no hits file at %s ?' % all_prev_hits_path)
             elif self.parallel:
                 self.top.quit()
-            hap = self.stop_hap
-            self.top.RES_delete_stop_hap_run_alone(hap)
-            self.stop_hap = None
+            if self.stop_hap is not None:
+                hap = self.stop_hap
+                self.top.RES_delete_stop_hap_run_alone(hap)
+                self.stop_hap = None
             if self.findbb is not None:
                 for f, n in sorted(self.bnt_list):
                     print('%-30s  packet %d' % (f, n))
@@ -747,6 +748,7 @@ class PlayAFL():
                         self.lgr.debug('Using local file at: %s' % full)
                 
                 with open(full, 'rb') as fh:
+                    self.lgr.debug('playAFL loadInData from %s' % full)
                     if sys.version_info[0] == 2:
                         self.in_data = bytearray(fh.read())
                     else:
@@ -883,9 +885,10 @@ class PlayAFL():
                 elif not self.repeat:
                     self.recordHits(hit_bbs)
                     self.coverage.saveDeadFile()
-                    hap = self.stop_hap
-                    self.top.RES_delete_stop_hap_run_alone(hap)
-                    self.stop_hap = None
+                    if self.stop_hap is not None:
+                        hap = self.stop_hap
+                        self.top.RES_delete_stop_hap_run_alone(hap)
+                        self.stop_hap = None
                     self.lgr.debug('playAFL stopHap, not repeat, should be done.')
                 if self.coverage.didExit() or self.did_exit:
                     self.lgr.debug('playAFL stopHap coverage says didExit, add to exit_list')
