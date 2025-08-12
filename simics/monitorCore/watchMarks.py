@@ -1150,7 +1150,7 @@ class WatchMarks():
         if buf_start is None:
             return None
         if count > 0:
-            if fun == 'strcmp':
+            if fun in ['strcmp', 'strncmp']:
                 dst_str = self.mem_utils.readString(self.cpu, dest, 100)
             else:
                 if two_bytes:
