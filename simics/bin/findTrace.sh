@@ -9,9 +9,14 @@ if [ $1 == '-h' ]; then
     echo "example: findTrace.sh open \"| grep -v time\""
     exit
 fi
+opt=""
+if [ $1 == '-l' ]; then
+    opt=" -l "
+    shift
+fi
 here=$(pwd)
 base=$(basename $here)
 afldir=$AFL_DATA/output/$base
 searchdir=$afldir/*/trace/*
-cmd="grep $1 $searchdir $2 | more"
+cmd="grep $opt $1 $searchdir $2 | more"
 eval $cmd
