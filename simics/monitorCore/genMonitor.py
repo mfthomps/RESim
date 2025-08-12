@@ -4111,8 +4111,10 @@ class GenMonitor():
         self.stackFrameManager[self.target].recordStackClone(tid, parent)
  
     def resetOrigin(self, cpu=None):
+        ''' reset the reverse origin.  NOTE: will enable reversing whether 
+            currently enabled or not '''
         self.lgr.debug('resetOrigin')
-        ''' could be called with tid as the parameter. '''
+        #could be called with tid as the parameter. 
         if cpu is None or type(cpu) is str:
             tid, cpu = self.context_manager[self.target].getDebugTid() 
             self.lgr.debug('resetOrigin from context_manager cpu %s' % str(cpu))
@@ -4872,7 +4874,8 @@ class GenMonitor():
         self.noWatchSysEnter()
 
         self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
-        self.injectIOInstance.delCallHap()
+        if self.injectIOInstance is not None:
+            self.injectIOInstance.delCallHap()
         self.track_finished = True
 
     def goToWatchMark(self, index):
@@ -4990,7 +4993,7 @@ class GenMonitor():
             the instance is not defined until it is done.
             use no_reset True to stop the tracking if RESim would need to reset the origin.'''
         self.track_started = True
-        self.lgr.debug('injectIO dfile: %s max_marks %s' % (dfile, max_marks))
+        self.lgr.debug('injectIO dfile: %s max_marks %s target: %s targetFD: %s' % (dfile, max_marks, target, targetFD))
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
             print('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
             self.lgr.debug('Modifying a coverage or injectIO file name to a queue file name for injection into application memory')
@@ -5554,13 +5557,8 @@ class GenMonitor():
             Use fname to name a binary such as a library.
         '''
 
-        ''' See if the target cell or/and process differs from the current process into which data will be injected '''
         target_cell, target_proc, target_cpu, this_cpu = self.parseTarget(target)
         cell_name = self.getTopComponentName(this_cpu)
-        #if not self.checkUserSpace(cpu):
-        #    return
-        #
-        # 
 
         if no_cover:
             bb_coverage = None
