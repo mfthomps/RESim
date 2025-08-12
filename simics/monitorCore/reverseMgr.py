@@ -220,7 +220,7 @@ class ReverseMgr():
         self.disableSimBreaks()
         if not self.version().startswith('7'):
             if self.version().startswith('6.0.146'):
-                self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
+                #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
                 cmd = 'restore-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
                 try:
@@ -263,7 +263,7 @@ class ReverseMgr():
         else:
             SIM_restore_snapshot(name)
         self.enableSimBreaks()
-        self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
+        #self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
     def cycleHandlerAlone(self, cycles):
         if self.latest_span_end != self.cpu.cycles:
