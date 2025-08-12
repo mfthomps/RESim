@@ -7,7 +7,7 @@ resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
 # parse to get file name from the likes of:
-#oneFortyEight.trace:249460b9fe--tid:2240-2244 (INS.exe) CreateFile fname: \??\D:\HLD\charts\STDF_MAIN\UPDATES\MUPDATE fname_addr: 0xbe767d0 retval_addr: 0x13e098 access: 0x100001 (SYNCHRONIZE, STANDARD_RIGHTS_ALL, SPECIFIC_RIGHTS_ALL) file_attributes: 0x80 (FILE_ATTRIBUTE_NORMAL) share_access: 0x3 (FILE_SHARE_READ, FILE_SHARE_WRITE) create_disposition: 0x2 (FILE_CREATE)
+#oneFortyEight.trace:249460b9fe--tid:2240-2244 (DOG.exe) CreateFile fname: \??\D:\DOG\charts\BAOS\UPDATES\NOKK fname_addr: 0xbe767d0 retval_addr: 0x13e098 access: 0x100001 (SYNCHRONIZE, STANDARD_RIGHTS_ALL, SPECIFIC_RIGHTS_ALL) file_attributes: 0x80 (FILE_ATTRIBUTE_NORMAL) share_access: 0x3 (FILE_SHARE_READ, FILE_SHARE_WRITE) create_disposition: 0x2 (FILE_CREATE)
 
 def findFiles(infile, outfile, find, lgr):
     found = []
