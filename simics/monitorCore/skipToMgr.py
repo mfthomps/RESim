@@ -52,6 +52,9 @@ class SkipToMgr():
     def skipToTest(self, cycle, disable_vmp=False):
         if not self.reverse_mgr.nativeReverse():
             retval = self.reverse_mgr.skipToCycle(cycle)
+            now = self.cpu.cycles
+            if now != cycle:
+                self.lgr.error('skipToMgr skipToTest reverseMgr failed.  wanted 0x%x go 0x%x' % (cycle, now))
         else:
             limit=100
             count = 0
