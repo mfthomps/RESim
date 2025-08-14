@@ -1654,7 +1654,7 @@ class GenMonitor():
                 else:
                     print('Warning, no program file for %s relative to root prefix.' % prog_name)
                     self.lgr.debug('debug Failed to get full path for %s' % prog_name)
-            rprint('Now debugging %s' % prog_name)
+            rprint('Now debugging %s tid:%s' % (prog_name, tid))
             if self.fun_mgr is None:
                 self.lgr.debug('Warning no fun_mgr is defined.  Do not know what we are debugging?')
             elif not self.fun_mgr.hasIDAFuns(comm=comm):
@@ -4110,8 +4110,8 @@ class GenMonitor():
     def recordStackClone(self, tid, parent):
         self.stackFrameManager[self.target].recordStackClone(tid, parent)
  
-    def resetOrigin(self, cpu=None):
-        ''' reset the reverse origin.  NOTE: will enable reversing whether 
+    def resetOrigin(self, cpu=None, enable=True):
+        ''' reset the reverse origin.  NOTE: if enable is true, will enable reversing whether 
             currently enabled or not '''
         self.lgr.debug('resetOrigin')
         #could be called with tid as the parameter. 
@@ -4120,13 +4120,14 @@ class GenMonitor():
             self.lgr.debug('resetOrigin from context_manager cpu %s' % str(cpu))
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
-        self.reverse_mgr[self.target].enableReverse(two_step=True)
-        self.lgr.debug('reset Origin rev ex enabled')
-        self.rev_execution_enabled = True
-        if self.bookmarks is not None:
-            self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
-        else:
-            self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
+        if enable:
+            self.reverse_mgr[self.target].enableReverse(two_step=True)
+            self.lgr.debug('reset Origin rev ex enabled')
+            self.rev_execution_enabled = True
+            if self.bookmarks is not None:
+                self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
+            else:
+                self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
 
     def clearBookmarks(self, reuse_msg=False):
         if self.reverseEnabled():
@@ -5244,7 +5245,7 @@ class GenMonitor():
         backstop_cycles = None
         if backstop:
             backstop_cycles = defaultConfig.backstopCycles()      
-        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, dead_zone=dead_zone)
+        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, dead_zone=dead_zone, manual_dead_zone=dead_zone)
 
     def showCoverage(self):
         self.coverage.showCoverage()
@@ -5447,7 +5448,7 @@ class GenMonitor():
         self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, 
-            one_done=False, test_file=None, commence_params=None):
+            one_done=False, test_file=None, commence_params=None, primer=None):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
@@ -5480,7 +5481,7 @@ class GenMonitor():
         self.afl_instance = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
-            one_done=one_done, test_file=test_file, commence_params=commence_params)
+            one_done=one_done, test_file=test_file, commence_params=commence_params, primer=primer)
         if target is None:
             self.noWatchSysEnter()
             self.afl_instance.goN(0)
@@ -5552,7 +5553,7 @@ class GenMonitor():
 
     def playAFL(self, dfile, n=1, sor=False, linear=False, dead=False, afl_mode=False, no_cover=False, crashes=False, 
             parallel=False, only_thread=False, target=None, trace_all=False, repeat=False, fname=None, targetFD=None, count=1, 
-            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None, watch_rop=False):
+            no_page_faults=False, show_new_hits=False, diag_hits=False, search_list=None, commence_params=None, watch_rop=False, primer=None):
         ''' replay one or more input files, e.g., all AFL discovered paths for purposes of updating BNT in code coverage 
             Use fname to name a binary such as a library.
         '''
@@ -5572,7 +5573,7 @@ class GenMonitor():
               self.cfg_file, self.lgr, packet_count=n, stop_on_read=sor, linear=linear, create_dead_zone=dead, afl_mode=afl_mode, 
               crashes=crashes, parallel=parallel, only_thread=only_thread, target_cell=target_cell, target_proc=target_proc, 
               repeat=repeat, fname=fname, targetFD=targetFD, count=count, trace_all=trace_all, no_page_faults=no_page_faults,
-              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params, watch_rop=watch_rop)
+              show_new_hits=show_new_hits, diag_hits=diag_hits, search_list=search_list, commence_params=commence_params, watch_rop=watch_rop, primer=primer)
         if play is not None and target_proc is None:
             self.lgr.debug('playAFL now go')
             #if trace_all: 
@@ -6632,6 +6633,7 @@ class GenMonitor():
     def getAnalysisPath(self, fname):
         if fname is not None:
             analysis_path = self.soMap[self.target].getAnalysisPath(fname)
+            self.lgr.debug('getAnalysisPath analysis path  %s' % analysis_path)
             if analysis_path is None:
                 self.lgr.debug('getAnalysisPath failed to get path from soMap for %s' % fname)
         else:
