@@ -491,10 +491,10 @@ def getWinPath(path, root_prefix, lgr=None):
         path = path[1:]
     return path
 
-def getRootTopDir(root_prefix):
+def getAnalysisRootTopDir(root_prefix):
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
-        lgr.error('resimUtils getRootTopDir path IDA_ANALYSIS not defined')
+        lgr.error('resimUtils getAnalysisRootTopDir path IDA_ANALYSIS not defined')
         return None
     root_dir = os.path.basename(root_prefix)
     root_parent = os.path.basename(os.path.dirname(root_prefix))
@@ -504,11 +504,18 @@ def getRootTopDir(root_prefix):
 def getFunListCache(ini, root_prefix=None):
     if root_prefix is None: 
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
     fun_list_cache = findListFrom('*.funs', top_dir)
     return fun_list_cache
 
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
+    '''
+    Given the path of a program, return the path to the program analysis.
+    The path may be full, starting with the root prefix.  And the path
+    may include a symlink, in which case we need to get the absolute path
+    per the program location relative to the root prefix.And it may
+    be windows, requiring caching and other search schemes.
+    '''
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getAnalyisPath find %s' % fname)
@@ -516,30 +523,54 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
     if root_prefix is None: 
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
+    root_prefix_abs = os.path.realpath(root_prefix)
     lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
-    fname_startswith_root = fname.startswith(root_prefix)
-    if fname.startswith('/'):
-        if fname_startswith_root:
-            fname_abs = os.path.realpath(fname)
-            if not fname_abs.startswith(root_prefix):
-                # hack on hack.  revert because it is the root prefix that has the evil sym link
-                pass
-            else:
-                fname = fname_abs
-        analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
-        lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
+    if fname.startswith(root_prefix):
+        fname_abs = os.path.realpath(fname)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath %s startswith root. abs is %s' % (fname, fname_abs))
+        if fname_abs.startswith(root_prefix_abs):
+            relative = fname_abs[len(root_prefix_abs)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs started with root_prefix_abs')
+        else:
+            relative = fname_abs[len(root_prefix)+1:] 
+        lgr.debug('resimUtils getAnalysisPath relative path %s to join onto top dir' % relative)
+        analysis_path = os.path.join(top_dir, relative)+'.funs'
+        lgr.debug('resimUtils getAnalysis path try from relative %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
-    lgr.debug('getAnalsysPath root_prefix %s  fname %s' % (root_prefix, fname))
-    if retval is None and root_prefix is not None and fname.startswith(root_prefix):
-        rest = fname[len(root_prefix):]        
-        analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
-        lgr.debug('resimUtils getAnalysis rest is %s analyis_path %s' % (rest, analysis_path))
+            lgr.debug('resimUtils getAnalysis got it %s' % retval)
+    else:
+        if fname.startswith('/'):
+            fname = fname[1:]
+        # try joining with root prefix so we can check for sym links
+        with_root = os.path.join(root_prefix, fname)
+        fname_abs = os.path.realpath(with_root)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysis fname %s did not start with root prefix.  with root would be %s, and abs of that %s' % (fname, with_root, fname_abs))
+        if fname_abs.startswith(root_prefix_abs):
+            relative = fname_abs[len(root_prefix_abs)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs started with root_prefix_abs relative %s' % relative)
+        else:
+            relative = fname_abs[len(root_prefix)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs not started root_prefix_abs relative %s' % relative)
+                
+        analysis_path = os.path.join(top_dir, relative)+'.funs'
+        lgr.debug('resimUtils getAnalysis joined relative to top dir for %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
+            lgr.debug('resimUtils getAnalysis got it not start with root_prefix %s' % retval)
+    #lgr.debug('getAnalysisPath root_prefix %s  fname %s' % (root_prefix, fname))
+    #if retval is None and root_prefix is not None and fname.startswith(root_prefix):
+    #    rest = fname[len(root_prefix):]        
+    #    analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
+    #    lgr.debug('resimUtils getAnalysisPath rest is %s analyis_path %s' % (rest, analysis_path))
+    #    if os.path.isfile(analysis_path):
+    #        retval = analysis_path[:-5]
        
     if retval is None:    
+        # try looking in cache and dealing with Windows paths
         if lgr is not None:
             lgr.debug('resimUtils getAnalysisPath top_dir %s' % (top_dir))
         if len(fun_list_cache) == 0:
@@ -564,11 +595,11 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
             if lgr is not None:
-                lgr.debug('resimUtils getAnalyssisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+                lgr.debug('resimUtils getAnalysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, [], lgr, force_look=True)
             if retval is not None:
                 if lgr is not None:
-                    lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
+                    lgr.debug('resimUtils getAnalysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
             if lgr is not None:
@@ -676,7 +707,7 @@ def getExecList(ini, lgr=None):
     if lgr is not None:
         lgr.debug('resimUtils getExecList ini %s' % ini)
     root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
     retval = os.path.join(top_dir, 'exec_list.txt')
     return retval
 
@@ -684,7 +715,7 @@ def getExecDict(root_prefix, lgr=None):
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getExecDict root_prefix %s' % root_prefix)
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
     path = os.path.join(top_dir, 'exec_dict.json')
     if lgr is not None:
         lgr.debug('resimUtils getExecDict path %s' % path)

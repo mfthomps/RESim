@@ -265,7 +265,7 @@ class ReverseMgr():
         else:
             SIM_restore_snapshot(name)
         self.enableSimBreaks()
-        self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
+        #self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
     def cycleHandlerAlone(self, cycles):
         if self.latest_span_end != self.cpu.cycles:
@@ -298,6 +298,7 @@ class ReverseMgr():
         '''
         Enable reverse execution.  This should only be called for one instance of reverseMgr at a time.
         '''
+        self.lgr.debug('reversMgr enableReverse')
         if self.nativeReverse():
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
@@ -397,20 +398,24 @@ class ReverseMgr():
              self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cell: %s' % (our_cycles, self.cpu.cycles, eip, use_cell))
         if self.origin_cycle is None:
             print('Reverse was not enabled')
+            self.lgr.debug('reverseMgr skipToCycle Reverse was not enabled')
             return False
         if our_cycles < self.origin_cycle:
             print('At oldest recorded cycle')
+            self.lgr.debug('reverseMgr At oldest recorded cycle')
             return False
         current_cycle = self.cpu.cycles
         if use_cell is None:
             if current_cycle == our_cycles:
                 print('Already at cycle 0x%x' % current_cycle)
+                self.lgr.debug('reverseMgr Already at cycle 0x%x' % current_cycle)
                 return True
             object_cycles = our_cycles
         else:
             current_cycle == self.cpu_map[use_cell].cycles
             if object_cycles == current_cycle:
                 print('Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
+                self.lgr.debug('reverseMgr Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
                 return True
 
         self.cancelSpanCycle()
@@ -438,7 +443,7 @@ class ReverseMgr():
                     cycle_mark = 'cycle_%x' % self.latest_span_end
 
                 self.restoreSnapshot(cycle_mark)
-                #self.lgr.debug('reverseMgr after restore %s cycle now 0x%x' % (cycle_mark, self.cpu.cycles))
+                self.lgr.debug('reverseMgr after restore %s cycle now 0x%x' % (cycle_mark, self.cpu.cycles))
                 if not missing_snapshots and self.cpu.cycles != self.latest_span_end:
                     self.lgr.error('reverseMgr skipToCycle did restore to %s, but now at 0x%x' % (cycle_mark, self.cpu.cycles))
                     return False
@@ -882,6 +887,7 @@ class ReverseMgr():
         '''
         Enable all breakpoints
         '''
+        self.lgr.debug('reverseMgr enableAll')
         self.setContinuationHap()
         for bp in self.bp_list:
             self.lgr.debug('reverseMgr enableAll bp is %s' % bp)
