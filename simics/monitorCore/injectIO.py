@@ -319,6 +319,7 @@ class InjectIO():
             use_data_watch = self.dataWatch
         if self.no_reset:
             write_callback = self.callback
+            self.dataWatch.noReset()
         else:
             write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
