@@ -404,13 +404,13 @@ class ReverseMgr():
         current_cycle = self.cpu.cycles
         if use_cell is None:
             if current_cycle == our_cycles:
-                print('Already at cycle 0x%x' % cycle)
+                print('Already at cycle 0x%x' % current_cycle)
                 return True
             object_cycles = our_cycles
         else:
             current_cycle == self.cpu_map[use_cell].cycles
             if object_cycles == current_cycle:
-                print('Already at cycle 0x%x on cell %s' % (cycle, use_cell))
+                print('Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
                 return True
 
         self.cancelSpanCycle()
