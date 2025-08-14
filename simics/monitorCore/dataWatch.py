@@ -325,6 +325,8 @@ class DataWatch():
         # for handling broken stack parsing that leads to ghost frames
         self.recent_ghost_call_addr = None
 
+        self.no_reset = False
+
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
         self.stop_hap = self.top.RES_add_stop_callback(self.memstuffStopHap, self.freadCallback)
@@ -5350,6 +5352,11 @@ class DataWatch():
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
         if len(self.start) == 0:
             return
+        # Returns false if directed to not reset the origin
+        if self.no_reset:
+            self.lgr.debug('dataWatch resetOrigin, but no_reset set.  Stop simulation')
+            SIM_break_simulation('no reset')
+            return False
         data_watch_list = self.watchMarks.getDataWatchList()
         origin_watches = []
         if len(self.cycle) > 0 and cycle <= self.cycle[-1]:
@@ -5376,6 +5383,7 @@ class DataWatch():
                 if data_watch['start'] is not None:
                     origin_watches.append(data_watch)
         self.watchMarks.resetOrigin(origin_watches, reuse_msg=reuse_msg, record_old=record_old)
+        return True
 
     def setFunMgr(self, fun_mgr):
         self.lgr.debug('DataWatch setFunMgr')
@@ -6352,6 +6360,7 @@ class DataWatch():
         else:
             return False                    
                 
-
+    def noReset(self):
+        self.no_reset = True
 
 
