@@ -94,6 +94,7 @@ class Coverage():
         self.jumpers = None
         # manage set of physical basic block addresses we don't want to cover, e.g., due to their being used in other threads (performance) '''
         self.crate_dead_zone = None
+        self.manual_dead_zone = False
         # list of bb's that will be ignored.  We are either collecting them, or using them to filter breakpoints.
         self.dead_list = []
         self.run_from_snap = run_from_snap
@@ -199,12 +200,12 @@ class Coverage():
             if bb_rel not in self.dead_list:
             
                 if phys_addr == 0 or phys_addr is None:
-                    self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
+                    #self.lgr.debug('coverage setBreak unmapped: 0x%x' % bb_rel)
                     self.unmapped_addrs.append(bb_rel)
                 else:
                     bp = self.setPhysBreak(phys_addr)
                     self.addr_map[bp] = bb_rel
-                    self.lgr.debug('coverage setBreak phys_addr 0x%x set to bp %d' % (phys_addr, bp))
+                    #self.lgr.debug('coverage setBreak phys_addr 0x%x set to bp %d' % (phys_addr, bp))
             else:
                 self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_addr)
                 pass
@@ -255,7 +256,7 @@ class Coverage():
             self.setBlockBreaks()
 
     def setBlockBreaks(self):
-        self.lgr.debug('setBlockBreaks')
+        self.lgr.debug('setBlockBreaks cycle: 0x%x' % self.cpu.cycles)
         self.stopCover()
         tmp_list = []
         prev_bp = None
@@ -705,8 +706,11 @@ class Coverage():
             if not self.report_coverage:
                 # User wants to identify breakpoints hit by other threads so they can later be masked 
                 tid = self.top.getTID(target=self.cell_name)
+                self.lgr.debug('wtf create dead zone not report cover tid %s' % tid)
                 if tid != self.tid:
                     self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_list)))
+                    dead_set = True
+                elif self.manual_dead_zone:
                     dead_set = True
             else:
                 # Independent of tid
@@ -1108,10 +1112,11 @@ class Coverage():
             self.lgr.debug('coverage startDataSession with no previous hits')
 
     def enableCoverage(self, tid, fname=None, prog_path=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
-                       create_dead_zone=False, no_save=False, only_thread=False, record_hits=True, diag_hits=False, report_coverage=False):
+                       create_dead_zone=False, manual_dead_zone=False, no_save=False, only_thread=False, record_hits=True, diag_hits=False, report_coverage=False):
         self.enabled = True
         self.tid = tid
         self.create_dead_zone = create_dead_zone
+        self.manual_dead_zone = manual_dead_zone
         self.no_save = no_save
         self.record_hits = record_hits
         self.only_thread = only_thread
@@ -1122,11 +1127,17 @@ class Coverage():
             self.analysis_path = self.top.getAnalysisPath(fname)
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
+            if self.analysis_path is None:
+                self.lgr.error('coverage enableCoverge fname was %s analysis_path is None' % fname)
+                self.top.quit() 
             if prog_path is not None:
                 self.prog_path = prog_path
             else:
                 self.prog_path = fname
         
+        if self.analysis_path is None:
+            self.lgr.error('coverage enableCoverge analysis_path is None')
+            self.top.quit() 
         ida_path = self.top.getIdaData(self.analysis_path, target=self.cell_name)
         # dynamically alter control flow, e.g., to avoid CRC checks
         self.loadJumpers(ida_path)
@@ -1134,9 +1145,9 @@ class Coverage():
         self.backstop = backstop
         self.backstop_cycles = backstop_cycles
         if self.backstop_cycles is not None:
-            self.lgr.debug('cover enableCoverage hits_path is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
+            self.lgr.debug('coverage enableCoverage hits_path is %s linear: %r backstop_cycles: 0x%x' % (self.hits_path, linear, self.backstop_cycles))
         else:
-            self.lgr.debug('cover enableCoverage hits_path is %s linear: %r no backstop given' % (self.hits_path, linear))
+            self.lgr.debug('coverage enableCoverage hits_path is %s linear: %r no backstop given' % (self.hits_path, linear))
         if report_coverage:
             self.backstop.setCallback(self.reportCoverage)
             print('Will report coverage when backstop is hit; assuming reverse execution is not needed.')
