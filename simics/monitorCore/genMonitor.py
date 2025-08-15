@@ -4132,19 +4132,19 @@ class GenMonitor():
     def clearBookmarks(self, reuse_msg=False):
         if self.reverseEnabled():
             tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.lgr.debug('genMonitor clearBookmarks')
-            if tid is None:
-                #print('** Not debugging?? **')
-                self.lgr.debug('clearBookmarks, Not debugging?? **')
-                return False
+            if self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True):
+                self.lgr.debug('genMonitor clearBookmarks')
+                if tid is None:
+                    #print('** Not debugging?? **')
+                    self.lgr.debug('clearBookmarks, Not debugging?? **')
+                    return False
        
-            self.bookmarks.clearMarks()
-            SIM_run_alone(self.resetOrigin, cpu)
-            #self.resetOrigin(cpu)
-            self.dataWatch[self.target].resetOrigin(cpu.cycles, reuse_msg=reuse_msg, record_old=True)
-            cpu, comm, tid = self.task_utils[self.target].curThread() 
-            #self.stopTrackIO()
-            self.lgr.debug('genMonitor clearBookmarks call clearWatches')
+                self.bookmarks.clearMarks()
+                SIM_run_alone(self.resetOrigin, cpu)
+                #self.resetOrigin(cpu)
+                cpu, comm, tid = self.task_utils[self.target].curThread() 
+                #self.stopTrackIO()
+                self.lgr.debug('genMonitor clearBookmarks call clearWatches')
         else:
             self.lgr.debug('genMonitor clearBookmarks reverse not enabled')
             pass
