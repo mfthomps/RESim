@@ -222,7 +222,7 @@ class ReverseMgr():
         self.disableSimBreaks()
         if not self.version().startswith('7'):
             if self.oldSimics():
-                self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
+                #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
                 cmd = 'restore-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
                 try:
