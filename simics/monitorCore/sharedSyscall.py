@@ -401,7 +401,7 @@ class SharedSyscall():
                 my_syscall = exit_info.syscall_instance
                 if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None and addr_len > 0:
                     ''' in case we want to break on a read of address data '''
-                    self.dataWatch.setRange(exit_info.retval_addr, addr_len, trace_msg, back_stop=False)
+                    self.dataWatch.setRange(exit_info.retval_addr, addr_len, trace_msg, backstop=False)
                     #if my_syscall.linger: 
                     ''' TBD better way to distinguish linger from trackIO '''
                     if not self.dataWatch.wouldBreakSimulation():
@@ -1161,7 +1161,7 @@ class SharedSyscall():
                     self.lgr.debug('sharedSyscall matched_param %s' % str(exit_info.matched_param))
                     if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
                         ''' in case we want to break on a read of waiting bytes '''
-                        self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, back_stop=True, no_backstop=True, fd=exit_info.old_fd)
+                        self.dataWatch.setRange(exit_info.retval_addr, 4, trace_msg, backstop=True, no_backstop=True, fd=exit_info.old_fd)
                         if exit_info.syscall_instance.linger: 
                             self.dataWatch.stopWatch() 
                             self.dataWatch.watch(break_simulation=False, no_backstop=True, i_am_alone=True)
