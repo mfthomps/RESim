@@ -133,6 +133,7 @@ class ReverseMgr():
         self.test_cycles = 0
         # hack for catching attempts to restore snapshots not net recorded due to runAlone
         self.snapshot_names = []
+        self.was_at_reverse_point = False
 
     def cancelSpanCycle(self):
         '''
@@ -437,8 +438,13 @@ class ReverseMgr():
                 missing_snapshots = False
                 if not self.hasSnapFor(self.latest_span_end):
                     missing_snapshots = True
-                    cycle_mark = 'cycle_%x' % self.getLatestSnapCycle() 
-                    self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle mark %s' % cycle_mark)
+                    latest = self.getLatestSnapCycle()
+                    if latest is not None:
+                        cycle_mark = 'cycle_%x' % self.getLatestSnapCycle() 
+                        self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle mark %s' % cycle_mark)
+                    else:
+                        self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle was none, set to latest_span_end 0x%x' % self.latest_span_end)
+                        cycle_mark = 'cycle_%x' % self.latest_span_end
                 else:
                     cycle_mark = 'cycle_%x' % self.latest_span_end
 
@@ -631,8 +637,23 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr skipBackAndRunForward reverse_to of 0x%x greater than current span start 0x%x, run forward 0x%x cycles' % (self.reverse_to, 
                            self.current_span_start, delta))
             self.reverse_to = None
+            self.rmContinuationHap()
+            self.disableSimBreaks()
+            expect = self.cpu.cycles + delta
             SIM_continue(delta)
+            count = 0
+            while self.cpu.cycles != expect:
+                eip = self.top.getEIP()
+                self.lgr.error('reverseMgr skipBackAndRunForward expected 0x%x but got 0x%x after running forward delta eip 0x%x' % (expect, self.cpu.cycles, eip))
+                new_delta = expect - self.cpu.cycles
+                SIM_continue(new_delta)
+                count = count + 1
+                if count > 5:
+                    self.lgr.error('reverseMgr skipBackAndRunForward too much, bail')
+                    return
+            self.enableSimBreaks()
             self.lgr.debug('reverseMgr skipBackAndRunForward ran forward to the reverse_to point so we can set breaks and run from there.  cycles now 0x%x' % self.cpu.cycles)
+            self.was_at_reverse_point = True
 
         #self.enableAll()
         if self.current_span_end == self.cpu.cycles:
@@ -665,8 +686,19 @@ class ReverseMgr():
         SIM_run_alone(self.cancelSpanEndCycle, None)
 
         if len(self.break_cycles) == 0:
-            self.lgr.debug('reverseMgr stopHap Failed to find any breaks, try forward from span prior to previous span ')
-            SIM_run_alone(self.skipBackAndRunForward, False)
+            if not self.was_at_reverse_point:
+                self.lgr.debug('reverseMgr stopHap Failed to find any breaks, try forward from span prior to previous span ')
+                SIM_run_alone(self.skipBackAndRunForward, False)
+            else:
+                self.lgr.debug('reverseMgr stopHap Failed to find any breaks and we ran forward from the reverse_to point')
+                if self.callback is not None:
+                    self.callback(0xbababa, None, None, None)
+                    self.callback = None
+                    self.lgr.debug('reverseMgr stopHap failed to find break, called callback')
+                else:
+                    self.lgr.debug('reverseMgr stopHap failed to find break, no callback')
+                    print('reverseMgr stopHap failed to find break, no callback')
+                 
         else:
             cycle_list = list(self.break_cycles.keys())
             sorted_list = sorted(cycle_list)
@@ -674,6 +706,7 @@ class ReverseMgr():
             latest_bp = self.break_cycles[latest_cycle].bp
             self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_bp))
             SIM_run_alone(self.skipAndCallback, latest_cycle)
+        self.was_at_reverse_point = False
 
 
     def skipAndCallback(self, skip_to_cycle):
@@ -835,7 +868,7 @@ class ReverseMgr():
 
     def deltaHandleAlone(self, dumb):
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.deltaStopHap, None)
-        SIM_break_simulation('delta cycle handler')
+        SIM_break_simulation('Cycle now 0x%x' % self.cpu.cycles)
 
     def deltaStopHap(self, param, one, exception, error_string):
         self.lgr.debug('reverseMgr deltaStopHap')
