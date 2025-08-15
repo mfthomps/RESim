@@ -448,7 +448,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -567,7 +567,7 @@ class AFL():
     def stopHap(self, dumb, one, exception, error_string):
         ''' Entered when the backstop is hit'''
         ''' Also if coverage record exit is hit '''
-        self.lgr.debug('afl stopHap cycle 0x%x' % self.target_cpu.cycles)
+        #self.lgr.debug('afl stopHap cycle 0x%x' % self.target_cpu.cycles)
         if self.stop_hap is None:
             return
         if self.target_cpu.cycles == self.starting_cycle:
@@ -672,7 +672,7 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         count = self.write_data.write()
-        self.lgr.debug('afl doWriteData wrote %d bytes cycle: 0x%x' % (count, self.cpu.cycles))
+        #self.lgr.debug('afl doWriteData wrote %d bytes cycle: 0x%x' % (count, self.cpu.cycles))
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
                 #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
