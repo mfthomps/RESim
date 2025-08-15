@@ -183,7 +183,7 @@ class StackTrace():
             if self.isCall(instruct[1]):
                 if self.cpu.architecture == 'ppc32' and instruct[1].startswith('bctrl'):
                     self.recent_bctrl = eip
-                    self.lgr.debug('stackTrace followCall set recent_bctrl to 0x%x' % eip)
+                    self.lgr.debug('stackTrace followCall is bctrl at 0x%x' % (eip))
                 retval = eip
         else:
             fun_addr = self.fun_mgr.getFun(return_to)
@@ -1491,20 +1491,26 @@ class StackTrace():
                             #        skip_this = True        
                             if not skip_this and prev_ip is not None and self.soMap.isMainText(val):
                                 if not self.soMap.isMainText(prev_ip):
-                                    #self.lgr.debug('stackTrace val 0x%x in main (%s), prev 0x%x (%s) was not' % (val, fname, prev_ip, prev_fname))
-                                    call_to, called_fun_name = self.getCallTo(ip_of_call_instruct)
-                                    if call_to is not None:
-                                        if called_fun_name is not None:    
-                                            # fix call instruction and force function name on called function if it is generic
-                                            fun_name = called_fun_name
-                                            instruct_str = '%s   %s' % (self.callmn, fun_name)
-                                            if self.frames[-1].fun_of_ip is not None and self.frames[-1].fun_of_ip.startswith('sub_'):
-                                                self.frames[-1].fun_of_ip = fun_name
-                                        if self.soMap.isMainText(call_to):
-                                            #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail. call-to is 0x%x' % call_to)
-                                            if not self.fun_mgr.isRelocate(call_to) and not self.isPLT(call_to):
-                                                skip_this = True
-                                                #self.lgr.debug('stackTrace not a PLT, skipped it first_instruct %s' % first_instruct[1])
+                                    self.lgr.debug('stackTrace val 0x%x in main (%s), prev 0x%x (%s) was not' % (val, fname, prev_ip, prev_fname))
+                                    call_instruct = SIM_disassemble_address(self.cpu, ip_of_call_instruct, 1, 0)
+                                    self.lgr.debug('stackTrace call instruct %s' % (call_instruct[1]))
+                                    if 'bctrl' in call_instruct[1]:
+                                        self.lgr.debug('stackTrace bctrl at clib boundary, bail')
+                                        skip_this = True
+                                    else:
+                                        call_to, called_fun_name = self.getCallTo(ip_of_call_instruct)
+                                        if call_to is not None:
+                                            if called_fun_name is not None:    
+                                                # fix call instruction and force function name on called function if it is generic
+                                                fun_name = called_fun_name
+                                                instruct_str = '%s   %s' % (self.callmn, fun_name)
+                                                if self.frames[-1].fun_of_ip is not None and self.frames[-1].fun_of_ip.startswith('sub_'):
+                                                    self.frames[-1].fun_of_ip = fun_name
+                                            if self.soMap.isMainText(call_to):
+                                                #self.lgr.debug('stackTrace prev stack frame was a lib, but we called into main.  If not a PLT, then bail. call-to is 0x%x' % call_to)
+                                                if not self.fun_mgr.isRelocate(call_to) and not self.isPLT(call_to):
+                                                    skip_this = True
+                                                    #self.lgr.debug('stackTrace not a PLT, skipped it first_instruct %s' % first_instruct[1])
 
                             fname = self.soMap.getSOFileFull(val)
                             if fname is not None and not self.okToCall(fname):
