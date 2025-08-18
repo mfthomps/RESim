@@ -429,7 +429,7 @@ class TaskUtils():
         if swapper_addr is None:
             self.lgr.debug('taskUtils getTaskStructs failed to get swapper')
             return tasks
-        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
+        #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
