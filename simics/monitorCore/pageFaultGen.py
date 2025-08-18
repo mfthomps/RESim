@@ -799,8 +799,12 @@ class PageFaultGen():
                         print('Fault %s tid:%s eip: 0x%x cycle: 0x%x' % (prec.name, tid, prec.eip, prec.cycles))
             else:
                 self.lgr.debug('pageFaultGen handleExit confused, recent_tid %s, tid %s' % (recent_tid, tid))
-
- 
+        if retval:
+            msg = 'tid:%s Thread exit.  SEGV.\n' % tid
+        else:
+            msg = 'tid:%s Thread exit.\n' % tid
+        self.lgr.debug('pageFaultGen call top.traceWrite with %s' % msg)
+        self.top.traceWrite(msg) 
                     
         return retval
 
