@@ -2372,15 +2372,26 @@ class GenMonitor():
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
             #self.context_manager[self.target].showHaps()
+            if prev is None:
+                eip = self.getEIP(cpu)
+                if cpu.architecture.startswith('arm') or cpu.architecture == 'ppc32':
+                    prev = eip - 4 
+                else:
+                    fun_addr = self.fun_mgr.getFun(eip)
+                    self.lgr.debug('reverseToCallInstruction prev was none eip 0x%x fun_addr %s' % (eip, fun_addr))
+                    if fun_addr is not None:
+                        prev = self.disassembler.getPrevInstruction(eip, fun_addr)
+                        if prev is None:
+                            self.lgr.debug('reverseToCallInstruction prev still none')
             if prev is not None:
                 instruct = SIM_disassemble_address(cpu, prev, 1, 0)
                 self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
-                if instruct[1] == 'int 128' or (not step_into and (instruct[1].startswith('call') or instruct[1].startswith('blr'))):
+                if resimUtils.isSysEnter(instruct[1]) or (not step_into and resimUtils.isCall(cpu, instruct[1])):
                     self.revToAddr(prev)
                 else:
                     self.rev_to_call[self.target].doRevToCall(step_into, prev)
             else:
-                self.lgr.debug('prev is none')
+                self.lgr.debug('reverseToCallInstruction prev is none')
                 self.rev_to_call[self.target].doRevToCall(step_into, prev)
             self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
@@ -4800,6 +4811,7 @@ class GenMonitor():
         if check_crash:
             crashing = self.pendingFault(target=target)               
         self.syscallManager[target].rmSyscall('runToIO', context=self.context_manager[target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
+        self.syscallManager[target].rmSyscall('runToInput', context=self.context_manager[target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
@@ -6950,6 +6962,7 @@ class GenMonitor():
 
     def traceWrite(self, msg):
         if self.target in self.traceMgr:
+            self.lgr.debug('traceWrite, so write %s' % msg)
             self.traceMgr[self.target].write(msg)
 
     def recordEntry(self, dumb=None):
