@@ -191,6 +191,8 @@ class reverseToCall():
                 self.decode = decode
             if self.cpu.architecture.startswith('arm'):
                 self.callmn = 'bl'
+            if self.cpu.architecture == 'ppc32':
+                self.callmn = 'bl'
             else:
                 self.callmn = 'call'
         else:
@@ -394,6 +396,8 @@ class reverseToCall():
     def isRet(self, instruct, eip):
         if self.cpu.architecture.startswith('arm'):
             parts = instruct.split()
+            if instruct.startswith('ret'):
+                return True
             if parts[0].strip().startswith('ld') and parts[1].startswith('pc'):
                 op2, op1 = self.decode.getOperands(instruct)
                 #if '[' in op2 and 'pc' in op2:
@@ -445,7 +449,7 @@ class reverseToCall():
         SIM_run_alone(self.rmStopHap, hap) 
         self.stop_hap = None
         if self.tooFarBack():
-            self.lgr.debug('At start of recording, cycle: 0x%x' % self.cpu.cycles)
+            self.lgr.debug('reverseToCall At start of recording, cycle: 0x%x' % self.cpu.cycles)
             print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
             self.cleanup(None)
             self.top.skipAndMail() 
@@ -540,7 +544,6 @@ class reverseToCall():
         If step_into is true, and the previous instruction is a return,
         enter the function at its return.
         '''
-
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
         self.is_monitor_running.setRunning(True)
@@ -549,9 +552,10 @@ class reverseToCall():
         self.lgr.debug('reservseToCall, call get procInfo')
         eip = self.top.getEIP(self.cpu)
         my_args = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
-        self.lgr.debug('reservseToCall, got my_args ')
+        self.lgr.debug('reverseToCall doRevtoCall, got my_args ')
         self.previous_eip = prev
         self.tryBackOne(my_args)
+        self.lgr.debug('reservseToCall, back from tryBackOne')
 
     def jumpOverKernel(self, tid):
         ''' Jump backwards over the kernel.  Returns True if skip works and reg unchanged, False if changed or None if left in kernel'''
@@ -1362,15 +1366,6 @@ class reverseToCall():
             self.top.skipAndMail()
         self.lgr.debug('cleanup complete')
 
-    def isSyscall(self, instruct):
-        if self.cpu.architecture.startswith('arm'):
-            if instruct.startswith('svc 0'):
-                return True
-        else:
-            if instruct.startswith('int 128') or instruct.startswith('sysenter'):
-                return True
-        return False
-
     def stoppedReverseToCall(self, my_args, one, exception, error_string):
         '''
         Invoked when the simulation stops while looking for a previous call
@@ -1389,7 +1384,7 @@ class reverseToCall():
         elif tid == self.tid and (memUtils.getCPL(cpu) != 0 or self.kernel):
             eip = self.top.getEIP(cpu)
             instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-            if self.first_back and self.isSyscall(instruct[1]):
+            if self.first_back and resimUtils.isSysEnter(instruct[1]):
                 self.lgr.debug('stoppedReverseToCall first back is syscall at %x, we are done' % eip)
                 self.cleanup(None)
             elif (self.first_back and not self.uncall) and (not self.isRet(instruct[1], eip) or self.step_into):
