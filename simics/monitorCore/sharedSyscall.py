@@ -118,6 +118,7 @@ class SharedSyscall():
                 self.context_manager.genDeleteHap(self.exit_hap[context][eip], immediate=True)
                 self.lgr.debug('sharedSyscall stopTrace removed exit hap %d for eip 0x%x context %s' % (self.exit_hap[context][eip], eip, str(context)))
             self.exit_tids[context] = {}
+            self.exit_hap[context] = {}
         for tid in self.exit_info:
             self.exit_info[tid] = {}
 
