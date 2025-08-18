@@ -84,11 +84,11 @@ class PrepInject():
         self.select_return_ip = self.top.getEIP(self.cpu)
         self.ret_cycle = self.cpu.cycles
         tid = self.top.getTID()
-        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
+        self.lgr.debug('prepInject instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
-        self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
+        self.lgr.debug('prepInject instrumentSelect origin 0x%x recent call cycle 0x%x' % (origin, cycle))
         if cycle <= origin:
             self.lgr.debug('prepInject instrumentSelect Entry into kernel is prior to first cycle, cannot record select_ip')
         else:
