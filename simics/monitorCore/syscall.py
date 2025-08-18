@@ -1220,7 +1220,7 @@ class Syscall():
             if self.name != 'traceAll' and socket_callname != 'socket':
                 for call_param in self.call_params:
                     if call_param is not None and call_param.subcall is not None:
-                        self.lgr.debug('syscall socketParse subcall in call_param of %s' % call_param.subcall)
+                        self.lgr.debug('syscall socketParse check subcall %s in call_param %s against %s' % (call_param.subcall, call_param.name, socket_callname.lower()))
                         if call_param.subcall.lower() == socket_callname.lower():
                             got_good = True
                         else:
@@ -2054,7 +2054,7 @@ class Syscall():
                         if byte_tuple is not None:
 
                             self.lgr.debug('syscall write check dmod %s count %d' % (mod.path, count))
-                            if mod.checkString(self.cpu, byte_tuple, count):
+                            if mod.checkString(self.cpu, exit_info.retval_addr, byte_tuple, count):
                                 if mod.getCount() == 0:
                                     self.lgr.debug('syscall write found final dmod %s' % mod.getPath())
                                     self.top.rmDmod(self.cell_name, mod.getPath())
@@ -2465,7 +2465,7 @@ class Syscall():
                      #    exit_info.call_params.append(call_param)
 
     def rmStopHap(self, hap):
-       self.top.RES_delete_stop_hap_alone(hap)
+       self.top.RES_delete_stop_hap_run_alone(hap)
 
     def stopHap(self, msg, one, exception, error_string):
         '''  Invoked when a syscall (or more typically its exit back to user space) triggers
@@ -2844,7 +2844,7 @@ class Syscall():
             return
 
         frame_string = taskUtils.stringFromFrame(frame)
-        self.lgr.debug('syscallHap in tid:%s (%s), callnum: 0x%x (%s)  EIP: 0x%x' % (tid, comm, callnum, callname, break_eip))
+        self.lgr.debug('syscallHap in tid:%s (%s), callnum: 0x%x (%s)  EIP: 0x%x cycle:0x%x' % (tid, comm, callnum, callname, break_eip, self.cpu.cycles))
         # Hack to allow repeated toProc(new=True) calls
         if self.name == 'execve' and callname == 'execve': 
             self.lgr.debug('hap name %s comm %s is execve cycles 0x%x current 0x%x' % (self.name, comm, self.execve_cycle, self.cpu.cycles))
@@ -2858,8 +2858,8 @@ class Syscall():
 
         # Set exit breaks, if wanted 
         if not tracing_all:
-            self.lgr.debug('syscallHap cell %s callnum %d stop_on_call %r' % (self.cell_name, 
-                 callnum, self.stop_on_call))
+            #self.lgr.debug('syscallHap cell %s callnum %d stop_on_call %r' % (self.cell_name, 
+            #     callnum, self.stop_on_call))
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
             if exit_info is not None:
                 self.lgr.debug('syscall exit_info not none callname %s my name %s' % (callname, self.name))
@@ -2916,7 +2916,7 @@ class Syscall():
             if exit_info is not None:
                 if comm != 'tar':
                     name = callname+'-exit' 
-                    self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
+                    #self.lgr.debug('syscallHap call to addExitHap for tid:%s' % tid)
                     if self.stop_on_call:
                         cp = CallParams('stop_on_call', None, None, break_simulation=True)
                         exit_info.call_params.append(cp)
