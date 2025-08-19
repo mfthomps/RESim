@@ -326,6 +326,7 @@ class DataWatch():
         self.recent_ghost_call_addr = None
 
         self.no_reset = False
+        self.failed_comm_list = []
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
@@ -2012,6 +2013,9 @@ class DataWatch():
             self.lgr.debug('dataWatch memSomethingEntry but pending call, bail')
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
+        if not self.task_utils.commMatch(comm, self.comm):
+            self.lgr.debug('memSomethingEntry tid:%s (%s) fun %s but wanted comm %s, bail' % (tid, comm, fun, self.comm))
+            return
         word_size = self.top.wordSize(tid, target=self.cell_name)
         self.lgr.debug('********* memSomethingEntry, tid:%s fun %s eip 0x%x cycle: 0x%x context: %s word_size %d break num %d' % (tid, fun, eip, self.cpu.cycles, self.cpu.current_context, word_size, the_breakpoint))
         if fun not in self.mem_fun_entries or eip not in self.mem_fun_entries[fun] or self.mem_fun_entries[fun][eip].hap is None:
@@ -4355,6 +4359,7 @@ class DataWatch():
                         trans_size = self.length[index] 
                         addr = start
             
+                recent = self.watchMarks.getRecentMark()
                 self.watchMarks.memoryMod(start, length, trans_size, addr=addr)
 
                 if (self.cpu.cycles - self.last_byteswap) > 0x100:
@@ -4365,12 +4370,16 @@ class DataWatch():
                         SIM_break_simulation('DataWatch written data')
                     else:
                         ''' TBD deleting buffer, sometimes, in finishReadHap, here too?'''
-                        self.lgr.debug('dataWatch did mem mod, call rmSubRange for 0x%x len 0x%x' % (addr, trans_size))
-                        if trans_size > 1:
-                            self.rmSubRange(addr, trans_size)
-                        else:
-                            self.lgr.debug('********remove this*********************REMOVE THIS**********************')
-                        pass
+                        if isinstance(recent.mark, watchMarks.DataMark) and recent.mark.addr == addr and recent.mark.trans_size == trans_size: 
+                           self.lgr.debug('dataWatch did mem mod, did recent read of same data, assume manipulation')
+                           pass
+                        else: 
+                            self.lgr.debug('dataWatch did mem mod, call rmSubRange for 0x%x len 0x%x' % (addr, trans_size))
+                            if trans_size > 1:
+                                self.rmSubRange(addr, trans_size)
+                            else:
+                                self.lgr.debug('********remove this*********************REMOVE THIS**********************')
+                            pass
                 else:
                     self.lgr.debug('dataWatch did mem mod, but recent byteswap, assume messing with read values.')
         elif self.retrack:
@@ -4426,8 +4435,16 @@ class DataWatch():
         #    return
 
         dum_cpu, comm, tid = self.task_utils.curThread()
-        if comm != self.comm:
-            self.lgr.debug('readHap tid:%s comm %s, but we are %s' % (tid, comm, self.comm))
+        if not self.task_utils.commMatch(comm, self.comm):
+            if comm in self.failed_comm_list:
+                self.lgr.debug('readHap tid:%s comm %s in failed comm list' % (tid, comm))
+                return
+            index_of_phys = self.findRangeIndexPhys(memory.physical_address)
+            self.lgr.debug('readHap tid:%s comm %s, but we are %s physical 0x%x index_of_phys %s start %s op_type: %d cycle: 0x%x' % (tid, comm, self.comm, memory.physical_address, index_of_phys, self.start[index_of_phys], op_type, self.cpu.cycles))
+        
+            if self.cpu.cycles == self.prev_cycle:
+                self.lgr.debug('readHap same cycle as previous, bail')
+                return
           
             if self.start[index] is None:
                 latest_index = self.findRangeIndexPhys(memory.physical_address)
@@ -4444,14 +4461,25 @@ class DataWatch():
                     self.lgr.debug('readHap index %d not in self.linear_breaks comm is %s  self.comm %s phys mem hit 0x%x' % (index, comm, self.comm, memory.physical_address))
                     if self.data_watch_manager is None:
                         self.data_watch_manager = dataWatchManager.DataWatchManager(self.top, self, self.cpu, self.cell_name, self.page_size, 
-                        self.context_manager, self.mem_utils, self.task_utils, self.rev_to_call, self.param, self.run_from_snap, self.backstop, 
-                        self.compat32, self.comp_dict, self.so_map, self.lgr)
+                                    self.context_manager, self.mem_utils, self.task_utils, self.rev_to_call, self.param, self.run_from_snap, self.backstop, 
+                                    self.compat32, self.comp_dict, self.so_map, self.reverse_mgr, self.lgr)
                     if self.data_watch_manager.failedCreate():
                         self.data_watch_manager = None
                         self.lgr.debug('readHap comm %s, but we are %s and create new data watch failed,, bail' % (comm, self.comm))
+                        self.failed_comm_list.append(comm)
+                        if index_of_phys < len(self.start):
+                            if self.start[index_of_phys] is not None:
+                                self.lgr.debug('readHap record wrong comm')
+                                msg = 'Read from buffer 0x%x %d bytes' % (self.start[index_of_phys], memory.size)
+                                self.watchMarks.mscMark('Other process', memory.physical_address, msg)
+                            else:
+                                self.lgr.debug('readHap start[%d] is none' % index_of_phys)
+                        else:    
+                            self.lgr.debug('readHap index %d not in start' % index_of_phys)
                     else:     
                         self.recordOtherProcRead(memory.physical_address, memory.size, addr, index, comm, tid, op_type)
                         self.lgr.debug('readHap comm %s, but we are %s, bail' % (comm, self.comm))
+                        self.prev_cycle = self.cpu.cycles
                     return
                 else:
                     self.lgr.debug('readHap comm %s, but we are %s, TBD is a linear break????' % (comm, self.comm))
@@ -5086,7 +5114,7 @@ class DataWatch():
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[index] = None
                     if start < addr:
-                        newlen = addr - start + 1
+                        newlen = addr - start 
                         if newlen > 0:
                             self.lgr.debug('dataWatch rmSubRange adding new range start 0x%x len %x' % (start, newlen))
                             self.setRange(start, newlen, no_extend=True)
