@@ -113,7 +113,6 @@ class reverseToCall():
             self.is_monitor_running = is_monitor_running
             self.taint = False
             self.bookmarks = bookmarks
-            self.previous_eip = None
             self.step_into = None
             self.jump_stop_hap = None
             self.page_faults = None
@@ -525,19 +524,15 @@ class reverseToCall():
             self.lgr.debug('tryOneStopped, back one did not work, starting at %x' % eip)
             self.stop_hap = self.top.RES_add_stop_callback(self.stoppedReverseToCall, my_args)
             self.lgr.debug('tryOneStopped, added stop hap')
-            if self.previous_eip is not None and eip != self.previous_eip and cpl > 0:
-                self.lgr.debug('tryOneStopped, prev %x not equal eip %x, assume syscall, set break on prev and rev' % (self.previous_eip, eip))
-                self.setOneBreak(self.previous_eip, self.cpu)
-            else: 
-                self.uncall = False
-                self.pageTableBreaks(False)
-                self.lgr.debug('tryOneStopped, set break range')
+            self.uncall = False
+            self.pageTableBreaks(False)
+            self.lgr.debug('tryOneStopped, set break range')
             SIM_run_alone(self.reverse_mgr.reverse, None)
             #self.lgr.debug('reverseToCall, did reverse-step-instruction')
             self.lgr.debug('tryOneStopped, did reverse')
 
         
-    def doRevToCall(self, step_into, prev=None):
+    def doRevToCall(self, step_into):
         self.noWatchSysenter()
         '''
         Run backwards.  
@@ -553,7 +548,6 @@ class reverseToCall():
         eip = self.top.getEIP(self.cpu)
         my_args = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
         self.lgr.debug('reverseToCall doRevtoCall, got my_args ')
-        self.previous_eip = prev
         self.tryBackOne(my_args)
         self.lgr.debug('reservseToCall, back from tryBackOne')
 
