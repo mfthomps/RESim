@@ -5126,7 +5126,8 @@ class DataWatch():
                         new_start = addr + trans_size
                     elif start == addr and trans_size < length:
                         new_start = addr+trans_size
-                    self.lgr.debug('dataWatch rmSubrange new_start 0x%x end 0x%x' % (new_start, end)) 
+                    if new_start is not None:
+                        self.lgr.debug('dataWatch rmSubrange new_start 0x%x end 0x%x' % (new_start, end)) 
                     if new_start is not None and new_start < end:
                         newlen = end - new_start + 1
                         if newlen > 0:
