@@ -4517,9 +4517,11 @@ class GenMonitor():
 
     def notRunning(self, quiet=False):
         status = self.is_monitor_running.isRunning()
+        self.lgr.debug('notRunning status %r' % status)
         if status:   
             if not quiet:
                 print('Was running, set to not running')
+            self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
