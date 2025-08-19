@@ -35,6 +35,7 @@ import pageUtils
 import w7Params
 import taskUtils
 import winSocket
+import commMap
 THREAD_STATE_INITIALIZED = 0
 THREAD_STATE_READY = 1
 THREAD_STATE_RUNNING = 2
@@ -63,7 +64,7 @@ class WinTaskUtils():
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
     PEB_ADDR = 0x338
-    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr, root_prefix=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -93,6 +94,7 @@ class WinTaskUtils():
         else:
             self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
             return
+        self.comm_map = commMap.CommMap(root_prefix, lgr) 
         self.gui_call_map = {}
         self.gui_call_num_map = {}
         w7GUImapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
@@ -948,3 +950,6 @@ class WinTaskUtils():
     def progComm(self, prog_string):
         prog_comm = os.path.basename(prog_string)[:self.commSize()]
         return prog_comm
+
+    def commMatch(self, comm1, comm2):
+        return self.comm_map.commMatch(comm1, comm2)
