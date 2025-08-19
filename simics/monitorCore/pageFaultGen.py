@@ -168,13 +168,16 @@ class PageFaultGen():
         self.ptable_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.ptableWriteHap, prec, self.ptable_break)
   
     def hapAlone(self, prec):
+       
+        if self.top.isRunning():
+            self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, prec)
+            self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
+            self.top.undoDebug(None)
+            SIM_break_simulation('SEGV, task rec for %s (%s) modified mem reference was 0x%x' % (prec.tid, prec.comm, prec.cr2))
+        else:
+            self.lgr.debug('pageFaultGen hapAlone already stopped')
         self.top.removeDebugBreaks(keep_coverage=False)
         self.top.stopTrackIO(immediate=True)
-       
-        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, prec)
-        self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
-        self.top.undoDebug(None)
-        SIM_break_simulation('SEGV, task rec for %s (%s) modified mem reference was 0x%x' % (prec.tid, prec.comm, prec.cr2))
  
     def pageFaultHapPPC32(self, compat32, third, forth, memory):
         reg_num = self.cpu.iface.int_register.get_number("msr")
