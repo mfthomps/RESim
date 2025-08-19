@@ -32,6 +32,7 @@ import osUtils
 import memUtils
 import syscallNumbers
 import traceback
+import json
 LIST_POISON2 = object()
 def stringFromFrame(frame):
     retval = None
@@ -100,7 +101,7 @@ class TaskStruct(object):
 
 COMM_SIZE = 15
 class TaskUtils():
-    def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr, root_prefix = None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -115,6 +116,13 @@ class TaskUtils():
 
         self.ts_cache = None
         self.ts_cache_cycle = None
+        self.comm_map = {}
+        if root_prefix is not None:
+             analysis_prefix = root_prefix.replace('images', 'analysis')
+             comm_map_file = analysis_prefix+'.comm_map'
+             if os.path.isfile(comm_map_file):
+                 self.comm_map = json.load(open(comm_map_file))
+                 self.lgr.debug('taskUtils loaded comm_map from %s' % comm_map_file)
   
         self.lgr.debug('TaskUtils init kernel base 0x%x' % param.kernel_base)
         
@@ -1343,3 +1351,23 @@ class TaskUtils():
     def progComm(self, prog_string):
         prog_comm = os.path.basename(prog_string)[:self.commSize()]
         return prog_comm
+
+    def commMatch(self, comm1, comm2):
+        if comm1 == comm2:
+            return True
+        comm1_as = None
+        comm2_as = None
+        #self.lgr.debug('check %s against %s' % (comm1, comm2))
+        if comm1 in self.comm_map: 
+            #self.lgr.debug('comm1 %s in map as %s' % (comm1, self.comm_map[comm1]))
+            if self.comm_map[comm1] == comm2:
+                return True
+            comm1_as = self.comm_map[comm1]
+        if comm2 in self.comm_map:
+            #self.lgr.debug('comm2 %s in map as %s' % (comm2, self.comm_map[comm2]))
+            if self.comm_map[comm2] == comm1:
+                return True
+            comm2_as = self.comm_map[comm2]
+        if comm1_as is not None and comm1_as == comm2_as:
+            return True
+        return False

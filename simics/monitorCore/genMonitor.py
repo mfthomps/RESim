@@ -1006,8 +1006,9 @@ class GenMonitor():
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
+                    root_prefix = self.comp_dict[cell_name]['RESIM_ROOT_PREFIX']
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
@@ -1500,6 +1501,7 @@ class GenMonitor():
             self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
 
     def setPathToProg(self, tid):
+        ''' Find the prog name for the tid, which may diverge from comm due to renaming  NOTE may set self.full_path '''
         local_path = self.soMap[self.target].getLocalPath(tid)
         if local_path is None:
             prog_name = self.getProgName(tid)
@@ -1531,6 +1533,7 @@ class GenMonitor():
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
+            self.lgr.debug('debug tid:%s (%s)' % (tid, comm))
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
@@ -1604,7 +1607,7 @@ class GenMonitor():
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
                     if load_info is not None and load_info.addr is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
-                        self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.lgr)
+                        self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.task_utils[self.target], self.lgr)
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
                             offset = load_info.addr - image_base
@@ -2365,34 +2368,14 @@ class GenMonitor():
     def revStepInto(self):
         self.reverseToCallInstruction(True)
  
-    def reverseToCallInstruction(self, step_into, prev=None):
+    def reverseToCallInstruction(self, step_into):
         if self.reverseEnabled():
             dum, cpu = self.context_manager[self.target].getDebugTid() 
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
             #self.context_manager[self.target].showHaps()
-            if prev is None:
-                eip = self.getEIP(cpu)
-                if cpu.architecture.startswith('arm') or cpu.architecture == 'ppc32':
-                    prev = eip - 4 
-                else:
-                    fun_addr = self.fun_mgr.getFun(eip)
-                    self.lgr.debug('reverseToCallInstruction prev was none eip 0x%x fun_addr %s' % (eip, fun_addr))
-                    if fun_addr is not None:
-                        prev = self.disassembler.getPrevInstruction(eip, fun_addr)
-                        if prev is None:
-                            self.lgr.debug('reverseToCallInstruction prev still none')
-            if prev is not None:
-                instruct = SIM_disassemble_address(cpu, prev, 1, 0)
-                self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
-                if resimUtils.isSysEnter(instruct[1]) or (not step_into and resimUtils.isCall(cpu, instruct[1])):
-                    self.revToAddr(prev)
-                else:
-                    self.rev_to_call[self.target].doRevToCall(step_into, prev)
-            else:
-                self.lgr.debug('reverseToCallInstruction prev is none')
-                self.rev_to_call[self.target].doRevToCall(step_into, prev)
+            self.rev_to_call[self.target].doRevToCall(step_into)
             self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
             print('reverse execution disabled')
