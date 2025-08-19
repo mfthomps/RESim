@@ -11,6 +11,13 @@ import resimUtils
 import regFu
 import ida_kernwin
 no_rev = 'reverse execution disabled'
+def testBit(int_value, bit):
+    mask = 1 << bit
+    result = int_value & mask
+    if result == 0:
+        return 0
+    else:
+        return 1
 class IdaSIM():
     def __init__(self, stack_trace, bookmark_view, data_watch, branch_not_taken, write_watch, kernel_base, reg_list):
         self.stack_trace = stack_trace
@@ -35,6 +42,20 @@ class IdaSIM():
         else:
             self.PC='eip'
             self.SP='esp'
+
+    def isKernel(self, eip):
+        retval = False
+        if new_eip >= self.kernel_base:
+            retval = True
+        else:
+            proc_info = idaapi.get_inf_structure()
+            if proc_info.procname == 'PPC':
+                # bit 4 of msr is clear if in supervisor
+                msr = idaversion.get_reg_value('MSR')
+                if not testBit(msr, 4):
+                    print('In Supervisor')
+                    retval = True
+        return retval
 
     def getOrigAnalysis(self):
         return self.origAnalysis
@@ -133,17 +154,9 @@ class IdaSIM():
     def doRevStepOver(self):
         #print 'in doRevStepOver'
         curAddr = idaversion.get_reg_value(self.PC)
-        prev_eip = idaversion.prev_head(curAddr)
-        eip = None
-        #simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
-        print('doRevStepOver prev_eip 0x%x' % prev_eip) 
-        if prev_eip == idaapi.BADADDR:
-            prev_eip = None
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
-        else:
-            #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False, prev=0x%x)");' % prev_eip)
+        simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(False)");')
         print('doRevStepOver %s' % simicsString) 
+        eip = None
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
             self.signalClient()
@@ -156,14 +169,6 @@ class IdaSIM():
         prev_eip = idaversion.prev_head(curAddr)
         eip = None
         simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True)");')
-        '''
-        if prev_eip == idaapi.BADADDR:
-            prev_eip = None
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True)");')
-        else:
-            #print('cur is 0x%x prev is 0x%x' % (curAddr, prev_eip))
-            simicsString = gdbProt.Evalx('SendGDBMonitor("@cgc.reverseToCallInstruction(True, prev=0x%x)");' % prev_eip)
-        '''
         if self.checkNoRev(simicsString):
             eip = gdbProt.getEIPWhenStopped()
             self.signalClient()
