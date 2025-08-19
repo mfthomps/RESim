@@ -736,9 +736,10 @@ class Syscall():
         return frame
 
     def stopTraceAlone(self, dumb):
-        #self.lgr.debug('stopTraceAlone')
+        self.lgr.debug('syscall stopTraceAlone name %s' % self.name)
         if self.stop_hap is not None:
             self.top.RES_delete_stop_hap(self.stop_hap)
+            self.lgr.debug('syscall stopTraceAlone deleted stop hap')
             self.stop_hap = None
 
         #self.lgr.debug('stopTraceAlone2')
@@ -753,14 +754,16 @@ class Syscall():
 
 
     def stopTrace(self, immediate=False):
-        self.lgr.debug('syscall stopTrace syscall name %s call_list %s immediat: %r' % (self.name, str(self.call_list), immediate))
+        self.lgr.debug('syscall stopTrace syscall name %s call_list %s immediate: %r' % (self.name, str(self.call_list), immediate))
         proc_copy = list(self.proc_hap)
         for ph in proc_copy:
             #self.lgr.debug('syscall stopTrace, delete self.proc_hap %d' % ph)
             self.context_manager.genDeleteHap(ph, immediate=immediate)
             self.proc_hap.remove(ph)
-
-        SIM_run_alone(self.stopTraceAlone, None)
+        if immediate:
+            self.stopTraceAlone(None)
+        else:
+            SIM_run_alone(self.stopTraceAlone, None)
         if self.top is not None and not self.top.remainingCallTraces(cell_name=self.cell_name):
             self.sharedSyscall.stopTrace()
 
@@ -2472,6 +2475,7 @@ class Syscall():
              a break in the simulation
         '''
         if self.stop_hap is not None:
+            self.top.notRunning()
             for param in self.rm_param_queue: 
                 self.rmCallParamName(param)
             self.lgr.debug('syscall stopHap removed %d queued call params' % len(self.rm_param_queue))
@@ -2925,7 +2929,7 @@ class Syscall():
                     self.lgr.debug('syscallHap tid:%s skip exitHap for tar' % tid)
 
 
-    def handleExit(self, tid, ida_msg, killed=False, retain_so=False, exit_group=False):
+    def handleExit(self, tid, ida_msg, killed=False, retain_so=False, exit_group=False, stop=True):
             if self.traceProcs is not None:
                 self.traceProcs.exit(tid)
             if killed:
@@ -2969,7 +2973,7 @@ class Syscall():
                 #if self.top.pendingFault():
                 if self.top.hasPendingPageFault(tid):
                     self.lgr.debug('syscall handleExit killed or group exit %s HAD pending fault, do something!' % tid)
-                if not self.context_manager.checkExitCallback():
+                if not self.context_manager.checkExitCallback() and stop:
                     SIM_run_alone(self.stopAlone, 'exit or exit_group tid:%s' % tid)
             else:
                 #if self.top.pendingFault():
