@@ -10,7 +10,7 @@ trace = sys.argv[1]
 #   something like 326bcae083--prctl option: SET_NAME changed comm to: new_dog tid:1415 (dog) cycle:0x326bcae083
 
 def main():
-    parser = argparse.ArgumentParser(prog='find_prog_rename', description='Search a trace for SET_NAME and create a json map of new names to original names.')
+    parser = argparse.ArgumentParser(prog='findProgRename', description='Search a trace for SET_NAME and create a json map of new names to original names.')
     parser.add_argument('ini', action='store', help='The ini file')
     parser.add_argument('trace', action='store', help='The trace file')
     args = parser.parse_args()
