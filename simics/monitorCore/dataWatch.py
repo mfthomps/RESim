@@ -1316,10 +1316,11 @@ class DataWatch():
         else:
             # multiple watch buffers in the copy
             self.lgr.debug('dataWatch handleMemcpyReturn %d multi buffers' % len(self.mem_something.multi_index_list))
-            for index in self.mem_something.multi_index_list:
-                src = self.start[index]
-                length = self.length[index]
-                offset = src - self.mem_something.start
+            #for index in self.mem_something.multi_index_list:
+            for src, length in self.mem_something.multi_index_list:
+                #src = self.start[index]
+                #length = self.length[index]
+                offset = src - self.mem_something.src
                 dest = self.mem_something.dest + offset
                 mark = self.watchMarks.copy(src, dest, length, src, Sim_Trans_Load)
                 self.setRange(dest, length, None, watch_mark=mark) 
@@ -2359,20 +2360,24 @@ class DataWatch():
         Are there multiple watch buffers within the range?
         '''
         retval = False
-        # we only look for complete inclusion, ignore intersections.
-        index_list = []
+        # use getIntersect to handle intersections of buffers
+        multi_list = []
         end = src + length - 1
         self.lgr.debug('dataWatch multiBuffer look for multiple buffers between 0x%x and 0x%x' % (src, end))
         for index in range(len(self.start)):
             if self.start[index] is not None:
-                if self.start[index] >= src: 
-                    this_end = self.start[index] + self.length[index]
-                    if this_end <= end:
-                        index_list.append(index)
-                        self.lgr.debug('dataWatch multiBuffer added index %d, start 0x%x' % (index, self.start[index]))
-        if len(index_list) > 1:
+                inter_start, inter_length = self.getIntersect(self.start[index], self.length[index], src, length)
+                #if self.start[index] >= src: 
+                #    this_end = self.start[index] + self.length[index]
+                #    #if this_end <= end:
+                #    if self.start[index] <= end:
+                #        index_list.append(index)
+                if inter_start is not None:
+                    multi_list.append((inter_start, inter_length))
+                    self.lgr.debug('dataWatch multiBuffer added from index %d start 0x%x len %d' % (index, inter_start, inter_length))
+        if len(multi_list) > 1:
             retval = True
-            self.mem_something.multi_index_list = list(index_list)
+            self.mem_something.multi_index_list = list(multi_list)
             self.mem_something.start = src
             self.mem_something.dest = dest
             # set these just to keep sanity check from failing in getMemParams
@@ -5121,6 +5126,7 @@ class DataWatch():
                         new_start = addr + trans_size
                     elif start == addr and trans_size < length:
                         new_start = addr+trans_size
+                    self.lgr.debug('dataWatch rmSubrange new_start 0x%x end 0x%x' % (new_start, end)) 
                     if new_start is not None and new_start < end:
                         newlen = end - new_start + 1
                         if newlen > 0:
