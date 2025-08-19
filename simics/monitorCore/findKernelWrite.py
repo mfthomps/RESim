@@ -581,10 +581,12 @@ class findKernelWrite():
             range_msg = ''
             if range_start is not None:
                 offset = self.addr - range_start
-                range_msg = ' And that is %d bytes from buffer starting at 0x%x' % (offset, range_start)
-            ida_msg = "Content of 0x%x was modified prior to enabling reverse execution. %s" % (self.addr, range_msg)
+                ida_msg = ' Content of 0x%x found %d bytes from buffer starting at 0x%x' % (self.addr, offset, range_start)
+            else:
+                ida_msg = "Content of 0x%x was modified prior to enabling reverse execution. %s" % (self.addr, range_msg)
             self.lgr.debug('findKernelWrite thinkWeWrote '+ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
+            print(ida_msg)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
