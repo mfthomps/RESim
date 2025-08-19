@@ -2,7 +2,8 @@
 #
 # Build a dictionary of executable program paths and word sizes keyed by basename.
 # First uses find to create an exec_list.txt file.  And then uses that to build the dictionary
-# The dictionary will only include entries for unique basenames.  The dictionary is an optimization
+# If multiple paths have the same base, each are printed and returned in a list.
+# The dictionary is an optimization
 # to avoid searching for windows paths that correspond to some comm that we find executing.
 #
 import os
@@ -24,11 +25,13 @@ def buildExecDict(exec_list_file, ini, root_dir, lgr):
                 else:
                     path = line.strip()
                 base = os.path.basename(path)
-                if base in exec_map:
-                    lgr.error('***** Collision on base %s, was %s new %s' % (base, exec_map[base]['path'], path))
-                    if base not in collisions:
-                        collisions.append(base)
-                    continue
+                #if base in exec_map:
+                #    lgr.error('***** Collision on base %s, was %s new %s' % (base, exec_map[base]['path'], path))
+                #    if base not in collisions:
+                #        collisions.append(base)
+                #    continue
+                if base not in exec_map:
+                    exec_map[base] = []
                 full_path = os.path.join(root_dir, path)
                 size, machine, image_base, addr_of_text = winProg.getSizeAndMachine(full_path, lgr)
                 if machine is None:
@@ -42,9 +45,9 @@ def buildExecDict(exec_list_file, ini, root_dir, lgr):
                 entry['path'] = path
                 entry['base'] = base
                 entry['word_size'] = word_size
-                exec_map[base] = entry
-        for remove in collisions:
-            del exec_map[remove]
+                exec_map[base].append(entry)
+        #for remove in collisions:
+        #    del exec_map[remove]
         parent = os.path.dirname(exec_list_file)
         outfile = os.path.join(parent, 'exec_dict.json')
         exec_json = json.dumps(exec_map)
@@ -63,7 +66,8 @@ def buildList(root_dir, exec_list_file):
         cmd = 'find ./ -name *.exe -type f | grep -v "/winsxs/" >%s ' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)
-        cmd = 'find . -name *.dll | grep -vi windows | grep -vi microsoft | grep -v -i temp >>%s' % (exec_list_file)
+        #cmd = 'find . -name *.dll | grep -vi windows | grep -vi microsoft | grep -v -i temp >>%s' % (exec_list_file)
+        cmd = 'find . -name *.dll | grep -v -i temp | grep -v "winsxs/" >>%s' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)
     else:
@@ -78,6 +82,5 @@ def main():
     exec_list_file = resimUtils.getExecList(args.ini, lgr=lgr)
     buildList(root_dir, exec_list_file)
     buildExecDict(exec_list_file, args.ini, root_dir, lgr)
-    print('Program names having collisions were not added to the dictionary.  Use qualified path names to name those.')
 if __name__ == '__main__':
     sys.exit(main())

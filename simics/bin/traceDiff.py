@@ -57,6 +57,9 @@ class getter():
             ok = False
             while not ok:
                 v, p = getVP(line)
+                if (self.index+1) >= len(self.lines):
+                    print('index %d plus 1 exceeds number of lines' % self.index)
+                    break
                 next_line = self.lines[self.index+1]
                 if not next_line.startswith('inst:') and not next_line.startswith('data:'):
                     self.index = self.index+1
@@ -110,9 +113,15 @@ def main():
         while rest1 == rest2 or (args.divergence and not ('ins' in line1 or 'ins' in line2)):
             #print('get1')
             line1 = get1.nextLine()
+            if line1 is None:
+                print('No more lines in first file')
+                break
             #print('\tline1 %s' % line1)
             #print('get2')
             line2 = get2.nextLine()
+            if line2 is None:
+                print('No more lines in second file')
+                break
             if args.divergence:
                 #print('is divert')
                 line1 = rmPhys(line1)

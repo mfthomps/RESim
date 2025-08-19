@@ -85,6 +85,11 @@ class RecordEntry():
                     self.lgr.debug('recordEntry watchSysenter set arm64 linear break at 0x%x' % (self.param.arm64_entry))
                     enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, 1, 0)
                     self.sysenter64_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'recordEntry sysenter')
+            elif self.cpu.architecture == ('ppc32'):
+                if self.param.ppc32_entry is not None:
+                    self.lgr.debug('recordEntry watchSysenter set linear break at 0x%x' % (self.param.ppc32_entry))
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.ppc32_entry, 1, 0)
+                    self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'recordEntry sysenter')
             else:
                 if self.param.sysenter is not None and self.param.sys_entry is not None:
                     self.lgr.debug('recordEntry watchSysenter set linear breaks at 0x%x and 0x%x' % (self.param.sysenter, self.param.sys_entry))
@@ -102,7 +107,7 @@ class RecordEntry():
 
     def sysenterHap(self, prec, the_object, the_break, memory):
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        #self.lgr.debug('recordEntry sysenterHap tid:%s' % tid)
+        self.lgr.debug('recordEntry sysenterHap tid:%s cycle: 0x%x' % (tid, self.cpu.cycles))
         if tid is not None:
             if True:
                 cycles = self.cpu.cycles
@@ -176,11 +181,12 @@ class RecordEntry():
         ret_cycles = None
         if self.cpu is not None:
             cur_cycles = self.cpu.cycles
-            self.lgr.debug('getRecentCycleFrame tid %s' % tid)
+            #self.lgr.debug('getRecentCycleFrame tid %s' % tid)
             if tid in self.recent_cycle:
                 ret_cycles, frame = self.recent_cycle[tid]
             else:
-                self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+                #self.lgr.debug('getRecentCycleFrame tid %s not there' % tid)
+                pass
         else:
             self.lgr.debug('getRecentCycleFrame cpu was None')
         return frame, ret_cycles

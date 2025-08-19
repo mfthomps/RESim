@@ -1,0 +1,1 @@
+cmd_drivers/net/ethernet/qsp/built-in.o :=  /home/mike/qsp_buildroot/buildroot/output/host/usr/bin/ccache /home/mike/qsp_buildroot/buildroot/output/host/usr/bin/arm-none-linux-gnueabi-ld -EL   -r -o drivers/net/ethernet/qsp/built-in.o drivers/net/ethernet/qsp/qsp_main.o 

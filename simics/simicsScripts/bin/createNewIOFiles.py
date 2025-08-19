@@ -1,13 +1,15 @@
+#!/usr/bin/env python3
 import sys
-import regex as re
+import re
 import json
 import os
 import pickle
+import argparse
+import queueChecksums
 
 word_list = []
-outputdir = os.path.join(os.getcwd(),"new_iofiles")
 
-def create_new_iofiles(seedfile, watchmarkfile, add_count=0):
+def create_new_iofiles(seedfile, watchmarkfile, outputdir, out_parent, add_count=0, save_words=False, cksum_dict=None):
     '''
     Create new input files based on strcmp in watchmark file or in trackio files.
     If there's a strcmp, replace the input string with the expected string
@@ -37,9 +39,11 @@ def create_new_iofiles(seedfile, watchmarkfile, add_count=0):
     except:
         pass
     for i in range(len(newword_list)-1): 
-        create_file(i, seedfile, inword_list[i], newword_list[i], add_count)
+        create_file(i, seedfile, inword_list[i], newword_list[i], outputdir, out_parent, add_count=add_count, cksum_dict=cksum_dict)
     
     infile.close()
+    if save_words:
+        save_word_list(out_parent)
 
 def check_duplicates(inlist,newlist):
     '''
@@ -65,13 +69,19 @@ def find_json_field(data, field_name, results):
     if isinstance(data, dict):
         for key, value in data.items():
             if key == field_name:
-                results.append(value.encode('utf-8'))
+                if len(value) > 0:
+                    results.append(value.encode('utf-8'))
             else:
                 find_json_field(value, field_name, results)  # Recursively search in the value
     elif isinstance(data, list):  # If it's a list
         for item in data:
             find_json_field(item, field_name, results)  # Recursively search each item
 
+def isStrCmp(line):
+    if 'strcmp' in line or 'strncmp' in line or 'strcasecmp' in line or 'strncasecmp' in line:
+        return True
+    else:
+        return False
 
 def get_words(infile):
     '''
@@ -80,13 +90,15 @@ def get_words(infile):
     inword_list = []
     newword_list = [] 
     for line in infile:
-        if "strcmp" in line:
+        if isStrCmp(line):
             space_split = line.split(' ')
             # Input string is after third space
             inword = space_split[3]
             # Expected string comes after ' to '
             to_split = line.split(' to ')
             newword = to_split[1].split(' ')[0]
+            if len(inword) == 0 or len(newword) == 0:
+                continue
             inword_list.append(inword.encode('utf-8'))
             newword_list.append(newword.encode('utf-8'))                 
         else:
@@ -110,11 +122,13 @@ def check_comparison(inwordlist,newwordlist, seedfile):
     check_seedf1.close()
     return updated_inwordlist, updated_newwordlist
 
-def create_file(j, seedfile, inword, newword, add_count=1):
+def create_file(j, seedfile, inword, newword, outputdir, out_parent, add_count=1, cksum_dict=None):
     '''
     Create new file based on original iofile. Substitute inword with newword.
+    May delete the file if found not no substitutions are made.
     '''
     # Create new seedfile
+    print('outputdir is %s' % outputdir)
     outfile_name = f"{outputdir}/track{add_count}_seedfile{j}.io"    
     # Counter to check if an original word isn't found in the seedfile 
     i=0
@@ -127,27 +141,37 @@ def create_file(j, seedfile, inword, newword, add_count=1):
                 i+=1
         seedf.close()
     outputfile.close()
+
+    exception_file = os.path.join(out_parent, 'exception_file.txt')
     if i==0:
         # Write exception to file:
-        with open('exception_file.txt', 'ab') as errorfile:
+        with open(exception_file, 'ab') as errorfile:
             errorfile.write((b"Found a strcmp, but original word not found in io file.\n"))
             errorfile.write(b"Original word: " + inword + b"\n")
             errorfile.write(b"New word: " + newword + b"\n")
             errorfile.write(b"---------\n")
         # Delete file
         os.remove(outfile_name)
+    else:
+        this_cksum = queueChecksums.cksum(outfile_name)
+        if this_cksum in cksum_dict:
+            print('%s checksum collision, delete' % outfile_name)
+            os.remove(outfile_name)
+        else:
+            cksum_dict[this_cksum] = outfile_name
+      
 
-def multiple_watchmarkfiles(inputdir, iofile):
+def multiple_watchmarkfiles(inputdir, iofile, output_dir, out_parent):
     here = os.getcwd()
     file_list=[]
     file_path = os.path.join(here,inputdir)
     track_list = os.listdir(file_path)
     for track in track_list:
-        file_list.append(os.path.join(file_path,track))
+        file_list.append(os.path.join(file_path,track, output_dir))
 
     add_count = 0
     for track in file_list:
-        create_new_iofiles(iofile, track, str(add_count))
+        create_new_iofiles(iofile, track, output_dir, out_parent, add_count=str(add_count))
         add_count+=1
 
 def get_wordlist():
@@ -162,9 +186,9 @@ def get_wordlist():
     else:
         return
 
-def save_wordlist():
+def save_wordlist(out_parent):
     # Save the list to a JSON file
-    output_file = "word_list.pkl"
+    output_file = os.path.join(out_parent,"word_list.pkl")
     try:
         with open(output_file, 'wb') as f:
             pickle.dump(word_list, f)
@@ -172,28 +196,36 @@ def save_wordlist():
         print(f"An error occurred trying to save the word list: {e}")
 
 if __name__ == "__main__":
-    
-    if len(sys.argv)==3:
-        # Import word_list if it exists
-        get_wordlist()
-        
-        iofile = sys.argv[1]
-        arg2 = sys.argv[2]        
-        if os.path.isdir(arg2):
-            multiple_watchmarkfiles(arg2,iofile)            
-        elif os.path.isfile(arg2):
-            create_new_iofiles(iofile, arg2)
-        else:
-            print(f"'{arg2}' does not exist.")
-            sys.exit()
-        #Save word_list to file
-        save_wordlist()
-        
-        print("New files in dir '/new_iofiles'")
-        print("Potential errors in exception_file.txt.")    
-        print("List of new substitutions saved in word_list.pkl.")
-
-    elif len(sys.argv)<3:
-        print("Provide an iofile and a watchmark file/directory")
+    default_output = 'new_iofiles'
+    parser = argparse.ArgumentParser(prog='createNewIOFiles.py', description='Generate new IO files, e.g., for seeds, based on string compares found in watch marks.')
+    parser.add_argument('iofile', action='store', help='The original io file that generated the watch marks')
+    parser.add_argument('watchmarks', action='store', help='Either a single watch mark file, or the directory to one created from fuzzing output')
+    parser.add_argument('-o','--output_dir', action='store', default=default_output, help='Output directory')
+    parser.add_argument('-w', '--words', action='store_true', help='Dump words when done')
+    args = parser.parse_args()
+    if args.output_dir != default_output:
+        out_parent = os.path.dirname(args.output_dir)
     else:
-        print('Too many arguments')
+        out_parent = './'
+    
+    # Import word_list if it exists
+    get_wordlist()
+    outputdir = os.path.join(os.getcwd(),args.output_dir)
+        
+    if os.path.isdir(args.watchmarks):
+        multiple_watchmarkfiles(args.watchmarks,args.iofile, outputdir, out_parent)
+    elif os.path.isfile(args.watchmarks):
+        print('Create new for %s output dir %s' % (args.iofile, outputdir))
+        create_new_iofiles(args.iofile, args.watchmarks, outputdir, out_parent)
+    else:
+        print(f"'{args.watchmarks}' does not exist.")
+        sys.exit()
+    #Save word_list to file
+    save_wordlist(out_parent)
+    if args.words:
+        for w in word_list:
+            print(w)
+        
+    print("New files in dir %s" % args.output_dir)
+    print("Potential errors in exception_file.txt.")    
+    print("List of new substitutions saved in word_list.pkl.")

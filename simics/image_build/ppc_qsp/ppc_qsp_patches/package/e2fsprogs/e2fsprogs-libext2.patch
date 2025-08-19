@@ -1,0 +1,13 @@
+--- e2fsprogs_1.42.11/lib/ext2fs/tst_libext2fs.c.orig	2022-12-01 22:49:23.903957845 +0000
++++ e2fsprogs_1.42.11/lib/ext2fs/tst_libext2fs.c	2022-12-01 22:49:43.523957923 +0000
+@@ -28,9 +28,7 @@
+  * Hook in new commands into debugfs
+  * Override debugfs's prompt
+  */
+-const char *debug_prog_name = "tst_libext2fs";
+ extern ss_request_table libext2fs_cmds;
+-ss_request_table *extra_cmds = &libext2fs_cmds;
+ 
+ static int print_blocks_proc(ext2_filsys fs EXT2FS_ATTR((unused)),
+ 			     blk64_t *blocknr, e2_blkcnt_t blockcnt,
+

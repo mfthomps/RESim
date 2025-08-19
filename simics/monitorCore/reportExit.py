@@ -6,6 +6,7 @@ import glob
 import re
 import decode
 import decodeArm
+import decodePPC32
 import pageUtils
 import aflPath
 
@@ -35,8 +36,10 @@ class ReportExit():
             pass
         self.exit_report = None
         self.report_path = None
-        if self.cpu.architecture == 'arm':
+        if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
+        elif self.cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
         else:
             self.decode = decode
 

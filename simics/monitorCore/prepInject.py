@@ -64,7 +64,7 @@ class PrepInject():
 
 
     def prepInject(self, dumb=None, ignore_waiting=False):
-        ''' Use runToInput to find location of desired input call.  Set callback to instrument the call and return '''
+        ''' Use runToInput/runToIO to find location of desired input call.  Set callback to instrument the call and return '''
         self.lgr.debug('prepInject snap %s FD: %d (0x%x) commence: %s' % (self.snap_name, self.fd, self.fd, self.commence))
         ''' passing "cb_param" causes stop function to use parameter passed by the stop hap, which should be the callname '''
         self.top.stopWatchPageFaults()
@@ -84,11 +84,11 @@ class PrepInject():
         self.select_return_ip = self.top.getEIP(self.cpu)
         self.ret_cycle = self.cpu.cycles
         tid = self.top.getTID()
-        self.lgr.debug('instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
+        self.lgr.debug('prepInject instrumentSelect stepped to return IP: 0x%x tid:%s cycle is 0x%x' % (self.select_return_ip, tid, self.cpu.cycles))
         ''' return to the call to record that IP '''
         frame, cycle = self.top.getRecentEnterCycle()
         origin = self.top.getFirstCycle()
-        self.lgr.debug('instrument origin 0x%x recent call cycle 0x%x' % (origin, cycle))
+        self.lgr.debug('prepInject instrumentSelect origin 0x%x recent call cycle 0x%x' % (origin, cycle))
         if cycle <= origin:
             self.lgr.debug('prepInject instrumentSelect Entry into kernel is prior to first cycle, cannot record select_ip')
         else:
@@ -119,7 +119,7 @@ class PrepInject():
         #else:
         #    self.lgr.error('prepInject finishNoCall falled to get syscall ?')
 
-    def tidScheduled(self, dumb):
+    def tidScheduled(self, dumb=None):
         self.lgr.debug('prepInject tidScheduled')
         pinfo = self.top.pageInfo(self.exit_info.retval_addr, quiet=True)
         self.lgr.debug('%s' % pinfo.valueString())

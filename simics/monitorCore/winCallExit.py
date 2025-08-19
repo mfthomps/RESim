@@ -163,7 +163,7 @@ class WinCallExit():
                 trace_msg = trace_msg + ' fname_addr: 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                 self.lgr.debug('winCallExit %s' % (trace_msg))
                
-                if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
+                if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so'))):
                     self.lgr.debug('winCallExit adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                     self.soMap.addFile(exit_info.fname, fd, tid)
 
@@ -183,7 +183,7 @@ class WinCallExit():
                     trace_msg = trace_msg + ' fname_addr 0x%x fname: %s Handle: 0x%x' % (exit_info.fname_addr, exit_info.fname, fd)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
 
-                    if self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so')):
+                    if self.top.trackingThreads() and (self.soMap is not None and (exit_info.fname.lower().endswith('.nls') or exit_info.fname.lower().endswith('.dll') or exit_info.fname.lower().endswith('.so'))):
                         self.lgr.debug('adding fname: %s with fd: %d to tid:%s' % (exit_info.fname, fd, tid))
                         self.soMap.addFile(exit_info.fname, fd, tid)
         
@@ -418,7 +418,8 @@ class WinCallExit():
         trace_msg=trace_msg+'\n'
 
         if exit_info.matched_param is not None and exit_info.matched_param.break_simulation:
-            self.lgr.debug('winCallExit found matching call parameter %s' % str(exit_info.matched_param.match_param))
+            my_syscall = exit_info.syscall_instance
+            self.lgr.debug('winCallExit found matching call parameter %s async_was_ready %r my_syscall.name %s  matched_param.name %s)' % (str(exit_info.matched_param.match_param), async_was_ready, my_syscall.name, exit_info.matched_param.name))
             self.matching_exit_info = exit_info
             if  exit_info.asynch_handler is not None and exit_info.asynch_handler.trace_msg is not None:
                 trace_msg = exit_info.asynch_handler.trace_msg
@@ -427,13 +428,12 @@ class WinCallExit():
             self.lgr.debug(trace_msg)
             #self.lgr.debug('winCallExit found matching call parameters callnum %d name %s' % (exit_info.callnum, callname))
             #my_syscall = self.top.getSyscall(self.cell_name, callname)
-            my_syscall = exit_info.syscall_instance
             #async_waiting = False
             #if  exit_info.asynch_handler is not None and exit_info.asynch_handler.exit_info is not None:
             #    async_waiting = True
             #    self.lgr.debug('winCallExit think async still waiting so do not stop')
             #if not async_waiting and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
-            if async_was_ready and (not my_syscall.linger or (my_syscall.name == 'traceAll' and exit_info.matched_param.name.startswith('runTo'))):
+            if async_was_ready and (not my_syscall.linger or (my_syscall.name in ['traceAll', 'trackSO'] and exit_info.matched_param.name.startswith('runTo'))):
                 self.lgr.debug('winCallExit linger is false, call stopTrace')
                 self.stopTrace()
                 if my_syscall is None:
@@ -471,7 +471,7 @@ class WinCallExit():
             self.exit_info[eip] = {}
 
     def openCallParams(self, exit_info):
-            if exit_info.matched_param is not None and type(exit_info.matched_param.matched_param) is str:
+            if exit_info.matched_param is not None and type(exit_info.matched_param) is str:
                 self.lgr.debug('winCallExit openCallParams open check string %s against %s' % (exit_info.fname, exit_info.matched_param.match_param))
                 #if eax < 0 or exit_info.call_params.match_param not in exit_info.fname:
                 if exit_info.matched_param.match_param not in exit_info.fname:

@@ -51,7 +51,7 @@ def findBNTForFun(target, hits, pre_hits, fun_blocks, no_print, prog, prog_elf, 
                         before_read = ''
                         lgr.debug('findBNTForFun target %s bb_hit 0x%x has branch 0x%x not in hits show read marks: %r' % (target, bb_hit, branch, show_read_marks))
                         if show_read_marks:
-                            queue_list = findBB.findBB(target_prog, bb_hit, True, lgr=lgr, cover_list=cover_list, auto=auto) 
+                            queue_list = findBB.FindBB(target_prog, bb_hit, True, lgr=lgr, cover_list=cover_list, auto=auto) 
                             lgr.debug('findBNTForFun len of qlist for bb_hit 0x%x is %d' % (bb_hit, len(queue_list)))
                             least_packet = 100000
                             least_size = 100000

@@ -1,0 +1,13 @@
+Linux files for version 3.10 QSP platforms
+These are the files as they are to exist in the build directory after applying the patch.
+The purpose of this directory is to let us create the patch file for use in a rebuild.
+For example, after the linux 3.10 is pulled into the output/build/ directory:
+   cp -aR 3.10_patches /tmp/
+   cp -aR linux-3.10 /tmp
+   cd /tmp
+   cp -aR linux-3.10 linux-3.10_patched
+   cp -aR 3.10_patches/* linux-3.10_patched/
+   diff -ruN linux-3.10 linux-3.10_patched > patch_file.patch
+
+Then the patch_file copied via the qsp_buildroot.sh script so it gets
+applied during the build process.

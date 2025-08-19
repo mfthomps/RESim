@@ -614,7 +614,7 @@ class Win7CallParams():
             #SIM_break_simulation('fix this')
             return
         if memory.size <= 8:
-            new_value = SIM_get_mem_op_value_le(memory)
+            new_value = memUtils.memoryValue(self.cpu, memory)
         else:
             self.lgr.error('Simics error reading memory, size %d' % memory.size)
             new_value = 0

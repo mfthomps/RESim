@@ -49,14 +49,14 @@ def onedone(top):
             targetFD = int(targetFD_s)
     trace_all = False
     run = True
-    no_trace_dbg = False
+    trace = False
+    trace_all = False
     if trace_all_s is not None and trace_all_s.lower() == 'true':
         trace_all = True
-        no_trace_dbg = True
         run = False
 
     myinject = top.injectIO(path, save_json=outpath, callback=quit, go=False, only_thread=only_thread, no_page_faults=no_page_faults, 
-                      max_marks=max_marks, target=target, targetFD=targetFD, trace_all=trace_all, no_trace_dbg=no_trace_dbg, run=run)
+                      max_marks=max_marks, target=target, targetFD=targetFD, trace=trace, trace_all=trace_all, run=run)
     myinject.setExitCallback(reportExit)
     myinject.go()
     if trace_all:

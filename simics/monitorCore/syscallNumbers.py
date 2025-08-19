@@ -25,6 +25,7 @@ class SyscallNumbers():
                 self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
                 return
         else:
+            self.lgr.debug('syscallNumbers')
             if fpath.endswith('ia64.tbl'):
                 self.fromTbl(fpath)
             elif fpath.endswith('arm64.tbl'):
@@ -63,12 +64,16 @@ class SyscallNumbers():
                 self.lgr.error('%s' % str(self.callnums))
 
     def fromInclude(self, fpath):
+        self.lgr.debug('syscallNumbers from include %s' % fpath)
         hackvals = {}
         if not os.path.isfile(fpath):
             print('ERROR *** Could not find unistd file at %s ***' % fpath)
             return
+        hack_query_module = False
         with open(fpath) as fh:
             for line in fh:
+                if 'was sys_query_module' in line:
+                    hack_query_module = True
                 if '__NR_' in line:
                     parts = line.split()
                     if parts[0] != '#define':
@@ -101,4 +106,9 @@ class SyscallNumbers():
                     self.syscalls[callnum] = nr
                     self.callnums[nr] = callnum
                      
+        if hack_query_module:
+            # some libcs are broken
+            self.lgr.debug('syscallNumbers hacking call 167 to be poll and 186 to be sendfile')
+            self.syscalls[167] = 'poll'
+            self.syscalls[186] = 'sendfile'
 

@@ -1,0 +1,5 @@
+@io_dir = os.getenv('RESIM_IO_DIR')
+@target = os.getenv('RESIM_TARGET_PROG')
+@target_fd = int(os.getenv('RESIM_TARGET_FD'))
+@cgc.playAFL(io_dir, target=target, targetFD=target_fd)
+@cgc.quit()

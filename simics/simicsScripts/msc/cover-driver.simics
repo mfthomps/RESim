@@ -1,0 +1,7 @@
+$cycles_s = (env RUN_CYCLES)
+$cycles = (atoi $cycles_s)
+@cgc.debugSnap()
+@cgc.mapCoverage()
+c $cycles unit=cycles
+@cgc.saveHits('/tmp/tri.hits')
+@cgc.quit()

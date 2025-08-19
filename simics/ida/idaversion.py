@@ -63,10 +63,14 @@ def getHighlight():
     return retval
 
 def get_reg_value(reg):
+    retval = None
     if idaapi.IDA_SDK_VERSION <= 699:
         retval = idc.GetRegValue(reg)
     else:
-        retval = idc.get_reg_value(reg)
+        try:
+            retval = idc.get_reg_value(reg)
+        except:
+            print('ERROR  failed getting value for reg %s' % reg)
     return retval
 
 def getRegVarValue(reg):
@@ -287,7 +291,10 @@ def set_reg_value(reg, value):
     if idaapi.IDA_SDK_VERSION <= 699:
         idc.SetRegValue(reg, value)
     else:
-        idc.set_reg_value(value, reg)
+        try:
+            idc.set_reg_value(value, reg)
+        except:
+            print('ERROR setting reg %s' % reg)
 
 def get_screen_ea():
     if idaapi.IDA_SDK_VERSION <= 699:

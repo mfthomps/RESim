@@ -11,6 +11,9 @@ import winProg
 import ntpath
 import targetFS
 import winTargetFS
+import decode
+import decodeArm
+import decodePPC32
 try:
     import importlib
 except:
@@ -169,6 +172,7 @@ def getPacketFilter(packet_filter, lgr):
 
 def getBasicBlocks(prog, ini=None, lgr=None, root_prefix=None, os_type=None):
     blocks = None
+    lgr.debug('getBasicBlocks prog %s' % prog)
     analysis_path = getAnalysisPath(ini, prog, root_prefix=root_prefix, lgr=lgr)
     #print('analysis_path at %s' % analysis_path)
     if lgr is not None:
@@ -375,11 +379,11 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
     if '/' in path:
         parts = path.split('/')
         for p in parts[:-1]:
-            #lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
+            lgr.debug('getfileInsensitve part %s cur_dir %s' % (p, cur_dir))
             dlist = [ name for name in os.listdir(cur_dir) if os.path.isdir(os.path.join(cur_dir, name)) ]
 
             for d in dlist:
-                #lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
+                lgr.debug('getfileInsensitive does %s match %s' % (d.upper(), p.upper()))
                 if '~' in p:
                     tilda_parts = p.split('~')
                     if d.lower().startswith(tilda_parts[0].lower()): 
@@ -391,7 +395,7 @@ def getfileInsensitive(path, root_prefix, root_subdirs, lgr, force_look=False):
                     cur_dir = os.path.join(cur_dir, d)
                     break
         p = parts[-1]
-        #lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
+        lgr.debug('getfileInsensitve cur_dir %s last part %s' % (cur_dir, p))
         flist = os.listdir(cur_dir)
         for f in flist:
             if f.upper() == p.upper():
@@ -462,6 +466,7 @@ def soMatch(fname, cache, lgr):
     base = os.path.basename(fname).upper()
     for item in cache:
         upper_item = item.upper()
+        #lgr.debug('soMatch upper_item %s' % upper_item)
         if upper_item.startswith(base) and upper_item.endswith('.FUNS'):
             if lgr  is not None:
                 #lgr.debug('resimUtils soMatch found match %s' % item)
@@ -489,17 +494,31 @@ def getWinPath(path, root_prefix, lgr=None):
         path = path[1:]
     return path
 
-def getRootTopDir(root_prefix):
+def getAnalysisRootTopDir(root_prefix):
     analysis_path = os.getenv('IDA_ANALYSIS')
     if analysis_path is None:
-        lgr.error('resimUtils getAnalysis path IDA_ANALYSIS not defined')
+        lgr.error('resimUtils getAnalysisRootTopDir path IDA_ANALYSIS not defined')
         return None
     root_dir = os.path.basename(root_prefix)
     root_parent = os.path.basename(os.path.dirname(root_prefix))
     top_dir = os.path.join(analysis_path, root_parent, root_dir)
     return top_dir
 
+def getFunListCache(ini, root_prefix=None):
+    if root_prefix is None: 
+        root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
+    top_dir = getAnalysisRootTopDir(root_prefix)
+    fun_list_cache = findListFrom('*.funs', top_dir)
+    return fun_list_cache
+
 def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None):
+    '''
+    Given the path of a program, return the path to the program analysis.
+    The path may be full, starting with the root prefix.  And the path
+    may include a symlink, in which case we need to get the absolute path
+    per the program location relative to the root prefix.And it may
+    be windows, requiring caching and other search schemes.
+    '''
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getAnalyisPath find %s' % fname)
@@ -507,22 +526,54 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         lgr.debug('resimUtils getAnalysisPath fname %s' % fname)
     if root_prefix is None: 
         root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
+    root_prefix_abs = os.path.realpath(root_prefix)
     lgr.debug('resimUtils getAnalysis topdir %s  root_prefix %s' % (top_dir, root_prefix))
-    if fname.startswith('/'):
-        analysis_path = os.path.join(top_dir, fname[1:])+'.funs'
-        lgr.debug('resimUtils getAnalysis path try %s' % analysis_path)
+    if fname.startswith(root_prefix):
+        fname_abs = os.path.realpath(fname)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysisPath %s startswith root. abs is %s' % (fname, fname_abs))
+        if fname_abs.startswith(root_prefix_abs):
+            relative = fname_abs[len(root_prefix_abs)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs started with root_prefix_abs')
+        else:
+            relative = fname_abs[len(root_prefix)+1:] 
+        lgr.debug('resimUtils getAnalysisPath relative path %s to join onto top dir' % relative)
+        analysis_path = os.path.join(top_dir, relative)+'.funs'
+        lgr.debug('resimUtils getAnalysis path try from relative %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
-    if retval is None and root_prefix is not None and fname.startswith(root_prefix):
-        rest = fname[len(root_prefix):]        
-        analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
-        lgr.debug('resimUtils getAnalysis rest is %s analyis_path %s' % (rest, analysis_path))
+            lgr.debug('resimUtils getAnalysis got it %s' % retval)
+    else:
+        if fname.startswith('/'):
+            fname = fname[1:]
+        # try joining with root prefix so we can check for sym links
+        with_root = os.path.join(root_prefix, fname)
+        fname_abs = os.path.realpath(with_root)
+        if lgr is not None:
+            lgr.debug('resimUtils getAnalysis fname %s did not start with root prefix.  with root would be %s, and abs of that %s' % (fname, with_root, fname_abs))
+        if fname_abs.startswith(root_prefix_abs):
+            relative = fname_abs[len(root_prefix_abs)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs started with root_prefix_abs relative %s' % relative)
+        else:
+            relative = fname_abs[len(root_prefix)+1:] 
+            lgr.debug('resimUtils getAnalysisPath fname_abs not started root_prefix_abs relative %s' % relative)
+                
+        analysis_path = os.path.join(top_dir, relative)+'.funs'
+        lgr.debug('resimUtils getAnalysis joined relative to top dir for %s' % analysis_path)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
-
+            lgr.debug('resimUtils getAnalysis got it not start with root_prefix %s' % retval)
+    #lgr.debug('getAnalysisPath root_prefix %s  fname %s' % (root_prefix, fname))
+    #if retval is None and root_prefix is not None and fname.startswith(root_prefix):
+    #    rest = fname[len(root_prefix):]        
+    #    analysis_path = os.path.join(top_dir, rest[1:])+'.funs'
+    #    lgr.debug('resimUtils getAnalysisPath rest is %s analyis_path %s' % (rest, analysis_path))
+    #    if os.path.isfile(analysis_path):
+    #        retval = analysis_path[:-5]
        
     if retval is None:    
+        # try looking in cache and dealing with Windows paths
         if lgr is not None:
             lgr.debug('resimUtils getAnalysisPath top_dir %s' % (top_dir))
         if len(fun_list_cache) == 0:
@@ -530,26 +581,28 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             if lgr is not None:
                 lgr.debug('resimUtils getAnalysisPath loaded %d fun files into cache top_dir %s' % (len(fun_list_cache), top_dir))
 
-        fname = fname.replace('\\', '/')
-        if root_prefix is None:
-            if fname.startswith('/??/C:/'):
-                fname = fname[7:]
-        else:
-            fname = getWinPath(fname, root_prefix, lgr=lgr)
+        if '\\' in fname:
+            fname = fname.replace('\\', '/')
+            if root_prefix is None:
+                if fname.startswith('/??/C:/'):
+                    fname = fname[7:]
+            else:
+                fname = getWinPath(fname, root_prefix, lgr=lgr)
 
         base = os.path.basename(fname)+'.funs'
         #if base.upper() in map(str.upper, fun_list_cache):
+        lgr.debug('resimUtils getAnalysisPath call soMatch for %s' % fname)
         is_match = soMatch(fname, fun_list_cache, lgr)
         if is_match is not None:
             parent = os.path.dirname(fname)
             with_funs = os.path.join(parent, is_match)
             #with_funs = fname+'.funs'
             if lgr is not None:
-                lgr.debug('resimUtils getAnalsysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
+                lgr.debug('resimUtils getAnalysisPath look for path for %s top_dir %s' % (with_funs, top_dir))
             retval = getfileInsensitive(with_funs, top_dir, [], lgr, force_look=True)
             if retval is not None:
                 if lgr is not None:
-                    lgr.debug('resimUtils getAnalsysisPath got %s from %s' % (retval, with_funs))
+                    lgr.debug('resimUtils getAnalysisPath got %s from %s' % (retval, with_funs))
                 retval = retval[:-5]
         else:
             if lgr is not None:
@@ -563,28 +616,39 @@ clib_dep = {'libc': 0,  'libstdc': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 
 
 def getClibIndex(fname):
     retval = None
-    fname = fname.lower()
+    fname = os.path.basename(fname.lower())
     for lib_file in clib_dep:
         if fname.startswith(lib_file):
             retval = clib_dep[lib_file]
             break
     return retval
     
-def isClib(in_lib_file):
+def isClib(in_lib_file, lgr=None):
     if in_lib_file is None:
         return False
     retval = False
-    lib_file = os.path.basename(in_lib_file) 
-    if lib_file is not None:
-        lf = lib_file.lower()
-        for libname in clib_dep:
-            if lf.startswith(libname):
+    if 'c:\\windows' in in_lib_file.lower():
+        retval = True
+    else:
+        lib_file = ntpath.basename(in_lib_file) 
+        if lib_file is not None:
+            lf = lib_file.lower()
+            for libname in clib_dep:
+                if lf.startswith(libname):
+                    retval = True
+                    break
+            if not retval and lf.startswith('ld-'):
+                # loader as libc
                 retval = True
-                break
-        if not retval and lf.startswith('ld-'):
-            # loader as libc
-            retval = True
     return retval
+
+def isWindowsCore(lib_file):
+    #if 'c:\windows' in lib_file.lower():
+    if 'windows' in lib_file.lower():
+        return True
+    else:
+        return False
+
 
 def getLoadOffsetFromSO(so_json, prog, lgr=None):
     retval = None
@@ -646,7 +710,7 @@ def getExecList(ini, lgr=None):
     if lgr is not None:
         lgr.debug('resimUtils getExecList ini %s' % ini)
     root_prefix = getIniTargetValue(ini, 'RESIM_ROOT_PREFIX')
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
     retval = os.path.join(top_dir, 'exec_list.txt')
     return retval
 
@@ -654,7 +718,7 @@ def getExecDict(root_prefix, lgr=None):
     retval = None
     if lgr is not None:
         lgr.debug('resimUtils getExecDict root_prefix %s' % root_prefix)
-    top_dir = getRootTopDir(root_prefix)
+    top_dir = getAnalysisRootTopDir(root_prefix)
     path = os.path.join(top_dir, 'exec_dict.json')
     if lgr is not None:
         lgr.debug('resimUtils getExecDict path %s' % path)
@@ -680,5 +744,43 @@ def getFullPath(prog, ini, lgr=None):
         target_fs = winTargetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
     else:
         target_fs = targetFS.TargetFS(None, root_prefix, the_subdirs, lgr)
+    if lgr is not None:
+        lgr.debug('resimUtils getFullPath %s' % prog)
     full = target_fs.getFull(prog, lgr=lgr)
     return full
+
+def getKeyValue(item):
+    key = None
+    value = None
+    if '=' in item:
+        parts = item.split('=', 1)
+        key = parts[0].strip()
+        value = parts[1].strip()
+    return key, value
+
+def yesNoTrueFalse(item):
+    item = item.lower()
+    if item in ['yes', 'true']:
+        return True
+    else:
+        return False 
+
+def isSO(prog):
+    prog = prog.lower()
+    if prog.endswith('.so') or '.so.' in prog or prog.endswith('.dll'):
+        return True
+    else:
+        return False
+def isSysEnter(instruct):
+    if instruct in ['int 128', 'sysenter', 'syscall', 'sc', 'svc 0']:
+        return True
+    else:
+        return False
+
+def isCall(cpu, instruct):
+    if cpu.architecture.startswith('arm'):
+        return decodeArm.isCall(cpu, instruct)
+    elif cpu.architecture == 'ppc32':
+        return decodePPC32.isCall(cpu, instruct)
+    else: 
+        return decode.isCall(cpu, instruct)

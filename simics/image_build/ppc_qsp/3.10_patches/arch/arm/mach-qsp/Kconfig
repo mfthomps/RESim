@@ -1,0 +1,17 @@
+config MACH_QSP
+	bool "Support Simics QSP platforms from device tree"
+	select ARM_QSP
+	select USE_OF
+	select HAVE_SMP
+	help
+	  Include support for Simics QSP based platforms
+	  using the device tree for discovery.
+
+config ARM_QSP
+	bool "Simics QSP for ARM"
+	default n
+	select QSP
+	select QSP_PIC
+	select CLK_QSP
+	help
+	  This option enables support for the QSP simics platform for arm.

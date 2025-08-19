@@ -7,6 +7,7 @@ import idautils
 import ida_segment
 import ida_loader
 import ida_bytes
+import ida_funcs
 import os
 import sys
 import logging
@@ -77,7 +78,7 @@ def dumpFuns(fname=None):
                     function_name = demangled
                 funs[function_ea]['name'] = function_name
                 print('try adjustStack fun %s fun ea 0x%x' % (function_name, function_ea))
-                adjust_sp = adjustStack(function_ea)
+                adjust_sp = adjustStack(function_name, function_ea)
                 if adjust_sp is not None:
                     #print('function %s function_ea 0x%x will adjust 0x%x' % (function_name, function_ea, adjust_sp))
                     funs[function_ea]['adjust_sp'] = adjust_sp
@@ -371,9 +372,23 @@ def renameFromLogger():
                 if done:
                     break
                     
-def adjustStack(fun_ea):
-    # Search end of function for indications of stack adjustment.  Used as an aide to stack tracing
+def adjustStack(function_name, fun_ea):
+    ''' Search end of function for indications of stack adjustment.  Used as an aide to stack tracing '''
+    # TBD can't all architectures use pfn.points like PPC32?
     info = idaapi.get_inf_structure()
+    if info.procname == 'PPC':
+        pfn = ida_funcs.get_fchunk(fun_ea)
+        if pfn.pntqty == 0:
+            return 0
+        adjust_total = 0
+        for i in range(pfn.pntqty):
+            adjust = pfn.points[i].spd * -1
+            adjust_total = adjust_total + adjust 
+            print('ppc adjust 0x%x (%s) index %d set to 0x%x total now 0x%x' % (fun_ea, function_name, i, adjust, adjust_total))
+            if adjust_total > 0:
+                # grows to large if all included.  strrchr for example.  are these adjustments that likely happen independently?
+                break
+        return adjust_total
     if info.is_32bit():
         word_size = 4
     else:

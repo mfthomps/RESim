@@ -53,7 +53,7 @@ class Kparams():
        
         self.current_task_fs = False
         self.current_task_gs = False
-        if not cpu.architecture.startswith('arm'): 
+        if cpu.architecture.startswith('x86'): 
             if word_size == 4:
                 self.current_task_fs = True
             else:
@@ -78,6 +78,9 @@ class Kparams():
         self.arm64_entry = None
         self.arm_ret = None
         self.arm_ret2 = None
+        self.ppc32_entry = None
+        self.ppc32_ret = None
+        self.ppc32_ret2 = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None

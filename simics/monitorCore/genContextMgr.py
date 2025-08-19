@@ -3,6 +3,9 @@ from resimHaps import *
 import winProg
 import resimSimicsUtils
 import os
+import memUtils
+import resimUtils
+from taskUtils import COMM_SIZE
 '''
 Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
 default & RESim.  Also has a carve-out for "maze_exit" breakpoints/haps, managed as an attribute of 
@@ -223,8 +226,8 @@ class GenContextMgr():
         self.hap_handle = 0
         #self.text_start = None
         #self.text_end = None
-        self.catch_tid = None
-        self.catch_callback = None
+        self.catch_tid = []
+        self.catch_callback = {}
         self.watch_only_this = False
         ''' used with afl '''
         self.callback = None
@@ -288,7 +291,6 @@ class GenContextMgr():
 
         self.watch_for_prog = []
         self.watch_for_prog_callback = {}
-        self.current_tasks = []
 
         self.comm_prog_map = {}
         self.soMap = None
@@ -476,8 +478,9 @@ class GenContextMgr():
         retval = []
         for rec in self.watch_rec_list:
             tid = self.watch_rec_list[rec]
-            #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
-            retval.append(tid)
+            if tid != '0': 
+                #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
+                retval.append(tid)
         return retval
 
     def getWatchList(self):
@@ -600,6 +603,8 @@ class GenContextMgr():
         if tid is None:
             return False
         retval = False       
+        if comm.startswith('kworker'):
+            comm = 'kworker'
         #self.lgr.debug('onlyOrIgnore comm %s' % comm)
         if tid in self.ignore_threads:
             #self.lgr.debug('onlyOrIgnore tid:%s in ignore_threads' % tid)
@@ -659,20 +664,31 @@ class GenContextMgr():
                     self.watchExit(tid=tid)
                 #self.lgr.debug('restore default context for tid:%s comm %s' % (tid, comm))
             
-            if tid is not None and self.catch_tid is not None:
-                #self.lgr.debug('contextManager onlyOrIgnore self.catch_tid %s  tid %s' % (self.catch_tid, tid))
-                if (self.catch_tid == tid or (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0])):
-                    #self.lgr.debug('contextManager onlyOrIgnore thread do catch_callback for tid %s' % tid)
-                    #SIM_break_simulation('in tid %s' % tid)
-                    if self.catch_callback is not None: 
-                        self.lgr.debug('contextManager onlyOrIgnore do catch callback tid:%s' % tid)
-                        SIM_run_alone(self.catch_callback, tid)
-                    else:
-                        SIM_break_simulation('changed thread, now in tid %s' % tid)
-                    self.catch_tid = None
-              
+            if tid is not None and len(self.catch_tid) > 0:
+                self.checkCatchTid(tid)              
         return retval
-    
+
+    def checkCatchTid(self, tid):
+        caught_tid = self.matchCatchTid(tid)
+        if caught_tid is not None:
+            
+            if caught_tid in self.catch_callback:
+                self.lgr.debug('contextManager onlyOrIgnore do catch callback tid:%s' % tid)
+                callback = self.catch_callback[caught_tid]
+                SIM_run_alone(callback, None)
+                del self.catch_callback[caught_tid]
+            else:
+                SIM_break_simulation('changed thread, now in tid %s' % caught_tid)
+            self.catch_tid.remove(caught_tid)
+
+    def matchCatchTid(self, current_tid):
+        retval = None
+        for tid in self.catch_tid:
+            if tid == current_tid or (tid == '-1' and self.amWatching(tid)) or (tid == '-2' and current_tid != '0') or \
+                                        (tid.endswith('-') and tid[:-1] == current_tid.split('-')[0]):
+                retval = tid
+                break
+        return retval
       
     def changedThread(self, cpu, third, forth, memory):
         ''' guts of context managment.  set or remove breakpoints/haps 
@@ -684,7 +700,7 @@ class GenContextMgr():
         if self.task_hap is None or self.reverse_context:
             return
         # get the value that will be written into the current thread address
-        new_addr = SIM_get_mem_op_value_le(memory)
+        new_addr = memUtils.memoryValue(self.cpu, memory)
         thread_id = None
         if self.top.isWindows(target=self.cell_name):
             ptr = new_addr + self.param.proc_ptr
@@ -728,15 +744,17 @@ class GenContextMgr():
         #    prev_proc = prev_task
         #    prev_tid = str(self.mem_utils.readWord32(cpu, prev_proc + self.param.ts_pid))
         #prev_comm = self.mem_utils.readString(cpu, prev_proc + self.param.ts_comm, 16)
-#
-#        if self.top.isWindows(target=self.cell_name):
-#            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
-#                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
-#        else:
-#            self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
-#                prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
-        #END DEBUG BLOCK
 
+        #if self.top.isWindows(target=self.cell_name):
+        #    self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
+        #        prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        #else:
+        #    self.lgr.debug('changeThread from %s (%s) to %s (%s) new_addr 0x%x watchlist len is %d debugging_comm is %s context %s watchingTasks %r cycles: 0x%x' % (prev_tid, 
+        #        prev_comm, tid, comm, new_addr, len(self.watch_rec_list), str(self.debugging_comm), cpu.current_context, self.watching_tasks, self.cpu.cycles))
+        #END DEBUG BLOCK
+        if comm is None:
+            self.lgr.debug('contextManager comm is None for tid:%s, bail' % tid)
+            return
         if self.onlyOrIgnore(tid, comm, new_addr):
             return 
         else:
@@ -803,28 +821,24 @@ class GenContextMgr():
             # TBD do we need this?  results in a mode hap and recording stack at start of execve?
             if not self.top.isWindows():
                 self.top.recordStackClone(tid, leader_tid)
-        if self.catch_tid is not None:
-            #self.lgr.debug('contextManager changedThread self.catch_tid is %s,  tid %s' % (self.catch_tid, tid))
-            #if self.catch_tid == tid or (self.catch_tid == '-1' and tid in self.tid_cache) or (self.catch_tid == '-2' and tid != '0') or \
-            if self.catch_tid == tid or (self.catch_tid == '-1' and self.amWatching(tid)) or (self.catch_tid == '-2' and tid != '0') or \
-                                        (self.catch_tid.endswith('-') and self.catch_tid[:-1] == tid.split('-')[0]):
-                self.lgr.debug('contextManager changedThread do catch_callback for tid %s' % tid)
-                if self.catch_callback is not None: 
-                    SIM_run_alone(self.catch_callback, tid)
-                else:
-                    SIM_break_simulation('changed thread, now in tid %s' % tid)
-                self.catch_tid = None
+        if tid is not None and len(self.catch_tid) > 0:
+            self.checkCatchTid(tid)              
               
     def catchTid(self, tid, callback):
+        ''' Invoke a callback when a given tid is next scheduled '''
+        add_tid = None
         if self.top.isWindows():
             if '-' not in tid:
-                self.catch_tid = tid+'-'
+                add_tid = tid+'-'
             else:
-                self.catch_tid = tid
+                add_tid = tid
         else:
-            self.catch_tid = tid
-        self.catch_callback = callback 
-        self.lgr.debug('contectManager catchTid %s callback %s' % (self.catch_tid, str(callback)))
+            add_tid = tid
+        if add_tid not in self.catch_tid:
+            self.catch_tid.append(add_tid)
+        if callback is not None:
+            self.catch_callback[add_tid] = callback 
+        self.lgr.debug('contectManager catchTid %s callback %s' % (add_tid, str(callback)))
         self.setTaskHap(tid=tid)
 
     def watchAll(self):
@@ -1125,7 +1139,7 @@ class GenContextMgr():
         if self.task_hap is None:
             self.task_break = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, 
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
-            #self.lgr.debug('contextManager setTaskHap bp %d' % self.task_break)
+            self.lgr.debug('contextManager setTaskHap bp %d' % self.task_break)
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
             self.lgr.debug('setTaskHap cell %s break %s set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
         dumb, comm, cur_tid  = self.task_utils.curThread()
@@ -1161,7 +1175,7 @@ class GenContextMgr():
         if set_debug_tid:
             self.lgr.warning('watchTasks, call to setDebugTid')
             self.setDebugTid(force=True)
-        if comm not in self.debugging_comm:
+        if comm is not None and comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
         if self.watchExit(tid=tid):
             #self.pageFaultGen.recordPageFaults()
@@ -1203,7 +1217,7 @@ class GenContextMgr():
         self.restoreDebugContext()
         self.debugging_tid = cur_tid
         self.debugging_tid_saved = self.debugging_tid
-        if comm not in self.debugging_comm:
+        if comm is not None and comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
         self.debugging_cell = self.top.getCell()
         if cur_tid not in self.tid_cache:
@@ -1233,13 +1247,15 @@ class GenContextMgr():
                 cache_copy = list(self.tid_cache)
                 for tid in cache_copy:
                     ida_msg = 'killed %s member of group led by %s' % (tid, lead_tid) 
-                    exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True)
                     if self.pageFaultGen is not None and self.exit_callback is None:
                         if self.pageFaultGen.handleExit(tid, lead_tid):
                             print('SEGV on tid %s?' % tid)
                             self.lgr.debug('contextManager SEGV on tid %s -- stop trace of exit_syscall' % tid)
                             exit_syscall.stopTrace() 
+                            exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True, stop=False)
                             break
+                    else:
+                        exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True)
                 self.clearExitBreaks()
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %s, leader was %s' % (lead_tid, self.group_leader))
@@ -1331,8 +1347,8 @@ class GenContextMgr():
                     self.lgr.debug('tid %s messing with its own task rec?  Let it go.' % tid)
     
             else: 
-                value = SIM_get_mem_op_value_le(memory)
-                self.lgr.debug('contextManager taskRecHap tid:%s wrote 0x%x to 0x%x watching for demise of %s' % (cur_tid, value, memory.logical_address, tid))
+                value = memUtils.memoryValue(self.cpu, memory)
+                self.lgr.debug('contextManager taskRecHap tid:%s wrote 0x%x to phys 0x%x watching for demise of %s' % (cur_tid, value, memory.physical_address, tid))
                 exit_syscall = self.top.getSyscall(self.cell_name, 'exit_group')
                 if exit_syscall is not None and not self.watching_page_faults:
                     ida_msg = 'tid:%s exit via kill?' % tid
@@ -1374,6 +1390,8 @@ class GenContextMgr():
         if tid is None:
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
+        elif tid == '0':
+            return False
         elif rec is None:
             self.lgr.debug('contextManager watchExit call getRecAddrForTid %s' % tid)
             rec = self.task_utils.getRecAddrForTid(tid)
@@ -1660,10 +1678,11 @@ class GenContextMgr():
                 self.lgr.error('contextManager loadOnlyList no file at %s' % fname)
         if retval:
             cur_tid = self.task_utils.curTID()
-            comm = self.task_utils.getCommFromTid(cur_tid) 
-            if comm not in self.only_progs:
-                self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
-                self.restoreIgnoreContext()
+            if cur_tid is not None:
+                comm = self.task_utils.getCommFromTid(cur_tid) 
+                if comm not in self.only_progs:
+                    self.lgr.debug('contextManager loadOnlyList  current comm of %s should be ignored, so set ignore context' % comm)
+                    self.restoreIgnoreContext()
         return retval
 
     def loadIgnoreThreadList(self, fname):
@@ -1684,31 +1703,44 @@ class GenContextMgr():
         return retval
 
     def checkExitCallback(self):
+        retval = False
         self.lgr.debug('contextManager checkExitCallback callback is %s' % str(self.exit_callback))
         if self.exit_callback is not None:
             self.exit_callback()
+            retval = True
+        return retval
 
 
-    def callWhenFirstScheduled(self, comm, callback):
-        self.watch_for_prog.append(comm)
-        self.watch_for_prog_callback[comm] = callback
-        self.current_tasks = self.task_utils.getTaskList()
+    def callWhenFirstScheduled(self, prog, callback):
+        ''' Make a callback when a given program is first scheduled
+            Intended for cases where comm is not yet running.
+        '''
+        prog_comm = self.task_utils.progComm(prog)
+        self.watch_for_prog.append(prog_comm)
+        self.watch_for_prog_callback[prog_comm] = callback
         self.setTaskHap()
+        self.lgr.debug('contextManager callWhenFirstScheduled comm %s' % prog_comm)
 
     def listStartsWith(self, the_list, the_value):
         for l in the_list:
-            if l.startswith(the_value):
+            if (len(l) > COMM_SIZE and l.startswith(the_value)) or l == the_value:
                 return True
         return False
 
-    def checkFirstSchedule(self, task_rec, tid, comm):
-        if task_rec not in self.current_tasks: 
-            #self.lgr.debug('contextManager checkFirstSchedule tid:%s (%s) not yet in current tasks' % (tid, comm))
-            if self.listStartsWith(self.watch_for_prog, comm) and self.listStartsWith(self.watch_for_prog_callback, comm):
+    def checkFirstSchedule(self, task_rec, tid, comm, first=False):
+        # NOTE may be called during memory transaction, i.e., info from taskUtils not reliable
+        #self.lgr.debug('contextManager checkFirstSchedule comm %s' % (comm))
+        #if task_rec not in self.current_tasks or len(self.current_tasks) == 0 or first: 
+        if True:
+            if comm in self.watch_for_prog and comm in self.watch_for_prog_callback:
+            #if self.listStartsWith(self.watch_for_prog, comm) and self.listStartsWith(self.watch_for_prog_callback, comm):
                 self.lgr.debug('contextManager checkFirstSchedule got first for tid:%s (%s)' % (tid, comm))
                 self.watch_for_prog.remove(comm)
-                self.watch_for_prog_callback[comm](tid)
+                # make the callback call.  TBD only one callback per comm
+                callback = self.watch_for_prog_callback[comm]
+                self.top.doInUser(callback, None, tid=tid, target=self.cell_name)
                 del self.watch_for_prog_callback[comm]
+
 
     def recordProcessText(self, tid):
         comm = self.task_utils.getCommFromTid(tid) 

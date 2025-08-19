@@ -171,7 +171,8 @@ class TraceBuffer():
             self.lgr.error('traceBuffer pagedIn name %s not in pending_pages' % name)
             return
         trace_info = self.pending_pages[name]
-        load_addr = self.so_map.getLoadAddr(trace_info.lib)
+        tid = self.top.getTID(target=self.cell_name)
+        load_addr = self.so_map.getLoadAddr(trace_info.lib, tid)
         if load_addr is not None:
             self.lgr.debug('traceBuffer paged_in load_addr 0x%x name %s linear 0x%x' % (load_addr, name, linear))
             phys = self.getPhys(trace_info, load_addr, None)

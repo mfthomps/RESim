@@ -1,0 +1,18 @@
+config PPC_QSP
+	bool "Simics QSP for PPC"
+	default n
+	select QSP
+	select QSP_PIC
+	help
+	  This option enables support for the QSP simics platform for PowerPC.
+
+config PPC_QSP_SYNC_TIMEBASE
+	bool "Manual sync of timebase between cores"
+	default n
+	depends on PPC_QSP && SMP
+	help
+	  This option enables generic code for manually syncing the timebase between cores
+	  on startup for SMP systems. This is very time consuming and will not yield perfect
+	  results anyway since simics runs each cores time slice in serial. When a core
+	  is enabled via the sysregs it's timebase is copied from core 0 which yields a good
+	  enough sync and a speedy boot so you can safely leave this option to N.

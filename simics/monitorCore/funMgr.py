@@ -31,16 +31,18 @@ import os
 import json
 import decode
 import decodeArm
+import decodePPC32
 import clibFuns
 from simics import *
 class FunMgr():
-    def __init__(self, top, cpu, cell_name, mem_utils, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, lgr):
         self.relocate_funs = {}
         self.export_funs = {}
         self.ida_funs = {}
         self.cpu = cpu
         self.cell_name = cell_name
         self.mem_utils = mem_utils
+        self.task_utils = task_utils
         self.top = top
         self.lgr = lgr
         self.so_checked = {}
@@ -50,6 +52,10 @@ class FunMgr():
             self.callmn = 'bl'
             self.jmpmn = 'bx'
             self.decode = decodeArm
+        elif cpu.architecture == 'ppc32':
+            self.callmn = 'bl'
+            self.jmpmn = 'b'
+            self.decode = decodePPC32
         else:
             self.callmn = 'call'
             self.jmpmn = 'jmp'
@@ -58,24 +64,42 @@ class FunMgr():
         # ARM64 BLR mapping (see ida/resimUtils imports)
         self.call_reg_funs = {}
 
+    def getComm(self, comm_in=None):
+        ''' return a comm if idaFuns has this comm, or one that matches it per comm renaming '''
+        retval = None
+        if comm_in is None:
+            comm = self.top.getComm(target=self.cell_name)
+        else: 
+            comm = comm_in
+        if comm in self.ida_funs:
+            retval = comm
+        else:
+            for my_comm in self.ida_funs:
+                if self.task_utils.commMatch(comm, my_comm):
+                    retval = my_comm
+                    break
+        return retval
+
     def getFun(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             ''' Returns the loaded function address of the fuction containing a given ip '''
             return self.ida_funs[comm].getFun(addr)
         else:
-            self.lgr.error('funMgr getFun no funs for comm %s' % comm)
+            self.lgr.error('funMgr getFun no funs for comm %s. comms for:' % comm)
+            for my_comm in self.ida_funs:
+                self.lgr.error('\t %s' % my_comm)
             return None
 
     def getName(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             return self.ida_funs[comm].getName(addr)
         else:
             return None
 
     def demangle(self, fun):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             return self.ida_funs[comm].demangle(fun)
         else:
@@ -83,7 +107,7 @@ class FunMgr():
 
     def isFun(self, fun):
         ''' given fun value may reflect random load base address '''
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         retval = False
         if comm in self.ida_funs:
             if self.ida_funs[comm].isFun(fun):
@@ -94,7 +118,7 @@ class FunMgr():
  
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0, text_offset=0):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         self.lgr.debug('funMgr add path %s' % path)
         if path is None:
             self.lgr.debug('funMgr add called with path of None')
@@ -123,7 +147,7 @@ class FunMgr():
 
     def inFun(self, prev_ip, call_to, call_ip=None):
         retval = False
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs: 
             retval = self.ida_funs[comm].inFun(prev_ip, call_to)
             if not retval and call_ip is not None:
@@ -149,10 +173,29 @@ class FunMgr():
                    if f1 == f2 and f_from != f1:
                        #self.lgr.debug('funMgr inFun NOT IN function, but in same SO and call from elsewhere.  call it good?')
                        retval = True
+                   elif self.cpu.architecture == 'ppc32':
+                       prev_ip_fun_addr = self.getFun(prev_ip)
+                       ip = call_to
+                       for i in range(50):
+                           instruct = SIM_disassemble_address(self.cpu, ip, 1, 0)
+                           if instruct[1].startswith('blr'):
+                               break
+                           if instruct[1].startswith('b '):
+                               try:
+                                   addr = int(instruct[1].split()[1], 16)
+                               except:
+                                   break
+                               if addr == prev_ip_fun_addr:
+                                   retval = True
+                                   self.lgr.debug('funMgr inFun ppc fu b to function')
+                                   break 
+                           ip = ip + instruct[0]
+                           
+          
         return retval
 
     def funFromAddr(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         fun = None
         if addr is not None:
             if comm in self.relocate_funs and addr in self.relocate_funs[comm]:
@@ -164,7 +207,7 @@ class FunMgr():
         return fun
 
     def getFunName(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         ''' Return the function name of the function containing a given IP (loaded) '''
         retval = None
         if comm not in self.ida_funs:
@@ -174,22 +217,24 @@ class FunMgr():
         return retval
 
     def isIterator(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.user_iterators and self.user_iterators[comm] is not None:
             return self.user_iterators[comm].isIterator(addr)
 
     def setUserIterators(self, iterators):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         self.user_iterators[comm] = iterators
 
     def addIterator(self, fun):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.user_iterators:
             self.user_iterators[comm].add(fun)
 
     def hasIDAFuns(self, comm=None):
         if comm is None:
-            comm = self.top.getComm(target=self.cell_name)
+            comm = self.getComm()
+        else:
+            comm = self.getComm(comm_in=comm)
         if comm in self.ida_funs: 
             return True
         else:
@@ -200,7 +245,7 @@ class FunMgr():
 
 
     def getIDAFuns(self, full_path, root_prefix, offset):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         # The offset value will be zero for executables that are not dynamically located.
         # It will be the load address for dynamically located binaries.
         if not self.top.isWindows():
@@ -233,7 +278,7 @@ class FunMgr():
             self.lgr.error('getIDAFuns full path %s does not start with prefix %s' % (full_path, root_prefix))
 
     def setRelocateFuns(self, full_path, offset=0):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm not in self.relocate_funs:
             self.relocate_funs[comm] = {}
         #self.lgr.debug('funMgr setRelocateFuns %s offset is 0x%x' % (full_path, offset))
@@ -348,10 +393,13 @@ class FunMgr():
         ''' given a call 0xdeadbeef, convert the instruction to use the function name if we can find it'''
         retval = instruct[1]
         fun_name = None
-        #self.lgr.debug('funMgr resolveCall %s' % instruct[1])
+        self.lgr.debug('funMgr resolveCall %s' % instruct[1])
         if instruct[1].startswith(self.callmn):
             faddr = None
             parts = instruct[1].split()
+            if len(parts) < 2:
+                # TBD fix for ppc32
+                return retval
             if parts[-1].strip().endswith(']'):
                 faddr, fun_name = self.indirectCall(instruct, eip)
             else:
@@ -371,14 +419,14 @@ class FunMgr():
    
     def isRelocate(self, addr):
         retval = False
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.relocate_funs:
             if addr in self.relocate_funs[comm]:
                 retval = True
         return retval
 
     def showRelocate(self, search=None):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         print('showRelocate for comm %s' % comm)
         if comm in self.relocate_funs and fun in self.relocate_funs[comm]:
             for fun in sorted(self.relocate_funs[comm]):
@@ -386,11 +434,11 @@ class FunMgr():
                     print('0x%x %s' % (fun, self.relocate_funs[comm][fun]))
 
     def showFuns(self, search = False):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         self.ida_funs[comm].showFuns(search=search)
 
     def showMangle(self, search = False):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         self.ida_funs[comm].showMangle(search=search)
 
     def indirectCall(self, instruct, eip):
@@ -454,21 +502,21 @@ class FunMgr():
 
 
     def soChecked(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.so_checked and addr in self.so_checked[comm]:
             return True
         else:
             return False
 
     def soCheckAdd(self, addr):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm not in self.so_checked:
             self.so_checked[comm] = []
         if addr not in self.so_checked[comm]: 
             self.so_checked[comm].append(addr)
 
     def showFunAddrs(self, fun_name):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm not in self.ida_funs:
             print('Comm %s not in ida funs' % comm)
             return
@@ -482,7 +530,7 @@ class FunMgr():
     def getFunEntry(self, fun_name):
         ''' get the loaded entry address for the named funtion.  If not in the fun list, check the exports.'''
         retval = None
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             retval =  self.ida_funs[comm].getFunEntry(fun_name)
             if retval is None:
@@ -493,7 +541,7 @@ class FunMgr():
         return retval
 
     def getFunWithin(self, fun_name, start, end):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             return self.ida_funs[comm].getFunWithin(fun_name, start, end)
         else:
@@ -537,18 +585,18 @@ class FunMgr():
         self.lgr.debug('funHap addr: 0x%x lr: 0x%x fun: %s from: %s break_num: 0x%x cycle: 0x%x' % (addr, lr_value, fun, fun_from, break_num, self.cpu.cycles))
             
     def getStartEnd(self, fun):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         return self.ida_funs[comm].getAddr(fun)
 
     def stackAdjust(self, fun):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         retval = 0
         if comm in self.ida_funs:
             retval = self.ida_funs[comm].stackAdjust(fun)
         return retval
 
     def setArmBLR(self, full_path, offset=0):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm not in self.call_reg_funs:
             self.call_reg_funs[comm] = {}
         if full_path.endswith('.funs'):
@@ -576,14 +624,14 @@ class FunMgr():
        
     def getBlr(self, addr): 
         retval = None
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if addr in self.call_reg_funs[comm]:
             retval = self.call_reg_funs[comm][addr]
             self.lgr.debug('funMgr getBlr addr 0x%x return %s' % (addr, retval))
         return retval
 
     def haveFuns(self, fname):
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm in self.ida_funs:
             return self.ida_funs[comm].haveFuns(fname)
         else:
@@ -591,7 +639,7 @@ class FunMgr():
 
     def loadExports(self, full_path):
         self.lgr.debug('funMgr loadExports for %s' % full_path)
-        comm = self.top.getComm(target=self.cell_name)
+        comm = self.getComm()
         if comm not in self.export_funs:
             self.export_funs[comm] = {}
         if full_path.endswith('.funs'):

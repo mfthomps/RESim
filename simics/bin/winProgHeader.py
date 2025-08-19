@@ -10,11 +10,14 @@ import resimUtils
 import winProg
 
 def main():
-    parser = argparse.ArgumentParser(prog='winProgSizes', description='Get program header info from a windows program file or dll')
+    parser = argparse.ArgumentParser(prog='winProgHeader', description='Get program header info from a windows program file or dll')
     parser.add_argument('infile', action='store', help='Path to the program file or dll')
     args = parser.parse_args()
     lgr = resimUtils.getLogger('winProgSizes', '/tmp', level=None)
-    fpath = os.path.join(resim_image, args.infile)
+    if os.path.isfile(args.infile):
+        fpath = args.infile
+    else:
+        fpath = os.path.join(resim_image, args.infile)
     if not os.path.isfile(fpath):
         print('no file at %s' % fpath)
         exit(1)

@@ -1,0 +1,1881 @@
+/*
+ * Copyright 2011, Wind River
+ * 2006 (c) G. Liakhovetski <g.liakhovetski@gmx.de>
+ * Copyright 2008 Freescale Semiconductor, Inc.
+ *
+ * This file is licensed under
+ * the terms of the GNU General Public License version 2.  This program
+ * is licensed "as is" without any warranty of any kind, whether express
+ * or implied.
+ */
+
+/* The dts file for an QSP virtual board can (and should) be generated
+ * by simics itself from the actual configuration. This is a simple version
+ * with just one of each device hardcoded into it and 512Mb memory.
+ */
+
+/dts-v1/;
+
+
+/ {
+	model = "Simics QSP";
+	compatible = "simics,qsp-arm";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			compatible = "arm,cortex-a9";
+			reg = <0>;
+		};
+	};
+
+
+	memory {
+		name = "memory";
+		device_type = "memory";
+		reg = <0x00000000 0x2000000>;
+	};
+	chosen {
+		bootargs = "root=0x6300 console=ttyAM0 ";
+	};
+
+	flash@0x00000000 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		compatible = "simple-bus";
+		ranges = <0 0 0x00000000 0x10000000>;
+		qsp_flash@0,0 {
+					compatible = "qsp-flash";
+					bank-width = <2>;
+					reg = <0 0x00000000 0x10000000>;
+					#address-cells = <1>;
+					#size-cells = <1>;
+					partition@0 {
+						label = "entire_flash";
+						reg = <0x00000000 0x10000000>;
+					};
+
+
+				   };
+	 };
+
+	soc@0xe0000000 {
+		#address-cells = <2>;
+		#size-cells = <1>;
+		device_type = "soc";
+		compatible = "simple-bus";
+		ranges = <		0 0 0xe0000000 0x1000 //pic0
+		1 0 0xe0001000 0x1000 //sysregs0
+		2 0 0xe0002000 0x1000 //rtc0
+		3 0 0xe0010000 0x1000 //uart0
+		4 0 0xe0011000 0x1000 //uart1
+		5 0 0xe0012000 0x1000 //uart2
+		6 0 0xe0013000 0x1000 //uart3
+		7 0 0xe0014000 0x1000 //uart4
+		8 0 0xe0015000 0x1000 //uart5
+		9 0 0xe0016000 0x1000 //uart6
+		10 0 0xe0017000 0x1000 //uart7
+		11 0 0xe0018000 0x1000 //uart8
+		12 0 0xe0019000 0x1000 //uart9
+		13 0 0xe001a000 0x1000 //uart10
+		14 0 0xe001b000 0x1000 //uart11
+		15 0 0xe001c000 0x1000 //uart12
+		16 0 0xe001d000 0x1000 //uart13
+		17 0 0xe001e000 0x1000 //uart14
+		18 0 0xe001f000 0x1000 //uart15
+		19 0 0xe0020000 0x1000 //timer0
+		20 0 0xe0030000 0x1000 //led0
+		21 0 0xe0031000 0x1000 //led1
+		22 0 0xe0032000 0x1000 //led2
+		23 0 0xe0033000 0x1000 //led3
+		24 0 0xe0034000 0x1000 //led4
+		25 0 0xe0035000 0x1000 //led5
+		26 0 0xe0036000 0x1000 //led6
+		27 0 0xe0037000 0x1000 //led7
+		28 0 0xe0038000 0x1000 //led8
+		29 0 0xe0039000 0x1000 //led9
+		30 0 0xe003a000 0x1000 //led10
+		31 0 0xe003b000 0x1000 //led11
+		32 0 0xe003c000 0x1000 //led12
+		33 0 0xe003d000 0x1000 //led13
+		34 0 0xe003e000 0x1000 //led14
+		35 0 0xe003f000 0x1000 //led15
+		36 0 0xe0040000 0x1000 //mac0
+		37 0 0xe0041000 0x1000 //mac1
+		38 0 0xe0042000 0x1000 //mac2
+		39 0 0xe0043000 0x1000 //mac3
+		40 0 0xe0044000 0x1000 //mac4
+		41 0 0xe0045000 0x1000 //mac5
+		42 0 0xe0046000 0x1000 //mac6
+		43 0 0xe0047000 0x1000 //mac7
+		44 0 0xe0048000 0x1000 //mac8
+		45 0 0xe0049000 0x1000 //mac9
+		46 0 0xe004a000 0x1000 //mac10
+		47 0 0xe004b000 0x1000 //mac11
+		48 0 0xe004c000 0x1000 //mac12
+		49 0 0xe004d000 0x1000 //mac13
+		50 0 0xe004e000 0x1000 //mac14
+		51 0 0xe004f000 0x1000 //mac15
+		52 0 0xe0050000 0x1000 //disk_ctrl0
+		53 0 0xe0051000 0x1000 //disk_ctrl1
+		54 0 0xe0052000 0x1000 //disk_ctrl2
+		55 0 0xe0053000 0x1000 //disk_ctrl3
+		56 0 0xe0054000 0x1000 //disk_ctrl4
+		57 0 0xe0055000 0x1000 //disk_ctrl5
+		58 0 0xe0056000 0x1000 //disk_ctrl6
+		59 0 0xe0057000 0x1000 //disk_ctrl7
+		60 0 0xe0058000 0x1000 //disk_ctrl8
+		61 0 0xe0059000 0x1000 //disk_ctrl9
+		62 0 0xe005a000 0x1000 //disk_ctrl10
+		63 0 0xe005b000 0x1000 //disk_ctrl11
+		64 0 0xe005c000 0x1000 //disk_ctrl12
+		65 0 0xe005d000 0x1000 //disk_ctrl13
+		66 0 0xe005e000 0x1000 //disk_ctrl14
+		67 0 0xe005f000 0x1000 //disk_ctrl15
+>;
+		bus-frequency = <0>;
+
+		PIC: interrupt-controller@0,0 {
+			#interrupt-cells = <2>;
+			cell-index = <0>;
+			device_type = "interrupt-controller";
+			compatible = "qsp-pic";
+			interrupt-controller;
+			reg = <0 0x0 0x1000>;
+		};
+
+		SYSREGS: sysregs {
+			device_type = "sysregs";
+			compatible = "qsp,sysregs";
+			reg = <1 0x0 0x1000>;
+		};
+
+		RTC: rtc {
+			device_type = "rtc";
+			compatible = "qsp-rtc";
+			reg = <2 0x0 0x1000>;
+		};
+
+		UART0: qspserial0 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <3 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <16 0x1>;
+		};
+
+		UART1: qspserial1 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <4 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <17 0x1>;
+		};
+
+		UART2: qspserial2 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <5 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <18 0x1>;
+		};
+
+		UART3: qspserial3 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <6 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <19 0x1>;
+		};
+
+		UART4: qspserial4 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <7 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <20 0x1>;
+		};
+
+		UART5: qspserial5 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <8 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <21 0x1>;
+		};
+
+		UART6: qspserial6 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <9 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <22 0x1>;
+		};
+
+		UART7: qspserial7 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <10 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <23 0x1>;
+		};
+
+		UART8: qspserial8 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <11 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <24 0x1>;
+		};
+
+		UART9: qspserial9 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <12 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <25 0x1>;
+		};
+
+		UART10: qspserial10 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <13 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <26 0x1>;
+		};
+
+		UART11: qspserial11 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <14 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <27 0x1>;
+		};
+
+		UART12: qspserial12 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <15 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <28 0x1>;
+		};
+
+		UART13: qspserial13 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <16 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <29 0x1>;
+		};
+
+		UART14: qspserial14 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <17 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <30 0x1>;
+		};
+
+		UART15: qspserial15 {
+			device_type = "serial";
+			compatible = "qsp-serial";
+			reg = <18 0x0 0x1000>;
+			clock-frequency = <1000000>; /* ignored by our driver, but needed by generic of_serial.c */
+			interrupt-parent = <&PIC>;
+ 			interrupts = <31 0x1>;
+		};
+
+		TIMER0: qsptimer0 {
+			compatible = "qsp,timer";
+			reg = <19 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <32 0x1>;
+		};
+
+		led0 {
+		 	 label = "led0";
+                         compatible = "leds-qsp";
+                         reg = <20 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led1 {
+		 	 label = "led1";
+                         compatible = "leds-qsp";
+                         reg = <21 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led2 {
+		 	 label = "led2";
+                         compatible = "leds-qsp";
+                         reg = <22 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led3 {
+		 	 label = "led3";
+                         compatible = "leds-qsp";
+                         reg = <23 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led4 {
+		 	 label = "led4";
+                         compatible = "leds-qsp";
+                         reg = <24 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led5 {
+		 	 label = "led5";
+                         compatible = "leds-qsp";
+                         reg = <25 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led6 {
+		 	 label = "led6";
+                         compatible = "leds-qsp";
+                         reg = <26 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led7 {
+		 	 label = "led7";
+                         compatible = "leds-qsp";
+                         reg = <27 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led8 {
+		 	 label = "led8";
+                         compatible = "leds-qsp";
+                         reg = <28 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led9 {
+		 	 label = "led9";
+                         compatible = "leds-qsp";
+                         reg = <29 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led10 {
+		 	 label = "led10";
+                         compatible = "leds-qsp";
+                         reg = <30 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led11 {
+		 	 label = "led11";
+                         compatible = "leds-qsp";
+                         reg = <31 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led12 {
+		 	 label = "led12";
+                         compatible = "leds-qsp";
+                         reg = <32 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led13 {
+		 	 label = "led13";
+                         compatible = "leds-qsp";
+                         reg = <33 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led14 {
+		 	 label = "led14";
+                         compatible = "leds-qsp";
+                         reg = <34 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+
+		};
+
+		led15 {
+		 	 label = "led15";
+                         compatible = "leds-qsp";
+                         reg = <35 0x0 0x1000>;
+
+		 	 linux,default-trigger = "default-on";
+
+			led0 {
+				label = "power";
+				index = <0>;
+				linux,default-trigger = "default-on";
+			};
+			led01 {
+				label = "heartbeat";
+				index = <1>;
+				linux,default-trigger = "heartbeat";
+			};
+			led02 {
+				label = "timer";
+				index = <2>;
+				//linux,default-trigger = "timer";
+			};
+			led03 {
+				label = "cpu0";
+				index = <3>;
+				//linux,default-trigger = "cpu0";
+			};
+			led04 {
+				label = "cpu1";
+				index = <4>;
+				//linux,default-trigger = "cpu1";
+			};
+			led05 {
+				label = "cpu2";
+				index = <5>;
+				//linux,default-trigger = "cpu2";
+			};
+			led06 {
+				label = "cpu3";
+				index = <6>;
+				//linux,default-trigger = "cpu3";
+			};
+			led07 {
+				label = "led07";
+				index = <7>;
+			};
+			led08 {
+				label = "led08";
+				index = <8>;
+			};
+			led09 {
+				label = "led09";
+				index = <9>;
+			};
+			led10 {
+				label = "led10";
+				index = <10>;
+			};
+			led11 {
+				label = "led11";
+				index = <11>;
+			};
+			led12 {
+				label = "led12";
+				index = <12>;
+			};
+			led13 {
+				label = "led13";
+				index = <13>;
+			};
+			led14 {
+				label = "led14";
+				index = <14>;
+			};
+			led15 {
+				label = "led15";
+				index = <15>;
+			};
+		};
+
+		ETH0: eth0 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <36 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <64 0x1>;
+
+		};
+
+		ETH1: eth1 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <37 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <65 0x1>;
+
+		};
+
+		ETH2: eth2 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <38 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <66 0x1>;
+
+		};
+
+		ETH3: eth3 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <39 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <67 0x1>;
+
+		};
+
+		ETH4: eth4 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <40 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <68 0x1>;
+
+		};
+
+		ETH5: eth5 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <41 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <69 0x1>;
+
+		};
+
+		ETH6: eth6 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <42 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <70 0x1>;
+
+		};
+
+		ETH7: eth7 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <43 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <71 0x1>;
+
+		};
+
+		ETH8: eth8 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <44 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <72 0x1>;
+
+		};
+
+		ETH9: eth9 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <45 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <73 0x1>;
+
+		};
+
+		ETH10: eth10 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <46 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <74 0x1>;
+
+		};
+
+		ETH11: eth11 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <47 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <75 0x1>;
+
+		};
+
+		ETH12: eth12 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <48 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <76 0x1>;
+
+		};
+
+		ETH13: eth13 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <49 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <77 0x1>;
+
+		};
+
+		ETH14: eth14 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <50 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <78 0x1>;
+
+		};
+
+		ETH15: eth15 {
+			device_type = "eth";
+			compatible = "qsp-mac";
+			reg = <51 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <79 0x1>;
+
+		};
+
+		DISKCTL0: diskctrl0 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <52 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <80 0x1>;
+		};
+
+		DISKCTL1: diskctrl1 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <53 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <81 0x1>;
+		};
+
+		DISKCTL2: diskctrl2 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <54 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <82 0x1>;
+		};
+
+		DISKCTL3: diskctrl3 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <55 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <83 0x1>;
+		};
+
+		DISKCTL4: diskctrl4 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <56 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <84 0x1>;
+		};
+
+		DISKCTL5: diskctrl5 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <57 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <85 0x1>;
+		};
+
+		DISKCTL6: diskctrl6 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <58 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <86 0x1>;
+		};
+
+		DISKCTL7: diskctrl7 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <59 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <87 0x1>;
+		};
+
+		DISKCTL8: diskctrl8 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <60 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <88 0x1>;
+		};
+
+		DISKCTL9: diskctrl9 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <61 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <89 0x1>;
+		};
+
+		DISKCTL10: diskctrl10 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <62 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <90 0x1>;
+		};
+
+		DISKCTL11: diskctrl11 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <63 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <91 0x1>;
+		};
+
+		DISKCTL12: diskctrl12 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <64 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <92 0x1>;
+		};
+
+		DISKCTL13: diskctrl13 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <65 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <93 0x1>;
+		};
+
+		DISKCTL14: diskctrl14 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <66 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <94 0x1>;
+		};
+
+		DISKCTL15: diskctrl15 {
+			device_type = "disk-controller";
+			compatible = "qsp,disk-controller";
+			reg = <67 0x0 0x1000>;
+			interrupt-parent = <&PIC>;
+			interrupts = <95 0x1>;
+		};
+	};
+};

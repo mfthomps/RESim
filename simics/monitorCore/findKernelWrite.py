@@ -30,6 +30,7 @@ from resimHaps import *
 import memUtils
 import decode
 import decodeArm
+import decodePPC32
 import procInfo
 import resimUtils
 import resimSimicsUtils
@@ -93,6 +94,9 @@ class findKernelWrite():
         if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
             self.lgr.debug('findKernelWrite using arm decoder')
+        elif self.cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
+            self.lgr.debug('findKernelWrite using PPC32 decoder')
         else:
             self.decode = decode
         self.start_cycles = None
@@ -143,7 +147,7 @@ class findKernelWrite():
             #self.hackOrigin()
             self.lgr.debug('findKernelWrite added rev_write_hap kernel break %d' % self.kernel_write_break)
             self.rev_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.revWriteCallback, self.cpu, self.kernel_write_break)
-            self.broken_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.brokenHap, self.cpu.cycles)
+            self.broken_hap = self.top.RES_add_stop_callback(self.brokenHap, self.cpu.cycles)
 
         self.lgr.debug( 'breakpoint is %d, done now reverse from findKernelWrite)' % (self.kernel_write_break))
         self.context_manager.disableAll(direction='reverse')
@@ -245,7 +249,7 @@ class findKernelWrite():
         SIM_run_alone(self.addStopHapForWriteAlone, offset)
 
     def deleteBrokenAlone(self, hap):
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)
+        self.top.RES_delete_stop_hap(hap)
 
     class MyMemoryTransaction():
         def __init__(self, logical_address, physical_address, size, value):
@@ -277,7 +281,7 @@ class findKernelWrite():
             self.top.skipAndMail()
         else:
             if memory.size <= 8:
-                value = SIM_get_mem_op_value_le(memory)
+                value = memUtils.memoryValue(self.cpu, memory)
             else:
                 self.lgr.debug('revWriteCallBack, memory transaction size > 8, addr 0x%x' % memory.logical_address)
                 value = 0xbaaabaaabaaabaaa
@@ -330,8 +334,7 @@ class findKernelWrite():
         '''
         Called by VT_handler
         '''
-        self.stop_write_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.stopToCheckWriteCallback, offset)
+        self.stop_write_hap = self.top.RES_add_stop_callback(self.stopToCheckWriteCallback, offset)
         #SIM_run_command('reverse')
         SIM_break_simulation('vt_handler')
         self.stop_cycles = self.cpu.cycles
@@ -394,7 +397,7 @@ class findKernelWrite():
             self.lgr.error('stopToCheckWriteCallback going forward hit our original eip')
             if self.stop_write_hap is not None:
                 self.reverse_mgr.SIM_delete_breakpoint(self.kernel_write_break)
-                SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
+                self.top.RES_delete_stop_hap(self.stop_write_hap)
                 self.stop_write_hap = None
                 self.kernel_write_break = None
                 self.lgr.debug('stopToCheckWriteCallback deleted kernel_write_break')
@@ -434,7 +437,7 @@ class findKernelWrite():
                     # TBD does not make sense to delete these here?
                     #SIM_delete_breakpoint(self.kernel_write_break)
                     #self.kernel_write_break = None
-                    SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
+                    self.top.RES_delete_stop_hap(self.stop_write_hap)
                     self.stop_write_hap = None
                 
             status = SIM_simics_is_running()
@@ -518,15 +521,14 @@ class findKernelWrite():
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('findKernelWrite stopExit eip 0x%x, given cycles: 0x%x' % (eip, cycles))
         self.lgr.debug('findKernelWrite one %s  exce %s  err %s' % (str(one), str(exception), str(error_string)))
-        SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_exit_hap)
+        self.top.RES_delete_stop_hap(self.stop_exit_hap)
         self.stop_exit_hap = None
         SIM_run_alone(self.skipAlone, cycles) 
  
     def exitAlone(self, cycles):
         ''' set stop hap and stop simulation '''
         self.lgr.debug('findKernelWrite exitAlone cycles: 0x%x' % cycles)
-        self.stop_exit_hap = SIM_hap_add_callback("Core_Simulation_Stopped", 
-		    self.stopExit, cycles)
+        self.stop_exit_hap = self.top.RES_add_stop_callback(self.stopExit, cycles)
         if self.exit_hap is not None:
             self.context_manager.genDeleteHap(self.exit_hap, immediate=True)
             self.exit_hap = None
@@ -572,17 +574,19 @@ class findKernelWrite():
         self.lgr.debug( 'in thinkWeWrote tid:%s, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (tid, cycle, eip, str(instruct), cpl, orig_cycle))
         if self.stop_write_hap is not None:
                 self.lgr.debug('thinkWeWrote delete stop_write_hap')
-                SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
+                self.top.RES_delete_stop_hap(self.stop_write_hap)
                 self.stop_write_hap = None
         if cycle <= orig_cycle:
             range_start = self.dataWatch.findRange(self.addr)
             range_msg = ''
             if range_start is not None:
                 offset = self.addr - range_start
-                range_msg = ' And that is %d bytes from buffer starting at 0x%x' % (offset, range_start)
-            ida_msg = "Content of 0x%x was modified prior to enabling reverse execution. %s" % (self.addr, range_msg)
+                ida_msg = ' Content of 0x%x found %d bytes from buffer starting at 0x%x' % (self.addr, offset, range_start)
+            else:
+                ida_msg = "Content of 0x%x was modified prior to enabling reverse execution. %s" % (self.addr, range_msg)
             self.lgr.debug('findKernelWrite thinkWeWrote '+ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
+            print(ida_msg)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
             return
@@ -902,7 +906,7 @@ class findKernelWrite():
             self.kernel_write_break = None
         if self.stop_write_hap is not None:
             self.lgr.debug('findKernelWrite cleanup delete stop_write_hap')
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_write_hap)
+            self.top.RES_delete_stop_hap(self.stop_write_hap)
             self.stop_write_hap = None
         if self.mem_hap is not None:
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.mem_hap)

@@ -168,6 +168,8 @@ def adjustFunName(fun_name, fun_mgr, lgr):
                 fun = fun.split('Q')[1]+'eq'
             elif fun.startswith('Z') and 'QString' in fun and 'Hash' in fun:
                 fun = 'QStringHash'
+            elif fun.startswith('Z') and 'QString' in fun:
+                fun = 'QString'
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy') or 'destructor' in fun:

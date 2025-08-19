@@ -86,7 +86,7 @@ def assignLinkNames(target, comp_dict, lgr):
     link_names = {}
     for link in links:
         if link.mac not in comp_dict:
-            lgr.debug('*************** assingLinkNames link.mac %s not in comp_dict' % comp_dict)
+            lgr.debug('*************** assingLinkNames link.mac %s not in comp_dict' % link.mac)
             continue
         if comp_dict[link.mac] != 'None':
             obj = doEthLink(target, link.eth, lgr)
@@ -462,6 +462,14 @@ class LaunchRESim():
                         value = self.comp_dict[section][name]
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
+            elif platform == 'ppc32':
+                params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
+                params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
+                for name in self.comp_dict[section]:
+                    if name.startswith('$'):
+                        value = self.comp_dict[section][name]
+                        cmd = '%s=%s' % (name, value)
+                        run_command(cmd)
             else:
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
@@ -502,6 +510,7 @@ class LaunchRESim():
                 run_command(cmd)
             #print('assign eth link names')
             lgr.debug('Assign link names for section %s' % section)
+            
             self.link_dict[section] = assignLinkNames(section, self.comp_dict[section], lgr)
             #print('link the switches')
             switch_map = linkSwitches(section, self.comp_dict[section], self.link_dict[section], lgr)

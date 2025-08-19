@@ -35,6 +35,7 @@ import pageUtils
 import w7Params
 import taskUtils
 import winSocket
+import commMap
 THREAD_STATE_INITIALIZED = 0
 THREAD_STATE_READY = 1
 THREAD_STATE_RUNNING = 2
@@ -63,7 +64,7 @@ class WinTaskUtils():
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
     PEB_ADDR = 0x338
-    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr, root_prefix=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -93,6 +94,7 @@ class WinTaskUtils():
         else:
             self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
             return
+        self.comm_map = commMap.CommMap(root_prefix, lgr) 
         self.gui_call_map = {}
         self.gui_call_num_map = {}
         w7GUImapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
@@ -247,10 +249,13 @@ class WinTaskUtils():
 
         if cur_thread is None:
             self.lgr.error('winTaskUtils getCurProcRec got cur_thread of None reading 0x%x' % self.phys_current_task)
+        elif cur_thread < self.param.kernel_base:
+            self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x, NOT in kernel address space, bail' % (cur_thread, self.phys_current_task))
+            return None
         else:
-            #self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x' % (cur_thread, self.phys_current_task))
             ptr = cur_thread + self.param.proc_ptr
-            ptr_phys = self.mem_utils.v2p(self.cpu, ptr)
+            #self.lgr.debug('winTaskUtils getCurProcRec got cur_thread 0x%x reading 0x%x ptr: 0x%x' % (cur_thread, self.phys_current_task, ptr))
+            ptr_phys = self.mem_utils.v2p(self.cpu, ptr, do_log=False)
             #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
                if ptr > self.param.kernel_base: 
@@ -598,6 +603,8 @@ class WinTaskUtils():
         return retval
 
     def getCommFromTid(self, tid):
+        if tid is None:
+            return None
         ts_list = self.getTaskStructs()
         pid = int(self.pidString(tid))
         for ts in ts_list:
@@ -940,4 +947,9 @@ class WinTaskUtils():
             self.phys_saved_cr3 = self.mem_utils.v2p(self.cpu, gs_base+self.param.saved_cr3)
             self.lgr.debug('winTaskUtils saved phys_saved_cr3 value 0x%x' % self.phys_saved_cr3)
 
+    def progComm(self, prog_string):
+        prog_comm = os.path.basename(prog_string)[:self.commSize()]
+        return prog_comm
 
+    def commMatch(self, comm1, comm2):
+        return self.comm_map.commMatch(comm1, comm2)

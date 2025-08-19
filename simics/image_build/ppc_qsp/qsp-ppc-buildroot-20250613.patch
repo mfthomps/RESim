@@ -1,0 +1,5837 @@
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0001-qsp-arm-Initial-support-for-qsp-arm-board.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0001-qsp-arm-Initial-support-for-qsp-arm-board.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0001-qsp-arm-Initial-support-for-qsp-arm-board.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0001-qsp-arm-Initial-support-for-qsp-arm-board.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,473 @@
++From 45d5d83ea69fae4ed6f2f3a96e47a547a62a2c94 Mon Sep 17 00:00:00 2001
++From: Ivar Holmqvist <ivarholmqvist@gmail.com>
++Date: Tue, 17 Jul 2012 19:32:22 +0200
++Subject: [PATCH] qsp-arm: Initial support for qsp-arm board.
++
++---
++ arch/arm/cpu/armv7/qsp/Makefile   |   46 ++++++++++
++ arch/arm/cpu/armv7/qsp/config.mk  |   26 ++++++
++ arch/arm/cpu/armv7/qsp/sys_info.c |   32 +++++++
++ board/windriver/qsp_arm/Makefile  |   43 ++++++++++
++ board/windriver/qsp_arm/qsp_arm.c |  170 +++++++++++++++++++++++++++++++++++++
++ boards.cfg                        |    1 +
++ include/configs/qsp_arm.h         |   90 ++++++++++++++++++++
++ 7 files changed, 408 insertions(+)
++
++diff --git a/arch/arm/cpu/armv7/qsp/Makefile b/arch/arm/cpu/armv7/qsp/Makefile
++new file mode 100644
++index 0000000..1fd202a
++--- /dev/null
+++++ b/arch/arm/cpu/armv7/qsp/Makefile
++@@ -0,0 +1,46 @@
+++#
+++# (C) Copyright 2000-2006
+++# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++#
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++
+++include $(TOPDIR)/config.mk
+++
+++LIB	= $(obj)lib$(SOC).o
+++
+++COBJS	:= sys_info.o
+++SOBJS	:=
+++
+++SRCS	:= $(SOBJS:.o=.S) $(COBJS:.o=.c)
+++OBJS	:= $(addprefix $(obj),$(COBJS) $(SOBJS))
+++
+++all:	$(obj).depend $(LIB)
+++
+++$(LIB):	$(OBJS)
+++	$(call cmd_link_o_target, $(OBJS))
+++
+++#########################################################################
+++
+++# defines $(obj).depend target
+++include $(SRCTREE)/rules.mk
+++
+++sinclude $(obj).depend
+++
+++#########################################################################
++diff --git a/arch/arm/cpu/armv7/qsp/config.mk b/arch/arm/cpu/armv7/qsp/config.mk
++new file mode 100644
++index 0000000..23b0b85
++--- /dev/null
+++++ b/arch/arm/cpu/armv7/qsp/config.mk
++@@ -0,0 +1,26 @@
+++#
+++# (C) Copyright 2010,2011
+++# NVIDIA Corporation <www.nvidia.com>
+++#
+++# (C) Copyright 2002
+++# Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
+++#
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++PLATFORM_CPPFLAGS += -march=armv7-a
++diff --git a/arch/arm/cpu/armv7/qsp/sys_info.c b/arch/arm/cpu/armv7/qsp/sys_info.c
++new file mode 100644
++index 0000000..284a718
++--- /dev/null
+++++ b/arch/arm/cpu/armv7/qsp/sys_info.c
++@@ -0,0 +1,32 @@
+++/*
+++ * (C) Copyright 2010,2011
+++ * NVIDIA Corporation <www.nvidia.com>
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++#include <common.h>
+++
+++#ifdef CONFIG_DISPLAY_CPUINFO
+++/* Print CPU information */
+++int print_cpuinfo(void)
+++{
+++	puts("QSP ARM\n");
+++	return 0;
+++}
+++#endif	/* CONFIG_DISPLAY_CPUINFO */
++diff --git a/board/windriver/qsp_arm/Makefile b/board/windriver/qsp_arm/Makefile
++new file mode 100644
++index 0000000..daafd6e
++--- /dev/null
+++++ b/board/windriver/qsp_arm/Makefile
++@@ -0,0 +1,43 @@
+++#
+++# (C) Copyright 2000-2004
+++# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++#
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++
+++include $(TOPDIR)/config.mk
+++
+++LIB	= $(obj)lib$(BOARD).o
+++
+++COBJS	:= qsp_arm.o
+++
+++SRCS	:= $(COBJS:.o=.c)
+++OBJS	:= $(addprefix $(obj),$(COBJS))
+++
+++$(LIB):	$(obj).depend $(OBJS)
+++	$(call cmd_link_o_target, $(OBJS))
+++
+++#########################################################################
+++
+++# defines $(obj).depend target
+++include $(SRCTREE)/rules.mk
+++
+++sinclude $(obj).depend
+++
+++#########################################################################
++diff --git a/board/windriver/qsp_arm/qsp_arm.c b/board/windriver/qsp_arm/qsp_arm.c
++new file mode 100644
++index 0000000..2ac54ce
++--- /dev/null
+++++ b/board/windriver/qsp_arm/qsp_arm.c
++@@ -0,0 +1,170 @@
+++/*
+++ * (C) Copyright 2012
+++ * Wind River AB
+++ * Ivar Holmqvist <ivar.holmqvist@windriver.com>
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <asm/io.h>
+++#include <common.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++#if defined(CONFIG_SHOW_BOOT_PROGRESS)
+++void show_boot_progress(int progress)
+++{
+++	printf("Boot reached stage %d\n", progress);
+++}
+++#endif
+++
+++int board_init(void)
+++{
+++        /* FIXME: ... */
+++	gd->bd->bi_arch_number = MACH_TYPE_QSP_ARM;
+++	gd->flags = 0;
+++	gd->bd->bi_boot_params = LINUX_BOOT_PARAM_ADDR; /* FIXME: needed only using fdt... */
+++
+++	return 0;
+++}
+++
+++int timer_init(void)
+++{
+++	return 0;
+++}
+++
+++
+++void reset_cpu(ulong addr)
+++{
+++        /* FIXME: ... */
+++        /* Use the sysregs to cause reset */
+++}
+++
+++/* We skip delay/timer support in u-boot, it will only slow things
+++ * down in simics to do something fancy here. No devices need it and aborting
+++ * auto-boot can be done with a script...
+++ */
+++void __udelay(ulong usec)
+++{
+++}
+++
+++ulong get_timer(ulong base)
+++{
+++        return 0;
+++}
+++
+++ulong get_timer_masked(void)
+++{
+++	return 0;
+++}
+++
+++unsigned long long get_ticks(void)
+++{
+++        return 0;
+++}
+++
+++ulong get_tbclk (void)
+++{
+++	return (ulong)0;
+++}
+++
+++#define QSP_SERIAL_BASE 0xe0010000
+++#define QSP_SYSREG_BASE 0xe0001000
+++
+++/* Status register bits
+++ */
+++#define TX_READY (1<<0)
+++#define RX_READY (1<<1)
+++
+++/* Control register bits
+++ */
+++#define TX_INT (1<<0)
+++#define RX_INT (1<<1)
+++
+++#define ID_REG      0x00
+++#define STATUS_REG  0x04
+++#define CONTROL_REG 0x08
+++#define TXDATA_REG  0x0c
+++#define RXDATA_REG  0x10
+++
+++
+++/* SYSREG registers */
+++#define MEM_AVAIL_REG 0x20
+++#define MEM_START_REG 0x24
+++#define CPU_FREQ_REG  0x28
+++
+++int dram_init(void)
+++{
+++        if(readl(QSP_SYSREG_BASE + MEM_START_REG) != CONFIG_SYS_SDRAM_BASE) {
+++                printf("### ERROR #### u-boot compiled for ram_base @ %08x, board reports %08x\n",
+++                       CONFIG_SYS_SDRAM_BASE, readl(QSP_SYSREG_BASE + MEM_START_REG));
+++                for(;;) {
+++                }
+++        }
+++        /* Note, can't write gd->bd->bi_dram[0].size yet, this function lets the common code know
+++         * where to place it. That is done later in dram_init_banksize.
+++         */
+++        gd->ram_size = readl(QSP_SYSREG_BASE + MEM_AVAIL_REG);
+++        return 0;
+++}
+++
+++void dram_init_banksize(void)
+++{
+++        gd->bd->bi_dram[0].start = readl(QSP_SYSREG_BASE + MEM_START_REG);
+++        gd->bd->bi_dram[0].size =  readl(QSP_SYSREG_BASE + MEM_AVAIL_REG);
+++	return;
+++}
+++
+++int serial_init   (void)
+++{
+++        /*nop*/
+++}
+++
+++void serial_setbrg (void)
+++{
+++        /*nop*/
+++}
+++
+++void serial_putc(const char x)
+++{
+++        if (x == '\n')
+++                writel('\r', QSP_SERIAL_BASE + TXDATA_REG);                
+++        writel(x, QSP_SERIAL_BASE + TXDATA_REG);
+++}
+++
+++void serial_puts   (const char *x)
+++{
+++        int i;
+++        for (i = 0; x[i]; i++) {
+++                serial_putc(x[i]);
+++        }
+++}
+++
+++int serial_getc(void)
+++{
+++        while(!serial_tstc())
+++                ;
+++        return readl(QSP_SERIAL_BASE + RXDATA_REG);
+++}
+++
+++int serial_tstc(void)
+++{
+++        return readl(QSP_SERIAL_BASE + STATUS_REG) & RX_READY;
+++}
+++
++diff --git a/boards.cfg b/boards.cfg
++index 1e5b3e0..e040d6c 100644
++--- a/boards.cfg
+++++ b/boards.cfg
++@@ -222,6 +222,7 @@ harmony                      arm         armv7       harmony             nvidia
++ seaboard                     arm         armv7       seaboard            nvidia         tegra2
++ ventana                      arm         armv7       ventana             nvidia         tegra2
++ u8500_href                   arm         armv7       u8500               st-ericsson    u8500
+++qsp_arm                      arm         armv7       qsp_arm             windriver      qsp
++ actux1_4_16                  arm         ixp         actux1              -              -           actux1:FLASH2X2
++ actux1_4_32                  arm         ixp         actux1              -              -           actux1:FLASH2X2,RAM_32MB
++ actux1_8_16                  arm         ixp         actux1              -              -           actux1:FLASH1X8
++diff --git a/include/configs/qsp_arm.h b/include/configs/qsp_arm.h
++new file mode 100644
++index 0000000..51378c9
++--- /dev/null
+++++ b/include/configs/qsp_arm.h
++@@ -0,0 +1,90 @@
+++/*
+++ * (C) Copyright 2010 Linaro
+++ * Matt Waddel, <matt.waddel@linaro.org>
+++ *
+++ * Configuration for Versatile Express. Parts were derived from other ARM
+++ *   configurations.
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#ifndef __CONFIG_H
+++#define __CONFIG_H
+++
+++/* CHECKME do we need these? update in linux?*/
+++#define MACH_TYPE_QSP_ARM 0xffffffff
+++#define CONFIG_SYS_LOAD_ADDR		0x10008000	/* load address */
+++#define LINUX_BOOT_PARAM_ADDR		0x10000100
+++#define CONFIG_SYS_TEXT_BASE           0x000000
+++
+++#define CONFIG_SYS_HZ			1000
+++#define CONFIG_SKIP_LOWLEVEL_INIT
+++
+++#define CONFIG_OF_LIBFDT		1
+++/* FIXME: invented by qsp port, I doubt that it is needed, see arch/arm/lib/bootm.c 
+++ *        for what it does.
+++ */
+++#define CONFIG_PASS_RELOCATED_FDT       1
+++/* Size of malloc() pool */
+++#define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + 128 * 1024)
+++
+++
+++/* TODO: BAUDRATE is irrelevant, but I guess we need a sane value... we could try with something larger...*/
+++#define CONFIG_BAUDRATE			115200
+++#define CONFIG_SYS_BAUDRATE_TABLE	{ 115200 }
+++
+++/* Miscellaneous configurable options */
+++/* FIXME: needed? */
+++
+++#define CONFIG_BOOTDELAY		2
+++
+++/* Stack sizes are set up in start.S using the settings below */
+++#define CONFIG_STACKSIZE		(128 * 1024)	/* regular stack */
+++
+++/* Physical Memory Map */
+++#define CONFIG_NR_DRAM_BANKS		1
+++#define PHYS_SDRAM_1			0x10000000
+++
+++/* additions for new relocation code */
+++#define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM_1
+++#define CONFIG_SYS_INIT_RAM_SIZE		0x8000
+++#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_SDRAM_BASE + \
+++					 CONFIG_SYS_INIT_RAM_SIZE - \
+++					 GENERATED_GBL_DATA_SIZE)
+++#define CONFIG_SYS_INIT_SP_ADDR		CONFIG_SYS_GBL_DATA_OFFSET
+++
+++/* Basic environment settings */
+++#define CONFIG_BOOTCOMMAND		"use_simics_script_to_start;"
+++
+++#define CONFIG_SYS_NO_FLASH
+++#define CONFIG_ENV_IS_NOWHERE		1
+++#define CONFIG_ENV_SIZE			0x40000
+++
+++/* Monitor Command Prompt */
+++#define CONFIG_SYS_CBSIZE		512	/* Console I/O Buffer Size */
+++#define CONFIG_SYS_PROMPT		"qsp-arm# "
+++#define CONFIG_SYS_PBSIZE		(CONFIG_SYS_CBSIZE + \
+++					sizeof(CONFIG_SYS_PROMPT) + 16)
+++#define CONFIG_SYS_BARGSIZE		CONFIG_SYS_CBSIZE /* Boot args buffer */
+++#define CONFIG_CMD_SOURCE
+++#define CONFIG_SYS_LONGHELP
+++#define CONFIG_CMDLINE_EDITING		1
+++#define CONFIG_SYS_MAXARGS		16	/* max command args */
+++
+++#endif
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0002-qsp-ppc-Initial-support-for-qsp-ppc-board.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0002-qsp-ppc-Initial-support-for-qsp-ppc-board.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0002-qsp-ppc-Initial-support-for-qsp-ppc-board.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0002-qsp-ppc-Initial-support-for-qsp-ppc-board.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,2972 @@
++From d68a9ec7a7339781528d8e4bfbc5d6e038973e9f Mon Sep 17 00:00:00 2001
++From: Ivar Holmqvist <ivarholmqvist@gmail.com>
++Date: Tue, 17 Jul 2012 19:33:39 +0200
++Subject: [PATCH] qsp-ppc: Initial support for qsp-ppc board.
++
++---
++ arch/powerpc/cpu/qsp/Makefile     |   59 +++
++ arch/powerpc/cpu/qsp/cache.S      |  379 ++++++++++++++
++ arch/powerpc/cpu/qsp/config.mk    |   27 +
++ arch/powerpc/cpu/qsp/cpu.c        |  141 ++++++
++ arch/powerpc/cpu/qsp/cpu_init.c   |  119 +++++
++ arch/powerpc/cpu/qsp/fdt.c        |   63 +++
++ arch/powerpc/cpu/qsp/interrupts.c |  132 +++++
++ arch/powerpc/cpu/qsp/mp.c         |  147 ++++++
++ arch/powerpc/cpu/qsp/speed.c      |   46 ++
++ arch/powerpc/cpu/qsp/start.S      | 1000 +++++++++++++++++++++++++++++++++++++
++ arch/powerpc/cpu/qsp/traps.c      |  234 +++++++++
++ arch/powerpc/cpu/qsp/u-boot.lds   |   93 ++++
++ board/windriver/qsp_ppc/Makefile  |   43 ++
++ board/windriver/qsp_ppc/qsp_ppc.c |  152 ++++++
++ boards.cfg                        |    1 +
++ include/configs/qsp_ppc.h         |  208 ++++++++
++ 16 files changed, 2844 insertions(+)
++
++diff --git a/arch/powerpc/cpu/qsp/Makefile b/arch/powerpc/cpu/qsp/Makefile
++new file mode 100644
++index 0000000..42bcc8f
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/Makefile
++@@ -0,0 +1,59 @@
+++#
+++# Copyright 2007 Freescale Semiconductor, Inc.
+++# (C) Copyright 2002,2003 Motorola Inc.
+++# Xianghua Xiao,X.Xiao@motorola.com
+++#
+++# (C) Copyright 2004 Freescale Semiconductor. (MC86xx Port)
+++# Jeff Brown
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++
+++include $(TOPDIR)/config.mk
+++
+++LIB	= $(obj)lib$(CPU).o
+++
+++SSTART	= start.o
+++CSTART	= traps.o
+++
+++SOBJS-y += cache.o
+++
+++COBJS-y	+= cpu.o
+++COBJS-y	+= cpu_init.o
+++COBJS-$(CONFIG_OF_LIBFDT) += fdt.o
+++COBJS-y	+= interrupts.o
+++COBJS-y	+= speed.o
+++
+++SRCS	:= $(START:.o=.S) $(SOBJS-y:.o=.S) $(COBJS-y:.o=.c)
+++OBJS	:= $(addprefix $(obj),$(SOBJS-y) $(COBJS-y))
+++START	:= $(addprefix $(obj),$(SSTART) $(CSTART))
+++
+++all:	$(obj).depend $(START) $(LIB)
+++
+++$(LIB):	$(OBJS)
+++	echo "HELLO"
+++	$(call cmd_link_o_target, $(OBJS))
+++
+++#########################################################################
+++
+++# defines $(obj).depend target
+++include $(SRCTREE)/rules.mk
+++
+++sinclude $(obj).depend
+++
+++#########################################################################
++diff --git a/arch/powerpc/cpu/qsp/cache.S b/arch/powerpc/cpu/qsp/cache.S
++new file mode 100644
++index 0000000..bb146d5
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/cache.S
++@@ -0,0 +1,379 @@
+++#include <config.h>
+++//#include <qsp_ppc.h>
+++#include <mpc86xx.h>
+++#include <version.h>
+++
+++#include <ppc_asm.tmpl>
+++#include <ppc_defs.h>
+++
+++#include <asm/cache.h>
+++#include <asm/mmu.h>
+++
+++#ifndef CACHE_LINE_SIZE
+++# define CACHE_LINE_SIZE L1_CACHE_BYTES
+++#endif
+++
+++#if CACHE_LINE_SIZE == 128
+++#define LG_CACHE_LINE_SIZE 7
+++#elif CACHE_LINE_SIZE == 32
+++#define LG_CACHE_LINE_SIZE 5
+++#elif CACHE_LINE_SIZE == 16
+++#define LG_CACHE_LINE_SIZE 4
+++#elif CACHE_LINE_SIZE == 8
+++#define LG_CACHE_LINE_SIZE 3
+++#else
+++# error "Invalid cache line size!"
+++#endif
+++
+++/*
+++ * Most of this code is taken from 74xx_7xx/cache.S
+++ * and then cleaned up a bit
+++ */
+++
+++/*
+++ * Invalidate L1 instruction cache.
+++ */
+++_GLOBAL(invalidate_l1_instruction_cache)
+++	/* use invalidate-all bit in HID0 */
+++	mfspr	r3,HID0
+++	ori	r3,r3,HID0_ICFI
+++	mtspr	HID0,r3
+++	isync
+++	blr
+++
+++/*
+++ * Invalidate L1 data cache.
+++ */
+++_GLOBAL(invalidate_l1_data_cache)
+++	mfspr	r3,HID0
+++	ori	r3,r3,HID0_DCFI
+++	mtspr	HID0,r3
+++	isync
+++	blr
+++
+++/*
+++ * Flush data cache.
+++ */
+++_GLOBAL(flush_dcache)
+++	lis	r3,0
+++	lis	r5,CACHE_LINE_SIZE
+++flush:
+++	cmp	0,1,r3,r5
+++	bge	done
+++	lwz	r5,0(r3)
+++	lis	r5,CACHE_LINE_SIZE
+++	addi	r3,r3,0x4
+++	b	flush
+++done:
+++	blr
+++/*
+++ * Write any modified data cache blocks out to memory
+++ * and invalidate the corresponding instruction cache blocks.
+++ * This is a no-op on the 601.
+++ *
+++ * flush_icache_range(unsigned long start, unsigned long stop)
+++ */
+++_GLOBAL(flush_icache_range)
+++	li	r5,CACHE_LINE_SIZE-1
+++	andc	r3,r3,r5
+++	subf	r4,r3,r4
+++	add	r4,r4,r5
+++	srwi.	r4,r4,LG_CACHE_LINE_SIZE
+++	beqlr
+++	mtctr	r4
+++	mr	r6,r3
+++1:	dcbst	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync				/* wait for dcbst's to get to ram */
+++	mtctr	r4
+++2:	icbi	0,r6
+++	addi	r6,r6,CACHE_LINE_SIZE
+++	bdnz	2b
+++	sync				/* additional sync needed on g4 */
+++	isync
+++	blr
+++/*
+++ * Write any modified data cache blocks out to memory.
+++ * Does not invalidate the corresponding cache lines (especially for
+++ * any corresponding instruction cache).
+++ *
+++ * clean_dcache_range(unsigned long start, unsigned long stop)
+++ */
+++_GLOBAL(clean_dcache_range)
+++	li	r5,CACHE_LINE_SIZE-1
+++	andc	r3,r3,r5	/* align r3 down to cache line */
+++	subf	r4,r3,r4	/* r4 = offset of stop from start of cache line */
+++	add	r4,r4,r5	/* r4 += cache_line_size-1 */
+++	srwi.	r4,r4,LG_CACHE_LINE_SIZE  /* r4 = number of cache lines to flush */
+++	beqlr				  /* if r4 == 0 return */
+++	mtctr	r4			  /* ctr = r4 */
+++
+++	sync
+++1:	dcbst	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync				/* wait for dcbst's to get to ram */
+++	blr
+++
+++/*
+++ * Write any modified data cache blocks out to memory
+++ * and invalidate the corresponding instruction cache blocks.
+++ *
+++ * flush_dcache_range(unsigned long start, unsigned long stop)
+++ */
+++_GLOBAL(flush_dcache_range)
+++	li	r5,CACHE_LINE_SIZE-1
+++	andc	r3,r3,r5
+++	subf	r4,r3,r4
+++	add	r4,r4,r5
+++	srwi.	r4,r4,LG_CACHE_LINE_SIZE
+++	beqlr
+++	mtctr	r4
+++
+++	sync
+++1:	dcbf	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync				/* wait for dcbf's to get to ram */
+++	blr
+++
+++/*
+++ * Like above, but invalidate the D-cache.  This is used by the 8xx
+++ * to invalidate the cache so the PPC core doesn't get stale data
+++ * from the CPM (no cache snooping here :-).
+++ *
+++ * invalidate_dcache_range(unsigned long start, unsigned long stop)
+++ */
+++_GLOBAL(invalidate_dcache_range)
+++	li	r5,CACHE_LINE_SIZE-1
+++	andc	r3,r3,r5
+++	subf	r4,r3,r4
+++	add	r4,r4,r5
+++	srwi.	r4,r4,LG_CACHE_LINE_SIZE
+++	beqlr
+++	mtctr	r4
+++
+++	sync
+++1:	dcbi	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync				/* wait for dcbi's to get to ram */
+++	blr
+++
+++/*
+++ * Flush a particular page from the data cache to RAM.
+++ * Note: this is necessary because the instruction cache does *not*
+++ * snoop from the data cache.
+++ *
+++ *	void __flush_page_to_ram(void *page)
+++ */
+++_GLOBAL(__flush_page_to_ram)
+++	rlwinm	r3,r3,0,0,19		/* Get page base address */
+++	li	r4,4096/CACHE_LINE_SIZE	/* Number of lines in a page */
+++	mtctr	r4
+++	mr	r6,r3
+++0:	dcbst	0,r3			/* Write line to ram */
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	0b
+++	sync
+++	mtctr	r4
+++1:	icbi	0,r6
+++	addi	r6,r6,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync
+++	isync
+++	blr
+++
+++/*
+++ * Flush a particular page from the instruction cache.
+++ * Note: this is necessary because the instruction cache does *not*
+++ * snoop from the data cache.
+++ *
+++ *	void __flush_icache_page(void *page)
+++ */
+++_GLOBAL(__flush_icache_page)
+++	li	r4,4096/CACHE_LINE_SIZE	/* Number of lines in a page */
+++	mtctr	r4
+++1:	icbi	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	sync
+++	isync
+++	blr
+++
+++/*
+++ * Clear a page using the dcbz instruction, which doesn't cause any
+++ * memory traffic (except to write out any cache lines which get
+++ * displaced).  This only works on cacheable memory.
+++ */
+++_GLOBAL(clear_page)
+++	li	r0,4096/CACHE_LINE_SIZE
+++	mtctr	r0
+++1:	dcbz	0,r3
+++	addi	r3,r3,CACHE_LINE_SIZE
+++	bdnz	1b
+++	blr
+++
+++/*
+++ * Enable L1 Instruction cache
+++ */
+++_GLOBAL(icache_enable)
+++	mfspr	r3, HID0
+++	li	r5, HID0_ICFI|HID0_ILOCK
+++	andc	r3, r3, r5
+++	ori	r3, r3, HID0_ICE
+++	ori	r5, r3, HID0_ICFI
+++	mtspr	HID0, r5
+++	mtspr	HID0, r3
+++	isync
+++	blr
+++
+++/*
+++ * Disable L1 Instruction cache
+++ */
+++_GLOBAL(icache_disable)
+++	mflr	r4
+++	bl	invalidate_l1_instruction_cache		/* uses r3 */
+++	sync
+++	mtlr	r4
+++	mfspr	r3, HID0
+++	li	r5, 0
+++	ori	r5, r5, HID0_ICE
+++	andc	r3, r3, r5
+++	mtspr	HID0, r3
+++	isync
+++	blr
+++
+++/*
+++ * Is instruction cache enabled?
+++ */
+++_GLOBAL(icache_status)
+++	mfspr	r3, HID0
+++	andi.	r3, r3, HID0_ICE
+++	blr
+++
+++
+++_GLOBAL(l1dcache_enable)
+++	mfspr	r3, HID0
+++	li	r5, HID0_DCFI|HID0_DLOCK
+++	andc	r3, r3, r5
+++	mtspr	HID0, r3		/* no invalidate, unlock */
+++	ori	r3, r3, HID0_DCE
+++	ori	r5, r3, HID0_DCFI
+++	mtspr	HID0, r5		/* enable + invalidate */
+++	mtspr	HID0, r3		/* enable */
+++	sync
+++	blr
+++
+++/*
+++ * Enable data cache(s) - L1 and optionally L2
+++ * Calls l2cache_enable. LR saved in r5
+++ */
+++_GLOBAL(dcache_enable)
+++	mfspr	r3, HID0
+++	li	r5, HID0_DCFI|HID0_DLOCK
+++	andc	r3, r3, r5
+++	mtspr	HID0, r3		/* no invalidate, unlock */
+++	ori	r3, r3, HID0_DCE
+++	ori	r5, r3, HID0_DCFI
+++	mtspr	HID0, r5		/* enable + invalidate */
+++	mtspr	HID0, r3		/* enable */
+++	sync
+++#ifdef CONFIG_SYS_L2
+++	mflr	r5
+++	bl	l2cache_enable		/* uses r3 and r4 */
+++	sync
+++	mtlr	r5
+++#endif
+++	blr
+++
+++
+++/*
+++ * Disable data cache(s) - L1 and optionally L2
+++ * Calls flush_dcache and l2cache_disable_no_flush.
+++ * LR saved in r4
+++ */
+++_GLOBAL(dcache_disable)
+++	mflr	r4			/* save link register */
+++	bl	flush_dcache	/* uses r3 and r5 */
+++	sync
+++	mfspr	r3, HID0
+++	li	r5, HID0_DCFI|HID0_DLOCK
+++	andc	r3, r3, r5
+++	mtspr	HID0, r3		/* no invalidate, unlock */
+++	li	r5, HID0_DCE|HID0_DCFI
+++	andc	r3, r3, r5		/* no enable, no invalidate */
+++	mtspr	HID0, r3
+++	sync
+++#ifdef CONFIG_SYS_L2
+++	bl	l2cache_disable_no_flush /* uses r3 */
+++#endif
+++	mtlr	r4			/* restore link register */
+++	blr
+++
+++/*
+++ * Is data cache enabled?
+++ */
+++_GLOBAL(dcache_status)
+++	mfspr	r3, HID0
+++	andi.	r3, r3, HID0_DCE
+++	blr
+++
+++/*
+++ * Invalidate L2 cache using L2I, assume L2 is enabled
+++ */
+++_GLOBAL(l2cache_invalidate)
+++	mfspr	r3, l2cr
+++	rlwinm.	r3, r3, 0, 0, 0
+++	beq	1f
+++
+++	mfspr	r3, l2cr
+++	rlwinm	r3, r3, 0, 1, 31
+++
+++#ifdef	CONFIG_ALTIVEC
+++	dssall
+++#endif
+++	sync
+++	mtspr	l2cr, r3
+++	sync
+++1:	mfspr	r3, l2cr
+++	oris	r3, r3, L2CR_L2I@h
+++	mtspr	l2cr, r3
+++
+++invl2:
+++	mfspr	r3, l2cr
+++	andis.	r3, r3, L2CR_L2I@h
+++	bne	invl2
+++	blr
+++
+++/*
+++ * Enable L2 cache
+++ * Calls l2cache_invalidate. LR is saved in r4
+++ */
+++_GLOBAL(l2cache_enable)
+++	mflr	r4			/* save link register */
+++	bl	l2cache_invalidate	/* uses r3 */
+++	sync
+++	lis	r3, L2_ENABLE@h
+++	ori	r3, r3, L2_ENABLE@l
+++	mtspr	l2cr, r3
+++	isync
+++	mtlr	r4			/* restore link register */
+++	blr
+++
+++/*
+++ * Disable L2 cache
+++ * Calls flush_dcache. LR is saved in r4
+++ */
+++_GLOBAL(l2cache_disable)
+++	mflr	r4			/* save link register */
+++	bl	flush_dcache		/* uses r3 and r5 */
+++	sync
+++	mtlr	r4			/* restore link register */
+++l2cache_disable_no_flush:		/* provide way to disable L2 w/o flushing */
+++	lis	r3, L2_INIT@h
+++	ori	r3, r3, L2_INIT@l
+++	mtspr	l2cr, r3
+++	isync
+++	blr
++diff --git a/arch/powerpc/cpu/qsp/config.mk b/arch/powerpc/cpu/qsp/config.mk
++new file mode 100644
++index 0000000..92ff7bf
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/config.mk
++@@ -0,0 +1,27 @@
+++#
+++# (C) Copyright 2004 Freescale Semiconductor.
+++# Jeff Brown
+++#
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++
+++PLATFORM_RELFLAGS += -meabi
+++
+++PLATFORM_CPPFLAGS += -ffixed-r2 -mstring
+++PLATFORM_CPPFLAGS += -maltivec -mabi=altivec -msoft-float
++diff --git a/arch/powerpc/cpu/qsp/cpu.c b/arch/powerpc/cpu/qsp/cpu.c
++new file mode 100644
++index 0000000..e275455
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/cpu.c
++@@ -0,0 +1,141 @@
+++/*
+++ * Copyright 2006,2009-2010 Freescale Semiconductor, Inc.
+++ * Jeff Brown
+++ * Srikanth Srinivasan (srikanth.srinivasan@freescale.com)
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <common.h>
+++#include <watchdog.h>
+++#include <command.h>
+++#include <asm/cache.h>
+++#include <asm/mmu.h>
+++#include <asm/processor.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++/*
+++ * Default board reset function
+++ */
+++static void
+++__board_reset(void)
+++{
+++	/* Do nothing */
+++}
+++void board_reset(void) __attribute__((weak, alias("__board_reset")));
+++
+++int cpu_numcores()
+++{
+++        return 1;
+++}
+++
+++int
+++checkcpu(void)
+++{
+++	sys_info_t sysinfo;
+++	uint pvr, svr;
+++	uint major, minor;
+++	char buf1[32], buf2[32];
+++	struct cpu_type *cpu;
+++
+++	svr = get_svr();
+++	major = SVR_MAJ(svr);
+++	minor = SVR_MIN(svr);
+++
+++	if (cpu_numcores() > 1) {
+++#ifndef CONFIG_MP
+++		puts("Unicore software on multiprocessor system!!\n"
+++		     "To enable mutlticore build define CONFIG_MP\n");
+++#endif
+++	}
+++
+++	puts("Core:  ");
+++	pvr = get_pvr();
+++	major = PVR_E600_MAJ(pvr);
+++	minor = PVR_E600_MIN(pvr);
+++
+++	printf("E600 Core ");
+++	printf(", Version: %d.%d, (0x%08x)\n", major, minor, pvr);
+++
+++	get_sys_info(&sysinfo);
+++
+++	puts("Clock Configuration:\n");
+++	printf("       CPU:%-4s MHz\n", strmhz(buf1, sysinfo.freqProcessor));
+++	printf("       TIMEBASE:%-4s MHz\n", strmhz(buf1, sysinfo.freqTimebase));
+++
+++	return 0;
+++}
+++
+++
+++int do_reset(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+++{
+++	/* Attempt board-specific reset */
+++	board_reset();
+++	while (1)
+++		;
+++
+++	return 1;
+++}
+++
+++
+++/*
+++ * Get timebase clock frequency
+++ */
+++unsigned long
+++get_tbclk(void)
+++{
+++	sys_info_t sys_info;
+++	get_sys_info(&sys_info);
+++	return (sys_info.freqTimebase);
+++}
+++
+++/*
+++ * Set the DDR BATs to reflect the actual size of DDR.
+++ *
+++ * dram_size is the actual size of DDR, in bytes
+++ *
+++ * Note: we assume that CONFIG_MAX_MEM_MAPPED is 2G or smaller as we only
+++ * are using a single BAT to cover DDR.
+++ *
+++ * If this is not true, (e.g. CONFIG_MAX_MEM_MAPPED is 2GB but HID0_XBSEN
+++ * is not defined) then we might have a situation where U-Boot will attempt
+++ * to relocated itself outside of the region mapped by DBAT0.
+++ * This will cause a machine check.
+++ *
+++ * Currently we are limited to power of two sized DDR since we only use a
+++ * single bat.  If a non-power of two size is used that is less than
+++ * CONFIG_MAX_MEM_MAPPED u-boot will crash.
+++ *
+++ */
+++void setup_ddr_bat(phys_addr_t dram_size)
+++{
+++	unsigned long batu, bl;
+++
+++	bl = TO_BATU_BL(min(dram_size, CONFIG_MAX_MEM_MAPPED));
+++
+++	if (BATU_SIZE(bl) != dram_size) {
+++		u64 sz = (u64)dram_size - BATU_SIZE(bl);
+++		print_size(sz, " left unmapped\n");
+++	}
+++
+++	batu = bl | BATU_VS | BATU_VP;
+++	write_bat(DBAT0, batu, CONFIG_SYS_DBAT0L);
+++	write_bat(IBAT0, batu, CONFIG_SYS_IBAT0L);
+++}
++diff --git a/arch/powerpc/cpu/qsp/cpu_init.c b/arch/powerpc/cpu/qsp/cpu_init.c
++new file mode 100644
++index 0000000..48f5556
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/cpu_init.c
++@@ -0,0 +1,119 @@
+++/*
+++ * Copyright 2004,2009-2011 Freescale Semiconductor, Inc.
+++ * Jeff Brown
+++ * Srikanth Srinivasan (srikanth.srinivasan@freescale.com)
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++/*
+++ * cpu_init.c - low level cpu init
+++ */
+++
+++#include <config.h>
+++#include <common.h>
+++#include <mpc86xx.h>
+++#include <asm/mmu.h>
+++#include <asm/fsl_law.h>
+++#include <asm/fsl_serdes.h>
+++#include <asm/mp.h>
+++
+++extern void srio_init(void);
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++/*
+++ * Breathe some life into the CPU...
+++ *
+++ * Set up the memory map
+++ * initialize a bunch of registers
+++ */
+++
+++void cpu_init_f(void)
+++{
+++	/* Pointer is writable since we allocated a register for it */
+++	gd = (gd_t *) (CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_GBL_DATA_OFFSET);
+++
+++	/* Clear initial global data */
+++	memset ((void *) gd, 0, sizeof (gd_t));
+++
+++#ifdef CONFIG_FSL_LAW
+++//	init_laws();
+++#endif
+++
+++	setup_bats();
+++
+++//	init_early_memctl_regs();
+++
+++#if defined(CONFIG_FSL_DMA)
+++//	dma_init();
+++#endif
+++
+++	/* enable the timebase bit in HID0 */
+++	set_hid0(get_hid0() | 0x4000000);
+++
+++	/* enable EMCP, SYNCBE | ABE bits in HID1 */
+++	set_hid1(get_hid1() | 0x80000C00);
+++}
+++
+++/*
+++ * initialize higher level parts of CPU like timers
+++ */
+++int cpu_init_r(void)
+++{
+++	/* needs to be in ram since code uses global static vars */
+++//	fsl_serdes_init();
+++
+++#ifdef CONFIG_SYS_SRIO
+++//	srio_init();
+++#endif
+++
+++#if defined(CONFIG_MP)
+++	setup_mp();
+++#endif
+++	return 0;
+++}
+++
+++#ifdef CONFIG_ADDR_MAP
+++/* Initialize address mapping array */
+++void init_addr_map(void)
+++{
+++	int i;
+++	ppc_bat_t bat = DBAT0;
+++	phys_size_t size;
+++	unsigned long upper, lower;
+++
+++	for (i = 0; i < CONFIG_SYS_NUM_ADDR_MAP; i++, bat++) {
+++		if (read_bat(bat, &upper, &lower) != -1) {
+++			if (!BATU_VALID(upper))
+++				size = 0;
+++			else
+++				size = BATU_SIZE(upper);
+++			addrmap_set_entry(BATU_VADDR(upper), BATL_PADDR(lower),
+++					  size, i);
+++		}
+++#ifdef CONFIG_HIGH_BATS
+++		/* High bats are not contiguous with low BAT numbers */
+++		if (bat == DBAT3)
+++			bat = DBAT4 - 1;
+++#endif
+++	}
+++}
+++
+++#endif
++diff --git a/arch/powerpc/cpu/qsp/fdt.c b/arch/powerpc/cpu/qsp/fdt.c
++new file mode 100644
++index 0000000..63560e3
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/fdt.c
++@@ -0,0 +1,63 @@
+++/*
+++ * Copyright 2008, 2011 Freescale Semiconductor, Inc.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License
+++ * Version 2 as published by the Free Software Foundation.
+++ */
+++
+++#include <common.h>
+++#include <libfdt.h>
+++#include <fdt_support.h>
+++#include <asm/mp.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++extern void ft_fixup_num_cores(void *blob);
+++extern void ft_srio_setup(void *blob);
+++
+++void ft_cpu_setup(void *blob, bd_t *bd)
+++{
+++#ifdef CONFIG_MP
+++	int off;
+++	u32 bootpg = determine_mp_bootpg();
+++#endif
+++        sys_info_t sys_info;
+++
+++	get_sys_info(&sys_info);
+++
+++#if 0
+++	do_fixup_by_prop_u32(blob, "device_type", "cpu", 4,
+++			     "timebase-frequency", bd->bi_busfreq / 4, 1);
+++	do_fixup_by_prop_u32(blob, "device_type", "cpu", 4,
+++			     "bus-frequency", bd->bi_busfreq, 1);
+++	do_fixup_by_prop_u32(blob, "device_type", "soc", 4,
+++			     "bus-frequency", bd->bi_busfreq, 1);
+++#endif
+++
+++	do_fixup_by_prop_u32(blob, "device_type", "cpu", 4,
+++			     "clock-frequency", sys_info.freqProcessor, 1);
+++	do_fixup_by_prop_u32(blob, "device_type", "cpu", 4,
+++			     "timebase-frequency", sys_info.freqTimebase, 1);
+++
+++#if defined(CONFIG_MPC8641)
+++	do_fixup_by_compat_u32(blob, "fsl,mpc8641-localbus",
+++			       "bus-frequency", gd->lbc_clk, 1);
+++#endif
+++#if 0
+++	do_fixup_by_compat_u32(blob, "fsl,elbc",
+++			       "bus-frequency", gd->lbc_clk, 1);
+++#endif
+++
+++	fdt_fixup_memory(blob, (u64)bd->bi_memstart, (u64)bd->bi_memsize);
+++
+++
+++#ifdef CONFIG_MP
+++	/* Reserve the boot page so OSes dont use it */
+++	off = fdt_add_mem_rsv(blob, bootpg, (u64)4096);
+++	if (off < 0)
+++		printf("%s: %s\n", __FUNCTION__, fdt_strerror(off));
+++
+++	ft_fixup_num_cores(blob);
+++#endif
+++}
++diff --git a/arch/powerpc/cpu/qsp/interrupts.c b/arch/powerpc/cpu/qsp/interrupts.c
++new file mode 100644
++index 0000000..6895e26
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/interrupts.c
++@@ -0,0 +1,132 @@
+++/*
+++ * (C) Copyright 2000-2002
+++ * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++ *
+++ * (C) Copyright 2002 (440 port)
+++ * Scott McNutt, Artesyn Communication Producs, smcnutt@artsyncp.com
+++ *
+++ * (C) Copyright 2003 Motorola Inc. (MPC85xx port)
+++ * Xianghua Xiao (X.Xiao@motorola.com)
+++ *
+++ * (C) Copyright 2004, 2007 Freescale Semiconductor. (MPC86xx Port)
+++ * Jeff Brown
+++ * Srikanth Srinivasan (srikanth.srinivasan@freescale.com)
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <common.h>
+++//#include <mpc86xx.h>
+++#include <command.h>
+++#include <asm/processor.h>
+++#ifdef CONFIG_POST
+++#include <post.h>
+++#endif
+++
+++int interrupt_init_cpu(unsigned long *decrementer_count)
+++{
+++#if 0
+++	volatile immap_t *immr = (immap_t *)CONFIG_SYS_IMMR;
+++	volatile ccsr_pic_t *pic = &immr->im_pic;
+++
+++#ifdef CONFIG_POST
+++	/*
+++	 * The POST word is stored in the PIC's TFRR register which gets
+++	 * cleared when the PIC is reset.  Save it off so we can restore it
+++	 * later.
+++	 */
+++	ulong post_word = post_word_load();
+++#endif
+++
+++	pic->gcr = MPC86xx_PICGCR_RST;
+++	while (pic->gcr & MPC86xx_PICGCR_RST)
+++		;
+++	pic->gcr = MPC86xx_PICGCR_MODE;
+++
+++	*decrementer_count = get_tbclk() / CONFIG_SYS_HZ;
+++	debug("interrupt init: tbclk() = %ld MHz, decrementer_count = %ld\n",
+++	      (get_tbclk() / 1000000),
+++	      *decrementer_count);
+++
+++#ifdef CONFIG_INTERRUPTS
+++
+++	pic->iivpr1 = 0x810001;	/* 50220 enable mcm interrupts */
+++	debug("iivpr1@%p = %x\n", &pic->iivpr1, pic->iivpr1);
+++
+++	pic->iivpr2 = 0x810002;	/* 50240 enable ddr interrupts */
+++	debug("iivpr2@%p = %x\n", &pic->iivpr2, pic->iivpr2);
+++
+++	pic->iivpr3 = 0x810003;	/* 50260 enable lbc interrupts */
+++	debug("iivpr3@%p = %x\n", &pic->iivpr3, pic->iivpr3);
+++
+++#if defined(CONFIG_PCI1) || defined(CONFIG_PCIE1)
+++	pic->iivpr8 = 0x810008;	/* enable pcie1 interrupts */
+++	debug("iivpr8@%p = %x\n", &pic->iivpr8, pic->iivpr8);
+++#endif
+++#if defined(CONFIG_PCI2) || defined(CONFIG_PCIE2)
+++	pic->iivpr9 = 0x810009;	/* enable pcie2 interrupts */
+++	debug("iivpr9@%p = %x\n", &pic->iivpr9, pic->iivpr9);
+++#endif
+++
+++	pic->ctpr = 0;	/* 40080 clear current task priority register */
+++#endif
+++
+++#ifdef CONFIG_POST
+++	post_word_store(post_word);
+++#endif
+++#endif
+++	return 0;
+++}
+++
+++/*
+++ * timer_interrupt - gets called when the decrementer overflows,
+++ * with interrupts disabled.
+++ * Trivial implementation - no need to be really accurate.
+++ */
+++void timer_interrupt_cpu(struct pt_regs *regs)
+++{
+++	/* nothing to do here */
+++}
+++
+++/*
+++ * Install and free a interrupt handler. Not implemented yet.
+++ */
+++void irq_install_handler(int vec, interrupt_handler_t *handler, void *arg)
+++{
+++}
+++
+++void irq_free_handler(int vec)
+++{
+++}
+++
+++/*
+++ * irqinfo - print information about PCI devices,not implemented.
+++ */
+++int do_irqinfo(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[])
+++{
+++	return 0;
+++}
+++
+++/*
+++ * Handle external interrupts
+++ */
+++void external_interrupt(struct pt_regs *regs)
+++{
+++	puts("external_interrupt (oops!)\n");
+++}
++diff --git a/arch/powerpc/cpu/qsp/mp.c b/arch/powerpc/cpu/qsp/mp.c
++new file mode 100644
++index 0000000..4e97569
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/mp.c
++@@ -0,0 +1,147 @@
+++/*
+++ * Copyright 2008-2010 Freescale Semiconductor, Inc.
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <common.h>
+++#include <asm/processor.h>
+++#include <asm/mmu.h>
+++#include <ioports.h>
+++#include <lmb.h>
+++#include <asm/io.h>
+++#include <asm/mp.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++int cpu_reset(int nr)
+++{
+++	/* dummy function so common/cmd_mp.c will build
+++	 * should be implemented in the future, when cpu_release()
+++	 * is supported.  Be aware there may be a similiar bug
+++	 * as exists on MPC85xx w/its PIC having a timing window
+++	 * associated to resetting the core */
+++	return 1;
+++}
+++
+++int cpu_status(int nr)
+++{
+++	/* dummy function so common/cmd_mp.c will build */
+++	return 0;
+++}
+++
+++int cpu_disable(int nr)
+++{
+++#if 0
+++	volatile immap_t *immap = (immap_t *) CONFIG_SYS_CCSRBAR;
+++	volatile ccsr_gur_t *gur = &immap->im_gur;
+++
+++	switch (nr) {
+++	case 0:
+++		setbits_be32(&gur->devdisr, MPC86xx_DEVDISR_CPU0);
+++		break;
+++	case 1:
+++		setbits_be32(&gur->devdisr, MPC86xx_DEVDISR_CPU1);
+++		break;
+++	default:
+++		printf("Invalid cpu number for disable %d\n", nr);
+++		return 1;
+++	}
+++#endif
+++	return 0;
+++}
+++
+++int is_core_disabled(int nr) {
+++#if 0
+++	immap_t *immap = (immap_t *) CONFIG_SYS_CCSRBAR;
+++	ccsr_gur_t *gur = &immap->im_gur;
+++	u32 devdisr = in_be32(&gur->devdisr);
+++
+++	switch (nr) {
+++	case 0:
+++		return (devdisr & MPC86xx_DEVDISR_CPU0);
+++	case 1:
+++		return (devdisr & MPC86xx_DEVDISR_CPU1);
+++	default:
+++		printf("Invalid cpu number for disable %d\n", nr);
+++	}
+++#endif
+++	return 0;
+++}
+++
+++int cpu_release(int nr, int argc, char * const argv[])
+++{
+++	/* dummy function so common/cmd_mp.c will build
+++	 * should be implemented in the future */
+++	return 1;
+++}
+++
+++u32 determine_mp_bootpg(void)
+++{
+++#if 0
+++	/* if we have 4G or more of memory, put the boot page at 4Gb-1M */
+++	if ((u64)gd->ram_size > 0xfffff000)
+++		return (0xfff00000);
+++#endif
+++	return (gd->ram_size - (1024 * 1024));
+++}
+++
+++void cpu_mp_lmb_reserve(struct lmb *lmb)
+++{
+++	u32 bootpg = determine_mp_bootpg();
+++
+++	/* tell u-boot we stole a page */
+++	lmb_reserve(lmb, bootpg, 4096);
+++}
+++
+++/*
+++ * Copy the code for other cpus to execute into an
+++ * aligned location accessible via BPTR
+++ */
+++void setup_mp(void)
+++{
+++#if 0
+++	extern ulong __secondary_start_page;
+++	ulong fixup = (ulong)&__secondary_start_page;
+++	u32 bootpg = determine_mp_bootpg();
+++	u32 bootpg_va;
+++
+++	if (bootpg >= CONFIG_SYS_MAX_DDR_BAT_SIZE) {
+++		/* We're not covered by the DDR mapping, set up BAT  */
+++		write_bat(DBAT7, CONFIG_SYS_SCRATCH_VA | BATU_BL_128K |
+++			  BATU_VS | BATU_VP,
+++			  bootpg | BATL_PP_RW | BATL_MEMCOHERENCE);
+++		bootpg_va = CONFIG_SYS_SCRATCH_VA;
+++	} else {
+++		bootpg_va = bootpg;
+++	}
+++
+++	memcpy((void *)bootpg_va, (void *)fixup, 4096);
+++	flush_cache(bootpg_va, 4096);
+++
+++	/* remove the temporary BAT mapping */
+++	if (bootpg >= CONFIG_SYS_MAX_DDR_BAT_SIZE)
+++		write_bat(DBAT7, 0, 0);
+++
+++	/* If the physical location of bootpg is not at fff00000, set BPTR */
+++	if (bootpg != 0xfff00000)
+++		out_be32((uint *)(CONFIG_SYS_CCSRBAR + 0x20), 0x80000000 |
+++			 (bootpg >> 12));
+++#endif
+++}
++diff --git a/arch/powerpc/cpu/qsp/speed.c b/arch/powerpc/cpu/qsp/speed.c
++new file mode 100644
++index 0000000..73bb018
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/speed.c
++@@ -0,0 +1,46 @@
+++/*
+++ * Copyright 2004 Freescale Semiconductor.
+++ * Jeff Brown
+++ * Srikanth Srinivasan (srikanth.srinivasan@freescale.com)
+++ *
+++ * (C) Copyright 2000-2002
+++ * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <common.h>
+++#include <asm/processor.h>
+++#include <asm/io.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++void get_sys_info(sys_info_t *sysInfo)
+++{
+++        sysregs_get_freqs(sysInfo);
+++}
+++
+++int get_clocks(void)
+++{
+++	sys_info_t sys_info;
+++	get_sys_info(&sys_info);
+++	gd->cpu_clk = sys_info.freqProcessor;
+++	gd->bus_clk = sys_info.freqTimebase;
+++        return 0;
+++}
++diff --git a/arch/powerpc/cpu/qsp/start.S b/arch/powerpc/cpu/qsp/start.S
++new file mode 100644
++index 0000000..368667b
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/start.S
++@@ -0,0 +1,1000 @@
+++/*
+++ * Copyright 2004, 2007, 2011 Freescale Semiconductor.
+++ * Srikanth Srinivasan <srikanth.srinivaan@freescale.com>
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++/*  U-Boot - Startup Code for 86xx PowerPC based Embedded Boards
+++ *
+++ *
+++ *  The processor starts at 0xfff00100 and the code is executed
+++ *  from flash. The code is organized to be at an other address
+++ *  in memory, but as long we don't jump around before relocating.
+++ *  board_init lies at a quite high address and when the cpu has
+++ *  jumped there, everything is ok.
+++ */
+++#include <asm-offsets.h>
+++#include <config.h>
+++#include <mpc86xx.h>
+++#include <version.h>
+++
+++#include <ppc_asm.tmpl>
+++#include <ppc_defs.h>
+++
+++#include <asm/cache.h>
+++#include <asm/mmu.h>
+++#include <asm/u-boot.h>
+++
+++/*
+++ * Need MSR_DR | MSR_IR enabled to access I/O (printf) in exceptions
+++ */
+++
+++/*
+++ * Set up GOT: Global Offset Table
+++ *
+++ * Use r12 to access the GOT
+++ */
+++	START_GOT
+++	GOT_ENTRY(_GOT2_TABLE_)
+++	GOT_ENTRY(_FIXUP_TABLE_)
+++
+++	GOT_ENTRY(_start)
+++	GOT_ENTRY(_start_of_vectors)
+++	GOT_ENTRY(_end_of_vectors)
+++	GOT_ENTRY(transfer_to_handler)
+++
+++	GOT_ENTRY(__init_end)
+++	GOT_ENTRY(__bss_end__)
+++	GOT_ENTRY(__bss_start)
+++	END_GOT
+++
+++/*
+++ * r3 - 1st arg to board_init(): IMMP pointer
+++ * r4 - 2nd arg to board_init(): boot flag
+++ */
+++	.text
+++	.long	0x27051956		/* U-Boot Magic Number */
+++	.globl	version_string
+++version_string:
+++	.ascii U_BOOT_VERSION_STRING, "\0"
+++
+++	. = EXC_OFF_SYS_RESET
+++	.globl	_start
+++_start:
+++	b	boot_cold
+++
+++	/* the boot code is located below the exception table */
+++
+++	.globl	_start_of_vectors
+++_start_of_vectors:
+++
+++/* Machine check */
+++	STD_EXCEPTION(0x200, MachineCheck, MachineCheckException)
+++
+++/* Data Storage exception. */
+++	STD_EXCEPTION(0x300, DataStorage, UnknownException)
+++
+++/* Instruction Storage exception. */
+++	STD_EXCEPTION(0x400, InstStorage, UnknownException)
+++
+++/* External Interrupt exception. */
+++	STD_EXCEPTION(0x500, ExtInterrupt, external_interrupt)
+++
+++/* Alignment exception. */
+++	. = 0x600
+++Alignment:
+++	EXCEPTION_PROLOG(SRR0, SRR1)
+++	mfspr	r4,DAR
+++	stw	r4,_DAR(r21)
+++	mfspr	r5,DSISR
+++	stw	r5,_DSISR(r21)
+++	addi	r3,r1,STACK_FRAME_OVERHEAD
+++	EXC_XFER_TEMPLATE(Alignment, AlignmentException, MSR_KERNEL, COPY_EE)
+++
+++/* Program check exception */
+++	. = 0x700
+++ProgramCheck:
+++	EXCEPTION_PROLOG(SRR0, SRR1)
+++	addi	r3,r1,STACK_FRAME_OVERHEAD
+++	EXC_XFER_TEMPLATE(ProgramCheck, ProgramCheckException,
+++		MSR_KERNEL, COPY_EE)
+++
+++	STD_EXCEPTION(0x800, FPUnavailable, UnknownException)
+++
+++	/* I guess we could implement decrementer, and may have
+++	 * to someday for timekeeping.
+++	 */
+++	STD_EXCEPTION(0x900, Decrementer, timer_interrupt)
+++	STD_EXCEPTION(0xa00, Trap_0a, UnknownException)
+++	STD_EXCEPTION(0xb00, Trap_0b, UnknownException)
+++	STD_EXCEPTION(0xc00, SystemCall, UnknownException)
+++	STD_EXCEPTION(0xd00, SingleStep, UnknownException)
+++	STD_EXCEPTION(0xe00, Trap_0e, UnknownException)
+++	STD_EXCEPTION(0xf00, Trap_0f, UnknownException)
+++	STD_EXCEPTION(0x1000, SoftEmu, SoftEmuException)
+++	STD_EXCEPTION(0x1100, InstructionTLBMiss, UnknownException)
+++	STD_EXCEPTION(0x1200, DataTLBMiss, UnknownException)
+++	STD_EXCEPTION(0x1300, InstructionTLBError, UnknownException)
+++	STD_EXCEPTION(0x1400, DataTLBError, UnknownException)
+++	STD_EXCEPTION(0x1500, Reserved5, UnknownException)
+++	STD_EXCEPTION(0x1600, Reserved6, UnknownException)
+++	STD_EXCEPTION(0x1700, Reserved7, UnknownException)
+++	STD_EXCEPTION(0x1800, Reserved8, UnknownException)
+++	STD_EXCEPTION(0x1900, Reserved9, UnknownException)
+++	STD_EXCEPTION(0x1a00, ReservedA, UnknownException)
+++	STD_EXCEPTION(0x1b00, ReservedB, UnknownException)
+++	STD_EXCEPTION(0x1c00, DataBreakpoint, UnknownException)
+++	STD_EXCEPTION(0x1d00, InstructionBreakpoint, UnknownException)
+++	STD_EXCEPTION(0x1e00, PeripheralBreakpoint, UnknownException)
+++	STD_EXCEPTION(0x1f00, DevPortBreakpoint, UnknownException)
+++
+++	.globl	_end_of_vectors
+++_end_of_vectors:
+++
+++	. = 0x2000
+++
+++boot_cold:
+++	/*
+++	 * NOTE: Only Cpu 0 will ever come here.  Other cores go to an
+++	 * address specified by the BPTR
+++	 */
+++1:
+++#ifdef CONFIG_SYS_RAMBOOT
+++	/* disable everything */
+++	li	r0, 0
+++	mtspr	HID0, r0
+++	sync
+++	mtmsr	0
+++#endif
+++
+++	/* Invalidate BATs */
+++	bl	invalidate_bats
+++	sync
+++	/* Invalidate all of TLB before MMU turn on */
+++	bl      clear_tlbs
+++	sync
+++
+++#ifdef CONFIG_SYS_L2
+++	/* init the L2 cache */
+++	lis	r3, L2_INIT@h
+++	ori	r3, r3, L2_INIT@l
+++	mtspr	l2cr, r3
+++	/* invalidate the L2 cache */
+++	bl	l2cache_invalidate
+++	sync
+++#endif
+++
+++	/*
+++	 * Calculate absolute address in FLASH and jump there
+++	 *------------------------------------------------------*/
+++	lis	r3, CONFIG_SYS_MONITOR_BASE_EARLY@h
+++	ori	r3, r3, CONFIG_SYS_MONITOR_BASE_EARLY@l
+++	addi	r3, r3, in_flash - _start + EXC_OFF_SYS_RESET
+++	mtlr	r3
+++	blr
+++
+++in_flash:
+++	/* let the C-code set up the rest			*/
+++	/*							*/
+++	/* Be careful to keep code relocatable !		*/
+++	/*------------------------------------------------------*/
+++	/* perform low-level init */
+++
+++	/* enable extended addressing */
+++	bl	enable_ext_addr
+++
+++	/* setup the bats */
+++	bl	early_bats
+++
+++	/*
+++	 * Cache must be enabled here for stack-in-cache trick.
+++	 * This means we need to enable the BATS.
+++	 * Cache should be turned on after BATs, since by default
+++	 * everything is write-through.
+++	 */
+++
+++	/* enable address translation */
+++	mfmsr	r5
+++	ori	r5, r5, (MSR_IR | MSR_DR)
+++	lis	r3,addr_trans_enabled@h
+++	ori	r3, r3, addr_trans_enabled@l
+++	mtspr	SPRN_SRR0,r3
+++	mtspr	SPRN_SRR1,r5
+++	rfi
+++
+++addr_trans_enabled:
+++	/* enable and invalidate the data cache */
+++/*	bl	l1dcache_enable */
+++	bl	dcache_enable
+++	sync
+++
+++#if 1
+++	bl	icache_enable
+++#endif
+++
+++#ifdef CONFIG_SYS_INIT_RAM_LOCK
+++	bl	lock_ram_in_cache
+++	sync
+++#endif
+++
+++#if (CONFIG_SYS_CCSRBAR_DEFAULT != CONFIG_SYS_CCSRBAR)
+++//	bl      setup_ccsrbar
+++#endif
+++
+++	/* set up the stack pointer in our newly created
+++	 * cache-ram (r1) */
+++	lis	r1, (CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_GBL_DATA_OFFSET)@h
+++	ori	r1, r1, (CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_GBL_DATA_OFFSET)@l
+++
+++	li	r0, 0		/* Make room for stack frame header and */
+++	stwu	r0, -4(r1)	/* clear final stack frame so that	*/
+++	stwu	r0, -4(r1)	/* stack backtraces terminate cleanly	*/
+++
+++	GET_GOT			/* initialize GOT access	*/
+++
+++	/* run low-level CPU init code	   (from Flash) */
+++	bl	cpu_init_f
+++	sync
+++
+++#ifdef	RUN_DIAG
+++
+++	/* Load PX_AUX register address in r4 */
+++	lis	r4, PIXIS_BASE@h
+++	ori	r4, r4, 0x6
+++	/* Load contents of PX_AUX in r3 bits 24 to 31*/
+++	lbz	r3, 0(r4)
+++
+++	/* Mask and obtain the bit in r3 */
+++	rlwinm. r3, r3, 0, 24, 24
+++	/* If not zero, jump and continue with u-boot */
+++	bne	diag_done
+++
+++	/* Load back contents of PX_AUX in r3 bits 24 to 31 */
+++	lbz	r3, 0(r4)
+++	/* Set the MSB of the register value */
+++	ori	r3, r3, 0x80
+++	/* Write value in r3 back to PX_AUX */
+++	stb	r3, 0(r4)
+++
+++	/* Get the address to jump to in r3*/
+++	lis	r3, CONFIG_SYS_DIAG_ADDR@h
+++	ori	r3, r3, CONFIG_SYS_DIAG_ADDR@l
+++
+++	/* Load the LR with the branch address */
+++	mtlr	r3
+++
+++	/* Branch to diagnostic */
+++	blr
+++
+++diag_done:
+++#endif
+++
+++/*	bl	l2cache_enable */
+++
+++	/* run 1st part of board init code (from Flash)	  */
+++	bl	board_init_f
+++	sync
+++
+++	/* NOTREACHED - board_init_f() does not return */
+++
+++	.globl	invalidate_bats
+++invalidate_bats:
+++
+++	li	r0, 0
+++	/* invalidate BATs */
+++	mtspr	IBAT0U, r0
+++	mtspr	IBAT1U, r0
+++	mtspr	IBAT2U, r0
+++	mtspr	IBAT3U, r0
+++	mtspr	IBAT4U, r0
+++	mtspr	IBAT5U, r0
+++	mtspr	IBAT6U, r0
+++	mtspr	IBAT7U, r0
+++
+++	isync
+++	mtspr	DBAT0U, r0
+++	mtspr	DBAT1U, r0
+++	mtspr	DBAT2U, r0
+++	mtspr	DBAT3U, r0
+++	mtspr	DBAT4U, r0
+++	mtspr	DBAT5U, r0
+++	mtspr	DBAT6U, r0
+++	mtspr	DBAT7U, r0
+++
+++	isync
+++	sync
+++	blr
+++
+++#define CONFIG_BAT_PAIR(n) \
+++	lis	r4, CONFIG_SYS_IBAT##n##L@h; 		\
+++	ori	r4, r4, CONFIG_SYS_IBAT##n##L@l; 	\
+++	lis	r3, CONFIG_SYS_IBAT##n##U@h; 		\
+++	ori	r3, r3, CONFIG_SYS_IBAT##n##U@l; 	\
+++	mtspr	IBAT##n##L, r4; 			\
+++	mtspr	IBAT##n##U, r3; 			\
+++	lis	r4, CONFIG_SYS_DBAT##n##L@h; 		\
+++	ori	r4, r4, CONFIG_SYS_DBAT##n##L@l; 	\
+++	lis	r3, CONFIG_SYS_DBAT##n##U@h; 		\
+++	ori	r3, r3, CONFIG_SYS_DBAT##n##U@l; 	\
+++	mtspr	DBAT##n##L, r4;				\
+++	mtspr	DBAT##n##U, r3;
+++
+++/*
+++ * setup_bats:
+++ *
+++ * Set up the final BAT registers now that setup is done.
+++ *
+++ * Assumes that:
+++ *	1) Address translation is enabled upon entry
+++ *	2) The boot rom is still accessible via 1:1 translation
+++ */
+++	.globl setup_bats
+++setup_bats:
+++	mflr	r5
+++	sync
+++
+++	/*
+++	 * When we disable address translation, we will get 1:1 (VA==PA)
+++	 * translation.  The only place we know for sure is safe for that is
+++	 * the bootrom where we originally started out.  Pop back into there.
+++	 */
+++	lis	r4, CONFIG_SYS_MONITOR_BASE_EARLY@h
+++	ori	r4, r4, CONFIG_SYS_MONITOR_BASE_EARLY@l
+++	addi	r4, r4, trans_disabled - _start + EXC_OFF_SYS_RESET
+++
+++	/* disable address translation */
+++	mfmsr	r3
+++	rlwinm	r3, r3, 0, 28, 25
+++	mtspr	SRR0, r4
+++	mtspr	SRR1, r3
+++	rfi
+++
+++trans_disabled:
+++#if defined(CONFIG_SYS_DBAT0U) && defined(CONFIG_SYS_DBAT0L) \
+++	&& defined(CONFIG_SYS_IBAT0U) && defined(CONFIG_SYS_IBAT0L)
+++	CONFIG_BAT_PAIR(0)
+++#endif
+++	CONFIG_BAT_PAIR(1)
+++	CONFIG_BAT_PAIR(2)
+++	CONFIG_BAT_PAIR(3)
+++	CONFIG_BAT_PAIR(4)
+++	CONFIG_BAT_PAIR(5)
+++	CONFIG_BAT_PAIR(6)
+++	CONFIG_BAT_PAIR(7)
+++
+++	sync
+++	isync
+++
+++	/* Turn translation back on and return */
+++	mfmsr	r3
+++	ori	r3, r3, (MSR_IR | MSR_DR)
+++	mtspr	SPRN_SRR0,r5
+++	mtspr	SPRN_SRR1,r3
+++	rfi
+++
+++/*
+++ * early_bats:
+++ *
+++ * Set up bats needed early on - this is usually the BAT for the
+++ * stack-in-cache, the Flash, and CCSR space
+++ */
+++	.globl  early_bats
+++early_bats:
+++	/* IBAT 3 */
+++	lis	r4, CONFIG_SYS_IBAT3L@h
+++	ori     r4, r4, CONFIG_SYS_IBAT3L@l
+++	lis	r3, CONFIG_SYS_IBAT3U@h
+++	ori     r3, r3, CONFIG_SYS_IBAT3U@l
+++	mtspr   IBAT3L, r4
+++	mtspr   IBAT3U, r3
+++	isync
+++
+++	/* DBAT 3 */
+++	lis	r4, CONFIG_SYS_DBAT3L@h
+++	ori     r4, r4, CONFIG_SYS_DBAT3L@l
+++	lis	r3, CONFIG_SYS_DBAT3U@h
+++	ori     r3, r3, CONFIG_SYS_DBAT3U@l
+++	mtspr   DBAT3L, r4
+++	mtspr   DBAT3U, r3
+++	isync
+++
+++	/* DBAT 5 */
+++	lis	r4, CONFIG_SYS_DBAT5L@h
+++	ori     r4, r4, CONFIG_SYS_DBAT5L@l
+++	lis	r3, CONFIG_SYS_DBAT5U@h
+++	ori     r3, r3, CONFIG_SYS_DBAT5U@l
+++	mtspr   DBAT5L, r4
+++	mtspr   DBAT5U, r3
+++	isync
+++
+++	/* IBAT 6 */
+++	lis	r4, CONFIG_SYS_IBAT6L_EARLY@h
+++	ori     r4, r4, CONFIG_SYS_IBAT6L_EARLY@l
+++	lis	r3, CONFIG_SYS_IBAT6U_EARLY@h
+++	ori     r3, r3, CONFIG_SYS_IBAT6U_EARLY@l
+++	mtspr   IBAT6L, r4
+++	mtspr   IBAT6U, r3
+++	isync
+++
+++	/* DBAT 6 */
+++	lis	r4, CONFIG_SYS_DBAT6L_EARLY@h
+++	ori     r4, r4, CONFIG_SYS_DBAT6L_EARLY@l
+++	lis	r3, CONFIG_SYS_DBAT6U_EARLY@h
+++	ori     r3, r3, CONFIG_SYS_DBAT6U_EARLY@l
+++	mtspr   DBAT6L, r4
+++	mtspr   DBAT6U, r3
+++	isync
+++
+++#if(CONFIG_SYS_CCSRBAR_DEFAULT != CONFIG_SYS_CCSRBAR)
+++	/* IBAT 7 */
+++	lis	r4, CONFIG_SYS_CCSR_DEFAULT_IBATL@h
+++	ori     r4, r4, CONFIG_SYS_CCSR_DEFAULT_IBATL@l
+++	lis	r3, CONFIG_SYS_CCSR_DEFAULT_IBATU@h
+++	ori     r3, r3, CONFIG_SYS_CCSR_DEFAULT_IBATU@l
+++	mtspr   IBAT7L, r4
+++	mtspr   IBAT7U, r3
+++	isync
+++
+++	/* DBAT 7 */
+++	lis	r4, CONFIG_SYS_CCSR_DEFAULT_DBATL@h
+++	ori     r4, r4, CONFIG_SYS_CCSR_DEFAULT_DBATL@l
+++	lis	r3, CONFIG_SYS_CCSR_DEFAULT_DBATU@h
+++	ori     r3, r3, CONFIG_SYS_CCSR_DEFAULT_DBATU@l
+++	mtspr   DBAT7L, r4
+++	mtspr   DBAT7U, r3
+++	isync
+++#endif
+++	blr
+++
+++	.globl clear_tlbs
+++clear_tlbs:
+++	addis   r3, 0, 0x0000
+++	addis   r5, 0, 0x4
+++	isync
+++tlblp:
+++	tlbie   r3
+++	sync
+++	addi    r3, r3, 0x1000
+++	cmp     0, 0, r3, r5
+++	blt tlblp
+++	blr
+++
+++	.globl disable_addr_trans
+++disable_addr_trans:
+++	/* disable address translation */
+++	mflr	r4
+++	mfmsr	r3
+++	andi.	r0, r3, (MSR_IR | MSR_DR)
+++	beqlr
+++	andc	r3, r3, r0
+++	mtspr	SRR0, r4
+++	mtspr	SRR1, r3
+++	rfi
+++
+++/*
+++ * This code finishes saving the registers to the exception frame
+++ * and jumps to the appropriate handler for the exception.
+++ * Register r21 is pointer into trap frame, r1 has new stack pointer.
+++ */
+++	.globl	transfer_to_handler
+++transfer_to_handler:
+++	stw	r22,_NIP(r21)
+++	lis	r22,MSR_POW@h
+++	andc	r23,r23,r22
+++	stw	r23,_MSR(r21)
+++	SAVE_GPR(7, r21)
+++	SAVE_4GPRS(8, r21)
+++	SAVE_8GPRS(12, r21)
+++	SAVE_8GPRS(24, r21)
+++	mflr	r23
+++	andi.	r24,r23,0x3f00		/* get vector offset */
+++	stw	r24,TRAP(r21)
+++	li	r22,0
+++	stw	r22,RESULT(r21)
+++	mtspr	SPRG2,r22		/* r1 is now kernel sp */
+++	lwz	r24,0(r23)		/* virtual address of handler */
+++	lwz	r23,4(r23)		/* where to go when done */
+++	mtspr	SRR0,r24
+++	mtspr	SRR1,r20
+++	mtlr	r23
+++	SYNC
+++	rfi				/* jump to handler, enable MMU */
+++
+++int_return:
+++	mfmsr	r28		/* Disable interrupts */
+++	li	r4,0
+++	ori	r4,r4,MSR_EE
+++	andc	r28,r28,r4
+++	SYNC			/* Some chip revs need this... */
+++	mtmsr	r28
+++	SYNC
+++	lwz	r2,_CTR(r1)
+++	lwz	r0,_LINK(r1)
+++	mtctr	r2
+++	mtlr	r0
+++	lwz	r2,_XER(r1)
+++	lwz	r0,_CCR(r1)
+++	mtspr	XER,r2
+++	mtcrf	0xFF,r0
+++	REST_10GPRS(3, r1)
+++	REST_10GPRS(13, r1)
+++	REST_8GPRS(23, r1)
+++	REST_GPR(31, r1)
+++	lwz	r2,_NIP(r1)	/* Restore environment */
+++	lwz	r0,_MSR(r1)
+++	mtspr	SRR0,r2
+++	mtspr	SRR1,r0
+++	lwz	r0,GPR0(r1)
+++	lwz	r2,GPR2(r1)
+++	lwz	r1,GPR1(r1)
+++	SYNC
+++	rfi
+++
+++	.globl	dc_read
+++dc_read:
+++	blr
+++
+++	.globl get_pvr
+++get_pvr:
+++	mfspr	r3, PVR
+++	blr
+++
+++	.globl get_svr
+++get_svr:
+++	mfspr	r3, SVR
+++	blr
+++
+++
+++/*
+++ * Function:	in8
+++ * Description:	Input 8 bits
+++ */
+++	.globl	in8
+++in8:
+++	lbz	r3,0x0000(r3)
+++	blr
+++
+++/*
+++ * Function:	out8
+++ * Description:	Output 8 bits
+++ */
+++	.globl	out8
+++out8:
+++	stb	r4,0x0000(r3)
+++	blr
+++
+++/*
+++ * Function:	out16
+++ * Description:	Output 16 bits
+++ */
+++	.globl	out16
+++out16:
+++	sth	r4,0x0000(r3)
+++	blr
+++
+++/*
+++ * Function:	out16r
+++ * Description:	Byte reverse and output 16 bits
+++ */
+++	.globl	out16r
+++out16r:
+++	sthbrx	r4,r0,r3
+++	blr
+++
+++/*
+++ * Function:	out32
+++ * Description:	Output 32 bits
+++ */
+++	.globl	out32
+++out32:
+++	stw	r4,0x0000(r3)
+++	blr
+++
+++/*
+++ * Function:	out32r
+++ * Description:	Byte reverse and output 32 bits
+++ */
+++	.globl	out32r
+++out32r:
+++	stwbrx	r4,r0,r3
+++	blr
+++
+++/*
+++ * Function:	in16
+++ * Description:	Input 16 bits
+++ */
+++	.globl	in16
+++in16:
+++	lhz	r3,0x0000(r3)
+++	blr
+++
+++/*
+++ * Function:	in16r
+++ * Description:	Input 16 bits and byte reverse
+++ */
+++	.globl	in16r
+++in16r:
+++	lhbrx	r3,r0,r3
+++	blr
+++
+++/*
+++ * Function:	in32
+++ * Description:	Input 32 bits
+++ */
+++	.globl	in32
+++in32:
+++	lwz	3,0x0000(3)
+++	blr
+++
+++/*
+++ * Function:	in32r
+++ * Description:	Input 32 bits and byte reverse
+++ */
+++	.globl	in32r
+++in32r:
+++	lwbrx	r3,r0,r3
+++	blr
+++
+++/*
+++ * void relocate_code (addr_sp, gd, addr_moni)
+++ *
+++ * This "function" does not return, instead it continues in RAM
+++ * after relocating the monitor code.
+++ *
+++ * r3 = dest
+++ * r4 = src
+++ * r5 = length in bytes
+++ * r6 = cachelinesize
+++ */
+++	.globl	relocate_code
+++relocate_code:
+++
+++	mr	r1,  r3		/* Set new stack pointer		*/
+++	mr	r9,  r4		/* Save copy of Global Data pointer	*/
+++	mr	r10, r5		/* Save copy of Destination Address	*/
+++
+++	GET_GOT
+++	mr	r3,  r5				/* Destination Address	*/
+++	lis	r4, CONFIG_SYS_MONITOR_BASE@h		/* Source      Address	*/
+++	ori	r4, r4, CONFIG_SYS_MONITOR_BASE@l
+++	lwz	r5, GOT(__init_end)
+++	sub	r5, r5, r4
+++	li	r6, CONFIG_SYS_CACHELINE_SIZE		/* Cache Line Size	*/
+++
+++	/*
+++	 * Fix GOT pointer:
+++	 *
+++	 * New GOT-PTR = (old GOT-PTR - CONFIG_SYS_MONITOR_BASE) + Destination Address
+++	 *
+++	 * Offset:
+++	 */
+++	sub	r15, r10, r4
+++
+++	/* First our own GOT */
+++	add	r12, r12, r15
+++	/* then the one used by the C code */
+++	add	r30, r30, r15
+++
+++	/*
+++	 * Now relocate code
+++	 */
+++	cmplw	cr1,r3,r4
+++	addi	r0,r5,3
+++	srwi.	r0,r0,2
+++	beq	cr1,4f		/* In place copy is not necessary	*/
+++	beq	7f		/* Protect against 0 count		*/
+++	mtctr	r0
+++	bge	cr1,2f
+++
+++	la	r8,-4(r4)
+++	la	r7,-4(r3)
+++1:	lwzu	r0,4(r8)
+++	stwu	r0,4(r7)
+++	bdnz	1b
+++	b	4f
+++
+++2:	slwi	r0,r0,2
+++	add	r8,r4,r0
+++	add	r7,r3,r0
+++3:	lwzu	r0,-4(r8)
+++	stwu	r0,-4(r7)
+++	bdnz	3b
+++/*
+++ * Now flush the cache: note that we must start from a cache aligned
+++ * address. Otherwise we might miss one cache line.
+++ */
+++4:	cmpwi	r6,0
+++	add	r5,r3,r5
+++	beq	7f		/* Always flush prefetch queue in any case */
+++	subi	r0,r6,1
+++	andc	r3,r3,r0
+++	mr	r4,r3
+++5:	dcbst	0,r4
+++	add	r4,r4,r6
+++	cmplw	r4,r5
+++	blt	5b
+++	sync			/* Wait for all dcbst to complete on bus */
+++	mr	r4,r3
+++6:	icbi	0,r4
+++	add	r4,r4,r6
+++	cmplw	r4,r5
+++	blt	6b
+++7:	sync			/* Wait for all icbi to complete on bus */
+++	isync
+++
+++/*
+++ * We are done. Do not return, instead branch to second part of board
+++ * initialization, now running from RAM.
+++ */
+++	addi	r0, r10, in_ram - _start + EXC_OFF_SYS_RESET
+++	mtlr	r0
+++	blr
+++
+++in_ram:
+++	/*
+++	 * Relocation Function, r12 point to got2+0x8000
+++	 *
+++	 * Adjust got2 pointers, no need to check for 0, this code
+++	 * already puts a few entries in the table.
+++	 */
+++	li	r0,__got2_entries@sectoff@l
+++	la	r3,GOT(_GOT2_TABLE_)
+++	lwz	r11,GOT(_GOT2_TABLE_)
+++	mtctr	r0
+++	sub	r11,r3,r11
+++	addi	r3,r3,-4
+++1:	lwzu	r0,4(r3)
+++	cmpwi	r0,0
+++	beq-	2f
+++	add	r0,r0,r11
+++	stw	r0,0(r3)
+++2:	bdnz	1b
+++
+++	/*
+++	 * Now adjust the fixups and the pointers to the fixups
+++	 * in case we need to move ourselves again.
+++	 */
+++	li	r0,__fixup_entries@sectoff@l
+++	lwz	r3,GOT(_FIXUP_TABLE_)
+++	cmpwi	r0,0
+++	mtctr	r0
+++	addi	r3,r3,-4
+++	beq	4f
+++3:	lwzu	r4,4(r3)
+++	lwzux	r0,r4,r11
+++	cmpwi	r0,0
+++	add	r0,r0,r11
+++	stw	r4,0(r3)
+++	beq-	5f
+++	stw	r0,0(r4)
+++5:	bdnz	3b
+++4:
+++/* clear_bss: */
+++	/*
+++	 * Now clear BSS segment
+++	 */
+++	lwz	r3,GOT(__bss_start)
+++	lwz	r4,GOT(__bss_end__)
+++
+++	cmplw	0, r3, r4
+++	beq	6f
+++
+++	li	r0, 0
+++5:
+++	stw	r0, 0(r3)
+++	addi	r3, r3, 4
+++	cmplw	0, r3, r4
+++	bne	5b
+++6:
+++	mr	r3, r9		/* Init Date pointer		*/
+++	mr	r4, r10		/* Destination Address		*/
+++	bl	board_init_r
+++
+++	/* not reached - end relocate_code */
+++/*-----------------------------------------------------------------------*/
+++
+++	/*
+++	 * Copy exception vector code to low memory
+++	 *
+++	 * r3: dest_addr
+++	 * r7: source address, r8: end address, r9: target address
+++	 */
+++	.globl	trap_init
+++trap_init:
+++	mflr	r4			/* save link register		*/
+++	GET_GOT
+++	lwz	r7, GOT(_start)
+++	lwz	r8, GOT(_end_of_vectors)
+++
+++	li	r9, 0x100		/* reset vector always at 0x100 */
+++
+++	cmplw	0, r7, r8
+++	bgelr				/* return if r7>=r8 - just in case */
+++1:
+++	lwz	r0, 0(r7)
+++	stw	r0, 0(r9)
+++	addi	r7, r7, 4
+++	addi	r9, r9, 4
+++	cmplw	0, r7, r8
+++	bne	1b
+++
+++	/*
+++	 * relocate `hdlr' and `int_return' entries
+++	 */
+++	li	r7, .L_MachineCheck - _start + EXC_OFF_SYS_RESET
+++	li	r8, Alignment - _start + EXC_OFF_SYS_RESET
+++2:
+++	bl	trap_reloc
+++	addi	r7, r7, 0x100		/* next exception vector	*/
+++	cmplw	0, r7, r8
+++	blt	2b
+++
+++	li	r7, .L_Alignment - _start + EXC_OFF_SYS_RESET
+++	bl	trap_reloc
+++
+++	li	r7, .L_ProgramCheck - _start + EXC_OFF_SYS_RESET
+++	bl	trap_reloc
+++
+++	li	r7, .L_FPUnavailable - _start + EXC_OFF_SYS_RESET
+++	li	r8, SystemCall - _start + EXC_OFF_SYS_RESET
+++3:
+++	bl	trap_reloc
+++	addi	r7, r7, 0x100		/* next exception vector	*/
+++	cmplw	0, r7, r8
+++	blt	3b
+++
+++	li	r7, .L_SingleStep - _start + EXC_OFF_SYS_RESET
+++	li	r8, _end_of_vectors - _start + EXC_OFF_SYS_RESET
+++4:
+++	bl	trap_reloc
+++	addi	r7, r7, 0x100		/* next exception vector	*/
+++	cmplw	0, r7, r8
+++	blt	4b
+++
+++	/* enable execptions from RAM vectors */
+++	mfmsr	r7
+++	li	r8,MSR_IP
+++	andc	r7,r7,r8
+++	ori	r7,r7,MSR_ME		/* Enable Machine Check */
+++	mtmsr	r7
+++
+++	mtlr	r4			/* restore link register	*/
+++	blr
+++
+++.globl enable_ext_addr
+++enable_ext_addr:
+++	mfspr	r0, HID0
+++	lis	r0, (HID0_HIGH_BAT_EN | HID0_XBSEN | HID0_XAEN)@h
+++	ori	r0, r0, (HID0_HIGH_BAT_EN | HID0_XBSEN | HID0_XAEN)@l
+++	mtspr	HID0, r0
+++	sync
+++	isync
+++	blr
+++
+++#if (CONFIG_SYS_CCSRBAR_DEFAULT != CONFIG_SYS_CCSRBAR)
+++.globl setup_ccsrbar
+++setup_ccsrbar:
+++	/* Special sequence needed to update CCSRBAR itself */
+++	lis	r4, CONFIG_SYS_CCSRBAR_DEFAULT@h
+++	ori	r4, r4, CONFIG_SYS_CCSRBAR_DEFAULT@l
+++
+++	lis	r5, CONFIG_SYS_CCSRBAR_PHYS_LOW@h
+++	ori	r5, r5, CONFIG_SYS_CCSRBAR_PHYS_LOW@l
+++	srwi	r5,r5,12
+++	li	r6, CONFIG_SYS_CCSRBAR_PHYS_HIGH@l
+++	rlwimi	r5,r6,20,8,11
+++	stw	r5, 0(r4) /* Store physical value of CCSR */
+++	isync
+++
+++	lis	r5, CONFIG_SYS_TEXT_BASE@h
+++	ori	r5,r5,CONFIG_SYS_TEXT_BASE@l
+++	lwz	r5, 0(r5)
+++	isync
+++
+++	/* Use VA of CCSR to do read */
+++	lis	r3, CONFIG_SYS_CCSRBAR@h
+++	lwz	r5, CONFIG_SYS_CCSRBAR@l(r3)
+++	isync
+++
+++	blr
+++#endif
+++
+++#ifdef CONFIG_SYS_INIT_RAM_LOCK
+++	xx
+++lock_ram_in_cache:
+++	/* Allocate Initial RAM in data cache.
+++	 */
+++	lis	r3, (CONFIG_SYS_INIT_RAM_ADDR & ~31)@h
+++	ori	r3, r3, (CONFIG_SYS_INIT_RAM_ADDR & ~31)@l
+++	li	r4, ((CONFIG_SYS_INIT_RAM_SIZE & ~31) + \
+++		     (CONFIG_SYS_INIT_RAM_ADDR & 31) + 31) / 32
+++	mtctr	r4
+++1:
+++	dcbz	r0, r3
+++	addi	r3, r3, 32
+++	bdnz	1b
+++#if 1
+++/* Lock the data cache */
+++	mfspr	r0, HID0
+++	ori	r0, r0, 0x1000
+++	sync
+++	mtspr	HID0, r0
+++	sync
+++	blr
+++#endif
+++#if 0
+++	/* Lock the first way of the data cache */
+++	mfspr	r0, LDSTCR
+++	ori	r0, r0, 0x0080
+++#if defined(CONFIG_ALTIVEC)
+++	dssall
+++#endif
+++	sync
+++	mtspr	LDSTCR, r0
+++	sync
+++	isync
+++	blr
+++#endif
+++
+++.globl unlock_ram_in_cache
+++unlock_ram_in_cache:
+++	/* invalidate the INIT_RAM section */
+++	lis	r3, (CONFIG_SYS_INIT_RAM_ADDR & ~31)@h
+++	ori	r3, r3, (CONFIG_SYS_INIT_RAM_ADDR & ~31)@l
+++	li	r4, ((CONFIG_SYS_INIT_RAM_SIZE & ~31) + \
+++		     (CONFIG_SYS_INIT_RAM_ADDR & 31) + 31) / 32
+++	mtctr	r4
+++1:	icbi	r0, r3
+++	addi	r3, r3, 32
+++	bdnz	1b
+++	sync			/* Wait for all icbi to complete on bus */
+++	isync
+++#if 1
+++/* Unlock the data cache and invalidate it */
+++	mfspr	r0, HID0
+++	li	r3,0x1000
+++	andc	r0,r0,r3
+++	li	r3,0x0400
+++	or	r0,r0,r3
+++	sync
+++	mtspr	HID0, r0
+++	sync
+++	blr
+++#endif
+++#if 0
+++	/* Unlock the first way of the data cache */
+++	mfspr	r0, LDSTCR
+++	li	r3,0x0080
+++	andc	r0,r0,r3
+++#ifdef CONFIG_ALTIVEC
+++	dssall
+++#endif
+++	sync
+++	mtspr	LDSTCR, r0
+++	sync
+++	isync
+++	li	r3,0x0400
+++	or	r0,r0,r3
+++	sync
+++	mtspr	HID0, r0
+++	sync
+++	blr
+++#endif
+++#endif
++diff --git a/arch/powerpc/cpu/qsp/traps.c b/arch/powerpc/cpu/qsp/traps.c
++new file mode 100644
++index 0000000..166ff8c
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/traps.c
++@@ -0,0 +1,234 @@
+++/*
+++ * Copyright (C) 1995-1996  Gary Thomas (gdt@linuxppc.org)
+++ *
+++ * Modified by Cort Dougan (cort@cs.nmt.edu)
+++ * and Paul Mackerras (paulus@cs.anu.edu.au)
+++ *
+++ * (C) Copyright 2000
+++ * Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++/*
+++ * This file handles the architecture-dependent parts of hardware exceptions
+++ */
+++
+++#include <common.h>
+++#include <command.h>
+++#include <kgdb.h>
+++#include <asm/processor.h>
+++
+++DECLARE_GLOBAL_DATA_PTR;
+++
+++/* Returns 0 if exception not found and fixup otherwise.  */
+++extern unsigned long search_exception_table(unsigned long);
+++
+++/*
+++ * End of addressable memory.  This may be less than the actual
+++ * amount of memory on the system if we're unable to keep all
+++ * the memory mapped in.
+++ */
+++extern ulong get_effective_memsize(void);
+++#define END_OF_MEM (gd->bd->bi_memstart + get_effective_memsize())
+++
+++/*
+++ * Trap & Exception support
+++ */
+++
+++void
+++print_backtrace(unsigned long *sp)
+++{
+++	int cnt = 0;
+++	unsigned long i;
+++
+++	printf("Call backtrace: ");
+++	while (sp) {
+++		if ((uint) sp > END_OF_MEM)
+++			break;
+++
+++		i = sp[1];
+++		if (cnt++ % 7 == 0)
+++			printf("\n");
+++		printf("%08lX ", i);
+++		if (cnt > 32)
+++			break;
+++		sp = (unsigned long *)*sp;
+++	}
+++	printf("\n");
+++}
+++
+++void
+++show_regs(struct pt_regs *regs)
+++{
+++	int i;
+++
+++	printf("NIP: %08lX XER: %08lX LR: %08lX REGS:"
+++	       " %p TRAP: %04lx DAR: %08lX\n",
+++	       regs->nip, regs->xer, regs->link, regs, regs->trap, regs->dar);
+++	printf("MSR: %08lx EE: %01x PR: %01x FP:"
+++	       " %01x ME: %01x IR/DR: %01x%01x\n",
+++	       regs->msr, regs->msr & MSR_EE ? 1 : 0,
+++	       regs->msr & MSR_PR ? 1 : 0, regs->msr & MSR_FP ? 1 : 0,
+++	       regs->msr & MSR_ME ? 1 : 0, regs->msr & MSR_IR ? 1 : 0,
+++	       regs->msr & MSR_DR ? 1 : 0);
+++
+++	printf("\n");
+++	for (i = 0; i < 32; i++) {
+++		if ((i % 8) == 0) {
+++			printf("GPR%02d: ", i);
+++		}
+++
+++		printf("%08lX ", regs->gpr[i]);
+++		if ((i % 8) == 7) {
+++			printf("\n");
+++		}
+++	}
+++}
+++
+++
+++void
+++_exception(int signr, struct pt_regs *regs)
+++{
+++	show_regs(regs);
+++	print_backtrace((unsigned long *)regs->gpr[1]);
+++	panic("Exception in kernel pc %lx signal %d", regs->nip, signr);
+++}
+++
+++void
+++MachineCheckException(struct pt_regs *regs)
+++{
+++	unsigned long fixup;
+++
+++	/* Probing PCI using config cycles cause this exception
+++	 * when a device is not present.  Catch it and return to
+++	 * the PCI exception handler.
+++	 */
+++	if ((fixup = search_exception_table(regs->nip)) != 0) {
+++		regs->nip = fixup;
+++		return;
+++	}
+++
+++#if defined(CONFIG_CMD_KGDB)
+++	if (debugger_exception_handler && (*debugger_exception_handler) (regs))
+++		return;
+++#endif
+++
+++	printf("Machine check in kernel mode.\n");
+++	printf("Caused by (from msr): ");
+++	printf("regs %p ", regs);
+++	switch ( regs->msr & 0x001F0000) {
+++	case (0x80000000>>11):
+++                printf("FIXME\n");
+++//		printf("MSS error. MSSSR0: %08x\n", mfspr(SPRN_MSSSR0));
+++		break;
+++	case (0x80000000>>12):
+++		printf("Machine check signal - probably due to mm fault\n"
+++		       "with mmu off\n");
+++		break;
+++	case (0x80000000 >> 13):
+++		printf("Transfer error ack signal\n");
+++		break;
+++	case (0x80000000 >> 14):
+++		printf("Data parity signal\n");
+++		break;
+++	case (0x80000000 >> 15):
+++		printf("Address parity signal\n");
+++		break;
+++	default:
+++		printf("Unknown values in msr\n");
+++	}
+++	show_regs(regs);
+++	print_backtrace((unsigned long *)regs->gpr[1]);
+++	panic("machine check");
+++}
+++
+++void
+++AlignmentException(struct pt_regs *regs)
+++{
+++#if defined(CONFIG_CMD_KGDB)
+++	if (debugger_exception_handler && (*debugger_exception_handler) (regs))
+++		return;
+++#endif
+++	show_regs(regs);
+++	print_backtrace((unsigned long *)regs->gpr[1]);
+++	panic("Alignment Exception");
+++}
+++
+++void
+++ProgramCheckException(struct pt_regs *regs)
+++{
+++	unsigned char *p = regs ? (unsigned char *)(regs->nip) : NULL;
+++	int i, j;
+++
+++#if defined(CONFIG_CMD_KGDB)
+++	if (debugger_exception_handler && (*debugger_exception_handler) (regs))
+++		return;
+++#endif
+++	show_regs(regs);
+++
+++	p = (unsigned char *)((unsigned long)p & 0xFFFFFFE0);
+++	p -= 32;
+++	for (i = 0; i < 256; i += 16) {
+++		printf("%08x: ", (unsigned int)p + i);
+++		for (j = 0; j < 16; j++) {
+++			printf("%02x ", p[i + j]);
+++		}
+++		printf("\n");
+++	}
+++
+++	print_backtrace((unsigned long *)regs->gpr[1]);
+++	panic("Program Check Exception");
+++}
+++
+++void
+++SoftEmuException(struct pt_regs *regs)
+++{
+++#if defined(CONFIG_CMD_KGDB)
+++	if (debugger_exception_handler && (*debugger_exception_handler) (regs))
+++		return;
+++#endif
+++	show_regs(regs);
+++	print_backtrace((unsigned long *)regs->gpr[1]);
+++	panic("Software Emulation Exception");
+++}
+++
+++void
+++UnknownException(struct pt_regs *regs)
+++{
+++#if defined(CONFIG_CMD_KGDB)
+++	if (debugger_exception_handler && (*debugger_exception_handler) (regs))
+++		return;
+++#endif
+++	printf("UnknownException regs@%lx\n", (ulong)regs);
+++	printf("Bad trap at PC: %lx, SR: %lx, vector=%lx\n",
+++	       regs->nip, regs->msr, regs->trap);
+++	_exception(0, regs);
+++}
+++
+++/*
+++ * Probe an address by reading.
+++ * If not present, return -1,
+++ * otherwise return 0.
+++ */
+++int
+++addr_probe(uint *addr)
+++{
+++	return 0;
+++}
++diff --git a/arch/powerpc/cpu/qsp/u-boot.lds b/arch/powerpc/cpu/qsp/u-boot.lds
++new file mode 100644
++index 0000000..b579277
++--- /dev/null
+++++ b/arch/powerpc/cpu/qsp/u-boot.lds
++@@ -0,0 +1,93 @@
+++/*
+++ * Copyright 2006, 2007 Freescale Semiconductor, Inc.
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++OUTPUT_ARCH(powerpc)
+++
+++SECTIONS
+++{
+++
+++  /* Read-only sections, merged into text segment: */
+++  .text      :
+++  {
+++    arch/powerpc/cpu/qsp/start.o	(.text*)
+++    arch/powerpc/cpu/qsp/traps.o	(.text*)
+++    *(.text*)
+++   }
+++    _etext = .;
+++    PROVIDE (etext = .);
+++    .rodata    :
+++   {
+++    *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.rodata*)))
+++  }
+++
+++  /* Read-write section, merged into data segment: */
+++  . = (. + 0x00FF) & 0xFFFFFF00;
+++  _erotext = .;
+++  PROVIDE (erotext = .);
+++  .reloc   :
+++  {
+++    _GOT2_TABLE_ = .;
+++    KEEP(*(.got2))
+++    KEEP(*(.got))
+++    PROVIDE(_GLOBAL_OFFSET_TABLE_ = . + 4);
+++    _FIXUP_TABLE_ = .;
+++    KEEP(*(.fixup))
+++  }
+++  __got2_entries = ((_GLOBAL_OFFSET_TABLE_ - _GOT2_TABLE_) >> 2) - 1;
+++  __fixup_entries = (. - _FIXUP_TABLE_) >> 2;
+++
+++  .data    :
+++  {
+++    *(.data*)
+++    *(.sdata*)
+++  }
+++  _edata  =  .;
+++  PROVIDE (edata = .);
+++
+++  . = .;
+++  __u_boot_cmd_start = .;
+++  .u_boot_cmd : { *(.u_boot_cmd) }
+++  __u_boot_cmd_end = .;
+++
+++  . = .;
+++  __start___ex_table = .;
+++  __ex_table : { *(__ex_table) }
+++  __stop___ex_table = .;
+++
+++  . = ALIGN(256);
+++  __init_begin = .;
+++  .text.init : { *(.text.init) }
+++  .data.init : { *(.data.init) }
+++  . = ALIGN(256);
+++  __init_end = .;
+++
+++  __bss_start = .;
+++  .bss (NOLOAD)       :
+++  {
+++   *(.bss*)
+++   *(.sbss*)
+++   *(COMMON)
+++   . = ALIGN(4);
+++  }
+++  __bss_end__ = . ;
+++  PROVIDE (end = .);
+++}
++diff --git a/board/windriver/qsp_ppc/Makefile b/board/windriver/qsp_ppc/Makefile
++new file mode 100644
++index 0000000..4d6f293
++--- /dev/null
+++++ b/board/windriver/qsp_ppc/Makefile
++@@ -0,0 +1,43 @@
+++#
+++# (C) Copyright 2000-2004
+++# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
+++#
+++# See file CREDITS for list of people who contributed to this
+++# project.
+++#
+++# This program is free software; you can redistribute it and/or
+++# modify it under the terms of the GNU General Public License as
+++# published by the Free Software Foundation; either version 2 of
+++# the License, or (at your option) any later version.
+++#
+++# This program is distributed in the hope that it will be useful,
+++# but WITHOUT ANY WARRANTY; without even the implied warranty of
+++# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++# GNU General Public License for more details.
+++#
+++# You should have received a copy of the GNU General Public License
+++# along with this program; if not, write to the Free Software
+++# Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++# MA 02111-1307 USA
+++#
+++
+++include $(TOPDIR)/config.mk
+++
+++LIB	= $(obj)lib$(BOARD).o
+++
+++COBJS	:= qsp_ppc.o
+++
+++SRCS	:= $(COBJS:.o=.c)
+++OBJS	:= $(addprefix $(obj),$(COBJS))
+++
+++$(LIB):	$(obj).depend $(OBJS)
+++	$(call cmd_link_o_target, $(OBJS))
+++
+++#########################################################################
+++
+++# defines $(obj).depend target
+++include $(SRCTREE)/rules.mk
+++
+++sinclude $(obj).depend
+++
+++#########################################################################
++diff --git a/board/windriver/qsp_ppc/qsp_ppc.c b/board/windriver/qsp_ppc/qsp_ppc.c
++new file mode 100644
++index 0000000..9a15225
++--- /dev/null
+++++ b/board/windriver/qsp_ppc/qsp_ppc.c
++@@ -0,0 +1,152 @@
+++/*
+++ * (C) Copyright 2012
+++ * Wind River AB
+++ * Ivar Holmqvist <ivar.holmqvist@windriver.com>
+++ *
+++ * See file CREDITS for list of people who contributed to this
+++ * project.
+++ *
+++ * This program is free software; you can redistribute it and/or
+++ * modify it under the terms of the GNU General Public License as
+++ * published by the Free Software Foundation; either version 2 of
+++ * the License, or (at your option) any later version.
+++ *
+++ * This program is distributed in the hope that it will be useful,
+++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+++ * GNU General Public License for more details.
+++ *
+++ * You should have received a copy of the GNU General Public License
+++ * along with this program; if not, write to the Free Software
+++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
+++ * MA 02111-1307 USA
+++ */
+++
+++#include <common.h>
+++#include <asm/processor.h>
+++#include <asm/io.h>
+++#include <libfdt.h>
+++#include <fdt_support.h>
+++
+++#define QSP_SERIAL_BASE 0xe0010000
+++#define QSP_SYSREG_BASE 0xe0001000
+++
+++/* Status register bits
+++ */
+++#define TX_READY (1<<0)
+++#define RX_READY (1<<1)
+++
+++/* Control register bits
+++ */
+++#define TX_INT (1<<0)
+++#define RX_INT (1<<1)
+++
+++#define ID_REG      0x00
+++#define STATUS_REG  0x04
+++#define CONTROL_REG 0x08
+++#define TXDATA_REG  0x0c
+++#define RXDATA_REG  0x10
+++
+++/* SYSREG registers */
+++#define ID_REG            0x00
+++#define CPU_ID_REG        0x10
+++#define MEM_AVAIL_REG     0x20
+++#define MEM_START_REG     0x24
+++#define CPU_FREQ_REG      0x28
+++#define TIMEBASE_FREQ_REG 0x2c
+++
+++
+++int checkboard(void) 
+++{
+++        printf("QSP PPC board sysregs ID 0x%08x\n", readl(QSP_SYSREG_BASE + ID_REG));
+++	return 0;
+++}
+++
+++phys_size_t
+++initdram(int board_type)
+++{
+++	phys_size_t dram_size = 0;
+++        dram_size = readl(QSP_SYSREG_BASE + MEM_AVAIL_REG);
+++	setup_ddr_bat(dram_size);        
+++	return dram_size;
+++}
+++
+++
+++
+++
+++#if defined(CONFIG_OF_BOARD_SETUP)
+++void
+++ft_board_setup(void *blob, bd_t *bd)
+++{
+++	int off;
+++	u64 *tmp;
+++	u32 *addrcells;
+++
+++	ft_cpu_setup(blob, bd);
+++}
+++#endif
+++
+++void board_reset(void)
+++{
+++        printf("reset not supported\n");
+++        /* FIXME:*/
+++	while (1)
+++		;
+++}
+++
+++#if defined(CONFIG_SHOW_BOOT_PROGRESS)
+++void show_boot_progress(int progress)
+++{
+++	printf("Boot reached stage %d\n", progress);
+++}
+++#endif
+++
+++int serial_init (void)
+++{
+++        /*nop*/
+++}
+++
+++void serial_setbrg (void)
+++{
+++        /*nop*/
+++}
+++
+++void serial_putc(const char x)
+++{
+++        if (x == '\n')
+++                writel('\r', QSP_SERIAL_BASE + TXDATA_REG);                
+++        writel(x, QSP_SERIAL_BASE + TXDATA_REG);
+++}
+++
+++void serial_puts   (const char *x)
+++{
+++        int i;
+++        for (i = 0; x[i]; i++) {
+++                serial_putc(x[i]);
+++        }
+++}
+++
+++int serial_getc(void)
+++{
+++        while(!serial_tstc())
+++                ;
+++        return readl(QSP_SERIAL_BASE + RXDATA_REG);
+++}
+++
+++int serial_tstc(void)
+++{
+++        return readl(QSP_SERIAL_BASE + STATUS_REG) & RX_READY;
+++}
+++
+++
+++
+++int	saveenv	     (void)
+++{
+++        return 0;
+++}
+++
+++void sysregs_get_freqs(sys_info_t *sysInfo)
+++{
+++        sysInfo->freqProcessor = readl(QSP_SYSREG_BASE + CPU_FREQ_REG);        
+++        sysInfo->freqTimebase = readl(QSP_SYSREG_BASE + TIMEBASE_FREQ_REG);        
+++}
++diff --git a/boards.cfg b/boards.cfg
++index e040d6c..8e5c31f 100644
++--- a/boards.cfg
+++++ b/boards.cfg
++@@ -763,6 +763,7 @@ xpedite520x                  powerpc     mpc85xx     -                   xes
++ xpedite537x                  powerpc     mpc85xx     -                   xes
++ xpedite550x                  powerpc     mpc85xx     -                   xes
++ sbc8641d                     powerpc     mpc86xx
+++qsp_ppc                      powerpc     qsp     qsp_ppc             windriver
++ MPC8610HPCD                  powerpc     mpc86xx     mpc8610hpcd         freescale
++ MPC8641HPCN                  powerpc     mpc86xx     mpc8641hpcn         freescale      -           MPC8641HPCN
++ MPC8641HPCN_36BIT            powerpc     mpc86xx     mpc8641hpcn         freescale      -           MPC8641HPCN:PHYS_64BIT
++diff --git a/include/configs/qsp_ppc.h b/include/configs/qsp_ppc.h
++new file mode 100644
++index 0000000..40d5eec
++--- /dev/null
+++++ b/include/configs/qsp_ppc.h
++@@ -0,0 +1,208 @@
+++#ifndef __QSP_PPC_H
+++#define __QSP_PPC_H
+++
+++#define CONFIG_SYS_PHYS_ADDR_HIGH 0x00000000
+++
+++#define CONFIG_SYS_QSPREGS                 	0xe0000000	
+++#define CONFIG_SYS_QSPREGS_PHYS_LOW	        0xe0000000	
+++#define CONFIG_SYS_QSPREGS_PHYS_HIGH	        0x00000000	
+++
+++#define CONFIG_SYS_FLASH_BASE	0xd0000000     /* start of FLASH 256M */
+++#define	CONFIG_SYS_TEXT_BASE	0xd0000000
+++
+++#define CONFIG_SYS_FLASH_BASE_PHYS_LOW	CONFIG_SYS_FLASH_BASE
+++#define CONFIG_SYS_FLASH_BASE_PHYS \
+++	PAIRED_PHYS_TO_PHYS(CONFIG_SYS_FLASH_BASE_PHYS_LOW, \
+++			    CONFIG_SYS_PHYS_ADDR_HIGH)
+++
+++#define CONFIG_SYS_MONITOR_BASE		CONFIG_SYS_TEXT_BASE	/* start of monitor */
+++#define CONFIG_SYS_MONITOR_BASE_EARLY   0xfff00000	/* early monitor loc */
+++
+++#define CONFIG_SYS_INIT_RAM_ADDR	0x00000000	/* Initial RAM address */
+++
+++#define CONFIG_SYS_INIT_RAM_SIZE	0x4000		/* Size of used area in RAM */
+++#define CONFIG_SYS_GBL_DATA_OFFSET	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
+++#define CONFIG_SYS_INIT_SP_OFFSET	CONFIG_SYS_GBL_DATA_OFFSET
+++
+++#define CONFIG_SYS_MONITOR_LEN		(256 * 1024)	/* Reserve 256 kB for Mon */
+++#define CONFIG_SYS_MALLOC_LEN		(1024 * 1024)	 /* Reserved for malloc */
+++
+++
+++#define CONFIG_SYS_NO_FLASH
+++//#define CONFIG_MP		1	/* support multiple processors, not needed yet...  */
+++#define CONFIG_LINUX_RESET_VEC	0x100	/* Reset vector used by Linux */
+++#define CONFIG_ADDR_MAP		1	/* Use addr map */
+++#define CONFIG_BAT_RW		1	/* Use common BAT rw code */
+++#define CONFIG_HIGH_BATS	1	/* High BATs supported and enabled */
+++
+++/*
+++ * BAT0		DDR
+++ */
+++#define CONFIG_SYS_DBAT0L	(BATL_PP_RW | BATL_MEMCOHERENCE)
+++#define CONFIG_SYS_IBAT0L	(BATL_PP_RW | BATL_MEMCOHERENCE)
+++
+++
+++
+++/*
+++ * BAT3		I/O
+++ */
+++#ifdef CONFIG_SYS_DBAT3L
+++#error Redfine
+++#endif
+++#define CONFIG_SYS_DBAT3L	( CONFIG_SYS_QSPREGS_PHYS_LOW  \
+++				 | BATL_PP_RW | BATL_CACHEINHIBIT \
+++				 | BATL_GUARDEDSTORAGE)
+++#define CONFIG_SYS_DBAT3U	( CONFIG_SYS_QSPREGS | BATU_BL_256M | BATU_VS \
+++				 | BATU_VP)
+++#define CONFIG_SYS_IBAT3L	( CONFIG_SYS_QSPREGS_PHYS_LOW \
+++				 | BATL_PP_RW | BATL_MEMCOHERENCE)
+++#define CONFIG_SYS_IBAT3U	CONFIG_SYS_DBAT3U
+++
+++
+++/*
+++ * BAT5		Init RAM for stack in the CPU DCache (no backing memory)
+++ */
+++#define CONFIG_SYS_DBAT5L	(CONFIG_SYS_INIT_RAM_ADDR | BATL_PP_RW | BATL_MEMCOHERENCE)
+++#define CONFIG_SYS_DBAT5U	(CONFIG_SYS_INIT_RAM_ADDR | BATU_BL_128K | BATU_VS | BATU_VP)
+++#define CONFIG_SYS_IBAT5L	CONFIG_SYS_DBAT5L
+++#define CONFIG_SYS_IBAT5U	CONFIG_SYS_DBAT5U
+++
+++/*
+++ * BAT6		FLASH
+++ */
+++#define CONFIG_SYS_DBAT6L	(CONFIG_SYS_FLASH_BASE_PHYS_LOW  \
+++				 | BATL_PP_RW | BATL_CACHEINHIBIT \
+++				 | BATL_GUARDEDSTORAGE)
+++#define CONFIG_SYS_DBAT6U	(CONFIG_SYS_FLASH_BASE | BATU_BL_256M | BATU_VS \
+++				 | BATU_VP)
+++#define CONFIG_SYS_IBAT6L	(CONFIG_SYS_FLASH_BASE_PHYS_LOW \
+++				 | BATL_PP_RW | BATL_MEMCOHERENCE)
+++#define CONFIG_SYS_IBAT6U	CONFIG_SYS_DBAT6U
+++
+++/* Map the last 1M of flash where we're running from reset */
+++#define CONFIG_SYS_DBAT6L_EARLY	(CONFIG_SYS_MONITOR_BASE_EARLY | BATL_PP_RW \
+++				 | BATL_CACHEINHIBIT | BATL_GUARDEDSTORAGE)
+++#define CONFIG_SYS_DBAT6U_EARLY	(CONFIG_SYS_TEXT_BASE | BATU_BL_1M | BATU_VS | BATU_VP)
+++#define CONFIG_SYS_IBAT6L_EARLY	(CONFIG_SYS_MONITOR_BASE_EARLY | BATL_PP_RW \
+++				 | BATL_MEMCOHERENCE)
+++#define CONFIG_SYS_IBAT6U_EARLY	CONFIG_SYS_DBAT6U_EARLY
+++
+++/*
+++ * BAT1,7,2,4		FREE - used later for tmp mappings
+++ */
+++#define CONFIG_SYS_DBAT1L 0x00000000
+++#define CONFIG_SYS_DBAT1U 0x00000000
+++#define CONFIG_SYS_IBAT1L 0x00000000
+++#define CONFIG_SYS_IBAT1U 0x00000000
+++
+++#define CONFIG_SYS_DBAT2L 0x00000000
+++#define CONFIG_SYS_DBAT2U 0x00000000
+++#define CONFIG_SYS_IBAT2L 0x00000000
+++#define CONFIG_SYS_IBAT2U 0x00000000
+++
+++#define CONFIG_SYS_DBAT4L 0x00000000
+++#define CONFIG_SYS_DBAT4U 0x00000000
+++#define CONFIG_SYS_IBAT4L 0x00000000
+++#define CONFIG_SYS_IBAT4U 0x00000000
+++
+++#define CONFIG_SYS_DBAT7L 0x00000000
+++#define CONFIG_SYS_DBAT7U 0x00000000
+++#define CONFIG_SYS_IBAT7L 0x00000000
+++#define CONFIG_SYS_IBAT7U 0x00000000
+++
+++#define CONFIG_ENV_IS_NOWHERE	1	/* Store ENV in memory only */
+++#define CONFIG_ENV_ADDR		(CONFIG_SYS_MONITOR_BASE - 0x1000)
+++#define CONFIG_ENV_SIZE		0x2000
+++
+++#define CONFIG_LOADS_ECHO	1	/* echo on for serial download */
+++#define CONFIG_SYS_LOADS_BAUD_CHANGE	1	/* allow baudrate change */
+++
+++
+++
+++/*
+++ * Command line configuration.
+++ */
+++#include <config_cmd_default.h>
+++
+++#if defined(CONFIG_SYS_RAMBOOT)
+++    #undef CONFIG_CMD_SAVEENV
+++#endif
+++
+++#if defined(CONFIG_PCI)
+++    #define CONFIG_CMD_PCI
+++    #define CONFIG_CMD_SCSI
+++    #define CONFIG_CMD_EXT2
+++    #define CONFIG_CMD_USB
+++#endif
+++
+++
+++//#undef CONFIG_WATCHDOG			/* watchdog disabled */
+++
+++/*
+++ * Miscellaneous configurable options
+++ */
+++#define CONFIG_SYS_LONGHELP			/* undef to save memory	*/
+++#define CONFIG_CMDLINE_EDITING		/* Command-line editing */
+++#define CONFIG_SYS_LOAD_ADDR	0x2000000	/* default load address */
+++#define CONFIG_SYS_PROMPT	"qsp-ppc# "		/* Monitor Command Prompt */
+++
+++#define CONFIG_OF_LIBFDT		1
+++#define CONFIG_OF_BOARD_SETUP		1
+++
+++#if defined(CONFIG_CMD_KGDB)
+++    #define CONFIG_SYS_CBSIZE	1024		/* Console I/O Buffer Size */
+++#else
+++    #define CONFIG_SYS_CBSIZE	256		/* Console I/O Buffer Size */
+++#endif
+++
+++#define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE+sizeof(CONFIG_SYS_PROMPT)+16) /* Print Buffer Size */
+++#define CONFIG_SYS_MAXARGS	16		/* max number of command args */
+++#define CONFIG_SYS_BARGSIZE	CONFIG_SYS_CBSIZE	/* Boot Argument Buffer Size */
+++#define CONFIG_SYS_HZ		1000		/* decrementer freq: 1ms ticks */
+++
+++/*
+++ * For booting Linux, the board info and command line data
+++ * have to be in the first 8 MB of memory, since this is
+++ * the maximum mapped by the Linux kernel during initialization.
+++ */
+++#define CONFIG_SYS_BOOTMAPSZ	(8 << 20)	/* Initial Memory map for Linux*/
+++
+++#if defined(CONFIG_CMD_KGDB)
+++    #define CONFIG_KGDB_BAUDRATE	230400	/* speed to run kgdb serial port */
+++    #define CONFIG_KGDB_SER_INDEX	2	/* which serial port to use */
+++#endif
+++/*
+++ * Environment Configuration
+++ */
+++#define CONFIG_BOOTCOMMAND  "use_simics_script_instead"
+++
+++#define CONFIG_MAX_CPUS 128
+++
+++#ifndef __ASSEMBLY__
+++typedef struct
+++{
+++        unsigned long freqProcessor;
+++        unsigned long freqTimebase;
+++} sys_info_t;
+++#endif
+++
+++#define CONFIG_SYS_NUM_ADDR_MAP 8	/* Number of addr map slots = 8 dbats */
+++#define CONFIG_BAUDRATE	115200
+++#define CONFIG_SYS_BAUDRATE_TABLE	{ 115200 }
+++#define CONFIG_SYS_DDR_SDRAM_BASE	0x00000000	/* DDR is system memory*/
+++#define CONFIG_SYS_SDRAM_BASE		CONFIG_SYS_DDR_SDRAM_BASE
+++#define CONFIG_SYS_MAX_DDR_BAT_SIZE	0x80000000	/* BAT mapping size */
+++#define CONFIG_VERY_BIG_RAM
+++
+++#define CONFIG_SYS_MEMTEST_START	0x00200000	/* memtest region */
+++#define CONFIG_SYS_MEMTEST_END		0x00400000
+++
+++#define CONFIG_SYS_SDRAM_SIZE           (256<<20)
+++
+++/* FIXME helpers for stolen cache.S
+++ */
+++#define CONFIG_SYS_L2
+++#define L2_INIT		0
+++#define L2_ENABLE	(L2CR_L2E)
+++
+++#endif	/* __CONFIG_H */
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0003-qsp-arm-Enable-ATAGS-for-older-kernels.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0003-qsp-arm-Enable-ATAGS-for-older-kernels.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0003-qsp-arm-Enable-ATAGS-for-older-kernels.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0003-qsp-arm-Enable-ATAGS-for-older-kernels.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,28 @@
++From 3b11cb19fd79999c044c07c2c6960388cdc0003a Mon Sep 17 00:00:00 2001
++From: Ivar Holmqvist <ivarholmqvist@gmail.com>
++Date: Thu, 29 Nov 2012 15:47:17 +0100
++Subject: [PATCH] qsp-arm: Enable ATAGS for older kernels.
++
++---
++ include/configs/qsp_arm.h |    5 +++++
++ 1 file changed, 5 insertions(+)
++
++diff --git a/include/configs/qsp_arm.h b/include/configs/qsp_arm.h
++index 51378c9..bf73925 100644
++--- a/include/configs/qsp_arm.h
+++++ b/include/configs/qsp_arm.h
++@@ -61,6 +61,11 @@
++ #define CONFIG_NR_DRAM_BANKS		1
++ #define PHYS_SDRAM_1			0x10000000
++ 
+++#define CONFIG_CMDLINE_TAG
+++#define CONFIG_SETUP_MEMORY_TAGS
+++#define CONFIG_INITRD_TAG
+++
+++
++ /* additions for new relocation code */
++ #define CONFIG_SYS_SDRAM_BASE		PHYS_SDRAM_1
++ #define CONFIG_SYS_INIT_RAM_SIZE		0x8000
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0004-qsp-arm-Use-proper-machine-number-for-qsp-arm.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0004-qsp-arm-Use-proper-machine-number-for-qsp-arm.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0004-qsp-arm-Use-proper-machine-number-for-qsp-arm.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0004-qsp-arm-Use-proper-machine-number-for-qsp-arm.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,26 @@
++From 264226fa25dc541c4eb68ccbd15352eef85ca171 Mon Sep 17 00:00:00 2001
++From: Ivar Holmqvist <ivarholmqvist@gmail.com>
++Date: Thu, 29 Nov 2012 15:47:59 +0100
++Subject: [PATCH] qsp-arm: Use proper machine number for qsp-arm.
++
++---
++ include/configs/qsp_arm.h |    3 +--
++ 1 file changed, 1 insertion(+), 2 deletions(-)
++
++diff --git a/include/configs/qsp_arm.h b/include/configs/qsp_arm.h
++index bf73925..e51745c 100644
++--- a/include/configs/qsp_arm.h
+++++ b/include/configs/qsp_arm.h
++@@ -27,8 +27,7 @@
++ #ifndef __CONFIG_H
++ #define __CONFIG_H
++ 
++-/* CHECKME do we need these? update in linux?*/
++-#define MACH_TYPE_QSP_ARM 0xffffffff
+++#define MACH_TYPE_QSP_ARM           4455
++ #define CONFIG_SYS_LOAD_ADDR		0x10008000	/* load address */
++ #define LINUX_BOOT_PARAM_ADDR		0x10000100
++ #define CONFIG_SYS_TEXT_BASE           0x000000
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0005-Backport-U-Boot-v2013.10-patches-to-support-loading-.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0005-Backport-U-Boot-v2013.10-patches-to-support-loading-.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0005-Backport-U-Boot-v2013.10-patches-to-support-loading-.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0005-Backport-U-Boot-v2013.10-patches-to-support-loading-.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,302 @@
++From 98d69d3d6205473a0698cc166b3ac060bfacaad3 Mon Sep 17 00:00:00 2001
++From: Bin Meng <bin.meng@windriver.com>
++Date: Thu, 26 Dec 2013 12:27:52 +0800
++Subject: [PATCH] Backport U-Boot v2013.10 patches to support loading VxWorks
++ 7 kernel. Now Vx-7 kernel can be loaded by U-Boot via
++ command:
++
++=> bootm <kernel> <ramdisk> <dtb>
++
++Tested with PPC build (P2020RDB_config) and ARM build (qsp_arm_config).
++---
++ arch/arm/lib/bootm.c      |   23 +++++++++++++
++ arch/powerpc/lib/bootm.c  |   56 +++++++++++++++++++++++++++++++
++ common/cmd_bootm.c        |   82 ++++++++++++++++++++++++++++++++++++++++-----
++ include/common.h          |    4 +++
++ include/config_defaults.h |    1 +
++ include/vxworks.h         |    3 ++
++ 6 files changed, 160 insertions(+), 9 deletions(-)
++
++diff --git a/arch/arm/lib/bootm.c b/arch/arm/lib/bootm.c
++index afa0093..40fd064 100644
++--- a/arch/arm/lib/bootm.c
+++++ b/arch/arm/lib/bootm.c
++@@ -344,3 +344,26 @@ static ulong get_sp(void)
++ 	asm("mov %0, sp" : "=r"(ret) : );
++ 	return ret;
++ }
+++
+++#if defined(CONFIG_BOOTM_VXWORKS)
+++void boot_prep_vxworks(bootm_headers_t *images)
+++{
+++#if defined(CONFIG_OF_LIBFDT)
+++       int off;
+++
+++       if (images->ft_addr) {
+++               off = fdt_path_offset(images->ft_addr, "/memory");
+++               if (off < 0) {
+++                       if (fixup_memory_node(images->ft_addr))
+++                               puts("## WARNING: fixup memory failed!\n");
+++               }
+++       }
+++#endif
+++       cleanup_before_linux();
+++}
+++void boot_jump_vxworks(bootm_headers_t *images)
+++{
+++       /* ARM VxWorks requires device tree physical address to be passed */
+++       ((void (*)(void *))images->ep)(images->ft_addr);
+++}
+++#endif
++diff --git a/arch/powerpc/lib/bootm.c b/arch/powerpc/lib/bootm.c
++index efcfe84..ccb2a68 100644
++--- a/arch/powerpc/lib/bootm.c
+++++ b/arch/powerpc/lib/bootm.c
++@@ -50,6 +50,7 @@ DECLARE_GLOBAL_DATA_PTR;
++ 
++ extern ulong get_effective_memsize(void);
++ static ulong get_sp (void);
+++extern void ft_fixup_num_cores(void *blob);
++ static void set_clocks_in_mhz (bd_t *kbd);
++ 
++ #ifndef CONFIG_SYS_LINUX_LOWMEM_MAX_SIZE
++@@ -395,3 +396,58 @@ static void set_clocks_in_mhz (bd_t *kbd)
++ #endif /* CONFIG_MPC5xxx */
++ 	}
++ }
+++
+++#if defined(CONFIG_BOOTM_VXWORKS)
+++void boot_prep_vxworks(bootm_headers_t *images)
+++{
+++#if defined(CONFIG_OF_LIBFDT)
+++	int off;
+++	u64 base, size;
+++
+++	if (!images->ft_addr)
+++		return;
+++
+++	base = (u64)gd->bd->bi_memstart;
+++	size = (u64)gd->bd->bi_memsize;
+++
+++	off = fdt_path_offset(images->ft_addr, "/memory");
+++	if (off < 0)
+++		fdt_fixup_memory(images->ft_addr, base, size);
+++
+++#if defined(CONFIG_MP)
+++#if defined(CONFIG_MPC85xx)
+++	ft_fixup_cpu(images->ft_addr, base + size);
+++	ft_fixup_num_cores(images->ft_addr);
+++#elif defined(CONFIG_MPC86xx)
+++	off = fdt_add_mem_rsv(images->ft_addr,
+++			determine_mp_bootpg(NULL), (u64)4096);
+++	if (off < 0)
+++		printf("## WARNING %s: %s\n", __func__, fdt_strerror(off));
+++	ft_fixup_num_cores(images->ft_addr);
+++#endif
+++	flush_cache((unsigned long)images->ft_addr, images->ft_len);
+++#endif
+++#endif
+++}
+++
+++void boot_jump_vxworks(bootm_headers_t *images)
+++{
+++	/* PowerPC VxWorks boot interface conforms to the ePAPR standard
+++	 * general purpuse registers:
+++	 *
+++	 *	r3: Effective address of the device tree image
+++	 *	r4: 0
+++	 *	r5: 0
+++	 *	r6: ePAPR magic value
+++	 *	r7: shall be the size of the boot IMA in bytes
+++	 *	r8: 0
+++	 *	r9: 0
+++	 *	TCR: WRC = 0, no watchdog timer reset will occur
+++	 */
+++	WATCHDOG_RESET();
+++
+++	((void (*)(void *, ulong, ulong, ulong,
+++		ulong, ulong, ulong))images->ep)(images->ft_addr,
+++		0, 0, EPAPR_MAGIC, getenv_bootm_mapsize(), 0, 0);
+++}
+++#endif
++diff --git a/common/cmd_bootm.c b/common/cmd_bootm.c
++index d5745b1..a148c59 100644
++--- a/common/cmd_bootm.c
+++++ b/common/cmd_bootm.c
++@@ -38,6 +38,11 @@
++ #include <asm/byteorder.h>
++ #include <linux/compiler.h>
++ 
+++#if defined(CONFIG_BOOTM_VXWORKS) && \
+++	(defined(CONFIG_PPC) || defined(CONFIG_ARM))
+++#include <vxworks.h>
+++#endif
+++
++ #if defined(CONFIG_CMD_USB)
++ #include <usb.h>
++ #endif
++@@ -123,8 +128,11 @@ static boot_os_fn do_bootm_rtems;
++ #if defined(CONFIG_BOOTM_OSE)
++ static boot_os_fn do_bootm_ose;
++ #endif
++-#if defined(CONFIG_CMD_ELF)
+++#if defined(CONFIG_BOOTM_VXWORKS) && \
+++	(defined(CONFIG_PPC) || defined(CONFIG_ARM))
++ static boot_os_fn do_bootm_vxworks;
+++#endif
+++#if defined(CONFIG_CMD_ELF)
++ static boot_os_fn do_bootm_qnxelf;
++ int do_bootvx(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
++ int do_bootelf(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
++@@ -149,8 +157,11 @@ static boot_os_fn *boot_os[] = {
++ #if defined(CONFIG_BOOTM_OSE)
++ 	[IH_OS_OSE] = do_bootm_ose,
++ #endif
++-#if defined(CONFIG_CMD_ELF)
+++#if defined(CONFIG_BOOTM_VXWORKS) && \
+++	(defined(CONFIG_PPC) || defined(CONFIG_ARM))
++ 	[IH_OS_VXWORKS] = do_bootm_vxworks,
+++#endif
+++#if defined(CONFIG_CMD_ELF)
++ 	[IH_OS_QNX] = do_bootm_qnxelf,
++ #endif
++ #ifdef CONFIG_INTEGRITY
++@@ -280,7 +291,8 @@ static int bootm_start(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]
++ 	if (((images.os.type == IH_TYPE_KERNEL) ||
++ 	     (images.os.type == IH_TYPE_KERNEL_NOLOAD) ||
++ 	     (images.os.type == IH_TYPE_MULTI)) &&
++-	    (images.os.os == IH_OS_LINUX)) {
+++	    (images.os.os == IH_OS_LINUX) ||
+++	    (images.os.os == IH_OS_VXWORKS)) {
++ 		/* find ramdisk */
++ 		ret = boot_get_ramdisk(argc, argv, &images, IH_INITRD_ARCH,
++ 				&images.rd_start, &images.rd_end);
++@@ -1443,12 +1455,64 @@ static int do_bootm_ose(int flag, int argc, char * const argv[],
++ }
++ #endif /* CONFIG_BOOTM_OSE */
++ 
++-#if defined(CONFIG_CMD_ELF)
+++#if defined(CONFIG_BOOTM_VXWORKS) && \
+++	(defined(CONFIG_PPC) || defined(CONFIG_ARM))
+++
+++void do_bootvx_fdt(bootm_headers_t *images)
+++{
+++#if defined(CONFIG_OF_LIBFDT)
+++	int ret;
+++	char *bootline;
+++	ulong of_size = images->ft_len;
+++	char **of_flat_tree = &images->ft_addr;
+++	struct lmb *lmb = &images->lmb;
+++
+++	if (*of_flat_tree) {
+++		boot_fdt_add_mem_rsv_regions(lmb, *of_flat_tree);
+++
+++		ret = boot_relocate_fdt(lmb, of_flat_tree, &of_size);
+++		if (ret)
+++			return;
+++
+++		ret = fdt_add_subnode(*of_flat_tree, 0, "chosen");
+++		if ((ret >= 0 || ret == -FDT_ERR_EXISTS)) {
+++			bootline = getenv("bootargs");
+++			if (bootline) {
+++				ret = fdt_find_and_setprop(*of_flat_tree,
+++						"/chosen", "bootargs",
+++						bootline,
+++						strlen(bootline) + 1, 1);
+++				if (ret < 0) {
+++					printf("## ERROR: %s : %s\n", __func__,
+++					       fdt_strerror(ret));
+++					return;
+++				}
+++			}
+++		} else {
+++			printf("## ERROR: %s : %s\n", __func__,
+++			       fdt_strerror(ret));
+++			return;
+++		}
+++	}
+++#endif
+++
+++	boot_prep_vxworks(images);
+++
+++#if defined(CONFIG_OF_LIBFDT)
+++	printf("## Starting vxWorks at 0x%08lx, device tree at 0x%08lx ...\n",
+++	       (ulong)images->ep, (ulong)*of_flat_tree);
+++#else
+++	printf("## Starting vxWorks at 0x%08lx\n", (ulong)images->ep);
+++#endif
+++
+++	boot_jump_vxworks(images);
+++
+++	puts("## vxWorks terminated\n");
+++}
+++
++ static int do_bootm_vxworks(int flag, int argc, char * const argv[],
++ 			     bootm_headers_t *images)
++ {
++-	char str[80];
++-
++ 	if ((flag != 0) && (flag != BOOTM_STATE_OS_GO))
++ 		return 1;
++ 
++@@ -1459,13 +1523,13 @@ static int do_bootm_vxworks(int flag, int argc, char * const argv[],
++ 	}
++ #endif
++ 
++-	sprintf(str, "%lx", images->ep); /* write entry-point into string */
++-	setenv("loadaddr", str);
++-	do_bootvx(NULL, 0, 0, NULL);
+++	do_bootvx_fdt(images);
++ 
++ 	return 1;
++ }
+++#endif
++ 
+++#if defined(CONFIG_CMD_ELF)
++ static int do_bootm_qnxelf(int flag, int argc, char * const argv[],
++ 			    bootm_headers_t *images)
++ {
++diff --git a/include/common.h b/include/common.h
++index 5cfdd76..d490fd7 100644
++--- a/include/common.h
+++++ b/include/common.h
++@@ -621,6 +621,10 @@ ulong get_ddr_freq(ulong);
++ #if defined(CONFIG_MPC85xx)
++ typedef MPC85xx_SYS_INFO sys_info_t;
++ void	get_sys_info  ( sys_info_t * );
+++#  if defined(CONFIG_OF_LIBFDT)
+++	void ft_fixup_cpu(void *, u64);
+++	void ft_fixup_num_cores(void *);
+++#  endif
++ #endif
++ #if defined(CONFIG_MPC86xx)
++ typedef MPC86xx_SYS_INFO sys_info_t;
++diff --git a/include/config_defaults.h b/include/config_defaults.h
++index d023c63..71191a4 100644
++--- a/include/config_defaults.h
+++++ b/include/config_defaults.h
++@@ -13,6 +13,7 @@
++ #define CONFIG_BOOTM_LINUX 1
++ #define CONFIG_BOOTM_NETBSD 1
++ #define CONFIG_BOOTM_RTEMS 1
+++#define CONFIG_BOOTM_VXWORKS 1
++ 
++ #define CONFIG_GZIP 1
++ #define CONFIG_ZLIB 1
++diff --git a/include/vxworks.h b/include/vxworks.h
++index 917a9ff..fce9504 100644
++--- a/include/vxworks.h
+++++ b/include/vxworks.h
++@@ -25,6 +25,9 @@
++ #define _VXWORKS_H_
++ 
++ int do_bootvx(cmd_tbl_t *cmdtp, int flag, int argc, char * const argv[]);
+++void boot_prep_vxworks(bootm_headers_t *images);
+++void boot_jump_vxworks(bootm_headers_t *images);
+++void do_bootvx_fdt(bootm_headers_t *images);
++ 
++ /*
++  * Use bootaddr to find the location in memory that VxWorks
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0006-common-fdt_support.c-avoid-unintended-return-from-fd.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0006-common-fdt_support.c-avoid-unintended-return-from-fd.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0006-common-fdt_support.c-avoid-unintended-return-from-fd.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0006-common-fdt_support.c-avoid-unintended-return-from-fd.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,38 @@
++From 6430aff21033227f162e8075a785c4204559f21f Mon Sep 17 00:00:00 2001
++From: Miao Yan <miao.yan@windriver.com>
++Date: Thu, 28 Nov 2013 17:51:39 +0800
++Subject: [PATCH] common/fdt_support.c: avoid unintended return from
++ fdt_fixup_memory_banks()
++
++fdt_fixup_memory_banks() will add and update /memory node in
++device tree blob. In the case that /memory node doesn't exist,
++after adding a new one, this function returns error.
++
++The correct behavior should be continuing to update its properties.
++
++Signed-off-by: Miao Yan <miao.yan@windriver.com>
++---
++ common/fdt_support.c |    5 +++--
++ 1 file changed, 3 insertions(+), 2 deletions(-)
++
++diff --git a/common/fdt_support.c b/common/fdt_support.c
++index 593f16c..9d65470 100644
++--- a/common/fdt_support.c
+++++ b/common/fdt_support.c
++@@ -407,10 +407,11 @@ int fdt_fixup_memory_banks(void *blob, u64 start[], u64 size[], int banks)
++ 	nodeoffset = fdt_path_offset(blob, "/memory");
++ 	if (nodeoffset < 0) {
++ 		nodeoffset = fdt_add_subnode(blob, 0, "memory");
++-		if (nodeoffset < 0)
+++		if (nodeoffset < 0) {
++ 			printf("WARNING: could not create /memory: %s.\n",
++ 					fdt_strerror(nodeoffset));
++-		return nodeoffset;
+++			return nodeoffset;
+++		}
++ 	}
++ 	err = fdt_setprop(blob, nodeoffset, "device_type", "memory",
++ 			sizeof("memory"));
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0007-README.vxworks-add-a-document-describing-the-new-VxW.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0007-README.vxworks-add-a-document-describing-the-new-VxW.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0007-README.vxworks-add-a-document-describing-the-new-VxW.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0007-README.vxworks-add-a-document-describing-the-new-VxW.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,39 @@
++From f967ef321c386498290ea98ccae2b9e2e6de91b5 Mon Sep 17 00:00:00 2001
++From: Miao Yan <miao.yan@windriver.com>
++Date: Thu, 28 Nov 2013 17:51:40 +0800
++Subject: [PATCH] README.vxworks: add a document describing the new VxWorks
++ boot interface
++
++Signed-off-by: Miao Yan <miao.yan@windriver.com>
++---
++ doc/README.vxworks |   19 +++++++++++++++++++
++ 1 file changed, 19 insertions(+)
++
++diff --git a/doc/README.vxworks b/doc/README.vxworks
++new file mode 100644
++index 0000000..4cb302e
++--- /dev/null
+++++ b/doc/README.vxworks
++@@ -0,0 +1,19 @@
+++From VxWorks 6.9+ (not include 6.9), VxWorks starts adopting device tree as its hardware
+++decription mechansim (for PowerPC and ARM), thus requiring boot interface changes.
+++This section will describe the new interface.
+++
+++For PowerPC, the calling convention of the new VxWorks entry point conforms to the ePAPR standard,
+++which is shown below (see ePAPR for more details):
+++
+++    void (*kernel_entry)(fdt_addr,
+++              0, 0, EPAPR_MAGIC, boot_IMA, 0, 0)
+++
+++For ARM, the calling convention is show below:
+++
+++    void (*kernel_entry)(void *fdt_addr)
+++
+++When booting new VxWorks kernel (uImage format), the parameters passed to bootm is like below:
+++
+++    bootm <kernel image address> - <device tree address>
+++
+++The do_bootvx command still works as it was for older VxWorks kernels.
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0008-qsp-arm-Add-reset-support.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0008-qsp-arm-Add-reset-support.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0008-qsp-arm-Add-reset-support.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0008-qsp-arm-Add-reset-support.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,92 @@
++From a6c6eaa8b571a963c76f811d6e3a7011a3862dbe Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <Lu.Gao@windriver.com>
++Date: Sat, 11 Oct 2014 17:04:48 +0800
++Subject: [PATCH] qsp-arm: Add reset support.
++
++---
++ board/windriver/qsp_arm/qsp_arm.c |   55 +++++++++++++++++++------------------
++ 1 file changed, 28 insertions(+), 27 deletions(-)
++
++diff --git a/board/windriver/qsp_arm/qsp_arm.c b/board/windriver/qsp_arm/qsp_arm.c
++index 2ac54ce..44e2525 100644
++--- a/board/windriver/qsp_arm/qsp_arm.c
+++++ b/board/windriver/qsp_arm/qsp_arm.c
++@@ -27,6 +27,32 @@
++ 
++ DECLARE_GLOBAL_DATA_PTR;
++ 
+++#define QSP_SERIAL_BASE 0xe0010000
+++#define QSP_SYSREG_BASE 0xe0001000
+++
+++/* Status register bits
+++ */
+++#define TX_READY (1<<0)
+++#define RX_READY (1<<1)
+++
+++/* Control register bits
+++ */
+++#define TX_INT (1<<0)
+++#define RX_INT (1<<1)
+++
+++#define ID_REG      0x00
+++#define STATUS_REG  0x04
+++#define CONTROL_REG 0x08
+++#define TXDATA_REG  0x0c
+++#define RXDATA_REG  0x10
+++
+++
+++/* SYSREG registers */
+++#define MEM_AVAIL_REG  0x20
+++#define MEM_START_REG  0x24
+++#define CPU_FREQ_REG   0x28
+++#define SOFT_RESET_REG 0x30
+++
++ #if defined(CONFIG_SHOW_BOOT_PROGRESS)
++ void show_boot_progress(int progress)
++ {
++@@ -52,8 +78,8 @@ int timer_init(void)
++ 
++ void reset_cpu(ulong addr)
++ {
++-        /* FIXME: ... */
++-        /* Use the sysregs to cause reset */
+++        printf("do reset\n");
+++        writel(1, QSP_SYSREG_BASE + SOFT_RESET_REG);
++ }
++ 
++ /* We skip delay/timer support in u-boot, it will only slow things
++@@ -84,31 +110,6 @@ ulong get_tbclk (void)
++ 	return (ulong)0;
++ }
++ 
++-#define QSP_SERIAL_BASE 0xe0010000
++-#define QSP_SYSREG_BASE 0xe0001000
++-
++-/* Status register bits
++- */
++-#define TX_READY (1<<0)
++-#define RX_READY (1<<1)
++-
++-/* Control register bits
++- */
++-#define TX_INT (1<<0)
++-#define RX_INT (1<<1)
++-
++-#define ID_REG      0x00
++-#define STATUS_REG  0x04
++-#define CONTROL_REG 0x08
++-#define TXDATA_REG  0x0c
++-#define RXDATA_REG  0x10
++-
++-
++-/* SYSREG registers */
++-#define MEM_AVAIL_REG 0x20
++-#define MEM_START_REG 0x24
++-#define CPU_FREQ_REG  0x28
++-
++ int dram_init(void)
++ {
++         if(readl(QSP_SYSREG_BASE + MEM_START_REG) != CONFIG_SYS_SDRAM_BASE) {
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0009-qsp-ppc-Add-reset-support.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0009-qsp-ppc-Add-reset-support.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0009-qsp-ppc-Add-reset-support.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0009-qsp-ppc-Add-reset-support.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,38 @@
++From ce2f548baf732f4d80594178ef80655a4041ca73 Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <Lu.Gao@windriver.com>
++Date: Sat, 11 Oct 2014 17:05:06 +0800
++Subject: [PATCH] qsp-ppc: Add reset support.
++
++---
++ board/windriver/qsp_ppc/qsp_ppc.c |    8 +++-----
++ 1 file changed, 3 insertions(+), 5 deletions(-)
++
++diff --git a/board/windriver/qsp_ppc/qsp_ppc.c b/board/windriver/qsp_ppc/qsp_ppc.c
++index 9a15225..0d0ab73 100644
++--- a/board/windriver/qsp_ppc/qsp_ppc.c
+++++ b/board/windriver/qsp_ppc/qsp_ppc.c
++@@ -54,7 +54,7 @@
++ #define MEM_START_REG     0x24
++ #define CPU_FREQ_REG      0x28
++ #define TIMEBASE_FREQ_REG 0x2c
++-
+++#define SOFT_RESET_REG    0x30
++ 
++ int checkboard(void) 
++ {
++@@ -88,10 +88,8 @@ ft_board_setup(void *blob, bd_t *bd)
++ 
++ void board_reset(void)
++ {
++-        printf("reset not supported\n");
++-        /* FIXME:*/
++-	while (1)
++-		;
+++        printf("do reset\n");
+++        writel(1, QSP_SYSREG_BASE + SOFT_RESET_REG);
++ }
++ 
++ #if defined(CONFIG_SHOW_BOOT_PROGRESS)
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0010-qsp-ppc-enlarge-the-max-command-characters.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0010-qsp-ppc-enlarge-the-max-command-characters.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0010-qsp-ppc-enlarge-the-max-command-characters.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0010-qsp-ppc-enlarge-the-max-command-characters.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,25 @@
++From 155a78c2a4897a8640238343940e259732b7ae03 Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <lu.gao@windriver.com>
++Date: Fri, 21 Nov 2014 09:14:31 +0800
++Subject: [PATCH] qsp-ppc: enlarge the max command characters
++
++---
++ include/configs/qsp_ppc.h |    2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/include/configs/qsp_ppc.h b/include/configs/qsp_ppc.h
++index 40d5eec..a80622a 100644
++--- a/include/configs/qsp_ppc.h
+++++ b/include/configs/qsp_ppc.h
++@@ -152,7 +152,7 @@
++ #if defined(CONFIG_CMD_KGDB)
++     #define CONFIG_SYS_CBSIZE	1024		/* Console I/O Buffer Size */
++ #else
++-    #define CONFIG_SYS_CBSIZE	256		/* Console I/O Buffer Size */
+++    #define CONFIG_SYS_CBSIZE	512		/* Console I/O Buffer Size */
++ #endif
++ 
++ #define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE+sizeof(CONFIG_SYS_PROMPT)+16) /* Print Buffer Size */
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0011-qsp-sysregs-changed-offset-of-sreset-to-0x48-avoidin.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0011-qsp-sysregs-changed-offset-of-sreset-to-0x48-avoidin.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0011-qsp-sysregs-changed-offset-of-sreset-to-0x48-avoidin.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0011-qsp-sysregs-changed-offset-of-sreset-to-0x48-avoidin.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,40 @@
++From 46d8cb84f3e0cd198da8f848c854a6dd0dfbe320 Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <lu.gao@windriver.com>
++Date: Fri, 28 Nov 2014 12:52:12 +0800
++Subject: [PATCH] qsp-sysregs: changed offset of sreset to 0x48 avoiding
++ conflict with 4.8
++
++---
++ board/windriver/qsp_arm/qsp_arm.c |    2 +-
++ board/windriver/qsp_ppc/qsp_ppc.c |    2 +-
++ 2 files changed, 2 insertions(+), 2 deletions(-)
++
++diff --git a/board/windriver/qsp_arm/qsp_arm.c b/board/windriver/qsp_arm/qsp_arm.c
++index 44e2525..1ee61ef 100644
++--- a/board/windriver/qsp_arm/qsp_arm.c
+++++ b/board/windriver/qsp_arm/qsp_arm.c
++@@ -51,7 +51,7 @@ DECLARE_GLOBAL_DATA_PTR;
++ #define MEM_AVAIL_REG  0x20
++ #define MEM_START_REG  0x24
++ #define CPU_FREQ_REG   0x28
++-#define SOFT_RESET_REG 0x30
+++#define SOFT_RESET_REG 0x48
++ 
++ #if defined(CONFIG_SHOW_BOOT_PROGRESS)
++ void show_boot_progress(int progress)
++diff --git a/board/windriver/qsp_ppc/qsp_ppc.c b/board/windriver/qsp_ppc/qsp_ppc.c
++index 0d0ab73..461aa07 100644
++--- a/board/windriver/qsp_ppc/qsp_ppc.c
+++++ b/board/windriver/qsp_ppc/qsp_ppc.c
++@@ -54,7 +54,7 @@
++ #define MEM_START_REG     0x24
++ #define CPU_FREQ_REG      0x28
++ #define TIMEBASE_FREQ_REG 0x2c
++-#define SOFT_RESET_REG    0x30
+++#define SOFT_RESET_REG    0x48
++ 
++ int checkboard(void) 
++ {
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0012-qsp-ppc-handled-other-cpu-enabling-and-disabling-at-.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0012-qsp-ppc-handled-other-cpu-enabling-and-disabling-at-.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0012-qsp-ppc-handled-other-cpu-enabling-and-disabling-at-.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0012-qsp-ppc-handled-other-cpu-enabling-and-disabling-at-.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,107 @@
++From 19c1af1a849301ad90f63c66cf38ff63b2e8844c Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <lu.gao@windriver.com>
++Date: Wed, 3 Dec 2014 10:34:54 +0800
++Subject: [PATCH] qsp-ppc: handled other cpu enabling and disabling at the
++ beginning
++
++---
++ arch/powerpc/cpu/qsp/start.S      |   24 ++++++++++++++++++++----
++ board/windriver/qsp_ppc/qsp_ppc.c |   10 ----------
++ include/configs/qsp_ppc.h         |   12 ++++++++++++
++ 3 files changed, 32 insertions(+), 14 deletions(-)
++
++diff --git a/arch/powerpc/cpu/qsp/start.S b/arch/powerpc/cpu/qsp/start.S
++index 368667b..fcb9360 100644
++--- a/arch/powerpc/cpu/qsp/start.S
+++++ b/arch/powerpc/cpu/qsp/start.S
++@@ -78,8 +78,12 @@ version_string:
++ 	. = EXC_OFF_SYS_RESET
++ 	.globl	_start
++ _start:
++-	b	boot_cold
++-
+++	lis	r14, QSP_SYSREG_BASE@h
+++	ori	r14, r14, QSP_SYSREG_BASE@l
+++	lwz	r15, CPU_ID_REG(r14)
+++	cmpi	0, 0, r15, 0
+++	beq	boot_cold
+++	stw	r15, DISABLE_REG(r14)
++ 	/* the boot code is located below the exception table */
++ 
++ 	.globl	_start_of_vectors
++@@ -152,9 +156,21 @@ _end_of_vectors:
++ 
++ boot_cold:
++ 	/*
++-	 * NOTE: Only Cpu 0 will ever come here.  Other cores go to an
++-	 * address specified by the BPTR
+++	 * NOTE: Only Cpu 0 will ever come here.  Other cores go
+++	 * disabled.
++ 	 */
+++        /* enable other cores to boot from 0xfff00100,
+++           let them disable themselves at the beginning */
+++	li	r16, BOOT_PC
+++	lis	r17, 0xfff00100@h
+++	ori	r17, r17, 0xfff00100@l
+++	stwbrx	r17, r16, r14
+++	li	r16, ENABLE_REG
+++	li	r15, 1
+++3:	stwbrx	r15, r16, r14
+++	addi	r15, r15, 1
+++	cmpi	0, 0, r15, CONFIG_MAX_CPUS
+++	blt	3b
++ 1:
++ #ifdef CONFIG_SYS_RAMBOOT
++ 	/* disable everything */
++diff --git a/board/windriver/qsp_ppc/qsp_ppc.c b/board/windriver/qsp_ppc/qsp_ppc.c
++index 461aa07..ca3e525 100644
++--- a/board/windriver/qsp_ppc/qsp_ppc.c
+++++ b/board/windriver/qsp_ppc/qsp_ppc.c
++@@ -29,7 +29,6 @@
++ #include <fdt_support.h>
++ 
++ #define QSP_SERIAL_BASE 0xe0010000
++-#define QSP_SYSREG_BASE 0xe0001000
++ 
++ /* Status register bits
++  */
++@@ -47,15 +46,6 @@
++ #define TXDATA_REG  0x0c
++ #define RXDATA_REG  0x10
++ 
++-/* SYSREG registers */
++-#define ID_REG            0x00
++-#define CPU_ID_REG        0x10
++-#define MEM_AVAIL_REG     0x20
++-#define MEM_START_REG     0x24
++-#define CPU_FREQ_REG      0x28
++-#define TIMEBASE_FREQ_REG 0x2c
++-#define SOFT_RESET_REG    0x48
++-
++ int checkboard(void) 
++ {
++         printf("QSP PPC board sysregs ID 0x%08x\n", readl(QSP_SYSREG_BASE + ID_REG));
++diff --git a/include/configs/qsp_ppc.h b/include/configs/qsp_ppc.h
++index a80622a..703318a 100644
++--- a/include/configs/qsp_ppc.h
+++++ b/include/configs/qsp_ppc.h
++@@ -205,4 +205,16 @@ typedef struct
++ #define L2_INIT		0
++ #define L2_ENABLE	(L2CR_L2E)
++ 
+++/* SYSREG registers */
+++#define QSP_SYSREG_BASE   0xe0001000
+++#define ENABLE_REG        0x04
+++#define DISABLE_REG       0x08
+++#define BOOT_PC           0x0c
+++#define CPU_ID_REG        0x10
+++#define MEM_AVAIL_REG     0x20
+++#define MEM_START_REG     0x24
+++#define CPU_FREQ_REG      0x28
+++#define TIMEBASE_FREQ_REG 0x2c
+++#define SOFT_RESET_REG    0x48
+++
++ #endif	/* __CONFIG_H */
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0013-qsp-arm-handled-other-cpu-enabling-and-disabling-at-.patch buildroot/board/windriver/qsp-ppc/uboot-2011.12-0013-qsp-arm-handled-other-cpu-enabling-and-disabling-at-.patch
+--- buildroot.2014.08/board/windriver/qsp-ppc/uboot-2011.12-0013-qsp-arm-handled-other-cpu-enabling-and-disabling-at-.patch	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/board/windriver/qsp-ppc/uboot-2011.12-0013-qsp-arm-handled-other-cpu-enabling-and-disabling-at-.patch	2014-12-09 13:19:53.701729700 +0800
+@@ -0,0 +1,91 @@
++From aa3ef3922230534f89637ee29b0b4d93bec894a6 Mon Sep 17 00:00:00 2001
++From: "Gao, Lu" <lu.gao@windriver.com>
++Date: Wed, 3 Dec 2014 13:38:18 +0800
++Subject: [PATCH] qsp-arm: handled other cpu enabling and disabling at the
++ beginning
++
++---
++ arch/arm/cpu/armv7/start.S        |   17 +++++++++++++++++
++ board/windriver/qsp_arm/qsp_arm.c |    8 --------
++ include/configs/qsp_arm.h         |   13 +++++++++++++
++ 3 files changed, 30 insertions(+), 8 deletions(-)
++
++diff --git a/arch/arm/cpu/armv7/start.S b/arch/arm/cpu/armv7/start.S
++index ef08a55..ffefe27 100644
++--- a/arch/arm/cpu/armv7/start.S
+++++ b/arch/arm/cpu/armv7/start.S
++@@ -123,6 +123,23 @@ IRQ_STACK_START_IN:
++  */
++ 
++ reset:
+++	ldr	r0, =(QSP_SYSREG_BASE)
+++	ldr	r1, [r0, #CPU_ID_REG]
+++	cmp	r1, #0
+++	beq	start_boot
+++	str	r1, [r0, #DISABLE_REG]
+++        /* enable other cores to boot from 0xfff00100,
+++           let them disable themselves at the beginning */
+++start_boot:
+++	ldr	r1, =_start
+++	str	r1, [r0, #BOOT_PC]
+++	mov     r1, #1
+++enable_other_cpus:
+++	str	r1, [r0, #ENABLE_REG]
+++	add	r1, r1, #1
+++	cmp	r1, #CONFIG_MAX_CPUS
+++	blt	enable_other_cpus
+++
++ 	bl	save_boot_params
++ 	/*
++ 	 * set the cpu to SVC32 mode
++diff --git a/board/windriver/qsp_arm/qsp_arm.c b/board/windriver/qsp_arm/qsp_arm.c
++index 1ee61ef..800e853 100644
++--- a/board/windriver/qsp_arm/qsp_arm.c
+++++ b/board/windriver/qsp_arm/qsp_arm.c
++@@ -28,7 +28,6 @@
++ DECLARE_GLOBAL_DATA_PTR;
++ 
++ #define QSP_SERIAL_BASE 0xe0010000
++-#define QSP_SYSREG_BASE 0xe0001000
++ 
++ /* Status register bits
++  */
++@@ -46,13 +45,6 @@ DECLARE_GLOBAL_DATA_PTR;
++ #define TXDATA_REG  0x0c
++ #define RXDATA_REG  0x10
++ 
++-
++-/* SYSREG registers */
++-#define MEM_AVAIL_REG  0x20
++-#define MEM_START_REG  0x24
++-#define CPU_FREQ_REG   0x28
++-#define SOFT_RESET_REG 0x48
++-
++ #if defined(CONFIG_SHOW_BOOT_PROGRESS)
++ void show_boot_progress(int progress)
++ {
++diff --git a/include/configs/qsp_arm.h b/include/configs/qsp_arm.h
++index e51745c..6d3c89d 100644
++--- a/include/configs/qsp_arm.h
+++++ b/include/configs/qsp_arm.h
++@@ -91,4 +91,17 @@
++ #define CONFIG_CMDLINE_EDITING		1
++ #define CONFIG_SYS_MAXARGS		16	/* max command args */
++ 
+++#define CONFIG_MAX_CPUS 128
+++
+++/* SYSREG registers */
+++#define QSP_SYSREG_BASE 0xe0001000
+++#define ENABLE_REG      0x04
+++#define DISABLE_REG     0x08
+++#define BOOT_PC         0x0c
+++#define CPU_ID_REG      0x10
+++#define MEM_AVAIL_REG   0x20
+++#define MEM_START_REG   0x24
+++#define CPU_FREQ_REG    0x28
+++#define SOFT_RESET_REG  0x48
+++
++ #endif
++-- 
++1.7.9.5
++
+diff -pNur buildroot.2014.08/configs/qsp_ppc_linux_defconfig buildroot/configs/qsp_ppc_linux_defconfig
+--- buildroot.2014.08/configs/qsp_ppc_linux_defconfig	1970-01-01 07:00:00.000000000 +0700
++++ buildroot/configs/qsp_ppc_linux_defconfig	2014-12-09 13:19:53.697729700 +0800
+@@ -0,0 +1,1510 @@
++#
++# Automatically generated file; DO NOT EDIT.
++# Buildroot 2014.08 Configuration
++#
++BR2_HAVE_DOT_CONFIG=y
++BR2_HOSTARCH_NEEDS_IA32_LIBS=y
++
++#
++# Target options
++#
++# BR2_arcle is not set
++# BR2_arceb is not set
++# BR2_arm is not set
++# BR2_armeb is not set
++# BR2_aarch64 is not set
++# BR2_bfin is not set
++# BR2_i386 is not set
++# BR2_microblazeel is not set
++# BR2_microblazebe is not set
++# BR2_mips is not set
++# BR2_mipsel is not set
++# BR2_mips64 is not set
++# BR2_mips64el is not set
++# BR2_nios2 is not set
++BR2_powerpc=y
++# BR2_powerpc64 is not set
++# BR2_powerpc64le is not set
++# BR2_sh is not set
++# BR2_sh64 is not set
++# BR2_sparc is not set
++# BR2_x86_64 is not set
++# BR2_xtensa is not set
++BR2_ARCH="powerpc"
++BR2_ENDIAN="BIG"
++BR2_ARCH_HAS_ATOMICS=y
++BR2_generic_powerpc=y
++# BR2_powerpc_401 is not set
++# BR2_powerpc_403 is not set
++# BR2_powerpc_405 is not set
++# BR2_powerpc_405fp is not set
++# BR2_powerpc_440 is not set
++# BR2_powerpc_440fp is not set
++# BR2_powerpc_464 is not set
++# BR2_powerpc_464fp is not set
++# BR2_powerpc_476 is not set
++# BR2_powerpc_476fp is not set
++# BR2_powerpc_505 is not set
++# BR2_powerpc_601 is not set
++# BR2_powerpc_602 is not set
++# BR2_powerpc_603 is not set
++# BR2_powerpc_603e is not set
++# BR2_powerpc_604 is not set
++# BR2_powerpc_604e is not set
++# BR2_powerpc_620 is not set
++# BR2_powerpc_630 is not set
++# BR2_powerpc_740 is not set
++# BR2_powerpc_7400 is not set
++# BR2_powerpc_7450 is not set
++# BR2_powerpc_750 is not set
++# BR2_powerpc_821 is not set
++# BR2_powerpc_823 is not set
++# BR2_powerpc_860 is not set
++# BR2_powerpc_970 is not set
++# BR2_powerpc_8540 is not set
++# BR2_powerpc_8548 is not set
++# BR2_powerpc_e300c2 is not set
++# BR2_powerpc_e300c3 is not set
++# BR2_powerpc_e500mc is not set
++# BR2_powerpc_power4 is not set
++# BR2_powerpc_power5 is not set
++# BR2_powerpc_power6 is not set
++# BR2_powerpc_power7 is not set
++# BR2_powerpc_power8 is not set
++BR2_powerpc_CLASSIC=y
++# BR2_POWERPC_SOFT_FLOAT is not set
++
++#
++# Build options
++#
++
++#
++# Commands
++#
++BR2_WGET="wget --passive-ftp -nd -t 3"
++BR2_SVN="svn"
++BR2_BZR="bzr"
++BR2_GIT="git"
++BR2_CVS="cvs"
++BR2_LOCALFILES="cp"
++BR2_SCP="scp"
++BR2_SSH="ssh"
++BR2_HG="hg"
++BR2_ZCAT="gzip -d -c"
++BR2_BZCAT="bzcat"
++BR2_XZCAT="xzcat"
++BR2_TAR_OPTIONS=""
++BR2_DEFCONFIG="$(CONFIG_DIR)/defconfig"
++BR2_DL_DIR="$(TOPDIR)/dl"
++BR2_HOST_DIR="$(BASE_DIR)/host"
++
++#
++# Mirrors and Download locations
++#
++BR2_PRIMARY_SITE=""
++BR2_BACKUP_SITE="http://sources.buildroot.net/"
++BR2_KERNEL_MIRROR="http://www.kernel.org/pub/"
++BR2_GNU_MIRROR="http://ftp.gnu.org/pub/gnu"
++BR2_DEBIAN_MIRROR="http://ftp.debian.org"
++BR2_LUAROCKS_MIRROR="http://rocks.moonscript.org"
++BR2_CPAN_MIRROR="http://cpan.metacpan.org"
++BR2_JLEVEL=12
++BR2_CCACHE=y
++BR2_CCACHE_DIR="$(HOME)/.buildroot-ccache"
++BR2_CCACHE_INITIAL_SETUP=""
++# BR2_DEPRECATED is not set
++# BR2_ENABLE_DEBUG is not set
++BR2_STRIP_strip=y
++# BR2_STRIP_none is not set
++BR2_STRIP_EXCLUDE_FILES=""
++BR2_STRIP_EXCLUDE_DIRS=""
++# BR2_OPTIMIZE_0 is not set
++# BR2_OPTIMIZE_1 is not set
++# BR2_OPTIMIZE_2 is not set
++# BR2_OPTIMIZE_3 is not set
++BR2_OPTIMIZE_S=y
++# BR2_ENABLE_SSP is not set
++# BR2_PREFER_STATIC_LIB is not set
++BR2_PACKAGE_OVERRIDE_FILE="$(TOPDIR)/local.mk"
++BR2_GLOBAL_PATCH_DIR=""
++
++#
++# Toolchain
++#
++BR2_TOOLCHAIN=y
++BR2_TOOLCHAIN_USES_GLIBC=y
++# BR2_TOOLCHAIN_BUILDROOT is not set
++BR2_TOOLCHAIN_EXTERNAL=y
++BR2_TOOLCHAIN_EXTERNAL_CODESOURCERY_POWERPC201103=y
++# BR2_TOOLCHAIN_EXTERNAL_CODESOURCERY_POWERPC201009 is not set
++# BR2_TOOLCHAIN_EXTERNAL_MUSL_CROSS is not set
++# BR2_TOOLCHAIN_EXTERNAL_CUSTOM is not set
++BR2_TOOLCHAIN_EXTERNAL_DOWNLOAD=y
++# BR2_TOOLCHAIN_EXTERNAL_PREINSTALLED is not set
++BR2_TOOLCHAIN_EXTERNAL_PREFIX="powerpc-linux-gnu"
++BR2_TOOLCHAIN_EXTERNAL_GLIBC=y
++# BR2_TOOLCHAIN_EXTERNAL_GDB_SERVER_COPY is not set
++# BR2_PACKAGE_HOST_GDB is not set
++BR2_LARGEFILE=y
++BR2_INET_IPV6=y
++BR2_TOOLCHAIN_HAS_NATIVE_RPC=y
++BR2_USE_WCHAR=y
++BR2_ENABLE_LOCALE=y
++BR2_INSTALL_LIBSTDCPP=y
++BR2_TOOLCHAIN_HAS_THREADS=y
++BR2_TOOLCHAIN_HAS_THREADS_DEBUG=y
++BR2_TOOLCHAIN_HAS_THREADS_NPTL=y
++BR2_TOOLCHAIN_HAS_SHADOW_PASSWORDS=y
++BR2_TOOLCHAIN_HAS_SSP=y
++# BR2_ENABLE_LOCALE_PURGE is not set
++BR2_GENERATE_LOCALE=""
++# BR2_TOOLCHAIN_GLIBC_GCONV_LIBS_COPY is not set
++BR2_USE_MMU=y
++BR2_TARGET_OPTIMIZATION="-pipe"
++BR2_TARGET_LDFLAGS=""
++# BR2_ECLIPSE_REGISTER is not set
++BR2_TOOLCHAIN_HEADERS_AT_LEAST="2.6"
++
++#
++# System configuration
++#
++BR2_TARGET_GENERIC_HOSTNAME="buildroot"
++BR2_TARGET_GENERIC_ISSUE="Welcome to Buildroot"
++# BR2_TARGET_GENERIC_PASSWD_DES is not set
++BR2_TARGET_GENERIC_PASSWD_MD5=y
++# BR2_TARGET_GENERIC_PASSWD_SHA256 is not set
++# BR2_TARGET_GENERIC_PASSWD_SHA512 is not set
++BR2_TARGET_GENERIC_PASSWD_METHOD="md5"
++BR2_INIT_BUSYBOX=y
++# BR2_INIT_SYSV is not set
++
++#
++# systemd needs an (e)glibc toolchain, headers >= 3.10
++#
++# BR2_INIT_NONE is not set
++# BR2_ROOTFS_DEVICE_CREATION_STATIC is not set
++BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_DEVTMPFS=y
++# BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_MDEV is not set
++# BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_EUDEV is not set
++BR2_ROOTFS_DEVICE_TABLE="system/device_table.txt"
++BR2_ROOTFS_SKELETON_DEFAULT=y
++# BR2_ROOTFS_SKELETON_CUSTOM is not set
++BR2_TARGET_GENERIC_ROOT_PASSWD=""
++BR2_TARGET_GENERIC_GETTY=y
++
++#
++# getty options
++#
++BR2_TARGET_GENERIC_GETTY_PORT="ttyAM0"
++# BR2_TARGET_GENERIC_GETTY_BAUDRATE_KEEP is not set
++# BR2_TARGET_GENERIC_GETTY_BAUDRATE_9600 is not set
++# BR2_TARGET_GENERIC_GETTY_BAUDRATE_19200 is not set
++# BR2_TARGET_GENERIC_GETTY_BAUDRATE_38400 is not set
++# BR2_TARGET_GENERIC_GETTY_BAUDRATE_57600 is not set
++BR2_TARGET_GENERIC_GETTY_BAUDRATE_115200=y
++BR2_TARGET_GENERIC_GETTY_BAUDRATE="115200"
++BR2_TARGET_GENERIC_GETTY_TERM="vt100"
++BR2_TARGET_GENERIC_GETTY_OPTIONS=""
++BR2_TARGET_GENERIC_REMOUNT_ROOTFS_RW=y
++# BR2_TARGET_TZ_INFO is not set
++BR2_ROOTFS_USERS_TABLES=""
++BR2_ROOTFS_OVERLAY=""
++BR2_ROOTFS_POST_BUILD_SCRIPT="board/windriver/qsp_fs_post.sh"
++BR2_ROOTFS_POST_IMAGE_SCRIPT=""
++BR2_ROOTFS_POST_SCRIPT_ARGS=""
++
++#
++# Kernel
++#
++BR2_LINUX_KERNEL=y
++# BR2_LINUX_KERNEL_LATEST_VERSION is not set
++BR2_LINUX_KERNEL_CUSTOM_VERSION=y
++# BR2_LINUX_KERNEL_CUSTOM_TARBALL is not set
++# BR2_LINUX_KERNEL_CUSTOM_GIT is not set
++# BR2_LINUX_KERNEL_CUSTOM_HG is not set
++# BR2_LINUX_KERNEL_CUSTOM_LOCAL is not set
++BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="3.10"
++BR2_LINUX_KERNEL_VERSION="3.10"
++BR2_LINUX_KERNEL_PATCH="board/windriver/qsp-ppc/"
++BR2_LINUX_KERNEL_USE_DEFCONFIG=y
++# BR2_LINUX_KERNEL_USE_CUSTOM_CONFIG is not set
++BR2_LINUX_KERNEL_DEFCONFIG="qsp"
++BR2_LINUX_KERNEL_UBOOT_IMAGE=y
++BR2_LINUX_KERNEL_UIMAGE=y
++# BR2_LINUX_KERNEL_ZIMAGE is not set
++# BR2_LINUX_KERNEL_CUIMAGE is not set
++# BR2_LINUX_KERNEL_VMLINUX is not set
++# BR2_LINUX_KERNEL_IMAGE_TARGET_CUSTOM is not set
++BR2_LINUX_KERNEL_DTS_SUPPORT=y
++BR2_LINUX_KERNEL_USE_INTREE_DTS=y
++# BR2_LINUX_KERNEL_USE_CUSTOM_DTS is not set
++BR2_LINUX_KERNEL_INTREE_DTS_NAME="qsp"
++# BR2_LINUX_KERNEL_INSTALL_TARGET is not set
++
++#
++# Linux Kernel Extensions
++#
++# BR2_LINUX_KERNEL_EXT_XENOMAI is not set
++# BR2_LINUX_KERNEL_EXT_RTAI is not set
++
++#
++# Target packages
++#
++BR2_PACKAGE_BUSYBOX=y
++BR2_PACKAGE_BUSYBOX_CONFIG="package/busybox/busybox.config"
++BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
++# BR2_PACKAGE_BUSYBOX_WATCHDOG is not set
++
++#
++# Audio and video applications
++#
++# BR2_PACKAGE_ALSA_UTILS is not set
++# BR2_PACKAGE_AUMIX is not set
++# BR2_PACKAGE_BELLAGIO is not set
++# BR2_PACKAGE_ESPEAK is not set
++# BR2_PACKAGE_FAAD2 is not set
++# BR2_PACKAGE_FFMPEG is not set
++# BR2_PACKAGE_FLAC is not set
++# BR2_PACKAGE_FLITE is not set
++# BR2_PACKAGE_GSTREAMER is not set
++# BR2_PACKAGE_GSTREAMER1 is not set
++# BR2_PACKAGE_JACK2 is not set
++# BR2_PACKAGE_LAME is not set
++# BR2_PACKAGE_LIBVPX is not set
++# BR2_PACKAGE_MADPLAY is not set
++# BR2_PACKAGE_MPG123 is not set
++# BR2_PACKAGE_MPLAYER is not set
++# BR2_PACKAGE_MUSEPACK is not set
++# BR2_PACKAGE_NCMPC is not set
++# BR2_PACKAGE_OPUS_TOOLS is not set
++# BR2_PACKAGE_PULSEAUDIO is not set
++# BR2_PACKAGE_SOX is not set
++# BR2_PACKAGE_TSTOOLS is not set
++# BR2_PACKAGE_TWOLAME is not set
++# BR2_PACKAGE_VLC is not set
++# BR2_PACKAGE_VORBIS_TOOLS is not set
++# BR2_PACKAGE_WAVPACK is not set
++# BR2_PACKAGE_YAVTA is not set
++
++#
++# Compressors and decompressors
++#
++# BR2_PACKAGE_BZIP2 is not set
++# BR2_PACKAGE_GZIP is not set
++# BR2_PACKAGE_INFOZIP is not set
++# BR2_PACKAGE_LZ4 is not set
++# BR2_PACKAGE_LZIP is not set
++# BR2_PACKAGE_LZOP is not set
++# BR2_PACKAGE_XZ is not set
++
++#
++# Debugging, profiling and benchmark
++#
++# BR2_PACKAGE_BONNIE is not set
++# BR2_PACKAGE_CACHE_CALIBRATOR is not set
++# BR2_PACKAGE_DHRYSTONE is not set
++# BR2_PACKAGE_DMALLOC is not set
++# BR2_PACKAGE_DROPWATCH is not set
++# BR2_PACKAGE_DSTAT is not set
++# BR2_PACKAGE_DUMA is not set
++# BR2_PACKAGE_FIO is not set
++# BR2_PACKAGE_GDB is not set
++# BR2_PACKAGE_IOZONE is not set
++# BR2_PACKAGE_KEXEC is not set
++# BR2_PACKAGE_KEXEC_LITE is not set
++# BR2_PACKAGE_KTAP is not set
++# BR2_PACKAGE_LATENCYTOP is not set
++# BR2_PACKAGE_LMBENCH is not set
++# BR2_PACKAGE_LSOF is not set
++# BR2_PACKAGE_LTP_TESTSUITE is not set
++# BR2_PACKAGE_LTRACE is not set
++# BR2_PACKAGE_LTTNG_MODULES is not set
++# BR2_PACKAGE_LTTNG_TOOLS is not set
++# BR2_PACKAGE_MEMSTAT is not set
++# BR2_PACKAGE_NETPERF is not set
++# BR2_PACKAGE_OPROFILE is not set
++# BR2_PACKAGE_PAX_UTILS is not set
++# BR2_PACKAGE_PERF is not set
++# BR2_PACKAGE_PV is not set
++# BR2_PACKAGE_RAMSMP is not set
++# BR2_PACKAGE_RAMSPEED is not set
++# BR2_PACKAGE_RT_TESTS is not set
++# BR2_PACKAGE_STRACE is not set
++# BR2_PACKAGE_STRESS is not set
++# BR2_PACKAGE_SYSPROF is not set
++# BR2_PACKAGE_TINYMEMBENCH is not set
++# BR2_PACKAGE_TRACE_CMD is not set
++# BR2_PACKAGE_VALGRIND is not set
++# BR2_PACKAGE_WHETSTONE is not set
++
++#
++# Development tools
++#
++# BR2_PACKAGE_BINUTILS is not set
++# BR2_PACKAGE_BSDIFF is not set
++# BR2_PACKAGE_CVS is not set
++# BR2_PACKAGE_DIFFUTILS is not set
++# BR2_PACKAGE_FINDUTILS is not set
++# BR2_PACKAGE_FLEX is not set
++# BR2_PACKAGE_GAWK is not set
++# BR2_PACKAGE_GETTEXT is not set
++# BR2_PACKAGE_GIT is not set
++# BR2_PACKAGE_GPERF is not set
++# BR2_PACKAGE_GREP is not set
++# BR2_PACKAGE_JQ is not set
++# BR2_PACKAGE_LIBTOOL is not set
++# BR2_PACKAGE_MAKE is not set
++# BR2_PACKAGE_PATCH is not set
++# BR2_PACKAGE_PKGCONF is not set
++# BR2_PACKAGE_SED is not set
++# BR2_PACKAGE_SSTRIP is not set
++# BR2_PACKAGE_SUBVERSION is not set
++# BR2_PACKAGE_TAR is not set
++# BR2_PACKAGE_TREE is not set
++
++#
++# Filesystem and flash utilities
++#
++# BR2_PACKAGE_BTRFS_PROGS is not set
++# BR2_PACKAGE_CIFS_UTILS is not set
++# BR2_PACKAGE_CRAMFS is not set
++# BR2_PACKAGE_CURLFTPFS is not set
++# BR2_PACKAGE_DOSFSTOOLS is not set
++# BR2_PACKAGE_E2FSPROGS is not set
++# BR2_PACKAGE_E2TOOLS is not set
++# BR2_PACKAGE_ECRYPTFS_UTILS is not set
++# BR2_PACKAGE_EXFAT is not set
++# BR2_PACKAGE_EXFAT_UTILS is not set
++# BR2_PACKAGE_F2FS_TOOLS is not set
++# BR2_PACKAGE_FLASHBENCH is not set
++# BR2_PACKAGE_GENEXT2FS is not set
++# BR2_PACKAGE_GENROMFS is not set
++# BR2_PACKAGE_MAKEDEVS is not set
++
++#
++# mmc-utils needs a toolchain w/ largefile, headers >= 3.0
++#
++BR2_PACKAGE_MTD=y
++
++#
++# MTD tools selection
++#
++# BR2_PACKAGE_MTD_DOCFDISK is not set
++# BR2_PACKAGE_MTD_DOC_LOADBIOS is not set
++BR2_PACKAGE_MTD_FLASHCP=y
++BR2_PACKAGE_MTD_FLASH_ERASE=y
++# BR2_PACKAGE_MTD_FLASH_LOCK is not set
++# BR2_PACKAGE_MTD_FLASH_OTP_DUMP is not set
++# BR2_PACKAGE_MTD_FLASH_OTP_INFO is not set
++# BR2_PACKAGE_MTD_FLASH_OTP_LOCK is not set
++# BR2_PACKAGE_MTD_FLASH_OTP_WRITE is not set
++# BR2_PACKAGE_MTD_FLASH_UNLOCK is not set
++# BR2_PACKAGE_MTD_FTL_CHECK is not set
++# BR2_PACKAGE_MTD_FTL_FORMAT is not set
++# BR2_PACKAGE_MTD_JFFS2DUMP is not set
++BR2_PACKAGE_MTD_MKFSJFFS2=y
++# BR2_PACKAGE_MTD_MKFSUBIFS is not set
++BR2_PACKAGE_MTD_MTD_DEBUG=y
++# BR2_PACKAGE_MTD_NANDDUMP is not set
++# BR2_PACKAGE_MTD_NANDTEST is not set
++# BR2_PACKAGE_MTD_NANDWRITE is not set
++# BR2_PACKAGE_MTD_NFTLDUMP is not set
++# BR2_PACKAGE_MTD_NFTL_FORMAT is not set
++# BR2_PACKAGE_MTD_RECV_IMAGE is not set
++# BR2_PACKAGE_MTD_RFDDUMP is not set
++# BR2_PACKAGE_MTD_RFDFORMAT is not set
++# BR2_PACKAGE_MTD_SERVE_IMAGE is not set
++# BR2_PACKAGE_MTD_SUMTOOL is not set
++BR2_PACKAGE_MTD_MTDINFO=y
++# BR2_PACKAGE_MTD_UBIATTACH is not set
++# BR2_PACKAGE_MTD_UBICRC32 is not set
++# BR2_PACKAGE_MTD_UBIDETACH is not set
++BR2_PACKAGE_MTD_UBIFORMAT=y
++# BR2_PACKAGE_MTD_UBIMKVOL is not set
++# BR2_PACKAGE_MTD_UBINFO is not set
++# BR2_PACKAGE_MTD_UBINIZE is not set
++# BR2_PACKAGE_MTD_UBIRENAME is not set
++# BR2_PACKAGE_MTD_UBIRMVOL is not set
++# BR2_PACKAGE_MTD_UBIRSVOL is not set
++# BR2_PACKAGE_MTD_UBIUPDATEVOL is not set
++BR2_PACKAGE_MTD_UBIBLOCK=y
++# BR2_PACKAGE_MTOOLS is not set
++# BR2_PACKAGE_NFS_UTILS is not set
++# BR2_PACKAGE_NTFS_3G is not set
++# BR2_PACKAGE_SIMICSFS is not set
++# BR2_PACKAGE_SQUASHFS is not set
++# BR2_PACKAGE_SSHFS is not set
++# BR2_PACKAGE_UNIONFS is not set
++# BR2_PACKAGE_XFSPROGS is not set
++
++#
++# Games
++#
++# BR2_PACKAGE_GNUCHESS is not set
++# BR2_PACKAGE_LBREAKOUT2 is not set
++# BR2_PACKAGE_LTRIS is not set
++# BR2_PACKAGE_OPENTYRIAN is not set
++# BR2_PACKAGE_PRBOOM is not set
++
++#
++# Graphic libraries and applications (graphic/text)
++#
++
++#
++# Graphic applications
++#
++# BR2_PACKAGE_FSWEBCAM is not set
++# BR2_PACKAGE_GNUPLOT is not set
++# BR2_PACKAGE_JHEAD is not set
++# BR2_PACKAGE_RRDTOOL is not set
++
++#
++# Graphic libraries
++#
++# BR2_PACKAGE_CEGUI06 is not set
++# BR2_PACKAGE_DIRECTFB is not set
++# BR2_PACKAGE_FBDUMP is not set
++# BR2_PACKAGE_FBGRAB is not set
++# BR2_PACKAGE_FBSET is not set
++# BR2_PACKAGE_FB_TEST_APP is not set
++# BR2_PACKAGE_FBTERM is not set
++# BR2_PACKAGE_FBV is not set
++# BR2_PACKAGE_IMAGEMAGICK is not set
++# BR2_PACKAGE_LINUX_FUSION is not set
++
++#
++# mesa3d needs udev /dev management and a toolchain w/ C++, largefile, NPTL
++#
++# BR2_PACKAGE_OCRAD is not set
++# BR2_PACKAGE_PSPLASH is not set
++# BR2_PACKAGE_SDL is not set
++
++#
++# Other GUIs
++#
++# BR2_PACKAGE_EFL is not set
++# BR2_PACKAGE_QT is not set
++# BR2_PACKAGE_QT5 is not set
++
++#
++# weston needs udev and a toolchain w/ threads, headers >= 3.0
++#
++# BR2_PACKAGE_XORG7 is not set
++
++#
++# X applications
++#
++
++#
++# X libraries and helper libraries
++#
++# BR2_PACKAGE_DEJAVU is not set
++# BR2_PACKAGE_LIBERATION is not set
++# BR2_PACKAGE_XKEYBOARD_CONFIG is not set
++
++#
++# X window managers
++#
++
++#
++# Hardware handling
++#
++
++#
++# Firmware
++#
++# BR2_PACKAGE_B43_FIRMWARE is not set
++# BR2_PACKAGE_LINUX_FIRMWARE is not set
++# BR2_PACKAGE_UX500_FIRMWARE is not set
++# BR2_PACKAGE_ZD1211_FIRMWARE is not set
++# BR2_PACKAGE_AVRDUDE is not set
++# BR2_PACKAGE_CDRKIT is not set
++# BR2_PACKAGE_CRYPTSETUP is not set
++# BR2_PACKAGE_CWIID is not set
++# BR2_PACKAGE_DBUS is not set
++# BR2_PACKAGE_DEVMEM2 is not set
++# BR2_PACKAGE_DMRAID is not set
++
++#
++# dvb-apps utils needs a toolchain w/ largefile, threads, headers >= 3.3
++#
++# BR2_PACKAGE_DVBSNOOP is not set
++# BR2_PACKAGE_DTV_SCAN_TABLES is not set
++# BR2_PACKAGE_EEPROG is not set
++
++#
++# eudev needs eudev /dev management
++#
++# BR2_PACKAGE_EVEMU is not set
++# BR2_PACKAGE_EVTEST is not set
++# BR2_PACKAGE_FAN_CTRL is not set
++# BR2_PACKAGE_FCONFIG is not set
++# BR2_PACKAGE_FIS is not set
++# BR2_PACKAGE_FMTOOLS is not set
++# BR2_PACKAGE_FXLOAD is not set
++# BR2_PACKAGE_GADGETFS_TEST is not set
++# BR2_PACKAGE_GPM is not set
++# BR2_PACKAGE_GPSD is not set
++# BR2_PACKAGE_GPTFDISK is not set
++# BR2_PACKAGE_GVFS is not set
++# BR2_PACKAGE_HDPARM is not set
++# BR2_PACKAGE_HWDATA is not set
++# BR2_PACKAGE_I2C_TOOLS is not set
++# BR2_PACKAGE_INPUT_EVENT_DAEMON is not set
++# BR2_PACKAGE_INPUT_TOOLS is not set
++# BR2_PACKAGE_IOSTAT is not set
++# BR2_PACKAGE_IRDA_UTILS is not set
++# BR2_PACKAGE_KBD is not set
++# BR2_PACKAGE_LCDPROC is not set
++# BR2_PACKAGE_LM_SENSORS is not set
++# BR2_PACKAGE_LSHW is not set
++# BR2_PACKAGE_LSUIO is not set
++# BR2_PACKAGE_LVM2 is not set
++# BR2_PACKAGE_MDADM is not set
++# BR2_PACKAGE_MEDIA_CTL is not set
++# BR2_PACKAGE_MEMTESTER is not set
++# BR2_PACKAGE_MINICOM is not set
++# BR2_PACKAGE_NANOCOM is not set
++# BR2_PACKAGE_NEARD is not set
++# BR2_PACKAGE_OFONO is not set
++# BR2_PACKAGE_OPEN2300 is not set
++# BR2_PACKAGE_OPENOCD is not set
++# BR2_PACKAGE_PARTED is not set
++# BR2_PACKAGE_PCIUTILS is not set
++# BR2_PACKAGE_PICOCOM is not set
++# BR2_PACKAGE_RNG_TOOLS is not set
++# BR2_PACKAGE_SANE_BACKENDS is not set
++# BR2_PACKAGE_SDPARM is not set
++# BR2_PACKAGE_SETSERIAL is not set
++# BR2_PACKAGE_SG3_UTILS is not set
++# BR2_PACKAGE_SISPMCTL is not set
++# BR2_PACKAGE_SMARTMONTOOLS is not set
++# BR2_PACKAGE_SMSTOOLS3 is not set
++# BR2_PACKAGE_SNOWBALL_HDMISERVICE is not set
++# BR2_PACKAGE_SREDIRD is not set
++# BR2_PACKAGE_STATSERIAL is not set
++# BR2_PACKAGE_SYSSTAT is not set
++# BR2_PACKAGE_TI_UIM is not set
++# BR2_PACKAGE_TI_UTILS is not set
++# BR2_PACKAGE_UBOOT_TOOLS is not set
++
++#
++# udisks needs udev /dev management
++#
++# BR2_PACKAGE_USB_MODESWITCH is not set
++# BR2_PACKAGE_USB_MODESWITCH_DATA is not set
++
++#
++# usbmount requires udev to be enabled
++#
++# BR2_PACKAGE_USBUTILS is not set
++
++#
++# w_scan needs a toolchain w/ headers >= 3.0
++#
++# BR2_PACKAGE_WIPE is not set
++
++#
++# Interpreter languages and scripting
++#
++# BR2_PACKAGE_ENSCRIPT is not set
++# BR2_PACKAGE_ERLANG is not set
++# BR2_PACKAGE_HASERL is not set
++# BR2_PACKAGE_JAMVM is not set
++# BR2_PACKAGE_JIMTCL is not set
++# BR2_PACKAGE_LUA is not set
++# BR2_PACKAGE_LUAJIT is not set
++# BR2_PACKAGE_PERL is not set
++# BR2_PACKAGE_PHP is not set
++# BR2_PACKAGE_PYTHON is not set
++# BR2_PACKAGE_PYTHON3 is not set
++# BR2_PACKAGE_RUBY is not set
++# BR2_PACKAGE_TCL is not set
++
++#
++# Libraries
++#
++
++#
++# Audio/Sound
++#
++# BR2_PACKAGE_ALSA_LIB is not set
++# BR2_PACKAGE_AUDIOFILE is not set
++# BR2_PACKAGE_CELT051 is not set
++# BR2_PACKAGE_FDK_AAC is not set
++# BR2_PACKAGE_LIBAO is not set
++# BR2_PACKAGE_LIBCDAUDIO is not set
++# BR2_PACKAGE_LIBCDIO is not set
++# BR2_PACKAGE_LIBCUE is not set
++# BR2_PACKAGE_LIBCUEFILE is not set
++# BR2_PACKAGE_LIBID3TAG is not set
++# BR2_PACKAGE_LIBLO is not set
++# BR2_PACKAGE_LIBMAD is not set
++# BR2_PACKAGE_LIBMODPLUG is not set
++# BR2_PACKAGE_LIBMPD is not set
++# BR2_PACKAGE_LIBMPDCLIENT is not set
++# BR2_PACKAGE_LIBREPLAYGAIN is not set
++# BR2_PACKAGE_LIBSAMPLERATE is not set
++# BR2_PACKAGE_LIBSNDFILE is not set
++# BR2_PACKAGE_LIBSOXR is not set
++# BR2_PACKAGE_LIBVORBIS is not set
++# BR2_PACKAGE_OPENCORE_AMR is not set
++# BR2_PACKAGE_OPUS is not set
++# BR2_PACKAGE_PORTAUDIO is not set
++# BR2_PACKAGE_SPEEX is not set
++# BR2_PACKAGE_TAGLIB is not set
++# BR2_PACKAGE_TREMOR is not set
++# BR2_PACKAGE_VO_AACENC is not set
++
++#
++# Compression and decompression
++#
++# BR2_PACKAGE_LIBARCHIVE is not set
++BR2_PACKAGE_LZO=y
++# BR2_PACKAGE_SNAPPY is not set
++BR2_PACKAGE_ZLIB=y
++
++#
++# Crypto
++#
++# BR2_PACKAGE_BEECRYPT is not set
++# BR2_PACKAGE_CA_CERTIFICATES is not set
++# BR2_PACKAGE_CRYPTODEV is not set
++# BR2_PACKAGE_GNUTLS is not set
++# BR2_PACKAGE_LIBASSUAN is not set
++# BR2_PACKAGE_LIBGCRYPT is not set
++# BR2_PACKAGE_LIBGPG_ERROR is not set
++# BR2_PACKAGE_LIBGPGME is not set
++# BR2_PACKAGE_LIBKSBA is not set
++# BR2_PACKAGE_LIBMCRYPT is not set
++# BR2_PACKAGE_LIBMHASH is not set
++# BR2_PACKAGE_LIBNSS is not set
++# BR2_PACKAGE_LIBSECRET is not set
++# BR2_PACKAGE_LIBSHA1 is not set
++# BR2_PACKAGE_LIBSSH2 is not set
++# BR2_PACKAGE_NETTLE is not set
++# BR2_PACKAGE_OPENSSL is not set
++# BR2_PACKAGE_POLARSSL is not set
++
++#
++# Database
++#
++# BR2_PACKAGE_BERKELEYDB is not set
++# BR2_PACKAGE_GDBM is not set
++# BR2_PACKAGE_MYSQL is not set
++# BR2_PACKAGE_POSTGRESQL is not set
++# BR2_PACKAGE_REDIS is not set
++# BR2_PACKAGE_SQLCIPHER is not set
++# BR2_PACKAGE_SQLITE is not set
++
++#
++# Filesystem
++#
++# BR2_PACKAGE_GAMIN is not set
++# BR2_PACKAGE_LIBCONFIG is not set
++# BR2_PACKAGE_LIBCONFUSE is not set
++# BR2_PACKAGE_LIBFUSE is not set
++# BR2_PACKAGE_LIBLOCKFILE is not set
++# BR2_PACKAGE_LIBNFS is not set
++# BR2_PACKAGE_LIBSYSFS is not set
++# BR2_PACKAGE_LOCKDEV is not set
++
++#
++# Graphics
++#
++# BR2_PACKAGE_ATK is not set
++# BR2_PACKAGE_CAIRO is not set
++# BR2_PACKAGE_FONTCONFIG is not set
++# BR2_PACKAGE_FREETYPE is not set
++# BR2_PACKAGE_GD is not set
++# BR2_PACKAGE_GDK_PIXBUF is not set
++# BR2_PACKAGE_HARFBUZZ is not set
++# BR2_PACKAGE_IMLIB2 is not set
++# BR2_PACKAGE_JASPER is not set
++# BR2_PACKAGE_JPEG is not set
++# BR2_PACKAGE_LCMS2 is not set
++# BR2_PACKAGE_LIBART is not set
++# BR2_PACKAGE_LIBDMTX is not set
++# BR2_PACKAGE_LIBDRM is not set
++# BR2_PACKAGE_LIBEXIF is not set
++# BR2_PACKAGE_LIBGEOTIFF is not set
++
++#
++# libglew depends on X.org and needs an OpenGL backend
++#
++
++#
++# libglu needs an OpenGL backend
++#
++# BR2_PACKAGE_LIBPNG is not set
++# BR2_PACKAGE_LIBQRENCODE is not set
++# BR2_PACKAGE_LIBRAW is not set
++# BR2_PACKAGE_LIBRSVG is not set
++# BR2_PACKAGE_LIBSVG is not set
++# BR2_PACKAGE_LIBSVG_CAIRO is not set
++# BR2_PACKAGE_LIBSVGTINY is not set
++# BR2_PACKAGE_LIBUNGIF is not set
++# BR2_PACKAGE_LIBVA is not set
++# BR2_PACKAGE_OPENCV is not set
++# BR2_PACKAGE_PANGO is not set
++# BR2_PACKAGE_PIXMAN is not set
++# BR2_PACKAGE_POPPLER is not set
++# BR2_PACKAGE_TIFF is not set
++# BR2_PACKAGE_WAYLAND is not set
++# BR2_PACKAGE_WEBP is not set
++# BR2_PACKAGE_ZXING is not set
++
++#
++# Hardware handling
++#
++# BR2_PACKAGE_CCID is not set
++# BR2_PACKAGE_DTC is not set
++# BR2_PACKAGE_LCDAPI is not set
++# BR2_PACKAGE_LIBAIO is not set
++
++#
++# libatasmart requires udev to be enabled
++#
++# BR2_PACKAGE_LIBCEC is not set
++# BR2_PACKAGE_LIBFREEFARE is not set
++# BR2_PACKAGE_LIBFTDI is not set
++# BR2_PACKAGE_LIBHID is not set
++
++#
++# libinput needs udev /dev management
++#
++# BR2_PACKAGE_LIBIQRF is not set
++# BR2_PACKAGE_LIBLLCP is not set
++
++#
++# libmbim needs udev /dev management and a toolchain w/ wchar, threads
++#
++# BR2_PACKAGE_LIBNFC is not set
++# BR2_PACKAGE_LIBQMI is not set
++# BR2_PACKAGE_LIBRAW1394 is not set
++# BR2_PACKAGE_LIBRTLSDR is not set
++# BR2_PACKAGE_LIBSERIAL is not set
++# BR2_PACKAGE_LIBSOC is not set
++# BR2_PACKAGE_LIBUSB is not set
++# BR2_PACKAGE_LIBV4L is not set
++# BR2_PACKAGE_LIBXKBCOMMON is not set
++# BR2_PACKAGE_MTDEV is not set
++# BR2_PACKAGE_NEARDAL is not set
++# BR2_PACKAGE_PCSC_LITE is not set
++# BR2_PACKAGE_TSLIB is not set
++# BR2_PACKAGE_URG is not set
++
++#
++# Javascript
++#
++# BR2_PACKAGE_EXPLORERCANVAS is not set
++# BR2_PACKAGE_FLOT is not set
++# BR2_PACKAGE_JQUERY is not set
++# BR2_PACKAGE_JQUERY_KEYBOARD is not set
++# BR2_PACKAGE_JQUERY_MOBILE is not set
++# BR2_PACKAGE_JQUERY_SPARKLINE is not set
++# BR2_PACKAGE_JQUERY_UI is not set
++# BR2_PACKAGE_JQUERY_VALIDATION is not set
++# BR2_PACKAGE_JSMIN is not set
++# BR2_PACKAGE_JSON_JAVASCRIPT is not set
++
++#
++# JSON/XML
++#
++# BR2_PACKAGE_CJSON is not set
++# BR2_PACKAGE_EXPAT is not set
++# BR2_PACKAGE_EZXML is not set
++# BR2_PACKAGE_JANSSON is not set
++# BR2_PACKAGE_JSON_C is not set
++# BR2_PACKAGE_JSON_GLIB is not set
++# BR2_PACKAGE_LIBJSON is not set
++# BR2_PACKAGE_LIBROXML is not set
++# BR2_PACKAGE_LIBXML2 is not set
++# BR2_PACKAGE_LIBXMLPP is not set
++# BR2_PACKAGE_LIBXMLRPC is not set
++# BR2_PACKAGE_LIBXSLT is not set
++# BR2_PACKAGE_LIBYAML is not set
++# BR2_PACKAGE_MXML is not set
++# BR2_PACKAGE_RAPIDJSON is not set
++# BR2_PACKAGE_TINYXML is not set
++# BR2_PACKAGE_XERCES is not set
++# BR2_PACKAGE_YAJL is not set
++
++#
++# Logging
++#
++# BR2_PACKAGE_LIBLOG4C_LOCALTIME is not set
++# BR2_PACKAGE_LIBLOGGING is not set
++# BR2_PACKAGE_LOG4CPLUS is not set
++# BR2_PACKAGE_LOG4CXX is not set
++# BR2_PACKAGE_ZLOG is not set
++
++#
++# Multimedia
++#
++# BR2_PACKAGE_LIBASS is not set
++# BR2_PACKAGE_LIBBLURAY is not set
++# BR2_PACKAGE_LIBDVBSI is not set
++# BR2_PACKAGE_LIBDVDNAV is not set
++# BR2_PACKAGE_LIBDVDREAD is not set
++# BR2_PACKAGE_LIBEBML is not set
++# BR2_PACKAGE_LIBMATROSKA is not set
++# BR2_PACKAGE_LIBMMS is not set
++# BR2_PACKAGE_LIBMPEG2 is not set
++# BR2_PACKAGE_LIBOGG is not set
++# BR2_PACKAGE_LIBPLAYER is not set
++# BR2_PACKAGE_LIBTHEORA is not set
++# BR2_PACKAGE_LIVE555 is not set
++# BR2_PACKAGE_MEDIASTREAMER is not set
++
++#
++# Networking
++#
++# BR2_PACKAGE_AGENTPP is not set
++# BR2_PACKAGE_C_ARES is not set
++# BR2_PACKAGE_CPPZMQ is not set
++# BR2_PACKAGE_CZMQ is not set
++# BR2_PACKAGE_FILEMQ is not set
++# BR2_PACKAGE_FLICKCURL is not set
++# BR2_PACKAGE_GEOIP is not set
++# BR2_PACKAGE_GLIB_NETWORKING is not set
++# BR2_PACKAGE_LIBCGI is not set
++# BR2_PACKAGE_LIBCGICC is not set
++# BR2_PACKAGE_LIBCURL is not set
++# BR2_PACKAGE_LIBDNET is not set
++# BR2_PACKAGE_LIBEXOSIP2 is not set
++# BR2_PACKAGE_LIBFCGI is not set
++# BR2_PACKAGE_LIBGSASL is not set
++# BR2_PACKAGE_LIBIDN is not set
++# BR2_PACKAGE_LIBISCSI is not set
++# BR2_PACKAGE_LIBMBUS is not set
++# BR2_PACKAGE_LIBMEMCACHED is not set
++# BR2_PACKAGE_LIBMICROHTTPD is not set
++# BR2_PACKAGE_LIBMNL is not set
++# BR2_PACKAGE_LIBMODBUS is not set
++# BR2_PACKAGE_LIBNDP is not set
++# BR2_PACKAGE_LIBNETFILTER_ACCT is not set
++# BR2_PACKAGE_LIBNETFILTER_CONNTRACK is not set
++# BR2_PACKAGE_LIBNETFILTER_CTHELPER is not set
++# BR2_PACKAGE_LIBNETFILTER_CTTIMEOUT is not set
++# BR2_PACKAGE_LIBNETFILTER_LOG is not set
++# BR2_PACKAGE_LIBNETFILTER_QUEUE is not set
++# BR2_PACKAGE_LIBNFNETLINK is not set
++# BR2_PACKAGE_LIBNL is not set
++# BR2_PACKAGE_LIBOAUTH is not set
++# BR2_PACKAGE_LIBOPING is not set
++# BR2_PACKAGE_LIBOSIP2 is not set
++# BR2_PACKAGE_LIBPCAP is not set
++# BR2_PACKAGE_LIBRSYNC is not set
++# BR2_PACKAGE_LIBSOCKETCAN is not set
++# BR2_PACKAGE_LIBSHAIRPLAY is not set
++# BR2_PACKAGE_LIBSOUP is not set
++# BR2_PACKAGE_LIBSTROPHE is not set
++# BR2_PACKAGE_LIBTIRPC is not set
++# BR2_PACKAGE_LIBTORRENT is not set
++# BR2_PACKAGE_LIBUPNP is not set
++# BR2_PACKAGE_LIBVNCSERVER is not set
++# BR2_PACKAGE_LIBWEBSOCKETS is not set
++# BR2_PACKAGE_NEON is not set
++# BR2_PACKAGE_OMNIORB is not set
++# BR2_PACKAGE_OPENPGM is not set
++# BR2_PACKAGE_ORTP is not set
++# BR2_PACKAGE_QDECODER is not set
++# BR2_PACKAGE_RTMPDUMP is not set
++# BR2_PACKAGE_SLIRP is not set
++# BR2_PACKAGE_SNMPPP is not set
++# BR2_PACKAGE_THRIFT is not set
++# BR2_PACKAGE_USBREDIR is not set
++# BR2_PACKAGE_WVSTREAMS is not set
++# BR2_PACKAGE_ZEROMQ is not set
++# BR2_PACKAGE_ZYRE is not set
++
++#
++# Other
++#
++# BR2_PACKAGE_APR is not set
++# BR2_PACKAGE_APR_UTIL is not set
++# BR2_PACKAGE_ARGP_STANDALONE is not set
++# BR2_PACKAGE_ARMADILLO is not set
++# BR2_PACKAGE_BOOST is not set
++# BR2_PACKAGE_CLAPACK is not set
++# BR2_PACKAGE_CPPCMS is not set
++# BR2_PACKAGE_EIGEN is not set
++# BR2_PACKAGE_ELFUTILS is not set
++# BR2_PACKAGE_FFTW is not set
++# BR2_PACKAGE_FLANN is not set
++# BR2_PACKAGE_GLIBMM is not set
++# BR2_PACKAGE_GMP is not set
++# BR2_PACKAGE_GSL is not set
++# BR2_PACKAGE_GTEST is not set
++# BR2_PACKAGE_LIBARGTABLE2 is not set
++BR2_PACKAGE_LIBATOMIC_ARCH_SUPPORTS=y
++# BR2_PACKAGE_LIBATOMIC_OPS is not set
++# BR2_PACKAGE_LIBCAP is not set
++# BR2_PACKAGE_LIBCAP_NG is not set
++# BR2_PACKAGE_LIBCGROUP is not set
++# BR2_PACKAGE_LIBDAEMON is not set
++# BR2_PACKAGE_LIBEE is not set
++# BR2_PACKAGE_LIBELF is not set
++# BR2_PACKAGE_LIBEV is not set
++# BR2_PACKAGE_LIBEVDEV is not set
++# BR2_PACKAGE_LIBEVENT is not set
++# BR2_PACKAGE_LIBFFI is not set
++# BR2_PACKAGE_LIBGC is not set
++# BR2_PACKAGE_LIBGLIB2 is not set
++# BR2_PACKAGE_LIBICAL is not set
++BR2_PACKAGE_LIBNSPR_ARCH_SUPPORT=y
++# BR2_PACKAGE_LIBNSPR is not set
++# BR2_PACKAGE_LIBPFM4 is not set
++# BR2_PACKAGE_LIBPLIST is not set
++# BR2_PACKAGE_LIBPTHREAD_STUBS is not set
++# BR2_PACKAGE_LIBPTHSEM is not set
++# BR2_PACKAGE_LIBSIGC is not set
++# BR2_PACKAGE_LIBSIGSEGV is not set
++# BR2_PACKAGE_LIBTASN1 is not set
++# BR2_PACKAGE_LIBTPL is not set
++# BR2_PACKAGE_LIBUBOX is not set
++# BR2_PACKAGE_LIBUCI is not set
++# BR2_PACKAGE_LIBUNWIND is not set
++# BR2_PACKAGE_LIBURCU is not set
++# BR2_PACKAGE_LIBUV is not set
++# BR2_PACKAGE_LINUX_PAM is not set
++# BR2_PACKAGE_LTTNG_LIBUST is not set
++# BR2_PACKAGE_MPC is not set
++# BR2_PACKAGE_MPDECIMAL is not set
++# BR2_PACKAGE_MPFR is not set
++# BR2_PACKAGE_MSGPACK is not set
++# BR2_PACKAGE_MTDEV2TUIO is not set
++# BR2_PACKAGE_ORC is not set
++# BR2_PACKAGE_P11_KIT is not set
++# BR2_PACKAGE_POCO is not set
++# BR2_PACKAGE_PROTOBUF_C is not set
++# BR2_PACKAGE_QHULL is not set
++# BR2_PACKAGE_SCHIFRA is not set
++
++#
++# Security
++#
++# BR2_PACKAGE_LIBSEPOL is not set
++
++#
++# Text and terminal handling
++#
++# BR2_PACKAGE_ENCHANT is not set
++# BR2_PACKAGE_ICU is not set
++# BR2_PACKAGE_LIBEDIT is not set
++# BR2_PACKAGE_LIBENCA is not set
++# BR2_PACKAGE_LIBESTR is not set
++# BR2_PACKAGE_LIBFRIBIDI is not set
++# BR2_PACKAGE_LINENOISE is not set
++BR2_PACKAGE_NCURSES=y
++# BR2_PACKAGE_NCURSES_TARGET_PANEL is not set
++# BR2_PACKAGE_NCURSES_TARGET_FORM is not set
++# BR2_PACKAGE_NCURSES_TARGET_MENU is not set
++# BR2_PACKAGE_NCURSES_TARGET_PROGS is not set
++# BR2_PACKAGE_NEWT is not set
++# BR2_PACKAGE_PCRE is not set
++# BR2_PACKAGE_POPT is not set
++BR2_PACKAGE_READLINE=y
++# BR2_PACKAGE_SLANG is not set
++# BR2_PACKAGE_TCLAP is not set
++
++#
++# Miscellaneous
++#
++# BR2_PACKAGE_AESPIPE is not set
++# BR2_PACKAGE_BC is not set
++# BR2_PACKAGE_COLLECTD is not set
++# BR2_PACKAGE_EMPTY is not set
++# BR2_PACKAGE_GOOGLEFONTDIRECTORY is not set
++# BR2_PACKAGE_HAVEGED is not set
++# BR2_PACKAGE_MCRYPT is not set
++# BR2_PACKAGE_MOBILE_BROADBAND_PROVIDER_INFO is not set
++# BR2_PACKAGE_SHARED_MIME_INFO is not set
++# BR2_PACKAGE_SNOWBALL_INIT is not set
++# BR2_PACKAGE_SOUND_THEME_BOREALIS is not set
++# BR2_PACKAGE_SOUND_THEME_FREEDESKTOP is not set
++
++#
++# Mail
++#
++# BR2_PACKAGE_EXIM is not set
++# BR2_PACKAGE_FETCHMAIL is not set
++# BR2_PACKAGE_HEIRLOOM_MAILX is not set
++# BR2_PACKAGE_LIBESMTP is not set
++# BR2_PACKAGE_MSMTP is not set
++# BR2_PACKAGE_MUTT is not set
++
++#
++# Networking applications
++#
++# BR2_PACKAGE_AICCU is not set
++# BR2_PACKAGE_AIRCRACK_NG is not set
++# BR2_PACKAGE_ARGUS is not set
++# BR2_PACKAGE_ARPTABLES is not set
++# BR2_PACKAGE_ATFTP is not set
++# BR2_PACKAGE_AVAHI is not set
++# BR2_PACKAGE_AXEL is not set
++# BR2_PACKAGE_BANDWIDTHD is not set
++# BR2_PACKAGE_BCUSDK is not set
++# BR2_PACKAGE_BIND is not set
++# BR2_PACKAGE_BLUEZ_UTILS is not set
++
++#
++# bluez5-utils needs a toolchain w/ wchar, threads, IPv6, headers >= 3.4
++#
++# BR2_PACKAGE_BMON is not set
++# BR2_PACKAGE_BOA is not set
++# BR2_PACKAGE_BRIDGE_UTILS is not set
++# BR2_PACKAGE_BWM_NG is not set
++# BR2_PACKAGE_CAN_UTILS is not set
++# BR2_PACKAGE_CHRONY is not set
++# BR2_PACKAGE_CIVETWEB is not set
++# BR2_PACKAGE_CONNMAN is not set
++# BR2_PACKAGE_CONNTRACK_TOOLS is not set
++# BR2_PACKAGE_CRDA is not set
++# BR2_PACKAGE_CTORRENT is not set
++# BR2_PACKAGE_CUPS is not set
++# BR2_PACKAGE_DHCP is not set
++# BR2_PACKAGE_DHCPCD is not set
++# BR2_PACKAGE_DHCPDUMP is not set
++# BR2_PACKAGE_DNSMASQ is not set
++# BR2_PACKAGE_DROPBEAR is not set
++# BR2_PACKAGE_EBTABLES is not set
++# BR2_PACKAGE_ETHTOOL is not set
++# BR2_PACKAGE_FAIFA is not set
++# BR2_PACKAGE_FPING is not set
++# BR2_PACKAGE_GESFTPSERVER is not set
++# BR2_PACKAGE_HIAWATHA is not set
++# BR2_PACKAGE_HOSTAPD is not set
++# BR2_PACKAGE_HTTPING is not set
++# BR2_PACKAGE_IFPLUGD is not set
++# BR2_PACKAGE_IFTOP is not set
++# BR2_PACKAGE_IGH_ETHERCAT is not set
++# BR2_PACKAGE_IGMPPROXY is not set
++# BR2_PACKAGE_INADYN is not set
++BR2_PACKAGE_IPERF=y
++# BR2_PACKAGE_IPROUTE2 is not set
++# BR2_PACKAGE_IPSEC_TOOLS is not set
++# BR2_PACKAGE_IPSET is not set
++# BR2_PACKAGE_IPTABLES is not set
++# BR2_PACKAGE_IPTRAF_NG is not set
++# BR2_PACKAGE_IPUTILS is not set
++# BR2_PACKAGE_IW is not set
++# BR2_PACKAGE_KISMET is not set
++# BR2_PACKAGE_KNOCK is not set
++# BR2_PACKAGE_LFTP is not set
++# BR2_PACKAGE_LIGHTTPD is not set
++# BR2_PACKAGE_LINKNX is not set
++# BR2_PACKAGE_LINKS is not set
++# BR2_PACKAGE_LINPHONE is not set
++# BR2_PACKAGE_LINUX_ZIGBEE is not set
++# BR2_PACKAGE_LRZSZ is not set
++# BR2_PACKAGE_MACCHANGER is not set
++# BR2_PACKAGE_MEMCACHED is not set
++# BR2_PACKAGE_MII_DIAG is not set
++# BR2_PACKAGE_MINIDLNA is not set
++
++#
++# modemmanager needs udev /dev management and a toolchain w/ largefile, wchar, threads, IPv6
++#
++# BR2_PACKAGE_MONGOOSE is not set
++# BR2_PACKAGE_MONGREL2 is not set
++# BR2_PACKAGE_MROUTED is not set
++# BR2_PACKAGE_MTR is not set
++# BR2_PACKAGE_NBD is not set
++# BR2_PACKAGE_NCFTP is not set
++# BR2_PACKAGE_NDISC6 is not set
++# BR2_PACKAGE_NETATALK is not set
++# BR2_PACKAGE_NETCAT is not set
++# BR2_PACKAGE_NETPLUG is not set
++# BR2_PACKAGE_NETSNMP is not set
++# BR2_PACKAGE_NETSTAT_NAT is not set
++# BR2_PACKAGE_NET_TOOLS is not set
++
++#
++# NetworkManager needs udev /dev management and a toolchain w/ IPv6, largefile, wchar, threads, headers >= 3.7
++#
++# BR2_PACKAGE_NFACCT is not set
++
++#
++# nftables needs a toolchain w/ IPv6, largefile, threads, wchar, headers >= 3.4
++#
++# BR2_PACKAGE_NGIRCD is not set
++# BR2_PACKAGE_NGREP is not set
++# BR2_PACKAGE_NMAP is not set
++# BR2_PACKAGE_NOIP is not set
++# BR2_PACKAGE_NTP is not set
++# BR2_PACKAGE_NUTTCP is not set
++# BR2_PACKAGE_OLSR is not set
++# BR2_PACKAGE_OPENNTPD is not set
++# BR2_PACKAGE_OPENOBEX is not set
++# BR2_PACKAGE_OPENSSH is not set
++# BR2_PACKAGE_OPENSWAN is not set
++# BR2_PACKAGE_OPENVPN is not set
++# BR2_PACKAGE_P910ND is not set
++# BR2_PACKAGE_PORTMAP is not set
++# BR2_PACKAGE_PPPD is not set
++# BR2_PACKAGE_PPTP_LINUX is not set
++# BR2_PACKAGE_PROFTPD is not set
++# BR2_PACKAGE_PROXYCHAINS_NG is not set
++# BR2_PACKAGE_PTPD is not set
++# BR2_PACKAGE_PTPD2 is not set
++# BR2_PACKAGE_QUAGGA is not set
++# BR2_PACKAGE_RADVD is not set
++# BR2_PACKAGE_RPCBIND is not set
++# BR2_PACKAGE_RSH_REDONE is not set
++# BR2_PACKAGE_RSYNC is not set
++# BR2_PACKAGE_RTORRENT is not set
++# BR2_PACKAGE_RTPTOOLS is not set
++# BR2_PACKAGE_SAMBA is not set
++# BR2_PACKAGE_SAMBA4 is not set
++# BR2_PACKAGE_SCONESERVER is not set
++# BR2_PACKAGE_SER2NET is not set
++# BR2_PACKAGE_SMCROUTE is not set
++# BR2_PACKAGE_SOCAT is not set
++# BR2_PACKAGE_SOCKETCAND is not set
++# BR2_PACKAGE_SPAWN_FCGI is not set
++# BR2_PACKAGE_SPICE_PROTOCOL is not set
++# BR2_PACKAGE_SQUID is not set
++# BR2_PACKAGE_SSHPASS is not set
++# BR2_PACKAGE_STRONGSWAN is not set
++# BR2_PACKAGE_STUNNEL is not set
++# BR2_PACKAGE_TCPDUMP is not set
++# BR2_PACKAGE_TCPING is not set
++# BR2_PACKAGE_TCPREPLAY is not set
++# BR2_PACKAGE_TFTPD is not set
++# BR2_PACKAGE_THTTPD is not set
++# BR2_PACKAGE_TINYHTTPD is not set
++# BR2_PACKAGE_TN5250 is not set
++# BR2_PACKAGE_TRANSMISSION is not set
++
++#
++# tvheadend needs a toolchain w/ largefile, IPv6, NPTL, headers >= 3.2
++#
++# BR2_PACKAGE_UDPCAST is not set
++# BR2_PACKAGE_ULOGD is not set
++# BR2_PACKAGE_USHARE is not set
++# BR2_PACKAGE_USSP_PUSH is not set
++# BR2_PACKAGE_VDE2 is not set
++# BR2_PACKAGE_VPNC is not set
++# BR2_PACKAGE_VSFTPD is not set
++# BR2_PACKAGE_VTUN is not set
++# BR2_PACKAGE_WGET is not set
++# BR2_PACKAGE_WHOIS is not set
++# BR2_PACKAGE_WIRELESS_REGDB is not set
++# BR2_PACKAGE_WIRELESS_TOOLS is not set
++# BR2_PACKAGE_WIRESHARK is not set
++# BR2_PACKAGE_WPA_SUPPLICANT is not set
++# BR2_PACKAGE_WVDIAL is not set
++# BR2_PACKAGE_XINETD is not set
++# BR2_PACKAGE_XL2TP is not set
++# BR2_PACKAGE_ZNC is not set
++
++#
++# Package managers
++#
++# BR2_PACKAGE_IPKG is not set
++# BR2_PACKAGE_OPKG is not set
++# BR2_PACKAGE_RPM is not set
++
++#
++# Real-Time
++#
++# BR2_PACKAGE_XENOMAI is not set
++
++#
++# Shell and utilities
++#
++
++#
++# Shells
++#
++BR2_PACKAGE_BASH=y
++# BR2_PACKAGE_DASH is not set
++# BR2_PACKAGE_ZSH is not set
++
++#
++# Utilities
++#
++# BR2_PACKAGE_AT is not set
++# BR2_PACKAGE_CCRYPT is not set
++# BR2_PACKAGE_DIALOG is not set
++# BR2_PACKAGE_DTACH is not set
++# BR2_PACKAGE_FILE is not set
++# BR2_PACKAGE_GNUPG is not set
++# BR2_PACKAGE_GNUPG2 is not set
++# BR2_PACKAGE_INOTIFY_TOOLS is not set
++# BR2_PACKAGE_LOCKFILE_PROGS is not set
++# BR2_PACKAGE_LOGROTATE is not set
++# BR2_PACKAGE_LOGSURFER is not set
++# BR2_PACKAGE_PINENTRY is not set
++# BR2_PACKAGE_SCREEN is not set
++# BR2_PACKAGE_SUDO is not set
++# BR2_PACKAGE_TIME is not set
++# BR2_PACKAGE_TMUX is not set
++# BR2_PACKAGE_WHICH is not set
++# BR2_PACKAGE_XMLSTARLET is not set
++
++#
++# System tools
++#
++# BR2_PACKAGE_ACL is not set
++# BR2_PACKAGE_ATTR is not set
++# BR2_PACKAGE_BOOTUTILS is not set
++# BR2_PACKAGE_COREUTILS is not set
++# BR2_PACKAGE_CPULOAD is not set
++# BR2_PACKAGE_DCRON is not set
++# BR2_PACKAGE_FTOP is not set
++# BR2_PACKAGE_HTOP is not set
++# BR2_PACKAGE_IPRUTILS is not set
++# BR2_PACKAGE_KEYUTILS is not set
++# BR2_PACKAGE_KMOD is not set
++# BR2_PACKAGE_LXC is not set
++# BR2_PACKAGE_MONIT is not set
++# BR2_PACKAGE_NCDU is not set
++# BR2_PACKAGE_NUMACTL is not set
++# BR2_PACKAGE_NUT is not set
++# BR2_PACKAGE_POWERPC_UTILS is not set
++# BR2_PACKAGE_POLKIT is not set
++# BR2_PACKAGE_PROCPS_NG is not set
++# BR2_PACKAGE_PSMISC is not set
++# BR2_PACKAGE_PWGEN is not set
++# BR2_PACKAGE_QUOTA is not set
++# BR2_PACKAGE_RSYSLOG is not set
++
++#
++# smack needs a toolchain w/ dynamic library, threads, headers >= 3.0
++#
++
++#
++# supervisor needs the python interpreter
++#
++# BR2_PACKAGE_SYSKLOGD is not set
++BR2_PACKAGE_SYSTEMD_ARCH_SUPPORTS=y
++# BR2_PACKAGE_UTIL_LINUX is not set
++
++#
++# Text editors and viewers
++#
++# BR2_PACKAGE_ED is not set
++# BR2_PACKAGE_JOE is not set
++# BR2_PACKAGE_LESS is not set
++# BR2_PACKAGE_NANO is not set
++# BR2_PACKAGE_UEMACS is not set
++# BR2_PACKAGE_VIM is not set
++BR2_PACKAGE_SIMICS_AGENT=y
++
++#
++# Filesystem images
++#
++# BR2_TARGET_ROOTFS_CLOOP is not set
++# BR2_TARGET_ROOTFS_CPIO is not set
++# BR2_TARGET_ROOTFS_CRAMFS is not set
++BR2_TARGET_ROOTFS_EXT2=y
++BR2_TARGET_ROOTFS_EXT2_2=y
++BR2_TARGET_ROOTFS_EXT2_2r0=y
++# BR2_TARGET_ROOTFS_EXT2_2r1 is not set
++# BR2_TARGET_ROOTFS_EXT2_3 is not set
++# BR2_TARGET_ROOTFS_EXT2_4 is not set
++BR2_TARGET_ROOTFS_EXT2_GEN=2
++BR2_TARGET_ROOTFS_EXT2_REV=0
++BR2_TARGET_ROOTFS_EXT2_BLOCKS=0
++BR2_TARGET_ROOTFS_EXT2_INODES=0
++BR2_TARGET_ROOTFS_EXT2_RESBLKS=0
++BR2_TARGET_ROOTFS_EXT2_NONE=y
++# BR2_TARGET_ROOTFS_EXT2_GZIP is not set
++# BR2_TARGET_ROOTFS_EXT2_BZIP2 is not set
++# BR2_TARGET_ROOTFS_EXT2_LZMA is not set
++# BR2_TARGET_ROOTFS_EXT2_LZO is not set
++# BR2_TARGET_ROOTFS_EXT2_XZ is not set
++# BR2_TARGET_ROOTFS_INITRAMFS is not set
++# BR2_TARGET_ROOTFS_JFFS2 is not set
++# BR2_TARGET_ROOTFS_ROMFS is not set
++# BR2_TARGET_ROOTFS_SQUASHFS is not set
++BR2_TARGET_ROOTFS_TAR=y
++BR2_TARGET_ROOTFS_TAR_NONE=y
++# BR2_TARGET_ROOTFS_TAR_GZIP is not set
++# BR2_TARGET_ROOTFS_TAR_BZIP2 is not set
++# BR2_TARGET_ROOTFS_TAR_LZMA is not set
++# BR2_TARGET_ROOTFS_TAR_LZO is not set
++# BR2_TARGET_ROOTFS_TAR_XZ is not set
++BR2_TARGET_ROOTFS_TAR_OPTIONS=""
++# BR2_TARGET_ROOTFS_UBIFS is not set
++# BR2_TARGET_ROOTFS_YAFFS2 is not set
++
++#
++# Bootloaders
++#
++# BR2_TARGET_BAREBOX is not set
++BR2_TARGET_UBOOT=y
++BR2_TARGET_UBOOT_BOARDNAME="qsp_ppc"
++# BR2_TARGET_UBOOT_LATEST_VERSION is not set
++BR2_TARGET_UBOOT_CUSTOM_VERSION=y
++# BR2_TARGET_UBOOT_CUSTOM_TARBALL is not set
++# BR2_TARGET_UBOOT_CUSTOM_GIT is not set
++# BR2_TARGET_UBOOT_CUSTOM_HG is not set
++BR2_TARGET_UBOOT_CUSTOM_VERSION_VALUE="2011.12"
++BR2_TARGET_UBOOT_VERSION="2011.12"
++BR2_TARGET_UBOOT_CUSTOM_PATCH_DIR="board/windriver/qsp-ppc"
++# BR2_TARGET_UBOOT_FORMAT_AIS is not set
++BR2_TARGET_UBOOT_FORMAT_BIN=y
++# BR2_TARGET_UBOOT_FORMAT_IMG is not set
++# BR2_TARGET_UBOOT_FORMAT_IMX is not set
++# BR2_TARGET_UBOOT_FORMAT_NAND_BIN is not set
++# BR2_TARGET_UBOOT_FORMAT_ELF is not set
++# BR2_TARGET_UBOOT_FORMAT_CUSTOM is not set
++# BR2_TARGET_UBOOT_SPL is not set
++# BR2_TARGET_UBOOT_ENVIMAGE is not set
++
++#
++# Host utilities
++#
++# BR2_PACKAGE_HOST_DFU_UTIL is not set
++# BR2_PACKAGE_HOST_DOSFSTOOLS is not set
++BR2_PACKAGE_HOST_E2FSPROGS=y
++# BR2_PACKAGE_HOST_E2TOOLS is not set
++BR2_PACKAGE_HOST_GENEXT2FS=y
++# BR2_PACKAGE_HOST_GENIMAGE is not set
++# BR2_PACKAGE_HOST_GENPART is not set
++# BR2_PACKAGE_HOST_LPC3250LOADER is not set
++# BR2_PACKAGE_HOST_MTD is not set
++# BR2_PACKAGE_HOST_MTOOLS is not set
++# BR2_PACKAGE_HOST_OPENOCD is not set
++# BR2_PACKAGE_HOST_PARTED is not set
++# BR2_PACKAGE_HOST_PATCHELF is not set
++# BR2_PACKAGE_HOST_PWGEN is not set
++# BR2_PACKAGE_HOST_SAM_BA is not set
++# BR2_PACKAGE_HOST_SQUASHFS is not set
++# BR2_PACKAGE_HOST_UBOOT_TOOLS is not set
++# BR2_PACKAGE_HOST_UTIL_LINUX is not set
++
++#
++# Legacy config options
++#
++
++#
++# Legacy options removed in 2014.08
++#
++# BR2_KERNEL_HEADERS_3_8 is not set
++# BR2_PACKAGE_GETTEXT_TOOLS is not set
++# BR2_PACKAGE_PROCPS is not set
++# BR2_BINUTILS_VERSION_2_20_1 is not set
++# BR2_BINUTILS_VERSION_2_21 is not set
++# BR2_BINUTILS_VERSION_2_23_1 is not set
++# BR2_UCLIBC_VERSION_0_9_32 is not set
++# BR2_GCC_VERSION_4_3_X is not set
++# BR2_GCC_VERSION_4_6_X is not set
++# BR2_GDB_VERSION_7_4 is not set
++# BR2_GDB_VERSION_7_5 is not set
++# BR2_BUSYBOX_VERSION_1_19_X is not set
++# BR2_BUSYBOX_VERSION_1_20_X is not set
++# BR2_BUSYBOX_VERSION_1_21_X is not set
++# BR2_PACKAGE_LIBV4L_DECODE_TM6000 is not set
++# BR2_PACKAGE_LIBV4L_IR_KEYTABLE is not set
++# BR2_PACKAGE_LIBV4L_V4L2_COMPLIANCE is not set
++# BR2_PACKAGE_LIBV4L_V4L2_CTL is not set
++# BR2_PACKAGE_LIBV4L_V4L2_DBG is not set
++
++#
++# Legacy options removed in 2014.05
++#
++# BR2_PACKAGE_EVTEST_CAPTURE is not set
++# BR2_KERNEL_HEADERS_3_6 is not set
++# BR2_KERNEL_HEADERS_3_7 is not set
++# BR2_PACKAGE_VALA is not set
++BR2_PACKAGE_TZDATA_ZONELIST=""
++# BR2_PACKAGE_LUA_INTERPRETER_EDITING_NONE is not set
++# BR2_PACKAGE_LUA_INTERPRETER_READLINE is not set
++# BR2_PACKAGE_LUA_INTERPRETER_LINENOISE is not set
++# BR2_PACKAGE_DVB_APPS_UTILS is not set
++# BR2_KERNEL_HEADERS_SNAP is not set
++# BR2_ROOTFS_DEVICE_CREATION_DYNAMIC_UDEV is not set
++# BR2_PACKAGE_UDEV is not set
++# BR2_PACKAGE_UDEV_RULES_GEN is not set
++# BR2_PACKAGE_UDEV_ALL_EXTRAS is not set
++
++#
++# Legacy options removed in 2014.02
++#
++# BR2_sh2 is not set
++# BR2_sh3 is not set
++# BR2_sh3eb is not set
++# BR2_KERNEL_HEADERS_3_1 is not set
++# BR2_KERNEL_HEADERS_3_3 is not set
++# BR2_KERNEL_HEADERS_3_5 is not set
++# BR2_GDB_VERSION_7_2 is not set
++# BR2_GDB_VERSION_7_3 is not set
++# BR2_PACKAGE_CCACHE is not set
++# BR2_HAVE_DOCUMENTATION is not set
++# BR2_PACKAGE_AUTOMAKE is not set
++# BR2_PACKAGE_AUTOCONF is not set
++# BR2_PACKAGE_XSTROKE is not set
++# BR2_PACKAGE_LZMA is not set
++# BR2_PACKAGE_TTCP is not set
++# BR2_PACKAGE_LIBNFC_LLCP is not set
++# BR2_PACKAGE_MYSQL_CLIENT is not set
++# BR2_PACKAGE_SQUASHFS3 is not set
++# BR2_TARGET_ROOTFS_SQUASHFS3 is not set
++# BR2_PACKAGE_NETKITBASE is not set
++# BR2_PACKAGE_NETKITTELNET is not set
++# BR2_PACKAGE_LUASQL is not set
++# BR2_PACKAGE_LUACJSON is not set
++
++#
++# Legacy options removed in 2013.11
++#
++# BR2_PACKAGE_LVM2_DMSETUP_ONLY is not set
++# BR2_PACKAGE_QT_JAVASCRIPTCORE is not set
++# BR2_PACKAGE_MODULE_INIT_TOOLS is not set
++BR2_TARGET_UBOOT_CUSTOM_GIT_REPO_URL=""
++BR2_TARGET_UBOOT_CUSTOM_GIT_VERSION=""
++BR2_LINUX_KERNEL_CUSTOM_GIT_REPO_URL=""
++BR2_LINUX_KERNEL_CUSTOM_GIT_VERSION=""
++
++#
++# Legacy options removed in 2013.08
++#
++# BR2_ARM_OABI is not set
++# BR2_PACKAGE_DOSFSTOOLS_DOSFSCK is not set
++# BR2_PACKAGE_DOSFSTOOLS_DOSFSLABEL is not set
++# BR2_PACKAGE_DOSFSTOOLS_MKDOSFS is not set
++# BR2_ELF2FLT is not set
++# BR2_VFP_FLOAT is not set
++# BR2_PACKAGE_GCC_TARGET is not set
++# BR2_HAVE_DEVFILES is not set
++
++#
++# Legacy options removed in 2013.05
++#
++# BR2_PACKAGE_LINUX_FIRMWARE_RTL_8192 is not set
++# BR2_PACKAGE_LINUX_FIRMWARE_RTL_8712 is not set
++
++#
++# Legacy options removed in 2013.02
++#
++# BR2_sa110 is not set
++# BR2_sa1100 is not set
++# BR2_PACKAGE_GDISK is not set
++# BR2_PACKAGE_GDISK_GDISK is not set
++# BR2_PACKAGE_GDISK_SGDISK is not set
++# BR2_PACKAGE_GDB_HOST is not set
++# BR2_PACKAGE_DIRECTB_DITHER_RGB16 is not set
++# BR2_PACKAGE_DIRECTB_TESTS is not set
++
++#
++# Legacy options removed in 2012.11
++#
++# BR2_PACKAGE_CUSTOMIZE is not set
++# BR2_PACKAGE_XSERVER_xorg is not set
++# BR2_PACKAGE_XSERVER_tinyx is not set
++# BR2_PACKAGE_PTHREAD_STUBS is not set
++
++#
++# Legacy options removed in 2012.08
++#
++# BR2_PACKAGE_GETTEXT_STATIC is not set
++# BR2_PACKAGE_LIBINTL is not set
++# BR2_PACKAGE_INPUT_TOOLS_EVTEST is not set
++# BR2_BFIN_FDPIC is not set
++# BR2_BFIN_FLAT is not set

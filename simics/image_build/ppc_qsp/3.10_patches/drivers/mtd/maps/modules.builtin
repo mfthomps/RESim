@@ -1,0 +1,2 @@
+kernel/drivers/mtd/maps/physmap.ko
+kernel/drivers/mtd/maps/physmap_of.ko

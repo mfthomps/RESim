@@ -52,7 +52,7 @@ class StackFrameManager():
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
 
-    def stackTrace(self, verbose=False, in_tid=None, use_cache=True):
+    def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -79,7 +79,7 @@ class StackFrameManager():
                
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                          self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                         reg_frame, self.disassembler, self.lgr)
+                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -90,7 +90,7 @@ class StackFrameManager():
                 self.stack2_cache[key].append(st)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -120,7 +120,7 @@ class StackFrameManager():
                 reg_frame = self.task_utils.frameFromRegs()
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                         self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse)
+                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -149,6 +149,7 @@ class StackFrameManager():
         if os.path.isfile(stack_base_file):
             self.lgr.debug('stackFrameManager stack_base pickle from %s' % stack_base_file)
             self.stack_base = pickle.load( open(stack_base_file, 'rb') ) 
+            self.lgr.debug('stackFrameManager loadPickle %d entries in stack_base' % (len(self.stack_base)))
             for tid in self.stack_base:
                 self.lgr.debug('stackFrameManager loadPickle tid:%s stack_base 0x%x' % (tid, self.stack_base[tid]))
 
@@ -183,16 +184,12 @@ class StackFrameManager():
 
     def recordStackBase(self, tid, sp):
         if tid is not None and sp is not None:
-            self.lgr.debug('recordStackBase tid:%s 0x%x' % (tid, sp))
+            self.lgr.debug('stackFrameManager recordStackBase tid:%s 0x%x' % (tid, sp))
             self.stack_base[tid] = sp
 
     def recordStackClone(self, tid, parent):
-        self.lgr.debug('recordStackClone tid: %s parent: %s' % (tid, parent))
+        self.lgr.debug('stackFrameManager recordStackClone tid: %s parent: %s' % (tid, parent))
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
-
-    ''' TBD remove, only here for compatability with old snapshots'''
-    def initStackBase(self, stack_base):
-        self.stack_base = stack_base
 
     def up(self):
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)

@@ -1,0 +1,15 @@
+#
+# QSP ethernet device configuration
+#
+
+config NET_QSP
+	tristate "QSP Ethernet MAC driver"
+	default n
+	depends on QSP
+	---help---
+	  If you have a network (Ethernet) card belonging to this class, say Y
+	  and read the Ethernet-HOWTO, available from
+	  <http://www.tldp.org/docs.html#howto>.
+
+	  This driver supports the QSP Ethernet MAC used on the Wind River
+	  QSP simics platform

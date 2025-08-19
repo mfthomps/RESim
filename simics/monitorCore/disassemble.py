@@ -33,9 +33,18 @@ import sys
 import os
 sys.path.insert(0,'/usr/local/lib/python3.10/dist-packages')
 home=os.getenv('HOME')
-if home is not None:
+simdir=os.getenv('SIMDIR')
+if simdir is not None and simdir.endswith('simics-6.0.146'):
+    # special case for older simics needed for ppc32
+    image_dir=os.getenv('RESIM_IMAGE')
+    if image_dir is not None:
+        package_dir = os.path.join(image_dir,'..','packages')
+        sys.path.insert(0,package_dir)
+        print('sys path inserted %s' % package_dir)
+elif home is not None:
     local_path = home+'/.local/lib/python3.10/site-packages'
     sys.path.insert(0,local_path)
+    print('sys path inserted %s' % local_path)
 try:
     from capstone import *
 except:
@@ -48,10 +57,17 @@ class Disassemble():
         self.lgr = lgr
         self.top = top
         self.prog_bytes = {}
+        #if cpu.architecture == 'ppc32':
+        #   self.lgr.debug('disassemble does not yet support ppc32')
+        #   return
         try:
             if cpu.architecture.startswith('arm'):
                 self.md32 = Cs(CS_ARCH_ARM, CS_MODE_ARM)
-                self.md64 = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
+                try:
+                    self.md64 = Cs(CS_ARCH_ARM, CS_MODE_ARM64)
+                except:
+                    self.lgr.debug('disassemble no support for CS_MOD_ARM64, use CS_MODE_ARM')
+                    self.md64 = self.md32
             else:
                 self.md32 = Cs(CS_ARCH_X86, CS_MODE_32)
                 self.md64 = Cs(CS_ARCH_X86, CS_MODE_64)

@@ -568,7 +568,7 @@ class WinSyscall():
         Parse a system call using many if blocks.  Note that setting exit_info to None prevents the return from the
         syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
         '''
-        exit_info = syscall.ExitInfo(self, cpu, tid, callnum, callname, None, frame)
+        exit_info = syscall.ExitInfo(self, cpu, tid, comm, callnum, callname, None, frame)
         exit_info.syscall_entry = self.mem_utils.getRegValue(self.cpu, 'pc')
         trace_msg = None
         frame_string = taskUtils.stringFromFrame(frame)
@@ -1382,8 +1382,7 @@ class WinSyscall():
         eip = self.top.getEIP()
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-            	     self.stopHap, msg)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, msg)
         self.lgr.debug('winSyscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
         SIM_break_simulation(msg)
 
@@ -1392,7 +1391,7 @@ class WinSyscall():
              a break in the simulation
         '''
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            self.top.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.stop_action is not None:
@@ -1456,7 +1455,7 @@ class WinSyscall():
             word_size = self.getWordSize(tid)
             frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, word_size, frame=frames[tid])
 
-            exit_info = syscall.ExitInfo(self, self.cpu, tid, callnum, callname, syscall_info.compat32, frame)
+            exit_info = syscall.ExitInfo(self, self.cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
@@ -1524,7 +1523,7 @@ class WinSyscall():
     def stopTraceAlone(self, dumb):
         #self.lgr.debug('winSyscall stopTraceAlone')
         if self.stop_hap is not None:
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+            RES_hap_delete_callback_id(self.stop_hap)
             self.stop_hap = None
 
         #self.lgr.debug('winSyscall stopTraceAlone2')
@@ -1551,11 +1550,11 @@ class WinSyscall():
     def stopMazeHap(self, syscall, one, exception, error_string):
         if self.stop_maze_hap is not None:
             SIM_run_alone(self.top.exitMaze, syscall)
-            RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_maze_hap)
+            self.top.RES_delete_stop_hap(self.stop_maze_hap)
             self.stop_maze_hap = None
 
     def stopForMazeAlone(self, syscall):
-        self.stop_maze_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopMazeHap, syscall)
+        self.stop_maze_hap = self.top.RES_add_stop_callback(self.stopMazeHap, syscall)
         self.lgr.debug('winSyscall added stopMazeHap Now stop, syscall: %s' % (syscall))
         SIM_break_simulation('automaze')
 
@@ -2137,6 +2136,9 @@ class WinSyscall():
     def doRecordLoadAddr(self, tid):
         # WARNING this is a contextManager callback on a reschedule.  The task info is not yet loaded
         comm = self.task_utils.getCommFromTid(tid) 
+        if comm is None:
+            self.lgr.debug('winSyscall doRecordLoad called with comm of None, bail')
+            return
         eproc = self.task_utils.getProcRecForTid(tid)
         self.lgr.debug('winSyscall doRecordLoad addr tid:%s (%s) eproc 0x%x' % (tid, comm, eproc))
         load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)

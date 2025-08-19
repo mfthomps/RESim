@@ -76,8 +76,9 @@ class InjectIO():
                 self.lgr.error('injectIO unable to break on given block.')
                 return
         self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s callback %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname, self.callback))
-        self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
-        if not self.top.hasAFL():
+        if self.backstop is not None:
+            self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
+        if not self.top.hasAFL() and self.backstop is not None:
             self.backstop.reportBackstop(True)
         self.stop_on_read =   stop_on_read
         self.packet_count = packet_count
@@ -154,7 +155,8 @@ class InjectIO():
         else:
             self.select_count_max = None
         self.break_on_hap = None
-        if not self.coverage and not self.trace_all:
+        self.no_track = no_track
+        if not self.coverage and not self.trace_all and not no_track:
             self.dataWatch.enable()
         self.dataWatch.clearWatchMarks(record_old=True)
         self.mark_logs = mark_logs
@@ -166,7 +168,6 @@ class InjectIO():
             self.filter_module = resimUtils.getPacketFilter(packet_filter, lgr)
         self.no_iterators = no_iterators
         self.only_thread = only_thread
-        self.no_track = no_track
         self.hit_break_on = False
         self.no_reset = no_reset
         self.no_page_faults = no_page_faults
@@ -298,7 +299,7 @@ class InjectIO():
             self.top.stopThreadTrack(immediate=True)
             if self.only_thread:
                 self.context_manager.watchOnlyThis()
-        elif self.trace_all and self.target_prog is None:
+        elif self.trace_all and self.target_prog is None and self.backstop is not None:
             self.backstop.setFutureCycle(self.backstop_cycles)
 
         self.bookmarks = self.top.getBookmarksInstance()
@@ -318,6 +319,7 @@ class InjectIO():
             use_data_watch = self.dataWatch
         if self.no_reset:
             write_callback = self.callback
+            self.dataWatch.noReset()
         else:
             write_callback = self.writeCallback
         self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.packet_count, 
@@ -325,7 +327,7 @@ class InjectIO():
                  pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, stop_on_read=self.stop_on_read, ioctl_count_max=self.ioctl_count_max, 
                  select_count_max=self.select_count_max,
                  force_default_context=force_default_context, write_callback=write_callback, limit_one=self.limit_one, dataWatch=use_data_watch, filter=self.filter_module, 
-                 shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset)
+                 shared_syscall=self.top.getSharedSyscall(), no_reset=self.no_reset, stop_callback=self.callback)
 
         #bytes_wrote = self.writeData()
         self.write_data.tracingIO()
@@ -361,33 +363,38 @@ class InjectIO():
                 self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
                 trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
                 self.top.traceWrite(trace_msg)
+                if self.trace_fd is not None:
+                    self.lgr.debug('injectIO target_prog none, traceFD 0x%x' % self.trace_fd)
+                    self.top.traceFD(self.trace_fd)
 
             self.commonGo()
             if not self.stay:
-                if not self.trace_all and not self.instruct_trace and not self.no_track:
+                #if not self.trace_all and not self.instruct_trace and not self.no_track:
+                if not self.trace_all and not self.instruct_trace: 
                     self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
                     did_origin_reset = True
                     self.lgr.debug('injectIO back from resetOrigin eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
-                    #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                    #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
                     ''' per trackIO, look at entire buffer for ref to old data '''
-                    if not self.mem_utils.isKernel(self.addr):
-                        #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
-                        self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.orig_max_len)
-                        if self.addr_of_count is not None:
-                            self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', back_stop=False, recv_addr=self.addr_of_count, max_len = 4)
-                            self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
+                    if not self.no_track:
+                        if not self.mem_utils.isKernel(self.addr):
+                            #self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len)
+                            self.dataWatch.setRange(self.addr, bytes_wrote, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.orig_max_len, data_stream=True)
+                            if self.addr_of_count is not None:
+                                self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', backstop=False, recv_addr=self.addr_of_count, max_len = 4)
+                                self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
      
-                        ''' special case'''
-                        if self.max_len == 1:
-                            self.addr += 1
-                        if self.addr_addr is not None:
-                            self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
-                    else:
-                        if self.addr_of_count is not None and not self.top.isWindows():
-                            if self.dataWatch is not None:
-                                self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
-                                self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
+                            ''' special case'''
+                            if self.max_len == 1:
+                                self.addr += 1
+                            if self.addr_addr is not None:
+                                self.dataWatch.setRange(self.addr_addr, self.addr_size, 'injectIO-addr')
+                        else:
+                            if self.addr_of_count is not None and not self.top.isWindows():
+                                if self.dataWatch is not None:
+                                    self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
+                                    self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -396,7 +403,7 @@ class InjectIO():
                     self.top.traceMalloc()
 
                 if self.trace_all or self.instruct_trace or self.no_track:
-                    self.lgr.debug('injectIO trace_all or instruct_trace requested.  Context is %s' % self.cpu.current_context)
+                    self.lgr.debug('injectIO trace_all or instruct_trace or no_track requested.  Context is %s' % self.cpu.current_context)
                     if self.run:
                         cli.quiet_run_command('c')
 
@@ -404,6 +411,9 @@ class InjectIO():
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
+                        if self.trace_fd is not None:
+                            self.lgr.debug('injectIO traceFD 0x%x' % self.trace_fd)
+                            self.top.traceFD(self.trace_fd)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
@@ -536,7 +546,7 @@ class InjectIO():
                 self.dataWatch.clearWatchMarks(record_old=True)
             if count != 0:
                 self.lgr.debug('resetReverseAlone call setRange')
-                self.dataWatch.setRange(self.addr, count, 'injectIO', back_stop=False, recv_addr=self.addr, max_len = self.max_len)
+                self.dataWatch.setRange(self.addr, count, 'injectIO', backstop=False, recv_addr=self.addr, max_len = self.max_len, data_stream=True)
                 ''' special case'''
                 if self.max_len == 1:
                     self.addr += 1
@@ -545,7 +555,7 @@ class InjectIO():
     
             if self.stop_hap is not None:
                 self.lgr.debug('injectIO resetReverseAlone delete stop hap')
-                RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+                self.top.RES_delete_stop_hap(self.stop_hap)
                 self.stop_hap = None
             if count > 0:
                 SIM_run_command('c')
@@ -577,8 +587,7 @@ class InjectIO():
     def writeCallbackAlone(self, count):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('injectIO writeCallback eip: 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", 
-        	     self.stopHap, count)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, count)
         SIM_break_simulation('writeCallback')
 
     def writeCallback(self, count):

@@ -1,0 +1,7 @@
+Simics QSP
+==========
+
+The QSP boards are pure virtual boards for the Wind River Simics (tm) system
+simulator. They serve as demonstration/example boards. The intention is to keep the Linux port as simple and elegant as possible, while maintaining code reuse across all major architectures.
+
+The devices on these boards are designed for simplicity first and perfomance second.

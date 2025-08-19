@@ -5,6 +5,7 @@ import watchMarks
 from simics import *
 import decode
 import decodeArm
+import decodePPC32
 import resimUtils
 import kbuffer
 '''
@@ -34,9 +35,12 @@ class PrepInjectWatch():
         self.k_end_ptr = None
         self.orig_buffer = None
         self.user_addr = None
-        if cpu.architecture == 'arm':
+        if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
             self.lgr.debug('setup using arm decoder')
+        elif cpu.architecture.startswith('ppc32'):
+            self.decode = decodePPC32
+            self.lgr.debug('setup using PPC32 decoder')
         else:
             self.decode = decode
         if self.kbuffer is not None:

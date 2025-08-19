@@ -51,8 +51,11 @@ def RES_delete_breakpoint(bp):
     SIM_delete_breakpoint(bp)
     #print('done')
 
-def RES_delete_mode_hap(hap):
+def RES_delete_mode_hap(hap, dumb=None):
     SIM_hap_delete_callback_id("Core_Mode_Change", hap)
 
-def RES_delete_mem_hap(hap):
+def RES_delete_mem_hap(hap, dumb=None):
     SIM_hap_delete_callback_id("Core_Breakpoint_Memop", hap)
+
+def RES_delete_stop_hap(hap, dumb=None):
+    SIM_hap_delete_callback_id("Core_Simulation_Stopped", hap)

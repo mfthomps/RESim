@@ -1,0 +1,7 @@
+@FD_S = os.getenv('RESIM_FD')
+@FD = int(FD_S)
+@cgc.debugSnap()
+@backstop_cycles = int(os.getenv('BACKSTOP_CYCLES'))
+@cgc.trackIO(FD, backstop_cycles=backstop_cycles)
+@cgc.saveWatchMarks('/tmp/tri.wm')
+@cgc.quit()

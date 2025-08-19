@@ -1,6 +1,7 @@
 from simics import *
 import decode
 import decodeArm
+import decodePPC32
 from resimHaps import *
 class RopCop():
     def __init__(self, top, cpu, cell_name, context_manager, mem_utils, text, size, bookmarks, task_utils, lgr):
@@ -23,14 +24,20 @@ class RopCop():
         self.lgr.debug('RopCop text 0x%x size %d' % (text, size))
         if self.cpu.architecture.startswith('arm'):
             self.decode = decodeArm
+        elif self.cpu.architecture == 'ppc32':
+            self.decode = decodePPC32
         else:
             self.decode = decode
         self.is_signal = False
 
-    def watchROP(self, watching=True, callback=None):
+    def watchROP(self, watching=True, callback=None, addr=None, size=None):
         self.watching = watching
         self.callback = callback
-        self.lgr.debug('watchROP %r, callback %s' % (watching, str(callback)))
+        if addr is not None: 
+            self.text = addr
+            self.size = size
+        self.lgr.debug('watchROP %r, callback %s addr 0x%xi size 0x%x' % (watching, str(callback), self.text, self.size))
+
         if watching:
             self.setHap()
         else:
@@ -83,7 +90,8 @@ class RopCop():
             
             #if instruct[1].startswith('call'):
             #if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
-            if instruct[1].startswith(self.callmn):
+            if instruct[1].startswith(self.callmn) and (eip + instruct[0] == return_to):
+                #self.lgr.debug('rob_cop_ret_callback eip 0x%x instruct %s' % (eip, instruct[1]))
                 done = True
             else:
                 eip = eip+1
@@ -150,7 +158,7 @@ class RopCop():
                     SIM_run_alone(self.stopAlone, ret_addr)
 
     def stopAlone(self, ret_addr):
-        self.stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stopHap, ret_addr)
+        self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, ret_addr)
         if self.is_signal:
             print('Possible signal handler')
             SIM_break_simulation('Signal handler ?')
@@ -161,7 +169,7 @@ class RopCop():
     def stopHap(self, ret_addr, one, exception, error_string):
         if self.stop_hap is None:  
             return
-        RES_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
+        self.top.RES_delete_stop_hap(self.stop_hap)
         self.clearHap()
         self.watchROP(watching=False)
         self.lgr.debug('ropCop stopHap, call skipAndMail, disabled ROP watch')

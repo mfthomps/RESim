@@ -1,0 +1,6 @@
+$cycles_s = (env RUN_CYCLES)
+$cycles = (atoi $cycles_s)
+@cgc.debugSnap()
+@cgc.traceAll(trace_file='/tmp/tri.trace')
+c $cycles unit=cycles
+@cgc.quit()
