@@ -1,0 +1,7 @@
+@io_file = os.getenv('RESIM_IO_FILE')
+@target = os.getenv('RESIM_TARGET_PROG')
+@target_fd = int(os.getenv('RESIM_TARGET_FD'))
+@wm_file = os.getenv('RESIM_WM_FILE')
+@cgc.injectIO(io_file, target=target, targetFD=target_fd)
+@cgc.saveWatchMarksJson(wm_file)
+@cgc.quit()
