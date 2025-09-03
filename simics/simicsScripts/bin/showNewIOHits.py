@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-Show new hits
+Show new coverage hits reached by each new queue file, starting with the original input file.
 '''
 import sys
 import os

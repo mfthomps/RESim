@@ -7,28 +7,34 @@ sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
 import createNewIOFiles
 import queueChecksums
+'''
+Generate new IO files for all queue/watchmarks pairs beneath a given level directory
+'''
 def doForOneInput(input_path, cksum_dict, lgr):
     '''
     For each queue/watchmark pair derived from the input assocated with the given path
     '''
+    lgr.debug('doForOneInput %s' % input_path)
     queue_dir = os.path.join(input_path, 'queue')
     wm_dir = os.path.join(input_path, 'trackio')
     abs_queue_dir = os.path.realpath(queue_dir)
     abs_wm_dir = os.path.realpath(wm_dir)
     next_level_dir = os.path.join(input_path, 'next_level')
     os.makedirs(next_level_dir, exist_ok=True)
+    lgr.debug('abs_queue_dir %s abs_wm_dir %s' % (abs_queue_dir, abs_wm_dir))
     flist = os.listdir(abs_queue_dir)
     for f in flist:
         qpath = os.path.join(abs_queue_dir, f)
         wpath = os.path.join(abs_wm_dir, f)
-        f_no_ext = f.split('.', 1)[0]
+        #f_no_ext = f.split('.', 1)[0]
         if not os.path.isfile(wpath):
             print('No watchmarks found at %s, bail' % wpath)
             break
-        new_dir_name = os.path.join(next_level_dir, f_no_ext)
+        new_dir_name = os.path.join(next_level_dir, f, 'queue')
+        os.makedirs(new_dir_name, exist_ok=True)
         out_parent = os.path.dirname(new_dir_name) 
         lgr.debug('Call create_new_iofiles  for %s, outputdir %s' % (qpath, new_dir_name))
-        createNewIOFiles.create_new_iofiles(qpath, wpath, new_dir_name, out_parent, cksum_dict=cksum_dict)
+        createNewIOFiles.create_new_iofiles(qpath, wpath, new_dir_name, out_parent, cksum_dict=cksum_dict, save_words=True, level_naming=True)
 
 def findTopLevel(from_level):
     '''
@@ -53,16 +59,22 @@ def main():
 
     top_level = findTopLevel(args.level_dir)
     cksum_dict = {}
-    dlist = os.listdir(top_level)
-    for d in dlist:
-        dpath = os.path.join(top_level, d)
-        queueChecksums.checkThis(dpath, cksum_dict, stop_dir=args.level_dir)
-    
-    dlist = os.listdir(args.level_dir)
-    for d in dlist:
-        dpath = os.path.join(args.level_dir, d) 
-        lgr.debug('Call doForOneInput for %s' % dpath)
-        doForOneInput(dpath, cksum_dict, lgr)
+    qdir = os.path.join(args.level_dir, 'queue') 
+    if os.path.isdir(qdir):
+        # Not a level dir.  Assume it is the target dir 
+        doForOneInput(args.level_dir, cksum_dict, lgr)
+    else:
+        dlist = os.listdir(top_level)
+        # populate the chksum_dict with checksums for each level from tthe top to the current level
+        for d in dlist:
+            dpath = os.path.join(top_level, d)
+            queueChecksums.checkThis(dpath, cksum_dict, stop_dir=args.level_dir)
+        # generate IO for each subdirectory of the level directory 
+        dlist = os.listdir(args.level_dir)
+        for d in dlist:
+            dpath = os.path.join(args.level_dir, d) 
+            lgr.debug('Call doForOneInput for %s' % dpath)
+            doForOneInput(dpath, cksum_dict, lgr)
  
 if __name__ == '__main__':
     sys.exit(main())

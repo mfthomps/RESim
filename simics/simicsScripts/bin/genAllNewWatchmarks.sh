@@ -20,7 +20,17 @@ dlist=$(ls $level_dir)
 for d in $dlist; do
     path="$level_dir"/"$d"
     if [ -d $path ]; then
-        io_dir="$path"/queue
-        genNewWatchmarks.sh $ini_file $io_dir $target $target_fd
+        track_dir="$path"/trackio
+        if [ ! -d $track_dir ]; then
+            io_dir="$path"/queue
+            genNewWatchmarks.sh $ini_file $io_dir $target $target_fd
+        else
+            echo "trackio already found at $track_dir"
+        fi
+        next_level="$path"/next_level
+        echo "Check next_level $next_level"
+        if [ -d $next_level ]; then
+            genAllNewWatchmarks.sh $ini_file $next_level $target $target_fd 
+        fi
     fi
 done

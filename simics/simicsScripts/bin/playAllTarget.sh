@@ -17,9 +17,14 @@ for d in $dlist; do
     path="$LEVEL_DIR"/"$d"
     echo "Check path $path"
     if [ -d $path ]; then
-        export RESIM_IO_DIR="$path"/queue
-        echo "Begin playAFL for $RESIM_IO_DIR"
-        resim $INI_FILE -c $RESIM_DIR/simics/simicsScripts/new_inputs/play_dir_target.simics
+        cover_dir="$path"/coverage
+        if [ ! -d $cover_dir ]; then
+            export RESIM_IO_DIR="$path"/queue
+            echo "Begin playAFL for $RESIM_IO_DIR"
+            resim $INI_FILE -c $RESIM_DIR/simics/simicsScripts/new_inputs/play_dir_target.simics
+        else
+            echo "Coverage already found at $cover_dir"
+        fi
         next_level="$path"/next_level
         echo "Check next_level $next_level"
         if [ -d $next_level ]; then
