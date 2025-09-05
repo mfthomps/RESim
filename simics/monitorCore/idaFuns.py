@@ -294,8 +294,11 @@ class IDAFuns():
         retval = 0
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
+                #self.lgr.debug('idaFuns stackAdjust fun 0x%x matched %s' % (fun, fun_name))
                 if 'adjust_sp' in self.funs[fun]:
                     retval = self.funs[fun]['adjust_sp']
+                    if retval > 0:
+                        break
         return retval
 
     def haveFuns(self, fname):
