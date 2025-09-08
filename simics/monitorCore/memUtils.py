@@ -1420,7 +1420,9 @@ class MemUtils():
 
     def writeString(self, cpu, address, string):
         #self.lgr.debug('writeString len %d adress: 0x%x %s' % (len(string), address, string))
-
+        if string is None:
+            self.lgr.error('writesString called with string of None')
+            return
         lcount = int(len(string)/4)
         carry = len(string) % 4
         if carry != 0:
