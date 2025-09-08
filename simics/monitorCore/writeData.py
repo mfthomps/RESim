@@ -406,6 +406,9 @@ class WriteData():
                 tot_len = len(self.in_data)
                 if self.filter is not None:
                     result = self.filter.filter(self.in_data, self.current_packet)
+                    if result is None:
+                        self.lgr.error('writeData userBufWrite filter returned none')
+                        return
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
                     tot_len = len(result)
                 else:
