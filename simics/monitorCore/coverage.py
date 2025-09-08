@@ -1447,7 +1447,7 @@ class Coverage():
 
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
         if tid != want_tid:
-            self.lgr.debug('coverage ptegHap tid:%s expected:%s, bail' % (tid, want_tid))
+            #self.lgr.debug('coverage ptegHap tid:%s expected:%s, bail' % (tid, want_tid))
             return
         length = memory.size
         type_name = SIM_get_mem_op_type_name(op_type)
