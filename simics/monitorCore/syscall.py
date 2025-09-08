@@ -1220,7 +1220,9 @@ class Syscall():
             ''' Is the call intended for this syscall instance? '''
             got_good = False 
             got_bad = False 
-            if self.name != 'traceAll' and socket_callname != 'socket':
+            if self.name == 'runToIO' and socket_callname.lower().startswith('recv'):
+                self.lgr.debug('syscall socketParse socket_callname %s, use it' % socket_callname)
+            elif self.name != 'traceAll' and socket_callname != 'socket':
                 for call_param in self.call_params:
                     if call_param is not None and call_param.subcall is not None:
                         self.lgr.debug('syscall socketParse check subcall %s in call_param %s against %s' % (call_param.subcall, call_param.name, socket_callname.lower()))
@@ -1233,7 +1235,7 @@ class Syscall():
                     return None
 
             if self.record_fd and socket_callname not in record_fd_list:
-                self.lgr.debug('syscall socketParse %s not in list, skip it' % socket_callname)
+                self.lgr.debug('syscall socketParse record_fd %s not in list, skip it' % socket_callname)
                 return None
             #self.lgr.debug('socketParse tid:%s socket_callnum is %d name: %s record_fd: %r' % (tid, socket_callnum, socket_callname, self.record_fd))
             #if syscall_info.compat32:
