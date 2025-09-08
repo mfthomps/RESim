@@ -371,7 +371,7 @@ class InjectIO():
             if not self.stay:
                 #if not self.trace_all and not self.instruct_trace and not self.no_track:
                 if not self.trace_all and not self.instruct_trace: 
-                    self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
+                    #self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
                     did_origin_reset = True
                     self.lgr.debug('injectIO back from resetOrigin eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
