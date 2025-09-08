@@ -921,10 +921,14 @@ class findKernelWrite():
             self.forward_hap = None
                 
     def revWriteCallbackSim7(self, memory, dumb, dum1, dumb2):
-        self.lgr.debug('findKernelWrite revWriteCallbackSim7 memory 0x%x' % memory.logical_address)
-        SIM_run_alone(self.cleanup, False)
-        self.memory_transaction = memory
-        SIM_run_alone(self.context_manager.enableAll, None)
-        #self.vt_handler(memory)
-        self.stop_cycles = self.cpu.cycles
-        SIM_run_alone(self.thinkWeWrote, 0)
+        if type(memory) is int:
+            self.lgr.debug('findKernelWrite failed to find write')
+            print('failed to find write to address')
+        else:
+            self.lgr.debug('findKernelWrite revWriteCallbackSim7 memory 0x%x' % memory.logical_address)
+            SIM_run_alone(self.cleanup, False)
+            self.memory_transaction = memory
+            SIM_run_alone(self.context_manager.enableAll, None)
+            #self.vt_handler(memory)
+            self.stop_cycles = self.cpu.cycles
+            SIM_run_alone(self.thinkWeWrote, 0)
