@@ -607,7 +607,7 @@ class SharedSyscall():
                             self.lgr.debug('sharedSyscall found origin reset, do it')
                             SIM_run_alone(self.stopAlone, None)
                 for call_param in exit_info.call_params:
-                    self.checkStringMatch(call_param, exit_info, byte_array, callname, tid)
+                    self.checkStringMatch(call_param, exit_info, byte_array, socket_callname, tid)
             else:
                 self.lgr.debug('sharedSyscall recvmsg no msghdr, assume return from syscall we already handled')
                 exit_info.matched_param = None
