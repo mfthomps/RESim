@@ -1006,8 +1006,9 @@ class GenMonitor():
                     unistd32 = None
                     if cell_name in self.unistd32:
                         unistd32 = self.unistd32[cell_name]
+                    root_prefix = self.comp_dict[cell_name]['RESIM_ROOT_PREFIX']
                     task_utils = taskUtils.TaskUtils(cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], 
-                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr)
+                        self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
                     self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
@@ -1500,6 +1501,7 @@ class GenMonitor():
             self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
 
     def setPathToProg(self, tid):
+        ''' Find the prog name for the tid, which may diverge from comm due to renaming  NOTE may set self.full_path '''
         local_path = self.soMap[self.target].getLocalPath(tid)
         if local_path is None:
             prog_name = self.getProgName(tid)
@@ -1531,6 +1533,7 @@ class GenMonitor():
         if not self.did_debug:
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
+            self.lgr.debug('debug tid:%s (%s)' % (tid, comm))
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
@@ -1604,7 +1607,7 @@ class GenMonitor():
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
                     if load_info is not None and load_info.addr is not None:
                         root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
-                        self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.lgr)
+                        self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.task_utils[self.target], self.lgr)
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
                             offset = load_info.addr - image_base
@@ -2365,23 +2368,14 @@ class GenMonitor():
     def revStepInto(self):
         self.reverseToCallInstruction(True)
  
-    def reverseToCallInstruction(self, step_into, prev=None):
+    def reverseToCallInstruction(self, step_into):
         if self.reverseEnabled():
             dum, cpu = self.context_manager[self.target].getDebugTid() 
             cell_name = self.getTopComponentName(cpu)
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
             #self.context_manager[self.target].showHaps()
-            if prev is not None:
-                instruct = SIM_disassemble_address(cpu, prev, 1, 0)
-                self.lgr.debug('reverseToCallInstruction instruct is %s at prev: 0x%x' % (instruct[1], prev))
-                if instruct[1] == 'int 128' or (not step_into and (instruct[1].startswith('call') or instruct[1].startswith('blr'))):
-                    self.revToAddr(prev)
-                else:
-                    self.rev_to_call[self.target].doRevToCall(step_into, prev)
-            else:
-                self.lgr.debug('prev is none')
-                self.rev_to_call[self.target].doRevToCall(step_into, prev)
+            self.rev_to_call[self.target].doRevToCall(step_into)
             self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
             print('reverse execution disabled')
@@ -4523,9 +4517,11 @@ class GenMonitor():
 
     def notRunning(self, quiet=False):
         status = self.is_monitor_running.isRunning()
+        self.lgr.debug('notRunning status %r' % status)
         if status:   
             if not quiet:
                 print('Was running, set to not running')
+            self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
@@ -4800,6 +4796,7 @@ class GenMonitor():
         if check_crash:
             crashing = self.pendingFault(target=target)               
         self.syscallManager[target].rmSyscall('runToIO', context=self.context_manager[target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
+        self.syscallManager[target].rmSyscall('runToInput', context=self.context_manager[target].getRESimContextName(), rm_all=crashing, immediate=immediate) 
         #if 'runToIO' in self.call_traces[self.target]:
         #    self.stopTrace(syscall = self.call_traces[self.target]['runToIO'])
         #    print('Tracking complete.')
@@ -4984,10 +4981,10 @@ class GenMonitor():
        
 
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
-            sor=False, cover=False, target=None, targetFD=None, trace_all=False, 
+            sor=False, cover=False, target=None, targetFD=None, trace=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None, no_backstop=False):
+            trace_all=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None, no_backstop=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -5020,6 +5017,11 @@ class GenMonitor():
             cpu = this_cpu
         ''' Record any debuggerish buffers that were specified in the ini file '''
         if trace_all:
+            trace = True
+            no_trace_dbg = True
+        else:
+            no_trace_dbg = False
+        if trace:
             self.traceBufferTarget(target_cell, msg='injectIO traceAll')
 
         cell_name = self.getTopComponentName(cpu)
@@ -5046,7 +5048,7 @@ class GenMonitor():
         self.injectIOInstance = injectIO.InjectIO(self, cpu, cell_name, backstop, dfile, self.dataWatch[target_cell], self.bookmarks, 
                   self.mem_utils[self.target], self.context_manager[self.target], self.soMap[self.target], self.lgr, 
                   self.run_from_snap, stay=stay, keep_size=keep_size, callback=callback, packet_count=n, stop_on_read=sor, coverage=cover, 
-                  target_cell=target_cell, target_prog=target_prog, targetFD=targetFD, trace_all=trace_all, 
+                  target_cell=target_cell, target_prog=target_prog, targetFD=targetFD, trace_all=trace, 
                   save_json=save_json, limit_one=limit_one, no_track=no_track,  no_reset=no_reset, no_rop=no_rop, instruct_trace=instruct_trace, 
                   break_on=break_on, mark_logs=mark_logs, no_iterators=no_iterators, only_thread=only_thread, count=count, no_page_faults=no_page_faults,
                   no_trace_dbg=no_trace_dbg, run=run, reset_debug=reset_debug, src_addr=src_addr, malloc=malloc, trace_fd=trace_fd, fname=fname)
@@ -6950,6 +6952,7 @@ class GenMonitor():
 
     def traceWrite(self, msg):
         if self.target in self.traceMgr:
+            self.lgr.debug('traceWrite, so write %s' % msg)
             self.traceMgr[self.target].write(msg)
 
     def recordEntry(self, dumb=None):

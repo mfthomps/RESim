@@ -3,7 +3,7 @@ import dataWatch
 class DataWatchManager():
     ''' Not sure yet.  See where it goes '''
     def __init__(self, top, first_watch, cpu, cell_name, page_ssze, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, 
-                 back_stop, compat32, comp_dict, so_map, lgr):
+                 back_stop, compat32, comp_dict, so_map, reverse_mgr, lgr):
         self.rev_to_call = rev_to_call
         self.top = top
         self.first_watch = first_watch
@@ -20,6 +20,7 @@ class DataWatchManager():
         self.comp_dict = comp_dict
         self.so_map = so_map
         self.run_from_snap = run_from_snap
+        self.reverse_mgr = reverse_mgr
         self.dataWatch = {}
         self.fun_mgr = self.top.getFunMgr()
         self.failed = False
@@ -32,6 +33,10 @@ class DataWatchManager():
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.lgr.debug('dataWatchManager createNewDataWatch comm %s' % (comm))
         full_path = self.top.getFullPath(fname=comm)
+        if full_path is None:
+            prog = self.top.getProgName(tid)
+            if prog is not None and prog != comm:
+                full_path = self.top.getFullPath(fname=prog)
         if full_path is None:
             self.lgr.debug('dataWatchManager createNewDataWatch for comm %s but did not find any prog for it' % comm)
             self.failed = True
@@ -52,7 +57,8 @@ class DataWatchManager():
 
         self.dataWatch[comm] = dataWatch.DataWatch(self.top, self.cpu, self.cell_name, self.page_size, self.context_manager, 
                   self.mem_utils, self.task_utils, self.rev_to_call, self.param, 
-                  self.run_from_snap, self.back_stop, self.compat32, self.comp_dict, self.so_map, self.lgr)
+                  self.run_from_snap, self.back_stop, self.compat32, self.comp_dict, self.so_map, self.reverse_mgr, self.lgr)
+
         self.dataWatch[comm].setFunMgr(self.fun_mgr)
         self.lgr.debug('dataWatchManager created new data watch for comm %s' % comm)
 

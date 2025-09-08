@@ -1247,13 +1247,15 @@ class GenContextMgr():
                 cache_copy = list(self.tid_cache)
                 for tid in cache_copy:
                     ida_msg = 'killed %s member of group led by %s' % (tid, lead_tid) 
-                    exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True)
                     if self.pageFaultGen is not None and self.exit_callback is None:
                         if self.pageFaultGen.handleExit(tid, lead_tid):
                             print('SEGV on tid %s?' % tid)
                             self.lgr.debug('contextManager SEGV on tid %s -- stop trace of exit_syscall' % tid)
                             exit_syscall.stopTrace() 
+                            exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True, stop=False)
                             break
+                    else:
+                        exit_syscall.handleExit(tid, ida_msg, killed=True, retain_so=True)
                 self.clearExitBreaks()
         elif self.group_leader != None:
             self.lgr.debug('contextManager killGroup NOT leader.  got %s, leader was %s' % (lead_tid, self.group_leader))

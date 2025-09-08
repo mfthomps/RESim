@@ -25,6 +25,7 @@ class PtableInfo():
         self.pteg1 = None
         self.pteg2 = None
         self.entry = None
+        self.page_exists = False
     def valueString(self):
         if self.phys_addr is not None:
             retval =  'phys_addr: 0x%x nx: %s protect: %s' % (self.phys_addr, self.nx, self.protect)
@@ -144,6 +145,7 @@ def findPageTable(cpu, ea, lgr):
         if rpn is not None:
             ra = (rpn << 12) | (ea & 0x00000fff)
         retval = PtableInfo(cpu, ra, pp, nx)
+        retval.page_exists=True
         retval.pteg1 = first_pteg
         retval.pteg2 = second_pteg
     return retval

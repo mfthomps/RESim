@@ -118,6 +118,7 @@ class SharedSyscall():
                 self.context_manager.genDeleteHap(self.exit_hap[context][eip], immediate=True)
                 self.lgr.debug('sharedSyscall stopTrace removed exit hap %d for eip 0x%x context %s' % (self.exit_hap[context][eip], eip, str(context)))
             self.exit_tids[context] = {}
+            self.exit_hap[context] = {}
         for tid in self.exit_info:
             self.exit_info[tid] = {}
 
@@ -606,7 +607,7 @@ class SharedSyscall():
                             self.lgr.debug('sharedSyscall found origin reset, do it')
                             SIM_run_alone(self.stopAlone, None)
                 for call_param in exit_info.call_params:
-                    self.checkStringMatch(call_param, exit_info, byte_array, callname, tid)
+                    self.checkStringMatch(call_param, exit_info, byte_array, socket_callname, tid)
             else:
                 self.lgr.debug('sharedSyscall recvmsg no msghdr, assume return from syscall we already handled')
                 exit_info.matched_param = None

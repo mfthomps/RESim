@@ -9,7 +9,7 @@ import queueChecksums
 
 word_list = []
 
-def create_new_iofiles(seedfile, watchmarkfile, outputdir, out_parent, add_count=0, save_words=False, cksum_dict=None):
+def create_new_iofiles(seedfile, watchmarkfile, outputdir, out_parent, add_count=0, save_words=False, cksum_dict=None, level_naming=False):
     '''
     Create new input files based on strcmp in watchmark file or in trackio files.
     If there's a strcmp, replace the input string with the expected string
@@ -39,11 +39,11 @@ def create_new_iofiles(seedfile, watchmarkfile, outputdir, out_parent, add_count
     except:
         pass
     for i in range(len(newword_list)-1): 
-        create_file(i, seedfile, inword_list[i], newword_list[i], outputdir, out_parent, add_count=add_count, cksum_dict=cksum_dict)
+        create_file(i, seedfile, inword_list[i], newword_list[i], outputdir, out_parent, add_count=add_count, cksum_dict=cksum_dict, level_naming=level_naming)
     
     infile.close()
     if save_words:
-        save_word_list(out_parent)
+        save_wordlist(out_parent)
 
 def check_duplicates(inlist,newlist):
     '''
@@ -122,14 +122,20 @@ def check_comparison(inwordlist,newwordlist, seedfile):
     check_seedf1.close()
     return updated_inwordlist, updated_newwordlist
 
-def create_file(j, seedfile, inword, newword, outputdir, out_parent, add_count=1, cksum_dict=None):
+def create_file(j, seedfile, inword, newword, outputdir, out_parent, add_count=1, cksum_dict=None, level_naming=False):
     '''
     Create new file based on original iofile. Substitute inword with newword.
     May delete the file if found not no substitutions are made.
     '''
     # Create new seedfile
     print('outputdir is %s' % outputdir)
-    outfile_name = f"{outputdir}/track{add_count}_seedfile{j}.io"    
+    if not level_naming:
+        outfile_name = f"{outputdir}/track{add_count}_seedfile{j}.io"    
+    else:
+        base = os.path.basename(outputdir)
+        if base == 'queue':
+            base = os.path.basename(os.path.dirname(outputdir))
+        outfile_name = f"{outputdir}/{base}.{j}"    
     # Counter to check if an original word isn't found in the seedfile 
     i=0
     with open(outfile_name, 'wb') as outputfile:
@@ -152,7 +158,7 @@ def create_file(j, seedfile, inword, newword, outputdir, out_parent, add_count=1
             errorfile.write(b"---------\n")
         # Delete file
         os.remove(outfile_name)
-    else:
+    elif cksum_dict is not None:
         this_cksum = queueChecksums.cksum(outfile_name)
         if this_cksum in cksum_dict:
             print('%s checksum collision, delete' % outfile_name)

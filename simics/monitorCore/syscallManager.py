@@ -384,6 +384,8 @@ class SyscallManager():
         call_instance = self.findInstanceByParams(call_param_name, context)
         if call_instance is None:
             self.lgr.debug('syscallManager rmSyscall did not find syscall instance with context %s and param name %s' % (context, call_param_name))
+            if context in self.syscall_dict and call_param_name in self.syscall_dict[context]:
+                del self.syscall_dict[context][call_param_name]
         elif rm_all:
             call_instance.stopTrace(immediate=immediate) 
             del self.syscall_dict[context][call_instance.name]

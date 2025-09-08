@@ -1329,8 +1329,8 @@ class StackTrace():
                                 frame, adjust_sp = self.genFrame(ip_of_call_instruct, call_instruction, ptr, fun_hex, fun_name, ret_addr, ptr, msg='simple call')
                                 ptr = ptr+adjust_sp
                         else:
-                            self.lgr.debug('stackTrace call_to 0x%x is not a fun' % (call_to))
-                            tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)[1]
+                            tmp_instruct = SIM_disassemble_address(self.cpu, call_to, 1, 0)
+                            self.lgr.debug('stackTrace call_to 0x%x is not a fun, instruct is %s' % (call_to, tmp_instruct[1]))
 
                             if self.isJmp(tmp_instruct):
                                 skip_this = True
@@ -1724,6 +1724,7 @@ class StackTrace():
                                 if fun is not None:
                                     frame.instruct = '%s %s' % (self.callmn, fun)                     
                                     frame.fun_name = fun 
+        
             skip_this = False
             if frame.fun_name is None and frame.fun_addr is not None:
                 #self.lgr.debug('stackTrace addFrame given fun_name is None for fun_addr 0x%x, last chance texeco' % frame.fun_addr)
@@ -1741,10 +1742,10 @@ class StackTrace():
                 # adjust is confusing because we adjust on the next frame.  consider ldp x1,x2, [sp], #36  before changing.
                 if self.cpu.architecture in ['arm', 'arm64']:
                     adjust = self.fun_mgr.stackAdjust(frame.fun_name)
-                    #self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_name, adjust))
+                    self.lgr.debug('stackTrace addFrame arm get adjust for fun %s got %d' % (frame.fun_name, adjust))
                 else:
                     adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
-                    #self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
+                    self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
                 self.frames.append(frame)
                 #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
                 self.prev_frame_sp = frame.sp

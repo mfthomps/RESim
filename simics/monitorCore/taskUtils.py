@@ -31,7 +31,9 @@ import pickle
 import osUtils
 import memUtils
 import syscallNumbers
+import commMap
 import traceback
+import json
 LIST_POISON2 = object()
 def stringFromFrame(frame):
     retval = None
@@ -100,7 +102,7 @@ class TaskStruct(object):
 
 COMM_SIZE = 15
 class TaskUtils():
-    def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr):
+    def __init__(self, cpu, cell_name, param, mem_utils, unistd, unistd32, RUN_FROM_SNAP, lgr, root_prefix = None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -115,7 +117,7 @@ class TaskUtils():
 
         self.ts_cache = None
         self.ts_cache_cycle = None
-  
+        self.comm_map = commMap.CommMap(root_prefix, lgr) 
         self.lgr.debug('TaskUtils init kernel base 0x%x' % param.kernel_base)
         
         if RUN_FROM_SNAP is not None:
@@ -429,7 +431,7 @@ class TaskUtils():
         if swapper_addr is None:
             self.lgr.debug('taskUtils getTaskStructs failed to get swapper')
             return tasks
-        self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
+        #self.lgr.debug('getTaskStructs using swapper_addr of %x' % swapper_addr)
         stack = []
         stack.append((swapper_addr, True))
         while stack:
@@ -1343,3 +1345,6 @@ class TaskUtils():
     def progComm(self, prog_string):
         prog_comm = os.path.basename(prog_string)[:self.commSize()]
         return prog_comm
+
+    def commMatch(self, comm1, comm2):
+        return self.comm_map.commMatch(comm1, comm2)

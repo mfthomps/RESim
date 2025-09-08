@@ -11,6 +11,9 @@ import winProg
 import ntpath
 import targetFS
 import winTargetFS
+import decode
+import decodeArm
+import decodePPC32
 try:
     import importlib
 except:
@@ -768,4 +771,16 @@ def isSO(prog):
         return True
     else:
         return False
+def isSysEnter(instruct):
+    if instruct in ['int 128', 'sysenter', 'syscall', 'sc', 'svc 0']:
+        return True
+    else:
+        return False
 
+def isCall(cpu, instruct):
+    if cpu.architecture.startswith('arm'):
+        return decodeArm.isCall(cpu, instruct)
+    elif cpu.architecture == 'ppc32':
+        return decodePPC32.isCall(cpu, instruct)
+    else: 
+        return decode.isCall(cpu, instruct)

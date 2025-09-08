@@ -156,6 +156,9 @@ class PlayAFL():
 
             self.lgr.debug('playAFL, directory of input files')
             flist = os.listdir(dfile)
+            if len(flist) == 0:
+                self.lgr.debug('playAFL, no files in directory %s, leave' % dfile)
+                return
             for f in sorted(flist):
                 rfile = os.path.join(dfile, f)
                 if os.path.isfile(rfile):
