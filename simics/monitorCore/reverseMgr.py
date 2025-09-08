@@ -134,6 +134,7 @@ class ReverseMgr():
         # hack for catching attempts to restore snapshots not net recorded due to runAlone
         self.snapshot_names = []
         self.was_at_reverse_point = False
+        self.was_at_origin = False
 
     def cancelSpanCycle(self):
         '''
@@ -156,33 +157,33 @@ class ReverseMgr():
         Register a cycle event to take a snapshot on reaching the next span during recording
         '''
         self.recording = True
-        self.lgr.debug('reverseMgr setNextCycle') 
+        #self.lgr.debug('reverseMgr setNextCycle') 
         if self.cycle_event is None:
             self.cycle_event = SIM_register_event("reverse cycle event", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
             masked = self.getMasked(self.origin_cycle)
             want_cycle = masked + self.cycle_span
             go_cycles = want_cycle - self.cpu.cycles
-            self.lgr.debug('reverseMgr setNextCycle did register computed want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
+            #self.lgr.debug('reverseMgr setNextCycle did register computed want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
         elif self.latest_span_end is None:
             masked = self.getMasked(self.origin_cycle)
             want_cycle = masked + self.cycle_span
             go_cycles = want_cycle - self.cpu.cycles
-            self.lgr.debug('reverseMgr setNextCycle already registered but no latest_span_end, want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
+            #self.lgr.debug('reverseMgr setNextCycle already registered but no latest_span_end, want_cycle as 0x%x go_cycles 0x%x' % (want_cycle, go_cycles))
 
         elif self.cpu.cycles == self.latest_span_end:
             self.cancelSpanCycle()
             go_cycles = self.cycle_span
             reach = self.cpu.cycles + go_cycles
-            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x equals latest_span_end, did cancel go cycles will be 0x%x to reach 0x%x' % (self.cpu.cycles, go_cycles, reach))
+            #self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x equals latest_span_end, did cancel go cycles will be 0x%x to reach 0x%x' % (self.cpu.cycles, go_cycles, reach))
         elif self.cpu.cycles > self.latest_span_end:
             self.cancelSpanCycle()
             go_cycles = self.cycle_span - (self.cpu.cycles % self.cycle_span)
-            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x after latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
+            #self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x after latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
         else:
             self.cancelSpanCycle()
             want_cycle = self.latest_span_end + self.cycle_span
             go_cycles = want_cycle - self.cpu.cycles
-            self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x prior to latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
+            #self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x prior to latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, go_cycles, go_cycles)
 
     def cycle_handler(self, obj, cycles):
@@ -198,7 +199,7 @@ class ReverseMgr():
     def takeSnapshot(self, name):
         if not self.version().startswith('7'):
             if self.oldSimics():
-                self.lgr.debug('reverseMgr 6.0.146 take %s' % name)
+                #self.lgr.debug('reverseMgr 6.0.146 take %s' % name)
                 cmd = 'save-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
                 cli.quiet_run_command(cmd)
@@ -221,9 +222,11 @@ class ReverseMgr():
 
     def restoreSnapshot(self, name):
         self.disableSimBreaks()
+        if name == 'origin':
+            self.was_at_origin = True
         if not self.version().startswith('7'):
             if self.oldSimics():
-                self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
+                #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
                 cmd = 'restore-snapshot %s' % name
                 #SIM_run_alone(cli.quiet_run_command, cmd)
                 try:
@@ -314,7 +317,7 @@ class ReverseMgr():
             if two_step:
                 # Simics gets confused when restoring memory snapshots.  Doing an immediate restore often avoids
                 # that confusion, however it can interere with real networks. Set two_step when calling due to real world cut. 
-                self.restoreSnapshot('origin')
+                self.skipToOrigin()
                 self.lgr.debug('reverseMgr enableReverse did 2-step')
             self.setNextCycle()
         else:
@@ -358,9 +361,10 @@ class ReverseMgr():
                 snap_list = self.parselist(raw_list)
                 self.lgr.debug('snap_list %s' % str(snap_list))
                 for name in snap_list:
-                    cmd = 'delete-snapshot %s' % name
-                    self.lgr.debug('disableReverse %s' % cmd)
-                    SIM_run_command(cmd)
+                    if '>' not in name:
+                        cmd = 'delete-snapshot %s' % name
+                        self.lgr.debug('disableReverse %s' % cmd)
+                        SIM_run_command(cmd)
             elif not self.version().startswith('7'):
                 snap_list = VT_list_snapshots()
                 for snap in snap_list:
@@ -423,7 +427,7 @@ class ReverseMgr():
 
         if self.latest_span_end is None:
             #self.lgr.error('reverseMgr skipToCycle, have not yet hit a single span.  Consider reducing the cycle span in reverseMgr.py.')
-            self.restoreSnapshot('origin')
+            self.skipToOrigin()
             if use_cell is None:
                 self.lgr.debug('reverseMgr skipToCycle no latest cycle, restored origin 0x%x, now run to 0x%x' % (self.cpu.cycles, object_cycles))
             else:
@@ -463,7 +467,7 @@ class ReverseMgr():
                 recorded = self.getMasked(our_cycles)
                 self.lgr.debug('reverseMgr skipToCycle recorded (after mask) is 0x%x' % recorded)
                 if recorded < self.origin_cycle:
-                    self.restoreSnapshot('origin')
+                    self.skipToOrigin()
                     if use_cell is None:
                         if self.top is not None:
                             eip = self.top.getEIP()
@@ -526,6 +530,7 @@ class ReverseMgr():
         is set at the most recent.
         '''
         self.reverse_to =  reverse_to
+        self.was_at_origin = False
         if self.nativeReverse():
             if self.reverse_to is not None:
                 cmd = 'reverse-to cycle=0x%x' % self.reverse_to
@@ -551,7 +556,7 @@ class ReverseMgr():
                 self.bp_list = self.sim_breakpoints
             if len(self.bp_list) == 0:
                 print('Warning reversing without any breakpoints, will hit origin')
-                self.restoreSnapshot('origin')
+                self.skipToOrigin()
                 self.lgr.debug('reverseMgr reverse without any breakpoints, just restore origin')
                 return
             else:
@@ -686,11 +691,14 @@ class ReverseMgr():
         SIM_run_alone(self.cancelSpanEndCycle, None)
 
         if len(self.break_cycles) == 0:
-            if not self.was_at_reverse_point:
+            if not self.was_at_reverse_point and not self.was_at_origin:
                 self.lgr.debug('reverseMgr stopHap Failed to find any breaks, try forward from span prior to previous span ')
                 SIM_run_alone(self.skipBackAndRunForward, False)
             else:
-                self.lgr.debug('reverseMgr stopHap Failed to find any breaks and we ran forward from the reverse_to point')
+                if self.was_at_reverse_point:
+                    self.lgr.debug('reverseMgr stopHap Failed to find any breaks and we ran forward from the reverse_to point')
+                else:
+                    self.lgr.debug('reverseMgr stopHap Failed to find any breaks and we ran forward from the origin')
                 if self.callback is not None:
                     self.callback(0xbababa, None, None, None)
                     self.callback = None
@@ -738,7 +746,7 @@ class ReverseMgr():
 
     def cancelSpanEndCycle(self, dumb):
         # cancel the event at the end of the current_span
-        self.lgr.debug('reverseMgr cancelSpanEndCycle')
+        #self.lgr.debug('reverseMgr cancelSpanEndCycle')
         SIM_event_cancel_time(self.cpu, self.span_end_cycle_event, self.cpu, None, None)
 
     def setSpanEndCycle(self):
