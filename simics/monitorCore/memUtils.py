@@ -24,6 +24,7 @@
 '''
 
 import pageUtils
+import pageUtilsPPC32
 import json
 import sys
 import struct
@@ -589,17 +590,25 @@ class MemUtils():
         v = self.getUnsigned(v)
         if cpu.architecture == 'ppc32':
             cpl = getCPL(cpu)
-            #self.lgr.debug('memUtils ppc cpl %d' % cpl)
+            #self.lgr.debug('memUtils v2p ppc cpl %d' % cpl)
             #if cpl == 1 and v >= self.getUnsigned(self.param.kernel_base):
             if v >= self.getUnsigned(self.param.kernel_base):
                 retval = v - 0xc0000000
             else:
-                try:
-                    phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-                    retval = phys_block.address
-                except:
-                    self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
-                    return None
+                pc = self.getRegValue(cpu, 'pc')
+                if pc < self.getUnsigned(self.param.kernel_base) and cpl == 0:
+                    pt = pageUtilsPPC32.findPageTable(cpu, v, self.lgr) 
+                    if pt.phys_addr is not None:
+                        retval = pt.phys_addr
+                    else:
+                        self.lgr.debug('memUtils v2p pc 0x%x cpl 0, no page table phys for 0x%xx' % (pc, v))
+                else:
+                    try:
+                        phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                        retval = phys_block.address
+                    except:
+                        self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
+                        return None
         else:
             cpl = getCPL(cpu)
             if do_log:
