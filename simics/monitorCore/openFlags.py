@@ -13,9 +13,12 @@ def getFlags(flags):
     if flags == 0:
         retval = 'RDONLY'
     else:
-        if flags & O_WRONLY > 0:
+        rw_flags = flags & 0xf
+        if rw_flags == 0:
+            retval = 'RDONLY'
+        elif rw_flags & O_WRONLY > 0:
             retval = 'WRONLY'
-        if flags & O_RDWR > 0:
+        elif rw_flags & O_RDWR > 0:
             retval = 'RDWR'
         if flags & O_CREAT > 0:
             retval = retval + ' CREAT'
