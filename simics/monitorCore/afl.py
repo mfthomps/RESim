@@ -111,6 +111,8 @@ class AFL():
         sor = os.getenv('AFL_STOP_ON_READ')
         if sor is not None and sor.lower() in ['true', 'yes']:
             self.stop_on_read = True
+        parts = cli.quiet_run_command('version')
+        self.version_string = parts[0][0][2]
         # TBD why are sor and backstop mutually exclusive?
         if stop_on_read:
             self.backstop_cycles = 0
@@ -201,10 +203,15 @@ class AFL():
         self.function_backstop_hap = None
         self.functionBackstop()
         self.already_got_data = False
+ 
+        # manage our own snapshotting so we do not overload reverseMgr.
+        # We will always need to start at this origin, regardless of which 
+        # process is the target
+        self.setOrigin()
         if target_proc is None:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
             self.finishInit()
-            self.disableReverse()
+            #self.disableReverse()
 
         else:
             # Target is a process other than the current.
@@ -244,9 +251,6 @@ class AFL():
                 self.afl_packet_count = self.packet_count
                 self.doWriteData()
                 self.lgr.debug('afl different target, did write data to help target get scheduled')
-            ''' need a bookmark to get back to here after setting up debug process '''
-            #self.top.resetOrigin(enable=False)
-            self.top.resetOrigin()
             self.top.setTarget(self.target_cell) 
             self.lgr.debug('afl use target proc %s on cell %s, call debug cycles: 0x%x' % (target_proc, target_cell, self.cpu.cycles))
             self.top.debugProc(target_proc, self.aflInitCallback, track_threads=False)
@@ -269,9 +273,7 @@ class AFL():
         self.exit_eip = self.mem_utils.v2p(self.target_cpu, eip)
         self.tid = self.top.getTID(target=self.target_cell)
 
-        #cmd = 'skip-to bookmark = bookmark0'
-        #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.starting_cycle, cpu=self.target_cpu)
+        self.top.restoreOrigin()
         SIM_run_alone(self.setHapsAndRun, None)
 
     def setHapsAndRun(self, dumb):
@@ -336,11 +338,8 @@ class AFL():
         ''' Setup complete for target other than initial data consumer, ready to restore origin and go '''
         self.lgr.debug('afl finishCallback call finishInit')
         self.finishInit()
-        #cmd = 'skip-to bookmark = bookmark0'
-        #cli.quiet_run_command(cmd)
-        self.top.skipToCycle(self.starting_cycle, cpu=self.target_cpu)
-        self.lgr.debug('afl finishCallback should be at cycle 0x%x actual 0x%x' % (self.starting_cycle, self.cpu.cycles))
-        self.disableReverse()
+        self.restoreOrigin()
+        self.lgr.debug('afl finishCallback should be at starting cycle 0x%x actual 0x%x' % (self.starting_cycle, self.cpu.cycles))
         self.top.setTarget(self.cell_name)
         self.context_manager.stopWatchTasks()
         tid = self.top.getTID()
@@ -605,11 +604,7 @@ class AFL():
             self.coverage.disableAll()
             #self.lgr.debug('afl goN disabled coverage breakpoints')
         #self.lgr.debug('afl goN restore snapshot')
-        if not self.top.nativeReverse():
-            self.top.restoreSnapshot('origin')
-        else:
-            cli.quiet_run_command('restore-snapshot name=origin')
-            #VT_restore_snapshot('origin')
+        self.restoreOrigin()
         if not self.linear and self.context_manager.isDebugContext():
             SIM_run_alone(self.context_manager.restoreDefaultContext, None)
         #self.top.restoreRESimContext()
@@ -875,3 +870,29 @@ class AFL():
             self.exit_eip = int(fh.readline(), 16) 
             self.target_tid = fh.readline()
             self.lgr.debug('afl loadCommenceParams loaded from %s' % self.commence_params)
+
+    def restoreOrigin(self):
+        if self.top.nativeReverse():
+            cli.quiet_run_command('restore-snapshot name=origin')
+        else:
+            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
+                cli.quiet_run_command('restore-snapshot name=origin')
+            else:
+                VT_take_restoreshot('origin')
+
+    def setOrigin(self):
+        if self.top.nativeReverse():
+            self.lgr.debug('afl setOrigin native reverse, enable unsupported and save snapshot')
+            cli.quiet_run_command('enable-unsupported-feature internals')
+            cmd = 'save-snapshot origin'
+            cli.quiet_run_command(cmd)
+        else:
+            if self.target_cpu.architecture == 'ppc32' and self.version().startswith('6.0.146'):
+                self.lgr.debug('afl setOrigin old ppc32, use save-snapshot')
+                cli.quiet_run_command('enable-unsupported-feature internals')
+                cmd = 'save-snapshot origin'
+                cli.quiet_run_command(cmd)
+            else:
+                self.lgr.debug('afl setOrigin not native, use VT_take_snapshot')
+                VT_take_snapshot('origin')
+

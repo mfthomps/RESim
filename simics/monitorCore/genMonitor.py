@@ -1546,12 +1546,12 @@ class GenMonitor():
                 if not self.no_gdb and self.bookmarks is None:
                     self.lgr.debug('genMonitor debug call doDebugCmd')
                     self.doDebugCmd()
-                if self.bookmarks is None:
+                if self.bookmarks is None and self.afl_instance is None:
                     self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
                     self.bookmarks.setOrigin(cpu)
                     self.debugger_target = self.target
             self.did_debug=True
-            if not self.reverse_mgr[self.target].reverseEnabled():
+            if not self.reverse_mgr[self.target].reverseEnabled() and self.afl_instance is None:
                 self.lgr.debug('debug enable reverse execution')
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 self.reverse_mgr[self.target].enableReverse()
@@ -1629,7 +1629,8 @@ class GenMonitor():
                         ''' TBD alter stackTrace to use this and buid it out'''
                         #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.soMap[self.target].setFunMgr(self.fun_mgr, tid)
-                        self.bookmarks.setFunMgr(self.fun_mgr)
+                        if self.bookmarks is not None:
+                            self.bookmarks.setFunMgr(self.fun_mgr)
                         self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell_name, self.context_manager[self.target],  self.mem_utils[self.target],
@@ -5468,6 +5469,7 @@ class GenMonitor():
         cell_name = self.getTopComponentName(this_cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
+        self.reverse_mgr[self.target].enableReverse()
         if target is None:
             if not self.checkUserSpace(target_cpu):
                 return
@@ -6973,8 +6975,10 @@ class GenMonitor():
         else:
             print('Reverse execution is not enabled.')
 
-    def enableReverse(self):
-        self.reverse_mgr[self.target].enableReverse()
+    def enableReverse(self, target=None):
+        if target is None:
+            target = self.target
+        self.reverse_mgr[target].enableReverse()
 
     def disableReverse(self):
         self.reverse_mgr[self.target].disableReverse()
