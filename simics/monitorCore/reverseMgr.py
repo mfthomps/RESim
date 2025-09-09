@@ -359,7 +359,7 @@ class ReverseMgr():
             if self.oldSimics():
                 raw_list = cli.quiet_run_command('list-snapshots')[1]
                 snap_list = self.parselist(raw_list)
-                self.lgr.debug('snap_list %s' % str(snap_list))
+                self.lgr.debug('disableReverse snap_list %s' % str(snap_list))
                 for name in snap_list:
                     if '>' not in name:
                         cmd = 'delete-snapshot %s' % name

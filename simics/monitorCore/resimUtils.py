@@ -759,9 +759,12 @@ def getKeyValue(item):
     return key, value
 
 def yesNoTrueFalse(item):
-    item = item.lower()
-    if item in ['yes', 'true']:
-        return True
+    if item is not None:
+        item = item.lower()
+        if item in ['yes', 'true']:
+            return True
+        else:
+            return False 
     else:
         return False 
 

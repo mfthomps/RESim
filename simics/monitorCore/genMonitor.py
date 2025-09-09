@@ -234,7 +234,6 @@ class GenMonitor():
 
         self.maze_exits = {}
         self.exit_maze = []
-        self.rev_execution_enabled = False
         self.run_from_snap = None
         self.ida_funs = None
         self.user_iterators = None
@@ -954,8 +953,12 @@ class GenMonitor():
 
 
             load_jumpers = self.getCompDict(cell_name, 'LOAD_JUMPERS')
-            if load_jumpers is not None and (load_jumpers.lower() == 'yes' or load_jumpers.lower() == 'true'):
+            if resimUtils.yesNoTrueFalse(load_jumpers): 
                 self.loadJumpersTarget(cell_name)
+            track_threads = self.getCompDict(cell_name, 'TRACK_THREADS')
+            if resimUtils.yesNoTrueFalse(track_threads): 
+                self.lgr.debug('Tracking threads for %s per INI file' % cell_name)
+                self.trackThreads(target=cell_name)
             
 
     def getBootCycleChunk(self):
@@ -1440,7 +1443,7 @@ class GenMonitor():
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
         if self.bookmarks is not None:
             self.lgr.debug('setDebugBookmark')
-            if not self.rev_execution_enabled:
+            if not self.reverseExecutionEnabled():
                 self.lgr.warning('setDebugBookmark called, but reverse not enabled, will ignore')
             else:
                 tid, cpu = self.context_manager[self.target].getDebugTid() 
@@ -1548,11 +1551,10 @@ class GenMonitor():
                     self.bookmarks.setOrigin(cpu)
                     self.debugger_target = self.target
             self.did_debug=True
-            if not self.rev_execution_enabled:
+            if not self.reverse_mgr[self.target].reverseEnabled():
                 self.lgr.debug('debug enable reverse execution')
                 ''' only exception is AFL coverage on target that differs from consumer of injected data '''
                 self.reverse_mgr[self.target].enableReverse()
-                self.rev_execution_enabled = True
                 #self.setDebugBookmark('origin', cpu)
                 self.bookmarks.setOrigin(cpu)
             ''' tbd, this is likely already set by some other action, no harm '''
@@ -1658,6 +1660,7 @@ class GenMonitor():
                     print('Warning, no program file for %s relative to root prefix.' % prog_name)
                     self.lgr.debug('debug Failed to get full path for %s' % prog_name)
             rprint('Now debugging %s tid:%s' % (prog_name, tid))
+            self.lgr.debug('debug Now debugging %s tid:%s' % (prog_name, tid))
             if self.fun_mgr is None:
                 self.lgr.debug('Warning no fun_mgr is defined.  Do not know what we are debugging?')
             elif not self.fun_mgr.hasIDAFuns(comm=comm):
@@ -1675,12 +1678,13 @@ class GenMonitor():
             self.lgr.debug('genMonitor debug, already debugging')
             self.context_manager[self.target].setDebugTid()
 
-        if not self.disable_reverse:
-            self.lgr.debug('debug call rev_to_call.setup with bookmarks %s' % self.bookmarks)
-            self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
+        if self.target in self.page_faults:
+            if not self.disable_reverse:
+                self.lgr.debug('debug call rev_to_call.setup with bookmarks %s' % self.bookmarks)
+                self.rev_to_call[self.target].setup(cpu, [], bookmarks=self.bookmarks, page_faults = self.page_faults[self.target])
+            ''' Otherwise not cleared when pageFaultGen is stopped/started '''
+            self.page_faults[self.target].clearFaultingCycles()
         self.task_utils[self.target].clearExitTid()
-        ''' Otherwise not cleared when pageFaultGen is stopped/started '''
-        self.page_faults[self.target].clearFaultingCycles()
         self.record_entry[self.target].clearEnterCycles()
         self.is_monitor_running.setRunning(False)
 
@@ -1693,12 +1697,14 @@ class GenMonitor():
         if self.target in self.reg_set:
              self.reg_set[self.target].swapContext()
 
-    def trackThreads(self):
+    def trackThreads(self, target=None):
         self.lgr.debug('trackThreads') 
         if self.track_threads is None:
             # undo hack
             self.track_threads = {}
-        if self.target not in self.track_threads:
+        if target is None:
+            target = self.target
+        if target not in self.track_threads:
             self.checkOnlyIgnore()
             cpu, comm, tid = self.task_utils[self.target].curThread() 
             self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, tid, self.context_manager[self.target], 
@@ -1945,6 +1951,7 @@ class GenMonitor():
             flist.append(stopFunction.StopFunction(self.debugExitHap, [], nest=False))
             flist.append(stopFunction.StopFunction(self.debug, [True], nest=False))
             if final_fun is not None:
+                self.lgr.debug('debugProc added finalfun %s to stopFunction' % final_fun)
                 flist.append(stopFunction.StopFunction(final_fun, [], nest=False))
             if pre_fun is not None:
                 fp = stopFunction.StopFunction(pre_fun, [], nest=False)
@@ -1968,6 +1975,9 @@ class GenMonitor():
             f3 = stopFunction.StopFunction(self.stackFrameManager[self.target].setStackBase, [], nest=False)
             f4 = stopFunction.StopFunction(self.debug, [], nest=False)
             flist = [f1, f2, f3, f4]
+            if final_fun is not None:
+                self.lgr.debug('debugProc not yet running, added finalfun %s to stopFunction' % final_fun)
+                flist.append(stopFunction.StopFunction(final_fun, [], nest=False))
             if track_threads:
                 watch_exit = True
             else:
@@ -2052,7 +2062,6 @@ class GenMonitor():
 
         ''' enable reversing now so we can rev to events prior to scheduling, e.g., arrival of data at kernel '''
         self.reverse_mgr[self.target].enableReverse()
-        self.rev_execution_enabled = True
         if self.full_path is None:
             self.lgr.debug('debugTidList full_path is None, set it')
             self.setPathToProg(tid_list[0])
@@ -2507,9 +2516,10 @@ class GenMonitor():
                 target = self.target
             if tid is None:
                 tid, cpu = self.context_manager[target].getDebugTid() 
-            self.lgr.debug('genMonitor watchPageFaults tid %s' % tid)
-            self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32, afl=afl)
-            #self.lgr.debug('genMonitor watchPageFaults back')
+            if target in self.page_faults:
+                self.lgr.debug('genMonitor watchPageFaults tid %s' % tid)
+                self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32, afl=afl)
+                #self.lgr.debug('genMonitor watchPageFaults back')
 
     def stopWatchPageFaults(self, tid=None, target=None, immediate=False):
         if target is None:
@@ -3052,9 +3062,8 @@ class GenMonitor():
     def stopDebug(self, rev=False):
         ''' stop all debugging.  called by injectIO and debugProc (with new=True) and user when process dies and we know it will be recreated '''
         self.lgr.debug('stopDebug')
-        if not rev and self.rev_execution_enabled:
+        if not rev and self.reverse_mgr[self.target].reverseEnabled():
             self.reverse_mgr[self.target].disableReverse()
-            self.rev_execution_enabled = False
         self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
         self.sharedSyscall[self.target].setDebugging(False)
         self.syscallManager[self.target].rmAllSyscalls()
@@ -3070,7 +3079,6 @@ class GenMonitor():
     def restartDebug(self):
         self.lgr.debug('restartDebug')
         self.reverse_mgr[self.target].enableReverse()
-        self.rev_execution_enabled = True
         self.restoreDebugBreaks(was_watching=True)
         self.sharedSyscall[self.target].setDebugging(True)
         self.recordEntry()
@@ -3230,11 +3238,10 @@ class GenMonitor():
         self.reverse_mgr[self.target].disableReverse()
         if not watch_enter:
             self.noWatchSysEnter()
-        self.rev_execution_enabled = False
         self.lgr.debug('genMonitor noReverse')
 
     def allowReverse(self):
-        if self.rev_execution_enabled:
+        if self.reverse_mgr[self.target].reverseEnabled():
             print('Reverse execution already enabled')
             return
         self.reverse_mgr[self.target].enableReverse()
@@ -3246,7 +3253,6 @@ class GenMonitor():
         if self.bookmarks is None:
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
             self.bookmarks.setOrigin(cpu)
-        self.rev_execution_enabled = True
         self.lgr.debug('genMonitor allowReverse done')
         print('Reverse execution enabled.')
  
@@ -3262,7 +3268,7 @@ class GenMonitor():
             if tid is not None:
                 if not was_watching:
                     self.context_manager[self.target].watchTasks()
-                if self.rev_execution_enabled:
+                if self.reverse_mgr[self.target].reverseEnabled():
                     prec = Prec(cpu, None, tid)
                     self.recordEntry()
                     if self.track_threads is not None and self.target in self.track_threads:
@@ -4117,7 +4123,6 @@ class GenMonitor():
         if enable:
             self.reverse_mgr[self.target].enableReverse(two_step=True)
             self.lgr.debug('reset Origin rev ex enabled')
-            self.rev_execution_enabled = True
             if self.bookmarks is not None:
                 self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
             else:
@@ -4597,10 +4602,10 @@ class GenMonitor():
         # TBD Simics VT_revexec_active is broken.  Often gives the wrong answer
         #return True
         if self.disable_reverse: 
-            #self.lgr.debug('reverseEnabled disable_reverse is True')
+            self.lgr.debug('reverseEnabled disable_reverse is True')
             return False
         else:
-            #self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
+            self.lgr.debug('reverseEnabled disable_reverse is False, call reverse mgr')
             if not self.reverse_mgr[self.target].nativeReverse():
                 return self.reverse_mgr[self.target].reverseEnabled()
             else:
@@ -4706,9 +4711,11 @@ class GenMonitor():
             return
         if not self.reverseEnabled() and not kbuf:
             print('Reverse execution must be enabled.')
+            self.lgr.debug('trackIO Reverse execution must be enabled.')
             return
         if self.fun_mgr is None:
             print('No funManager loaded, debugging?')
+            self.lgr.debug('trackIO No funManager loaded, debugging?')
             return
 
         debug_tid, dumb = self.context_manager[self.target].getDebugTid() 
@@ -4718,6 +4725,7 @@ class GenMonitor():
         comm = self.task_utils[self.target].getCommFromTid(debug_tid)
         if not self.fun_mgr.hasIDAFuns(comm=comm):
             print('No functions defined for comm %s, needs IDA or Ghidra analysis.' % comm)
+            self.lgr.debug('trackIO No functions defined for comm %s, needs IDA or Ghidra analysis.' % comm)
             return
 
         clib_ok = self.soMap[self.target].checkClibAnalysis(debug_tid)
@@ -6232,7 +6240,9 @@ class GenMonitor():
             target = self.target
         if tid is None:
             self.lgr.error('hasPendingFault called with tid of None')
-            return
+            return False
+        if target not in self.page_faults:
+            return False
         tid_list = self.task_utils[target].getGroupTids(tid)
         self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
         for t in tid_list:
@@ -6488,7 +6498,7 @@ class GenMonitor():
         self.task_utils[self.target].showTidsForComm(comm_in)
 
     def isReverseExecutionEnabled(self):
-        return self.rev_execution_enabled
+        return self.reverse_mgr[self.target].reverseEnabled()
 
     def traceWindows(self, track_threads=True):
         if self.target in self.trace_all:
