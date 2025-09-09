@@ -214,7 +214,7 @@ class PageFaultGen():
     def pageFaultHapPPC32(self, compat32, third, forth, memory):
         reg_num = self.cpu.iface.int_register.get_number("msr")
         msr = self.cpu.iface.int_register.read(reg_num)
-        self.lgr.debug('pageFaultHapPPC32 msr 0x%x memory 0x%x' % (msr, memory.logical_address)) 
+        #self.lgr.debug('pageFaultHapPPC32 msr 0x%x memory 0x%x' % (msr, memory.logical_address)) 
         if not memUtils.testBit(msr, 4) and memory.logical_address != self.data_storage_fault:
             return
         cpu, comm, tid = self.task_utils.curThread() 
@@ -223,9 +223,9 @@ class PageFaultGen():
         self.user_eip = reg_value
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         eip = cur_pc    
-        self.lgr.debug('pageFaultHapPPC32 tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
+        #self.lgr.debug('pageFaultHapPPC32 tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
-            self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
+            #self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
             return
         if self.exception_eip is not None:
             eip = self.exception_eip
@@ -235,32 +235,32 @@ class PageFaultGen():
             # dar should have fauling address, but lob's are wrong
             dar = self.mem_utils.getRegValue(cpu, 'dar')
             fault_addr = dar
-            self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
+            #self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
         else: 
             fault_addr = eip
         if self.mem_utils.isKernel(self.user_eip):
             # record cycle and eip for reversing back to user space    
             self.recordFault(tid, self.user_eip)
         if self.top.isCode(fault_addr, tid, target=self.target):
-            self.lgr.debug('pageFaultHap 0x%x is code, bail' % fault_addr)
+            #self.lgr.debug('pageFaultHap 0x%x is code, bail' % fault_addr)
             return
         if tid not in self.faulted_pages:
             self.faulted_pages[tid] = []
         if fault_addr in self.faulted_pages[tid]:
-            self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
+            #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
         self.faulted_pages[tid].append(fault_addr)
         page_info = pageUtilsPPC32.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
-            self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
+            #self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
             if self.mem_utils.isKernel(fault_addr):
-                self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
+                #self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
                 self.pending_faults[tid] = prec
             else:
                 self.pending_faults[tid] = prec
                 if self.mode_hap is None:
-                    self.lgr.debug('pageFaultGen adding mode hap')
+                    #self.lgr.debug('pageFaultGen adding mode hap')
                     self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
