@@ -1443,7 +1443,7 @@ class GenMonitor():
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
         if self.bookmarks is not None:
             self.lgr.debug('setDebugBookmark')
-            if not self.reverseExecutionEnabled():
+            if not self.reverse_mgr[self.target].reverseEnabled():
                 self.lgr.warning('setDebugBookmark called, but reverse not enabled, will ignore')
             else:
                 tid, cpu = self.context_manager[self.target].getDebugTid() 
