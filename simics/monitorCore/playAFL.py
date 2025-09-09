@@ -382,6 +382,8 @@ class PlayAFL():
         if self.dfile != 'oneplay' or self.repeat:
             self.lgr.debug('playAFL finishInit call to remove debug breaks')
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
+            self.lgr.debug('playAFL finishInit call to restore watch of exits')
+            self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
             self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
             self.top.resetOrigin()
@@ -628,6 +630,10 @@ class PlayAFL():
 
             if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
                 self.backstop.setFutureCycle(self.backstop_cycles, now=False)
+
+            if self.exit_syscall is not None:
+                # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
+                self.exit_syscall.resetHackCycle()
 
             self.lgr.debug('playAFL goAlone now continue')
             if self.repeat:
@@ -922,6 +928,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL stopHap Search completed.')
             else:
                 self.lgr.debug('playAFL stopHap, coverage not set and no search list')
+            self.top.clearExitTid()
             if self.repeat or self.dfile != 'oneplay':
                 self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
