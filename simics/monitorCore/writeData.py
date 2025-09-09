@@ -374,7 +374,7 @@ class WriteData():
     def userBufWrite(self, record=False):
         ''' inject data into the application buffer and set the return count value seen by the application '''
         retval = None
-        #self.lgr.debug('userBufWrite')
+        #self.lgr.debug('userBufWrite self.max_len is %d in data is %d bytes' % (self.max_len, len(self.in_data)))
         if self.current_packet > 1 and self.no_reset:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
@@ -383,19 +383,24 @@ class WriteData():
              return
         if self.expected_packet_count <= 1 and self.udp_header is None:
             if self.expected_packet_count != 1 and len(self.in_data) > self.max_len:
+                #self.lgr.debug('writeData userBufWrite in data %d bytes longer than max_len %d' % (len(self.in_data), self.max_len))
                 next_data = self.in_data[:self.max_len]
                 self.in_data = self.in_data[self.max_len:]
                 if self.filter is not None:
                     result = self.filter.filter(next_data, self.current_packet)
+                    # this truncating is crude.  TBD handle truncating with filters.  Go back and further shorten the in_data?
+                    if len(result) > self.max_len:
+                        result = result[:self.max_len]
+                        #self.lgr.debug('writeData userBufWrite used filter, truncated result len %d' % (len(result)))
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
-                    #self.lgr.debug('writeData first_data failed filter, wrote nulls')
+                    self.setCountValue(len(result))
+                    retval = len(result)
                 else: 
                     self.mem_utils.writeString(self.cpu, self.addr, next_data) 
+                    self.setCountValue(len(next_data))
+                    retval = len(next_data)
                 #self.lgr.debug('writeData userBufWrite TCP not last packet, wrote %d bytes to 0x%x packet_num %d remaining bytes %d' % (len(next_data), self.addr, self.current_packet, len(self.in_data)))
-                self.lgr.debug('%s' % next_data)
-                self.setCountValue(len(next_data))
-                #self.lgr.debug('writeData userBufWrite back from setCountValue')
-                retval = len(next_data)
+                #self.lgr.debug('%s' % next_data)
                 if self.max_len == 1:
                     ''' Assume reading byte at a time into buffer '''
                     ''' TBD REMOVE THIS.  At least for TCP?  Character at a time input requires injection into kernel buffer '''
@@ -409,6 +414,9 @@ class WriteData():
                     if result is None:
                         self.lgr.error('writeData userBufWrite filter returned none')
                         return
+                    if len(result) > self.max_len:
+                        result = result[:self.max_len]
+                        #self.lgr.debug('writeData userBufWrite used TCP last or udp, filter, truncated result len %d' % (len(result)))
                     self.mem_utils.writeString(self.cpu, self.addr, result) 
                     tot_len = len(result)
                 else:
