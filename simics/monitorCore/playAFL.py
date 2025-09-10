@@ -139,6 +139,7 @@ class PlayAFL():
         if packet_count > 1 and not (self.udp_header is not None or self.pad_to_size > 0):
             self.lgr.error('Multi-packet requested but no pad or UDP header has been given in env variables')
             return None
+        self.exit_syscall = None
         self.one_off = False
         if os.path.isfile(dfile):
             ''' single file to play '''
