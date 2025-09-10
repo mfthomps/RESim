@@ -887,7 +887,7 @@ class AFL():
             cmd = 'save-snapshot origin'
             cli.quiet_run_command(cmd)
         else:
-            if self.target_cpu.architecture == 'ppc32' and self.version().startswith('6.0.146'):
+            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
                 self.lgr.debug('afl setOrigin old ppc32, use save-snapshot')
                 cli.quiet_run_command('enable-unsupported-feature internals')
                 cmd = 'save-snapshot origin'
