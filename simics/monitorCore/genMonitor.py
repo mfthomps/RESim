@@ -5469,7 +5469,7 @@ class GenMonitor():
         cell_name = self.getTopComponentName(this_cpu)
         ''' prevent use of reverseToCall.  TBD disable other modules as well?'''
         self.disable_reverse = True
-        self.reverse_mgr[self.target].enableReverse()
+        #self.reverse_mgr[self.target].enableReverse()
         if target is None:
             if not self.checkUserSpace(target_cpu):
                 return
