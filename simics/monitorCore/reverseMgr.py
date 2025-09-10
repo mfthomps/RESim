@@ -180,7 +180,11 @@ class ReverseMgr():
             go_cycles = self.cycle_span - (self.cpu.cycles % self.cycle_span)
             #self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x after latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
         else:
+            # current cycles < latest_span_end
             self.cancelSpanCycle()
+            if self.oldSimics():
+                self.latest_span_end = self.getMasked(self.cpu.cycles)
+                self.lgr.debug('reverseMgr setNextCycle old simics, reverted latest_span_end to 0x%x' % self.latest_span_end)
             want_cycle = self.latest_span_end + self.cycle_span
             go_cycles = want_cycle - self.cpu.cycles
             #self.lgr.debug('reverseMgr setNextCycle cpu.cycles 0x%x prior to latest_span_end go 0x%x cycles' % (self.cpu.cycles, go_cycles))
@@ -226,42 +230,51 @@ class ReverseMgr():
             self.was_at_origin = True
         if not self.version().startswith('7'):
             if self.oldSimics():
-                #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
-                cmd = 'restore-snapshot %s' % name
-                #SIM_run_alone(cli.quiet_run_command, cmd)
-                try:
-                    cli.quiet_run_command(cmd)
-                except:
-                    self.lgr.debug('reverseMgr restoreSnapshot %s race condition?' % name)
-                    if name in self.snapshot_names:
-                        # assume race due to runAlone
-                        raw_list = cli.quiet_run_command('list-snapshots')[1]
-                        snap_list = self.parselist(raw_list)
-                        self.lgr.debug('snap_list %s' % str(snap_list))
-                        cur_name = name
-                        count = 0
-                        while True:
-                            count = count + 1
-                            cur_name = self.getPreviousName(cur_name)
-                            self.lgr.debug('reverseMgr restoreSnapshot got cur_name %s' % cur_name)
-                            if cur_name is None:
-                                self.lgr.error('reverseMgr restoreSnapshot failed to find any snapshot to use')
-                                break
-                            if cur_name in snap_list:
-                                self.lgr.debug('reverseMgr restoreSnapshot would use cur_name %s' % cur_name)
-                                cmd = 'restore-snapshot %s' % cur_name
-                                cli.quiet_run_command(cmd)
-                                self.lgr.debug('reverseMgr restoreSnapshot after restore to previous cycles now 0x%x' % self.cpu.cycles)
-                                cycles = self.cycle_span * count
-                                cmd = 'run-cycles 0x%x' % cycles
-                                cli.quiet_run_command(cmd)
-                                self.lgr.debug('reverseMgr restoreSnapshot took long way to get to cycle 0x%x after running ahead 0x%x cycles' % (self.cpu.cycles, cycles))
-                                break
-                            if count > 30:
-                                self.lgr.error('reverseMgr restoreSnapshot, missing %d snapshots???' % count) 
-                                break
-                    else:
-                        self.lgr.error('reverseMgr restoreSnapshot ask %s, not in recorded names' % name)
+                go_forward = False
+                if name.startswith('cycle_'):
+                    want_cycle = int(name[6:], 16)
+                    if want_cycle > self.cpu.cycles:
+                        go_forward = True
+                if go_forward:
+                    self.lgr.debug('reverseMgr restoreSnapshot %s, is forward, old simics, run there' % name)
+                    self.runToCycle(want_cycle)
+                else:
+                    #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
+                    cmd = 'restore-snapshot %s' % name
+                    #SIM_run_alone(cli.quiet_run_command, cmd)
+                    try:
+                        cli.quiet_run_command(cmd)
+                    except:
+                        self.lgr.debug('reverseMgr restoreSnapshot %s race condition?' % name)
+                        if name in self.snapshot_names:
+                            # assume race due to runAlone
+                            raw_list = cli.quiet_run_command('list-snapshots')[1]
+                            snap_list = self.parselist(raw_list)
+                            self.lgr.debug('snap_list %s' % str(snap_list))
+                            cur_name = name
+                            count = 0
+                            while True:
+                                count = count + 1
+                                cur_name = self.getPreviousName(cur_name)
+                                self.lgr.debug('reverseMgr restoreSnapshot got cur_name %s' % cur_name)
+                                if cur_name is None:
+                                    self.lgr.error('reverseMgr restoreSnapshot failed to find any snapshot to use')
+                                    break
+                                if cur_name in snap_list:
+                                    self.lgr.debug('reverseMgr restoreSnapshot would use cur_name %s' % cur_name)
+                                    cmd = 'restore-snapshot %s' % cur_name
+                                    cli.quiet_run_command(cmd)
+                                    self.lgr.debug('reverseMgr restoreSnapshot after restore to previous cycles now 0x%x' % self.cpu.cycles)
+                                    cycles = self.cycle_span * count
+                                    cmd = 'run-cycles 0x%x' % cycles
+                                    cli.quiet_run_command(cmd)
+                                    self.lgr.debug('reverseMgr restoreSnapshot took long way to get to cycle 0x%x after running ahead 0x%x cycles' % (self.cpu.cycles, cycles))
+                                    break
+                                if count > 30:
+                                    self.lgr.error('reverseMgr restoreSnapshot, missing %d snapshots???' % count) 
+                                    break
+                        else:
+                            self.lgr.error('reverseMgr restoreSnapshot ask %s, not in recorded names' % name)
  
                                  
             else:
@@ -413,14 +426,14 @@ class ReverseMgr():
         if use_cell is None:
             if current_cycle == our_cycles:
                 print('Already at cycle 0x%x' % current_cycle)
-                self.lgr.debug('reverseMgr Already at cycle 0x%x' % current_cycle)
+                self.lgr.debug('reverseMgr skipToCycle Already at cycle 0x%x' % current_cycle)
                 return True
             object_cycles = our_cycles
         else:
             current_cycle == self.cpu_map[use_cell].cycles
             if object_cycles == current_cycle:
                 print('Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
-                self.lgr.debug('reverseMgr Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
+                self.lgr.debug('reverseMgr skipToCycle Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
                 return True
 
         self.cancelSpanCycle()
@@ -435,7 +448,10 @@ class ReverseMgr():
                      current_cycle, use_cell,  object_cycles))
             self.runToCycle(object_cycles, use_cell=use_cell)
         else:
-            if our_cycles > self.latest_span_end:
+            if self.oldSimics() and our_cycles > current_cycle:
+                self.lgr.debug('reverseMgr skipToCycle old simics, want cycle in future, just run to it')
+                self.runToCycle(object_cycles, use_cell=use_cell)
+            elif our_cycles > self.latest_span_end:
                 #print('Cycle 0x%x is after last recorded cycle of 0x%x, will just run ahead' % (cycle, self.latest_span_end))
                 self.lgr.debug('reverseMgr skipToCycle Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (our_cycles, self.latest_span_end))
 
@@ -465,7 +481,7 @@ class ReverseMgr():
                 self.runToCycle(object_cycles, use_cell=use_cell)
             else:
                 recorded = self.getMasked(our_cycles)
-                self.lgr.debug('reverseMgr skipToCycle recorded (after mask) is 0x%x' % recorded)
+                self.lgr.debug('reverseMgr skipToCycle recorded (after mask) is 0x%x cpu.cycles is 0x%x' % (recorded, self.cpu.cycles))
                 if recorded < self.origin_cycle:
                     self.skipToOrigin()
                     if use_cell is None:
@@ -476,6 +492,9 @@ class ReverseMgr():
                         current_cycle = self.cpu_map[use_cell].cycles
                         self.lgr.debug('reverseMgr skipToCycle did restore origin and run forward to cycle 0x%x  cycle now 0x%x on our cell, different cell %s cycle 0x%x' % (object_cycles, self.cpu.cycles, current_cycles, use_cell))
                     self.runToCycle(object_cycles, use_cell=use_cell)
+                elif recorded == self.cpu.cycles and use_cell is None:
+                    self.runToCycle(object_cycles, use_cell=use_cell)
+                    self.lgr.debug('reverseMgr skipToCycle recorded 0x%x same as current, just run forward to 0x%x' % (recorded, object_cycles))
                 else:
                     cycle_mark = 'cycle_%x' % recorded
                     self.restoreSnapshot(cycle_mark)
@@ -487,8 +506,11 @@ class ReverseMgr():
                         current_cycle = self.cpu_map[use_cell].cycles
                         self.lgr.debug('reverseMgr skipToCycle restored 0x%x cycles now 0x%x on our cpu and 0x%x on different cell %s' % (recorded, self.cpu.cycles, current_cyle, use_cell))
                     if recorded != current_cycle:
-                        self.lgr.debug('reverseMgr skipToCycle run to 0x%x' % object_cycles)
-                        self.runToCycle(object_cycles, use_cell=use_cell)
+                        if self.cpu.cycles != object_cycles or use_cell is not None:
+                            self.lgr.debug('reverseMgr skipToCycle run to 0x%x' % object_cycles)
+                            self.runToCycle(object_cycles, use_cell=use_cell)
+                        else:
+                            self.setNextCycle()
         return True
             
           
@@ -519,10 +541,13 @@ class ReverseMgr():
                 cli.quiet_run_command(cmd)
                 
             SIM_continue(0)
-            self.setNextCycle()
             #SIM_continue(delta)
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
             self.enableAll()
+            self.setNextCycle()
+        if self.oldSimics() and self.latest_span_end is not None and self.latest_span_end > use_cpu.cycles:
+            self.latest_span_end =  self.getMasked(use_cpu.cycles)
+            self.lgr.debug('reverseMgr runToCycle reverted latest_span_end to 0x%x' % self.latest_span_end)
 
     def reverse(self, dumb=None, reverse_to=None, callback=None):
         '''
@@ -576,6 +601,7 @@ class ReverseMgr():
         retval = None
         raw_list = cli.quiet_run_command('list-snapshots')[1]
         snap_list = self.parselist(raw_list)
+        self.lgr.debug('reverseMgr getLatestSnapCycle snaplist has %d items' % len(snap_list))
         if len(snap_list)>1:
             name = snap_list[-1]
             try:
