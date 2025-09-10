@@ -223,24 +223,29 @@ class PageFaultGen():
         self.user_eip = reg_value
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         eip = cur_pc    
-        #self.lgr.debug('pageFaultHapPPC32 tid:%s eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, eip, self.cpu.cycles, self.user_eip))
+        self.lgr.debug('pageFaultHapPPC32 tid:%s (%s) eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, comm, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
-            #self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
+            self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
             return
         if self.exception_eip is not None:
             eip = self.exception_eip
         
         access_type = None
         if memory.logical_address == self.data_storage_fault:
-            # dar should have fauling address, but lob's are wrong
+            # dar should have fauling address
             dar = self.mem_utils.getRegValue(cpu, 'dar')
             fault_addr = dar
-            #self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
+            self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
         else: 
-            fault_addr = eip
+            fault_addr = self.user_eip
+        # TBD why were we recording this? Check other architectures to see if that makes sense.  Why not just bail?
+        #if self.mem_utils.isKernel(self.user_eip):
+        #    # record cycle and eip for reversing back to user space    
+        #    self.recordFault(tid, self.user_eip)
         if self.mem_utils.isKernel(self.user_eip):
-            # record cycle and eip for reversing back to user space    
-            self.recordFault(tid, self.user_eip)
+             # what about validation of user space-provided pointers? Would those involve a page fault?
+             self.lgr.debug('pageFaultHapPPC32 within kernel, 0x%x, bail.' % self.user_eip)
+             return
         if self.top.isCode(fault_addr, tid, target=self.target):
             #self.lgr.debug('pageFaultHap 0x%x is code, bail' % fault_addr)
             return
@@ -253,7 +258,7 @@ class PageFaultGen():
         page_info = pageUtilsPPC32.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
-            #self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
+            self.lgr.debug('pageFaultHapPPC32 add pending fault for %s (%s) addr 0x%x cycle 0x%x' % (tid, comm, prec.cr2, prec.cycles))
             if self.mem_utils.isKernel(fault_addr):
                 #self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
                 self.pending_faults[tid] = prec
@@ -799,16 +804,20 @@ class PageFaultGen():
             return {}
 
     def handleExit(self, tid, leader, report_only=False):
-        ''' Assumed called while debugging a tid group.  Search all tids for most recent reference, assuming a 
+        ''' We believe a process has been killed.  Determine if three is a pending page fault. 
+            If the tid is within a thread group, look at all threads for most recent reference, assuming a 
             true fault is handled without rescheduling. 
             Return True if we think a segv occured
         '''
         retval = False
         self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d' % (tid, str(leader), len(self.pending_faults)))
         if len(self.pending_faults) > 0:
+            thread_group = self.task_utils.getGroupTids(tid)
             recent_cycle = 0
             recent_tid = None
             for pending_tid in self.pending_faults:
+                if pending_tid not in thread_group:
+                    continue
                 self.lgr.debug('compare pending_tid:%s cycle 0x%x to recent 0x%x' % (pending_tid, self.pending_faults[pending_tid].cycles, recent_cycle))
                 if self.pending_faults[pending_tid].cycles > recent_cycle:
                     # TBD weak algorithm for determining which thread is a fault
