@@ -365,7 +365,7 @@ class InjectIO():
                 self.top.traceWrite(trace_msg)
                 if self.trace_fd is not None:
                     self.lgr.debug('injectIO target_prog none, traceFD 0x%x' % self.trace_fd)
-                    self.top.traceFD(self.trace_fd)
+                    self.top.traceFD(self.trace_fd, raw=True)
 
             self.commonGo()
             if not self.stay:
@@ -413,7 +413,7 @@ class InjectIO():
                         self.top.traceAll()
                         if self.trace_fd is not None:
                             self.lgr.debug('injectIO traceFD 0x%x' % self.trace_fd)
-                            self.top.traceFD(self.trace_fd)
+                            self.top.traceFD(self.trace_fd, raw=True)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
@@ -432,7 +432,7 @@ class InjectIO():
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         if self.trace_fd is not None:
-                            self.top.traceFD(self.trace_fd)
+                            self.top.traceFD(self.trace_fd, raw=True)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
                     if not did_origin_reset:
@@ -512,13 +512,13 @@ class InjectIO():
             self.lgr.debug('injectIO call traceAll for mark_logs')
             self.top.traceAll()
             if self.trace_fd is not None:
-                self.top.traceFD(self.trace_fd)
+                self.top.traceFD(self.trace_fd, raw=True)
             self.top.traceBufferMarks(target=self.cell_name)
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
                 self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
             elif self.targetFD is not None:
-                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs)
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs, callback=self.callback)
             else:
                 # just want to debug the target
                 pass
