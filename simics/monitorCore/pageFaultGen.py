@@ -223,9 +223,9 @@ class PageFaultGen():
         self.user_eip = reg_value
         cur_pc = self.mem_utils.getRegValue(cpu, 'pc')
         eip = cur_pc    
-        self.lgr.debug('pageFaultHapPPC32 tid:%s (%s) eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, comm, eip, self.cpu.cycles, self.user_eip))
+        #self.lgr.debug('pageFaultHapPPC32 tid:%s (%s) eip: 0x%x cycle 0x%x user_eip: 0x%x' % (tid, comm, eip, self.cpu.cycles, self.user_eip))
         if not self.context_manager.watchingThis():
-            self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
+            #self.lgr.debug('pageFaultHapPPC32 tid:%s, contextManager says not watching' % tid)
             return
         if self.exception_eip is not None:
             eip = self.exception_eip
@@ -235,7 +235,7 @@ class PageFaultGen():
             # dar should have fauling address
             dar = self.mem_utils.getRegValue(cpu, 'dar')
             fault_addr = dar
-            self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
+            #self.lgr.debug('pageFaultHapPPC32 data fault addr 0x%x' % (dar))
         else: 
             fault_addr = self.user_eip
         # TBD why were we recording this? Check other architectures to see if that makes sense.  Why not just bail?
