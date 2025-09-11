@@ -2060,9 +2060,10 @@ class GenMonitor():
         debug_group = False
         if debug_function == self.debugGroup:
             debug_group = True
-
-        ''' enable reversing now so we can rev to events prior to scheduling, e.g., arrival of data at kernel '''
-        self.reverse_mgr[self.target].enableReverse()
+        if self.afl_instance is None:
+            ''' enable reversing now so we can rev to events prior to scheduling, e.g., arrival of data at kernel '''
+            self.lgr.debug('debugTidList enable reverse')
+            self.reverse_mgr[self.target].enableReverse()
         if self.full_path is None:
             self.lgr.debug('debugTidList full_path is None, set it')
             self.setPathToProg(tid_list[0])
@@ -2943,7 +2944,7 @@ class GenMonitor():
 
     def traceFD(self, fd, raw=False, web=False, all=False, comm=None):
         ''' Create mirror of reads/write to the given FD.  Use raw to avoid modifications to the data. '''
-        self.lgr.debug('traceFD %d target is %s' % (fd, self.target))
+        self.lgr.debug('traceFD %d target is %s raw: %r' % (fd, self.target, raw))
         outfile = 'logs/output-fd-%d.log' % fd
         self.traceFiles[self.target].watchFD(fd, outfile, raw=raw, web=web, all=all, comm=comm)
 
@@ -5490,6 +5491,8 @@ class GenMonitor():
             full_path=fname
         '''
         full_path=fname
+        # set value to prevent reverse execution and such while afl initializing
+        self.afl_instance = 'placeholder'
         self.afl_instance = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
