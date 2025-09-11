@@ -947,7 +947,7 @@ class GenContextMgr():
         ctask = self.task_utils.getCurThreadRec()
         cur_tid  = self.task_utils.curTID()
         if cur_tid in self.tid_cache or ctask in self.watch_rec_list or cur_tid in self.task_rec_hap or cur_tid in self.demise_cache:
-            #self.lgr.debug('contextManager watchingThis am watching tid:%s' % cur_tid)
+            #self.lgr.debug('contextManager watchingThis are we watching current tid:%s ?' % cur_tid)
             #self.lgr.debug('cache %s  watch_rec_list %s task_rec_hap  %s  demise %s' % (str(self.tid_cache), str(self.watch_rec_list), str(self.task_rec_hap), self.demise_cache))
             return True
         else:
