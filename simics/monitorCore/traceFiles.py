@@ -95,7 +95,7 @@ class TraceFiles():
                 pass
             with open(outfile+'-write', 'wb') as fh:
                 pass
-        self.lgr.debug('traceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
+        self.lgr.debug('traceFiles watchFD %d num open files %d raw: %r' % (fd, len(self.open_files), raw))
         if key not in self.tracing_fd:
             self.tracing_fd[key] = []
         self.tracing_fd[key].append(fd)
@@ -180,7 +180,7 @@ class TraceFiles():
 
     def getTracingRec(self, tid, comm, fd):
         retval = None
-        if tid in self.tracing_fd and fd in self.tracing_fd[tid]:
+        if tid in self.tracing_fd and fd < len(self.tracing_fd[tid]):
             retval = self.tracing_fd[tid][fd]
         elif comm is not None and comm in self.tracing_fd and fd in self.tracing_fd[comm]:
             retval = self.tracing_fd[comm][fd]
