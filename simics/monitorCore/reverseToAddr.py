@@ -53,7 +53,7 @@ class reverseToAddr():
         else:
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
             return
-        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
+        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x break num %d' % (address, phys_block.address, extra_back, cpu.cycles, self.the_break))
        
         #self.one_stop_hap = None
         #self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
