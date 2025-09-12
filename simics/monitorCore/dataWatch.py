@@ -2290,6 +2290,7 @@ class DataWatch():
                         elif self.mem_something.src is not None:
                             self.lgr.debug('dataWatch getMemParams, src 0x%x  not buffer we care about, skip it' % (self.mem_something.src))
                         no_buffer_found = True
+                        # way to determine if breakpoint hap may follow this should be ignored.
                         self.last_buffer_not_found = self.mem_something.src
                         #self.mem_fun_entries[self.mem_something.fun][eip] = self.MemCallRec(None, ret_addr_offset, eip)
                         self.mem_fun_entries[self.mem_something.fun][eip].skip_count += 1
@@ -3063,7 +3064,8 @@ class DataWatch():
                 self.rmRange(self.mem_something.addr) 
                 SIM_continue(0)
                 return
-            elif self.mem_something.fun in ['strlen','strchr'] and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
+            #elif self.mem_something.fun in ['strlen','strchr'] and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
+            elif self.mem_something.fun.startswith('str') and self.last_buffer_not_found is not None and abs(self.mem_something.addr - self.last_buffer_not_found) < 20:
                 # very obscure, see declaration of last_buffer_not_found
                 SIM_continue(0)
                 return
@@ -5222,7 +5224,7 @@ class DataWatch():
             ret_end = min(end1, end2)
             ret_length = ret_end - ret_start + 1
         else:
-            #self.lgr.debug('dataWatch getIntersect no overlap in start1 0x%x length1 %d start2 0x%x lenght2 %d' % (start1, length1, start2, length2))
+            self.lgr.debug('dataWatch getIntersect no overlap in start1 0x%x length1 %d start2 0x%x length2 %d' % (start1, length1, start2, length2))
             pass
  
         return ret_start, ret_length
