@@ -53,6 +53,10 @@ Do not enable reversing on multiple instances.
 
 As a convenience to support compatibility between Simics 6 and 7, some of the ReverseMgr functions will 
 invoke native Simics reversing functions if running on Simics 6.
+
+The reverseMgr can provide reversing functions on Simics 6 (instead of using native reverseing).
+This requires some additional logic because memory snapshots in the future are deleted as an effect
+of restore-snapshot.
  
 '''
 from simics import *
@@ -481,16 +485,17 @@ class ReverseMgr():
                 self.runToCycle(object_cycles, use_cell=use_cell)
             else:
                 recorded = self.getMasked(our_cycles)
-                self.lgr.debug('reverseMgr skipToCycle recorded (after mask) is 0x%x cpu.cycles is 0x%x' % (recorded, self.cpu.cycles))
+                self.lgr.debug('reverseMgr skipToCycle recorded (after mask of want cycle) is 0x%x cpu.cycles is 0x%x origin was 0x%x' % (recorded, self.cpu.cycles, self.origin_cycle))
                 if recorded < self.origin_cycle:
+                    self.lgr.debug('reverseMgr skipToCycle masked value less than origin, skip to origin')
                     self.skipToOrigin()
                     if use_cell is None:
                         if self.top is not None:
                             eip = self.top.getEIP()
-                            self.lgr.debug('reverseMgr skipToCycle did restore origin and run forward to cycle 0x%x  cycle now 0x%x eip 0x%x' % (object_cycles, self.cpu.cycles, eip))
+                            self.lgr.debug('reverseMgr skipToCycle did restore origin.  Now run forward to cycle 0x%x  cycle (origin) now 0x%x eip 0x%x' % (object_cycles, self.cpu.cycles, eip))
                     else:
                         current_cycle = self.cpu_map[use_cell].cycles
-                        self.lgr.debug('reverseMgr skipToCycle did restore origin and run forward to cycle 0x%x  cycle now 0x%x on our cell, different cell %s cycle 0x%x' % (object_cycles, self.cpu.cycles, current_cycles, use_cell))
+                        self.lgr.debug('reverseMgr skipToCycle did restore origin Now run forward to cycle 0x%x  cycle now 0x%x on our cell, different cell %s cycle 0x%x' % (object_cycles, self.cpu.cycles, current_cycles, use_cell))
                     self.runToCycle(object_cycles, use_cell=use_cell)
                 elif recorded == self.cpu.cycles and use_cell is None:
                     self.runToCycle(object_cycles, use_cell=use_cell)
@@ -837,7 +842,10 @@ class ReverseMgr():
         if self.top is not None:
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, self.cpu.cycles, eip, instruct[1]))
+            if memory.logical_address == 0 and memory.physical_address is not None:
+                self.lgr.debug('reverseMgr breakCallback break num %d phys memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.physical_address, self.cpu.cycles, eip, instruct[1]))
+            else:
+                self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, self.cpu.cycles, eip, instruct[1]))
         object_cycles = None 
         object_cell = the_obj.name.split('.')[0]
         if object_cell != self.our_cell:
@@ -1045,6 +1053,8 @@ class ReverseMgr():
     def skipToOrigin(self):
         self.lgr.debug('reverseMgr skipToOrigin')
         self.restoreSnapshot('origin')
+        if self.oldSimics():
+            self.latest_span_end = None
 
     def reverseTo(self, cycle):
         '''
