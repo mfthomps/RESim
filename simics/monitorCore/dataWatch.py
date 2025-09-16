@@ -2246,7 +2246,7 @@ class DataWatch():
             cell = self.top.getCell()
             ''' use massive if block to get parameters. ''' 
             skip_fun = self.gatherCallParams(sp, eip, word_size, data_hit)
-            self.lgr.debug('dataWatch getMemParams, back from gather')
+            self.lgr.debug('dataWatch getMemParams, back from gather, skip_fun: %r' % skip_fun)
 
             if data_hit: 
                 ''' Assume we have disabled debugging in context manager while fussing with parameters. '''
@@ -2459,8 +2459,9 @@ class DataWatch():
                 #self.lgr.debug('gatherCallParams memcpy-ish dest 0x%x  src 0x%x count 0x%x' % (param_dest, param_src, 
                 #    param_length))
 
-            ''' recalculate buf_start and buf_length per new param_length '''
-            skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
+            if not skip_fun:
+                ''' recalculate buf_start and buf_length per new param_length '''
+                skip_fun = self.bufferWithinBuffer(param_src, param_length, param_dest, orig_param_length)
         return skip_fun
 
     def bufferWithinBuffer(self, param_src, param_length, param_dest, orig_param_length):
