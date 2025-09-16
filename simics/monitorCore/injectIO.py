@@ -43,9 +43,10 @@ class InjectIO():
            coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
            count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
+        self.lgr = None
         if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
-            lgr.error('injectIO called with target_prog but not targetFD')
-            return
+            lgr.debug('injectIO called with target_prog but not targetFD')
+            #return
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -203,6 +204,8 @@ class InjectIO():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        if self.lgr is None:
+            self.top.quit() 
         self.lgr.debug('injectIO go')
         if self.addr is None:
             return
@@ -509,7 +512,7 @@ class InjectIO():
         if self.malloc:
             self.top.traceMalloc()
         if self.mark_logs:
-            self.lgr.debug('injectIO call traceAll for mark_logs')
+            self.lgr.debug('injectIO injectCallback call traceAll for mark_logs')
             self.top.traceAll()
             if self.trace_fd is not None:
                 self.top.traceFD(self.trace_fd, raw=True)
@@ -520,6 +523,7 @@ class InjectIO():
             elif self.targetFD is not None:
                 self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs, callback=self.callback)
             else:
+                self.lgr.debug('injectIO injectCallback not targetFD...')
                 # just want to debug the target
                 pass
 
