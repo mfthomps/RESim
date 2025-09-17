@@ -951,15 +951,24 @@ class reverseToCall():
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
                             if (mn.startswith('ldr') or mn.startswith('ldu')) and op1.startswith('['):
                                 self.lgr.debug('is ldr op1 is %s' % op1)
-                                addr = decodeArm.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
                                     addr = addr + self.offset
                                     self.lgr.debug('cycleRegisterMod, set as addr type for addr 0x%x reflects offset %s' % (addr, self.offset))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
+                            elif self.cpu.architecture == 'ppc32' and mn.startswith('l'):
+                                # TBD incomplete by a mile
+                                self.lgr.debug('cycleRegisterMod is ppc l op1 is %s' % op1)
+                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                if addr is not None:
+                                    retval = RegisterModType(addr, RegisterModType.ADDR)
+                                else:
+                                    self.lgr.debug('cycleRegisterMod failed to get addr from %s' % op1)
+                                
                             elif mn.startswith('mov') and '[' in op1:
                                 self.lgr.debug('is mov op1 is %s' % op1)
-                                addr = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
                                     addr = addr + self.offset
@@ -976,7 +985,7 @@ class reverseToCall():
                                 retval = RegisterModType(op1, RegisterModType.REG)
                             elif mn == 'lea':
                                 self.lgr.debug('cycleRegisterMod is lea %s' % instruct[1])
-                                lea_reg = decode.adjustRegInBrackets(op1, self.lgr)
+                                lea_reg = self.decode.adjustRegInBrackets(op1, self.lgr)
                                 if lea_reg is not None: 
                                     self.lgr.debug('cycleRegisterMod lea is constant adjust, new reg %s' % lea_reg)
                                     if lea_reg == self.reg:
@@ -1017,7 +1026,15 @@ class reverseToCall():
                                     # assume constant 
                                     self.lgr.debug('cycleRegisterMod, constant adjust to %s, keep going' % op0)
                                     done = False 
-                                    
+                            elif self.cpu.architecture == 'ppc32' and (mn.startswith('rl') or mn.startswith('rr')):
+                                src_reg = op1.split(',')[0].strip()
+                                if mn.endswith('mi'):
+                                    self.lgr.debug('cycleRegisterMod ppc rotate mask src reg is %s but we are guessing the meat of the result is the target register because zero bit positions cause r0 bits to be unchanged, so ignore' % src_reg)
+                                    done = False 
+                                else:
+                                    # TBD taint branch.  src is masked with 
+                                    retval = RegisterModType(src_reg, RegisterModType.REG)
+                                    self.lgr.debug('cycleRegisterMod ppc rotate mask src reg is %s' % src_reg)
                                 
                     elif self.cpu.architecture.startswith('arm'):
                         if ']!' in instruct[1]:
@@ -1133,7 +1150,7 @@ class reverseToCall():
                         return True
         return False
             
-    def followTaintArm(self, reg_mod_type):
+    def followTaintArmPpc(self, reg_mod_type):
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('followTaintArm %s' % instruct[1])
@@ -1160,8 +1177,8 @@ class reverseToCall():
                 self.cleanup(None)
                  
     def followTaint(self, reg_mod_type):
-        if self.cpu.architecture.startswith('arm'):
-            self.followTaintArm(reg_mod_type)
+        if self.cpu.architecture.startswith('arm') or self.cpu.architecture == 'ppc32':
+            self.followTaintArmPpc(reg_mod_type)
         else:
             self.followTaintX86(reg_mod_type)
 
@@ -1251,7 +1268,7 @@ class reverseToCall():
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
 
         #elif mn == 'lea':
-        #    address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+        #    address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
 
         else:
             self.lgr.debug('followTaintX86, see if %s is an address' % op1)
