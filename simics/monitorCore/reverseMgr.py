@@ -744,6 +744,7 @@ class ReverseMgr():
             latest_cycle = sorted_list[-1]
             latest_bp = self.break_cycles[latest_cycle].bp
             self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_bp))
+
             SIM_run_alone(self.skipAndCallback, latest_cycle)
         self.was_at_reverse_point = False
 
@@ -934,7 +935,7 @@ class ReverseMgr():
         if bp is not None:
             if bp in self.sim_breakpoints:
                 self.sim_breakpoints.remove(bp)
-                self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_brekpoints' % bp)
+                self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_breakpoints' % bp)
                 if bp in self.bp_list:
                     self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from bp_list' % bp)
                     self.bp_list.remove(bp)
