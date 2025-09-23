@@ -166,28 +166,31 @@ class DataWatch():
             self.decode = decode
         self.readLib = readLibTrack.ReadLibTrack(cpu, self.mem_utils, 
                   self.context_manager, self, self.top, self.lgr)
-        ''' ignore modify of ad-hoc buffer for same cycle '''
+        # ignore modify of ad-hoc buffer for same cycle '''
         self.move_cycle = 0
         self.move_cycle_max = 0
         self.fun_mgr = None
-        ''' optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
+        # optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
         self.mem_fun_entries = {}
         self.added_mem_fun_entry = False
 
-        ''' limit number of marks gathered '''
+        # limit number of marks gathered '''
         self.max_marks = 2000
         self.resetState()
 
-        ''' hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
+        # hack to ignore reuse of fgets buffers if reading stuff we don't care about '''
         self.recent_fgets = None
         self.recent_reused_index=None
-        ''' control trace of malloc calls, e.g., within xml parsing '''
+        # control trace of malloc calls, e.g., within xml parsing '''
         self.me_trace_malloc = False
+        # control track of malloc calls when directed by user
+        self.track_malloc = False
+         
 
         self.save_cycle = None
         #self.loadFunEntryPickle(run_from_snap)
 
-        ''' ring buffers for characters copied via char_ring_functions '''
+        # ring buffers for characters copied via char_ring_functions '''
         self.ring_char_entry = {}
         self.ring_char_hap = {}
         self.append_char_returns = None
@@ -210,14 +213,18 @@ class DataWatch():
 
     def resetState(self):
         self.lgr.debug('resetState')
+        # watched buffer starts.  start and length are lists with common index.  Entries are not removed, they are set to None.
         self.start = []
         self.length = []
         self.hack_reuse = []
         self.cycle = []
         self.mark = []
         self.read_hap = []
+        # tracking accesses across processes
         self.range_cr3 = []
+        # watched buffers have breakpoints on physical memory
         self.phys_start = []
+        # unless not yet mapped.
         self.linear_breaks = []
         self.show_cmp = False
         self.break_simulation = True
@@ -5140,7 +5147,7 @@ class DataWatch():
                     self.stopWatch()
                     self.watch()
                 else:
-                    self.lgr.debug('dataWatch subRange, do not remove, no overlap, start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
+                    #self.lgr.debug('dataWatch subRange, do not remove, no overlap, start 0x%x end 0x%x  addr 0x%x trans_size 0x%x' % (start, end, addr, trans_size))
                     pass
             else:
                 self.lgr.debug('dataWatch rmSubRange found index %d was recent reused index, do not delete subrange.' % index)
@@ -5225,7 +5232,7 @@ class DataWatch():
             ret_end = min(end1, end2)
             ret_length = ret_end - ret_start + 1
         else:
-            self.lgr.debug('dataWatch getIntersect no overlap in start1 0x%x length1 %d start2 0x%x length2 %d' % (start1, length1, start2, length2))
+            #self.lgr.debug('dataWatch getIntersect no overlap in start1 0x%x length1 %d start2 0x%x length2 %d' % (start1, length1, start2, length2))
             pass
  
         return ret_start, ret_length
@@ -5565,10 +5572,14 @@ class DataWatch():
         return self.watchMarks.nextWatchMark()
 
     def recordMalloc(self, addr, size):
-        if self.me_trace_malloc:
-            self.malloc_dict[addr] = size
-        else:
+        if self.track_malloc:
             self.watchMarks.malloc(addr, size)
+            self.setRange(addr, size, 'trackMalloc')
+        else:
+            if self.me_trace_malloc:
+                self.malloc_dict[addr] = size
+            else:
+                self.watchMarks.malloc(addr, size)
 
     def recordFree(self, addr, fun=None):
         if self.me_trace_malloc:
@@ -6401,4 +6412,6 @@ class DataWatch():
     def noReset(self):
         self.no_reset = True
 
-
+    def trackMalloc(self):
+        self.lgr.debug('dataWatch trackMalloc') 
+        self.track_malloc = True
