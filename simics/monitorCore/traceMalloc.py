@@ -42,15 +42,17 @@ class TraceMalloc():
                 free_fun_addr = self.fun_mgr.getFunEntry('free')
                 free_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, free_fun_addr, 1, 0)
                 self.free_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.freeHap, None, free_break, 'free')
-                #self.lgr.debug('TraceMalloc setBreaks on malloc 0x%x and free 0x%x' % (malloc_fun_addr, free_fun_addr))
+                self.lgr.debug('TraceMalloc setBreaks on malloc 0x%x and free 0x%x' % (malloc_fun_addr, free_fun_addr))
 
             else:
                 self.lgr.error('TraceMalloc, address of malloc not found in idaFuns')
+        else:
+            self.lgr.debug('TraceMalloc no fun_mgr')
 
     def mallocHap(self, dumb, context, break_num, memory):
         if self.malloc_hap is not None:
             cpu, comm, tid = self.task_utils.curThread() 
-            #self.lgr.debug('TraceMalloc mallocHap tid:%s' % tid)
+            self.lgr.debug('TraceMalloc mallocHap tid:%s' % tid)
             if cpu.architecture == 'arm':
                 size = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc size %d' % size)
@@ -58,6 +60,11 @@ class TraceMalloc():
             elif cpu.architecture == 'arm64':
                 size = self.mem_utils.getRegValue(self.cpu, 'x0') 
                 #self.lgr.debug('malloc size %d' % size)
+                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
+            elif cpu.architecture == 'ppc32':
+                size = self.mem_utils.getRegValue(self.cpu, 'r3') 
+                self.lgr.debug('malloc size %d' % size)
+                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
             else:
                 sp = self.mem_utils.getRegValue(self.cpu, 'sp')
                 ret_addr = self.mem_utils.readPtr(self.cpu, sp)
@@ -67,8 +74,8 @@ class TraceMalloc():
                 malloc_rec = self.MallocRec(tid, size, cpu.cycles)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
-            #else:
-            #    self.lgr.debug('TraceMalloc mallocHap ret_addr 0x%x is CLIB, skip it cycle 0x%x' % (ret_addr, self.cpu.cycles))
+            else:
+                self.lgr.debug('TraceMalloc mallocHap ret_addr 0x%x is CLIB, skip it cycle 0x%x' % (ret_addr, self.cpu.cycles))
 
     def freeHap(self, dumb, context, break_num, memory):
         if self.free_hap is not None:
@@ -94,13 +101,16 @@ class TraceMalloc():
     def mallocEndHap(self, malloc_rec, context, break_num, memory):
         if self.malloc_hap_ret is not None:
             cpu, comm, tid = self.task_utils.curThread() 
-            #self.lgr.debug('TraceMalloc mallocEndHap tid:%s cycle 0x%x' % (tid, self.cpu.cycles))
+            self.lgr.debug('TraceMalloc mallocEndHap tid:%s cycle 0x%x' % (tid, self.cpu.cycles))
             if cpu.architecture == 'arm':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
-            elif cpu.architecture == 'arm':
+            elif cpu.architecture == 'arm64':
                 addr = self.mem_utils.getRegValue(self.cpu, 'x0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
+            elif cpu.architecture == 'ppc32':
+                addr = self.mem_utils.getRegValue(self.cpu, 'r3') 
+                self.lgr.debug('TraceMalloc mallocEndHap addr 0x%x' % addr)
             else:
                 addr = self.mem_utils.getRegValue(self.cpu, 'eax') 
                 #self.lgr.debug('TraceMalloc mallocEndHap addr 0x%x, size: %d' % (addr, malloc_rec.size))
@@ -112,4 +122,4 @@ class TraceMalloc():
 
     def showList(self):
         for rec in self.malloc_list:
-            print('%4d \t0x%x\t%d' % (rec.tid, rec.addr, rec.size))
+            print('%4s \t0x%x\t%d' % (rec.tid, rec.addr, rec.size))
