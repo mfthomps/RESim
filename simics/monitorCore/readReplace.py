@@ -278,7 +278,8 @@ class ReadReplace():
                 self.lgr.debug('readReplace readHap IS WRITE transaction value is 0x%x, replace that with 0x%x' % (new_value, our_value))
                 memUtils.setMemoryValue(self.cpu, memory, our_value)
                 mod_addr = replace_entry.linear_addr
-                SIM_run_alone(self.top.clearBookmarks, None)
+                #SIM_run_alone(self.top.clearBookmarks, None)
+                SIM_run_alone(self.top.resetOrigin, None)
             else:
                 mod_addr = self.doReplace(replace_entry, prog)
 
