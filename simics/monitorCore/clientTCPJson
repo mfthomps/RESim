@@ -15,7 +15,10 @@ import logging.handlers
 import argparse
 import json
 def getCookie(data, lgr):
-    offset = data.index(b'set-cookie:') + len('set-cookie:')
+    try:
+        offset = data.index(b'set-cookie:') + len('set-cookie:')
+    except:
+        offset = data.index(b'Set-Cookie:') + len('set-cookie:')
     rest = data[offset:]
     lgr.debug('rest is %s' % rest)
     auth = rest.split(b'=', 1)[1]
@@ -23,6 +26,26 @@ def getCookie(data, lgr):
     cookie = auth.split(b';')[0]
     lgr.debug('data set cookie %s' % cookie)
     return cookie
+
+def getToken(data, token, lgr):
+    offset = data.index(token) + len(token) 
+    rest = data[offset:]
+    lgr.debug('rest is %s' % rest)
+    if rest.endswith(','):
+        rest = rest[-1]
+    retval = rest.replace('"', '')
+    lgr.debug('getToken returning %s' % rest)
+    return retval
+
+def sockConnect(sock, server_addr, lgr):
+    while True:
+        try:
+            sock.connect(server_addr)
+            lgr.debug('connect ok')
+            break
+        except(socket.error) as e:
+            lgr.debug('connect fail %s' % e)
+            time.sleep(1)
 
 def sendTCP(lgr):
     with open('/tmp/catchme.json', 'r') as fh:
@@ -36,16 +59,9 @@ def sendTCP(lgr):
         data = jdict['data'] 
     
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
         server_addr = (host, port)
-        while True:
-            try:
-                sock.connect(server_addr)
-                lgr.debug('connect ok')
-                break
-            except(socket.error) as e:
-                lgr.debug('connect fail %s' % e)
-                time.sleep(1)
+        print('try connect host %s port %d' % (host, port))
+        sockConnect(sock, server_addr, lgr)
         #TBD REMOVE/FIX
         delim = b"\r\n\r\n"
         cookie = None
@@ -62,11 +78,19 @@ def sendTCP(lgr):
                 if item is None:
                     lgr.debug('Got none from data iterator, break')
                     break
-                item_hex = eval(item)
-                item_bytes = binascii.unhexlify(item_hex)
+                #item_hex = eval(item)
+                item_bytes = item.encode()
+                item_bytes = binascii.unhexlify(item_bytes)
             else:
                 get_next = True
-            if cookie is not None: 
+            lgr.debug('Next item to send %s' % item_bytes.decode())
+            disconnect = False
+            if b'RESIM_DISCONNECT' in item_bytes:
+                disconnect = True
+                nothing = bytes(0)
+                item_bytes = item_bytes.replace(b'RESIM_DISCONNECT', nothing)
+                
+            elif cookie is not None: 
                 if b'Cookie:' in item_bytes:
                     lgr.debug('item has a cookie')
                     if b'RESIM_COOKIE' in item_bytes:
@@ -87,8 +111,11 @@ def sendTCP(lgr):
             count = 0
             while not done:
                 got = sock.recv(1024)
-                lgr.debug('got len %d' % (len(got)))
-                if b'set-cookie:' in got:
+                lgr.debug('received len %d' % (len(got)))
+                got_str = got.decode()
+                lgr.debug(got_str)
+                if 'set-cookie' in got_str.lower(): 
+                    lgr.debug('sees set-cookie')
                     cookie = getCookie(got, lgr)
                 if len(got) == 1024:
                     # dangerous assumption
@@ -101,6 +128,12 @@ def sendTCP(lgr):
                     count = count+1
                     if count > 10:
                         break
+            if disconnect:
+                lgr.debug('Saw disconnect, will reconnect after a close')
+                sock.close()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                time.sleep(.5)
+                sockConnect(sock, server_addr, lgr)
         if hang:
                 lgr.debug('hanging as directed')
                 time.sleep(1000000)
@@ -121,6 +154,7 @@ def createNewJson(host, port, infile, hang, lgr):
             jdict['data']=tcp_json
     with open('/tmp/catchme.json', 'w') as fh:
         fh.write(json.dumps(jdict))
+    print('did createNewJson')
 
     
 def main():
