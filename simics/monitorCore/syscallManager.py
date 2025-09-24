@@ -233,6 +233,8 @@ class SyscallManager():
             # NOTE may return default context
             context = self.getDebugContextName()
             self.lgr.debug('syscallManager watchSyscall given context was none, now set to %s' % context)
+        else:
+            self.lgr.debug('syscallManager watchSyscall given context is %s' % context)
 
         cell = self.context_manager.getCellFromContext(context)
 
@@ -342,7 +344,7 @@ class SyscallManager():
                     self.lgr.debug('syscallManager deleted syscall instance for syscall name %s, will replace with %s.  The syscall_dict[context] now has %d items' % (call_instance.syscall.name, name, len(self.syscall_dict[context])))
 
                 ''' TBD what about flist and stop action?'''
-                self.lgr.debug('syscallManager did consolidate, new_call_list is %s old_call_params len %d' % (str(new_call_list), len(old_call_params)))
+                self.lgr.debug('syscallManager did consolidate, new_call_list is %s old_call_params len %d context %s' % (str(new_call_list), len(old_call_params), context))
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
@@ -368,7 +370,7 @@ class SyscallManager():
                         self.lgr.debug('syscallManager watchSyscall old_call_param %s not in existing_param_call_list?' % param.name)
                    
                 self.syscall_dict[context][name] = new_call_instance
-                self.lgr.debug('syscallManager watchSyscall replaced old syscall, call_list and params for call instance %s syscall name %s' % (new_call_instance.name, 
+                self.lgr.debug('syscallManager watchSyscall replaced old syscall, context: %s call_list and params for call instance %s syscall name %s' % (context, new_call_instance.name, 
                    name))
  
         return retval

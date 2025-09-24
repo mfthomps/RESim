@@ -42,7 +42,7 @@ class InjectIO():
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
            coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None):
         self.lgr = None
         if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
             lgr.debug('injectIO called with target_prog but not targetFD')
@@ -177,6 +177,15 @@ class InjectIO():
         self.reset_debug = reset_debug
         self.src_addr = src_addr
         self.malloc = malloc
+        if track_malloc:
+            self.lgr.debug('injectIO track malloc')
+            self.malloc = True
+            self.dataWatch.trackMalloc()
+        if self.target_fname is None:
+            self.manual_watch = self.top.getCompDict(self.cell_name, 'MANUAL_WATCH')
+            if self.manual_watch is not None and not os.path.isfile(self.manual_watch):
+                self.lgr.error('dataWatch manual_watch file %s not found.' % self.manual_watch)
+                self.manual_watch = None
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -398,6 +407,8 @@ class InjectIO():
                                 if self.dataWatch is not None:
                                     self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                                     self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
+                        if self.manual_watch is not None:
+                            self.manualWatch()
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -521,6 +532,10 @@ class InjectIO():
             if self.save_json is not None:
                 self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
             elif self.targetFD is not None:
+                self.manual_watch = self.top.getCompDict(self.target_cell, 'MANUAL_WATCH')
+                if self.manual_watch is not None and not os.path.isfile(self.manual_watch):
+                    self.lgr.error('dataWatch manual_watch file %s not found.' % self.manual_watch)
+                    self.manual_watch = None
                 self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs, callback=self.callback)
             else:
                 self.lgr.debug('injectIO injectCallback not targetFD...')
@@ -703,3 +718,26 @@ class InjectIO():
                 self.lgr.debug('injectIO checkBreakOn adjusted break_on to be 0x%x' % self.break_on)
         self.lgr.debug('injectIO checkBreakOn done, break_on is now 0x%x' % self.break_on)
         return retval
+
+    def manualWatch(self):
+        with open(self.manual_watch) as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                try:
+                    prog, start_string, length_string = line.split()
+                except:
+                    self.lgr.error('dataWatch manualWatch bad line %s' % line)
+                    return
+                if self.target_fname is None:
+                    tid = self.top.getTID()
+                    target_prog = self.so_map.getProg(tid)
+                else:
+                    target_prog = self.target_fname
+                if target_prog.endswith(prog):
+                    self.lgr.debug('dataWatch manualWatch load watches for %s' % prog)
+                    start = int(start_string, 16) 
+                    length = int(length_string, 16) 
+                    self.dataWatch.setRange(start, length, 'manualWatch', backstop=False)
+                    

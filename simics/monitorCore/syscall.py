@@ -585,6 +585,8 @@ class Syscall():
 
         # Determine when to stop tracing due to a close FD for trackIO
         self.clone_fd_count = 1
+        dumb, dumb2, this_tid = self.task_utils.curThread() 
+        self.fd_tid = this_tid
 
         self.no_exit_maze = False
 
@@ -610,7 +612,7 @@ class Syscall():
         break_addrs = []
         self.timeofday_count = {}
         self.timeofday_start_cycle = {}
-        self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r current context %s' % (self.cell_name, compat32, self.cpu.current_context))
+        self.lgr.debug('syscall cell_name %s doBreaks.  compat32: %r current context %s cell: %s' % (self.cell_name, compat32, self.cpu.current_context, self.cell))
         if self.call_list is None:
             ''' trace all calls '''
             self.syscall_info = SyscallInfo(self.cpu, None,  False, self.trace)
@@ -725,7 +727,7 @@ class Syscall():
                 dc = self.context_manager.getDefaultContext()
                 self.background_break = SIM_breakpoint(dc, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                 self.background_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, None, self.background_break)
-                self.lgr.debug('Syscall setComputeBreaks doBreaks set background breaks at 0x%x callnum %s break 0x%x' % (entry, callnum, self.background_break))
+                #self.lgr.debug('Syscall setComputeBreaks doBreaks set background breaks at 0x%x callnum %s break 0x%x' % (entry, callnum, self.background_break))
         
     def frameFromStackSyscall(self):
         reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
@@ -1598,10 +1600,17 @@ class Syscall():
                  socket_callname, tid, comm, self.fd, level, optname, optval, optlen, optval_val)
         elif socket_callname == 'socketpair':
             if callname == 'socketcall':
-                exit_info.retval_addr = self.mem_utils.readWord32(self.cpu, frame['param4'])
+                domain = self.mem_utils.readWord32(self.cpu, frame['param2'])
+                sock_type = self.mem_utils.readWord32(self.cpu, frame['param2']+4)
+                protocol = self.mem_utils.readWord32(self.cpu, frame['param2']+8)
+                exit_info.retval_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+12)
             else:
+                domain = frame['param1']
+                socK_type = frame['param2']
+                protocol = frame['param3']
                 exit_info.retval_addr = frame['param4']
-            ida_msg = '%s - %s %s tid:%s (%s) ' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid, comm)
+            ida_msg = '%s - %s %s tid:%s (%s) domain: 0x%x type: 0x%x protocol: 0x%x sv addr 0x%x' % (callname, 
+               socket_callname, taskUtils.stringFromFrame(frame), tid, comm, domain, sock_type, protocol, exit_info.retval_addr)
             
         else:
             ida_msg = '%s - %s %s   tid:%s (%s)' % (callname, socket_callname, taskUtils.stringFromFrame(frame), tid, comm)
@@ -1788,11 +1797,14 @@ class Syscall():
                     exit_info.call_params.append(call_param)
                     if not self.linger or self.name=='runToIO':
                         if self.clone_fd_count <= 1:
-                            self.lgr.debug('closed fd %d, stop trace' % fd)
-                            self.stopTrace()
+                            if self.fd_tid is None or tid == self.fd_tid:
+                                self.lgr.debug('syscall closed fd %d, stop trace' % fd)
+                                self.stopTrace()
                         else:
-                            self.lgr.debug('closed fd %d, but clone_fd_count not yet 1 %d' % (fd, self.clone_fd_count))
+                            self.lgr.debug('syscall closed fd %d, but clone_fd_count not yet 1 %d' % (fd, self.clone_fd_count))
                             self.clone_fd_count -= 1
+                            if self.fd_tid is not None and tid == self.fd_tid:
+                                self.fd_tid = None 
                 elif call_param.match_param.__class__.__name__ == 'Dmod': 
                     has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
                     if has_fd_open:
@@ -2684,7 +2696,7 @@ class Syscall():
         self.comm_cache[tid] = comm
         if self.linger:
             if cpu.cycles in self.linger_cycles:
-                #self.lgr.debug('syscalHap for lingering call we already made.')
+                #self.lgr.debug('syscallHap for lingering call we already made.')
                 return
             else:
                 self.linger_cycles.append(cpu.cycles)
