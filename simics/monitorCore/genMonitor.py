@@ -2760,6 +2760,7 @@ class GenMonitor():
                 #    return
                 self.lgr.debug('rev1 result from skip to 0x%x  is %s cycle now 0x%x' % (new_cycle, result, cpu.cycles))
                 self.skipAndMail()
+                SIM_run_command('disassemble')
             else:
                 self.lgr.debug('rev1, already at first cycle 0x%x' % new_cycle)
                 self.skipAndMail()
@@ -2789,6 +2790,7 @@ class GenMonitor():
         self.reverseToCallInstruction(True)
 
     def revToWrite(self, addr):
+        ''' reverse until a write to given address '''
         self.stopAtKernelWrite(addr)
 
     def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False):
