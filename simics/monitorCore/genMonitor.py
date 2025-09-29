@@ -654,7 +654,7 @@ class GenMonitor():
             new_mode = 'user'
         else:
             new_mode = 'hypervisor'
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
         phys = self.mem_utils[self.target].v2p(cpu, eip)
         callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
         self.lgr.debug('modeChangeReport new mode: %s get phys of eip: 0x%x eax: 0x%x tid:%s cycle: 0x%x' % (new_mode, eip, callnum, this_tid, cpu.cycles))
@@ -668,6 +668,10 @@ class GenMonitor():
                     reason = "sysret64"
                 elif eip == self.param[self.target].sysexit:
                     reason = "sysexit"
+                elif eip == self.param[self.target].ppc32_ret:
+                    reason = "ppc32_ret"
+                elif eip == self.param[self.target].ppc32_ret2:
+                    reason = "ppc32_ret2"
                 self.lgr.debug('modeChangeReport returned to user from eip 0x%x %s reason: %s' % (eip, instruct[1], reason))
             elif new_mode == 'kernel':
                 self.lgr.debug('modeChangeReport entering kernel from eip 0x%x %s ' % (eip, instruct[1]))
@@ -678,7 +682,7 @@ class GenMonitor():
             self.lgr.debug('modeChangeReport new mode: %s  eip 0x%x eax 0x%x  Failed getting phys for eip' % (new_mode, eip, callnum))
 
 
-        SIM_break_simulation('mode changed')
+        #SIM_break_simulation('mode changed')
 
     def modeChanged(self, tid_list, one, old, new):
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -4575,7 +4579,7 @@ class GenMonitor():
             for tid in plist:
                 print(tid)
         
-    def reportMode(self):
+    def reportMode(self, stop=True):
         self.rmDebugWarnHap()
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         if tid is None:
@@ -4583,7 +4587,8 @@ class GenMonitor():
         
         self.lgr.debug('reportMode for tid:%s' % tid)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, tid)
-        self.stop_hap = self.RES_add_stop_callback(self.stopModeChanged, None)
+        if stop:
+            self.stop_hap = self.RES_add_stop_callback(self.stopModeChanged, None)
 
     def setTarget(self, target):
         if target not in self.cell_config.cell_context:
@@ -5462,7 +5467,7 @@ class GenMonitor():
         self.afl(n=-1, sor=sor, fname=fname, port=port, dead=dead)
 
     def afl(self,n=1, sor=False, fname=None, linear=False, target=None, targetFD=None, count=1, dead=None, port=8765, 
-            one_done=False, test_file=None, commence_params=None, primer=None):
+            one_done=False, test_file=None, commence_params=None, primer=None, repeat=1):
         ''' sor is stop on read; target names process other than consumer; if dead is True,it 
             generates list of breakpoints to later ignore because they are hit by some other thread over and over. Stored in checkpoint.dead.
             fname is to fuzz a library'''
@@ -5498,7 +5503,7 @@ class GenMonitor():
         self.afl_instance = afl.AFL(self, this_cpu, cell_name, self.coverage, self.back_stop[target_cell], self.mem_utils[self.target], 
             self.run_from_snap, self.context_manager[target_cell], self.page_faults[target_cell], self.lgr, packet_count=n, stop_on_read=sor, fname=full_path, 
             linear=linear, target_cell=target_cell, target_proc=target_proc, targetFD=targetFD, count=count, create_dead_zone=dead, port=port, 
-            one_done=one_done, test_file=test_file, commence_params=commence_params, primer=primer)
+            one_done=one_done, test_file=test_file, commence_params=commence_params, primer=primer, repeat=repeat)
         if target is None:
             self.noWatchSysEnter()
             self.afl_instance.goN(0)
@@ -7122,6 +7127,9 @@ class GenMonitor():
         else:
             self.stepN(1)
 
+    def stopAFL(self):
+        if self.afl_instance is not None:
+            self.afl_instance.stopAll()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
