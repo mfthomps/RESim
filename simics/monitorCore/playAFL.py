@@ -274,6 +274,8 @@ class PlayAFL():
             self.top.resetOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback, not_to_user=False)
+        parts = cli.quiet_run_command('version')
+        self.version_string = parts[0][0][2]
         self.did_exit = False
 
     def ranToIO(self, dumb):
@@ -550,10 +552,14 @@ class PlayAFL():
             if self.commence_after_exits is not None:
                 self.coverage.disableAll()
             if self.dfile != 'oneplay' or self.repeat:
-                if not self.top.nativeReverse():
-                    self.top.restoreSnapshot('origin')
-                else:
-                    cli.quiet_run_command('restore-snapshot name=origin')
+                self.lgr.debug('playAFL goAlone call restoreOrigin')
+                self.restoreOrigin()
+                #if not self.top.nativeReverse():
+                #    self.lgr.debug('playAFL goAlone not native reverse, restore orign')
+                #    self.top.restoreSnapshot('origin')
+                #else:
+                #    self.lgr.debug('playAFL goAlone native reverse, restore orign')
+                #    cli.quiet_run_command('restore-snapshot name=origin')
             #VT_restore_snapshot('origin')
             if self.commence_after_exits is not None:
                 self.lgr.debug('playAFL goAlone set counter hap')
@@ -605,6 +611,7 @@ class PlayAFL():
             if self.afl_mode: 
                 if self.coverage is not None:
                     if self.repeat is False or self.repeat_counter > 1:
+                        self.lgr.debug('playAFL goAlone call watchExits')
                         self.coverage.watchExits(callback=self.reportExit, suspend_callback=self.reportSuspend, tid=self.target_tid)
                 else:
                     self.lgr.error('playAFL afl_mode but not coverage?')
@@ -614,8 +621,12 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
-            self.lgr.debug('playAFL goAlone call watch tasks target tid %s' % self.target_tid)
-            self.context_manager.watchTasks(tid=self.target_tid)
+            if not self.afl_mode:
+                self.lgr.debug('playAFL goAlone call watch tasks target tid %s' % self.target_tid)
+                self.context_manager.watchTasks(tid=self.target_tid)
+            elif not self.linear:
+                self.lgr.debug('playAFL goAlone afl mode and not linear, restore default context')
+                self.context_manager.restoreDefaultContext()
             #if self.stop_hap is None:
             #    self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
 
@@ -654,7 +665,7 @@ class PlayAFL():
             ''' did all sessions '''
             if self.coverage is not None and self.findbb is None and not self.afl_mode and not self.parallel and not os.path.isdir(self.dfile):
                 hits = self.coverage.getHitCount()
-                self.lgr.info('All sessions done, save %d all_hits as %s' % (len(self.all_hits), self.dfile))
+                self.lgr.info('All sessions done, save %d all_hits (quantity of unique blocks hit) as %s' % (len(self.all_hits), self.dfile))
                 hits_path = self.coverage.getHitsPath()
   
                 s = json.dumps(self.all_hits)
@@ -670,7 +681,9 @@ class PlayAFL():
                 except:
                     self.lgr.error('Failed creating %s.  Is the directory correct?' % save_name)
                     return
-                print('%d Hits file written to %s' % (len(self.all_hits), save_name))
+                delta = self.cpu.cycles = self.initial_cycle
+                print('%d hits in 0x%x cycles file written to %s' % (len(self.all_hits), delta, save_name))
+                self.lgr.debug('%d hits in 0x%x cycles file written to %s' % (len(self.all_hits), delta, save_name))
                 all_prev_hits_path = '%s.hits' % hits_path
                 if os.path.isfile(all_prev_hits_path):
                     all_prev_hits = json.load(open(all_prev_hits_path))
@@ -840,12 +853,15 @@ class PlayAFL():
                 self.all_hits.append(hit)
         if self.one_off:
             print('Hits list (for IDA) stored %d hits in /tmp/playAFL.hits' % len(self.all_hits))
+            self.lgr.debug('playAFL recordHits Hits list (for IDA) stored %d hits in /tmp/playAFL.hits' % len(self.all_hits))
             fname = '/tmp/playAFL.hits'
             with open(fname, 'w') as fh:
                 json.dump(self.all_hits, fh) 
         else:
             base = os.path.basename(fname)
-            print('%d hits in this play for %s.' % (len(hit_bbs), base))
+            delta = self.target_cpu.cycles - self.initial_cycle
+            print('%d unique bb addresses hit in 0x%x cycles for this play for %s.' % (len(hit_bbs), delta, base))
+            self.lgr.debug('playAFL recordHits %d unique bb addreeses hit in 0x%x cycles for this play for %s.' % (len(hit_bbs), delta, base))
         self.reportNewHits()
 
     def reportNewHits(self):
@@ -891,18 +907,23 @@ class PlayAFL():
         if self.stop_hap is not None:
             if self.coverage is not None:
                 num_packets = self.write_data.getCurrentPacket()
-                self.lgr.debug('playAFL stopHap index %d, got %d hits, %d packets cycles: 0x%x' % (self.index, self.coverage.getHitCount(), 
-                     num_packets, self.target_cpu.cycles))
+                hits = self.coverage.getHitCount()
+                if self.afl_mode:
+                    self.lgr.debug('playAFL stopHap index %d, %d unique blocks hit from coverage getHitCount ** by AFL accounting **, %d packets cycles: 0x%x' % (self.index, hits,
+                         num_packets, self.target_cpu.cycles))
+                else:
+                    self.lgr.debug('playAFL stopHap index %d, %d unique blocks hit from coverage getHitCount, %d packets cycles: 0x%x' % (self.index, hits,
+                         num_packets, self.target_cpu.cycles))
                 #self.backstop.checkEvent()
                 self.backstop.clearCycle()
-                hits = self.coverage.getHitCount()
                 if hits > self.hit_total:
                     delta = hits - self.hit_total
                     self.hit_total = hits 
-                    self.lgr.debug('Found %d new hits' % delta)
+                    self.lgr.debug('playAFL stpHap Found %d new hits' % delta)
+                # get dict of unique bb addresses hit
                 hit_bbs = self.coverage.getBlocksHit()
                 delta = self.target_cpu.cycles - self.initial_cycle
-                self.lgr.debug('playAFL stophap getBlocksHit returned %d hits over 0x%x cycles' % (len(hit_bbs), delta))
+                self.lgr.debug('playAFL stopHap getBlocksHit returned %d unique hits over 0x%x cycles' % (len(hit_bbs), delta))
                 if self.findbb is not None and self.index < len(self.afl_list):
                     self.lgr.debug('looking for bb 0x%x' % self.findbb)
                     if self.findbb in hit_bbs:
@@ -1068,3 +1089,13 @@ class PlayAFL():
             self.exit_eip = int(fh.readline(), 16) 
             self.target_tid = fh.readline()
             self.lgr.debug('afl loadCommenceParams loaded from %s' % self.commence_params)
+
+    def restoreOrigin(self):
+        self.lgr.debug('restoreOrigin')
+        if self.top.nativeReverse():
+            cli.quiet_run_command('restore-snapshot name=origin')
+        else:
+            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
+                cli.quiet_run_command('restore-snapshot name=origin')
+            else:
+                VT_take_restoreshot('origin')
