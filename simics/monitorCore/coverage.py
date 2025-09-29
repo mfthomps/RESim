@@ -788,7 +788,7 @@ class Coverage():
             self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
         tid = self.top.getTID(target=self.cell_name)
-        self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
 
         if (not self.linear or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
@@ -1568,17 +1568,17 @@ class Coverage():
             if adjusted_addr not in self.dead_list:
                 got_one = True
                 bp = self.setPhysBreak(addr)
-                self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                #self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
                 self.addr_map[bp] = bb
                 if prev_bp is not None and bp != (prev_bp+1):
-                    self.lgr.debug('coverage tableHap broken sequence set hap and update index')
+                    #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
                     SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
                     bb_index = len(self.bp_list)
                 self.bp_list.append(bp)                 
                 prev_bp = bp
                 self.did_missing.append(bb)
                 self.did_missing_break.append(bp)
-                self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
+                #self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
             else:
                 #self.lgr.debug('tableHap addr 0x%x in dead map, skip' % addr)
                 pass
