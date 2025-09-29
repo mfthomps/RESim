@@ -919,7 +919,7 @@ class PlayAFL():
                 if hits > self.hit_total:
                     delta = hits - self.hit_total
                     self.hit_total = hits 
-                    self.lgr.debug('playAFL stpHap Found %d new hits' % delta)
+                    self.lgr.debug('playAFL stopHap Found %d new hits' % delta)
                 # get dict of unique bb addresses hit
                 hit_bbs = self.coverage.getBlocksHit()
                 delta = self.target_cpu.cycles - self.initial_cycle
