@@ -63,6 +63,7 @@ from simics import *
 import os
 import cli
 import logging
+import resimSimicsUtils
 class ReverseMgr():
     '''
     Initialize the ReverseMgr.
@@ -840,13 +841,23 @@ class ReverseMgr():
         ''' 
         if len(self.break_haps) == 0:
             return
+        op_type = SIM_get_mem_op_type(memory)
+        if op_type in [Sim_Trans_Load, Sim_Trans_Store]:
+            break_after = True
+        else:
+            break_after = False
         if self.top is not None:
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            op_type = SIM_get_mem_op_type(memory)
+            op_type_string = resimSimicsUtils.transType(op_type)
+
             if memory.logical_address == 0 and memory.physical_address is not None:
-                self.lgr.debug('reverseMgr breakCallback break num %d phys memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.physical_address, self.cpu.cycles, eip, instruct[1]))
+                self.lgr.debug('reverseMgr breakCallback break num %d phys memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
+                        memory.physical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
             else:
-                self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s' % (the_break, memory.logical_address, self.cpu.cycles, eip, instruct[1]))
+                self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
+                        memory.logical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
         object_cycles = None 
         object_cell = the_obj.name.split('.')[0]
         if object_cell != self.our_cell:
@@ -854,7 +865,13 @@ class ReverseMgr():
                 self.lgr.error('reverseMgr breakCallback %s not in cpu map' % object_cell)
                 return
             object_cycles = self.cpu_map[object_cell].cycles
-        self.break_cycles[self.cpu.cycles] = self.BreakInfo(the_obj, the_break, memory, object_cycles=object_cycles)
+            if break_after:
+                object_cycles = object_cycles + 1
+        if break_after:
+            cpu_cycles = self.cpu.cycles+1
+        else:
+            cpu_cycles = self.cpu.cycles
+        self.break_cycles[cpu_cycles] = self.BreakInfo(the_obj, the_break, memory, object_cycles=object_cycles)
         if the_break in self.bp_cli_list:
             self.lgr.debug('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
             print('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
