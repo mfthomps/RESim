@@ -294,8 +294,8 @@ class Coverage():
                 if bp is not None:
                     did_breaks_at.append(bb_rel)
                     self.bp_list.append(bp)                 
-                    #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
-                    #   int(fun), bb, self.offset, bp))
+                    self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
+                       int(fun), bb, self.offset, bp))
                     if prev_bp is not None and bp != (prev_bp+1):
                         self.doHapRange(tmp_list)
                         tmp_list = []
@@ -512,7 +512,7 @@ class Coverage():
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
                         self.begin_tmp_hap = len(self.bb_hap)
-                        print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
+                        print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
                         #self.lgr.debug('coverage tableHap setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
                     prev_bp = None
                     got_one = False
@@ -609,7 +609,7 @@ class Coverage():
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
                         self.begin_tmp_hap = len(self.bb_hap)
-                        print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
+                        print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
                         self.lgr.debug('coverage pageBaseUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
                     prev_bp = None
                     got_one = False
@@ -1207,7 +1207,7 @@ class Coverage():
                     #for addr in self.dead_list:
                     #    self.lgr.debug('dead spot: 0x%x' % addr)
             elif dead_file is not None:
-                self.lgr.error('coverage missing dead_file %s' % dead_file)
+                self.lgr.debug('coverage no dead_file %s' % dead_file)
 
     def disableCoverage(self):
         self.lgr.debug('coverage disableCoverage')
@@ -1541,7 +1541,7 @@ class Coverage():
         if self.begin_tmp_bp is None:
             self.begin_tmp_bp = bb_index
             self.begin_tmp_hap = len(self.bb_hap)
-            print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
+            print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
             self.lgr.debug('coverage ptegUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
         prev_bp = None
         got_one = False
