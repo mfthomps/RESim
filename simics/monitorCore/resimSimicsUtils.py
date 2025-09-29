@@ -102,6 +102,11 @@ def disconnectServiceNode(name):
                         ok = True
                         break
                 break
+        #cmd = '%s.delete' % name
+        #print('did disconnect, now delete')
+        #dumb,result = cli.quiet_run_command(cmd)
+        #print('did delete')
+
 
 def serviceNodeConnected(name, lgr=None):
         retval = False
@@ -215,4 +220,18 @@ def setBreakpointSubstring(conf, bp, substring):
             conf.sim.attr.breakpoints[index][8] = substring
             break
         index = index + 1
+    return retval
+
+def transType(op_type):
+    retval = 'unknown'
+    if op_type == Sim_Trans_Load:
+        retval = 'load'
+    elif op_type == Sim_Trans_Store:
+        retval = 'store'
+    elif op_type == Sim_Trans_Instr_Fetch:
+        retval = 'instr_fetch'
+    elif op_type == Sim_Trans_Pefetch:
+        retval = 'instr_prefetch'
+    elif op_type == Sim_Trans_Cache:
+        retval = 'instr_cache'
     return retval
