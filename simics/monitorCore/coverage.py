@@ -43,6 +43,10 @@ Does not use the Context Manager for breakpoints
 Tracks a single code file at a time, e.g., main or a single so file.  TBD expand to include multiple blocks_hit dictionaries?
 
 Output files of hits use addresses from code file, i.e., not runtime addresses.
+
+When physical addresses are used, we must set breaks on page table structures when a basic block is not mapped.  We assume those
+structures are the same for all iterations.  Breakpoints on basic blocks that get dynamically mapped will be deleted on each iteration
+because we assume the physical address of such basic blocks may change due to code path variations.
 '''
 class Coverage():
     def __init__(self, top, prog_path, analysis_path, hits_path, context_manager, cell_name, so_map, mem_utils, cpu, run_from_snap, lgr):
