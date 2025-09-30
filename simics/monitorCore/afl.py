@@ -435,7 +435,7 @@ class AFL():
                 avg_cycles = self.total_cycles/100
                 now = time.time()
                 delta = 100/(now - self.tmp_time)
-                self.lgr.debug('afl finishUp average hits in last 100 iterations is %d avg cycles: 0x%x execs/sec: %.2f' % (avg, int(avg_cycles), delta))
+                #self.lgr.debug('afl finishUp average hits in last 100 iterations is %d avg cycles: 0x%x execs/sec: %.2f' % (avg, int(avg_cycles), delta))
                 self.total_hits = 0
                 self.total_cycles = 0
                 self.tmp_time = time.time()
@@ -444,7 +444,7 @@ class AFL():
                 #self.lgr.debug(dog)
                 #print(dog)
                 #self.top.showHaps()
-            self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
+            #self.lgr.debug('afl finishUp bitfile iteration %d cycle: 0x%x new_hits: %d delta cycles 0x%x' % (self.iteration, self.target_cpu.cycles, new_hits, delta_cycles))
             if self.create_dead_zone:
                 self.lgr.debug('afl finishUp, create dead zone so ignore status to avoid hangs.')
                 status = AFL_OK
@@ -592,7 +592,7 @@ class AFL():
         ''' Only applies to multi-packet UDP fu '''
         self.current_packet = 0
         self.bad_trick = False
-        self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
+        #self.lgr.debug('afl goN context is %s' % str(self.target_cpu.current_context))
         ''' If just starting, get data from afl, otherwise, was read from stopHap. '''
         if self.stop_hap is None:
             self.tmp_time = time.time()
@@ -617,7 +617,7 @@ class AFL():
             self.restoreOrigin()
         elif self.iteration > 1:
             self.coverage.disableAll()
-            self.lgr.debug('afl goN call restoreOrigin')
+            #self.lgr.debug('afl goN call restoreOrigin')
             self.restoreOrigin()
             self.coverage.enableAll()
         if not self.linear and self.context_manager.isDebugContext():
@@ -680,7 +680,7 @@ class AFL():
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()
-        self.lgr.debug('afl goN now continue current context %s cycle: 0x%x' % (str(self.cpu.current_context), self.cpu.cycles))
+        #self.lgr.debug('afl goN now continue current context %s cycle: 0x%x' % (str(self.cpu.current_context), self.cpu.cycles))
         #cli.quiet_run_command('c') 
         SIM_continue(0)
 
@@ -696,7 +696,7 @@ class AFL():
            self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
 
         count = self.write_data.write()
-        self.lgr.debug('afl doWriteData wrote %d bytes cycle: 0x%x' % (count, self.cpu.cycles))
+        #self.lgr.debug('afl doWriteData wrote %d bytes cycle: 0x%x' % (count, self.cpu.cycles))
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
                 #self.lgr.debug('afl set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
@@ -902,7 +902,7 @@ class AFL():
 
     # manage our own snapshotting so we do not overload reverseMgr.
     def restoreOrigin(self):
-        self.lgr.debug('restoreOrigin')
+        #self.lgr.debug('restoreOrigin')
         if self.top.nativeReverse():
             cli.quiet_run_command('restore-snapshot name=origin')
         else:

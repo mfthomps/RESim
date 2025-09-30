@@ -792,7 +792,7 @@ class Coverage():
             self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
         tid = self.top.getTID(target=self.cell_name)
-        self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
+        #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
 
         if (not self.linear or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
             #self.lgr.debug('phys %r  afl %r' % (self.physical, self.afl))
@@ -897,10 +897,10 @@ class Coverage():
     def getHitCount(self):
         ''' return the number of unique blocks hit '''
         if self.afl:
-            self.lgr.debug('coverage getHitCount is afl, return hit_count %d' % self.hit_count)
+            #self.lgr.debug('coverage getHitCount is afl, return hit_count %d' % self.hit_count)
             return self.hit_count;
         else:
-            self.lgr.debug('coverage getHitCount not afl, return len of blocks_hit %d' % len(self.blocks_hit))
+            #self.lgr.debug('coverage getHitCount not afl, return len of blocks_hit %d' % len(self.blocks_hit))
             return len(self.blocks_hit)
 
     def saveHits(self, fname):
@@ -1093,7 +1093,7 @@ class Coverage():
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
-            self.lgr.debug('coverage trace_bits array size %d clearing self.hit_count' % self.map_size)
+            #self.lgr.debug('coverage trace_bits array size %d clearing self.hit_count' % self.map_size)
             self.prev_loc = 0
             self.proc_status = 0
             self.hit_count = 0
@@ -1336,11 +1336,11 @@ class Coverage():
             SIM_enable_breakpoint(bp) 
         for addr in self.missing_breaks:
             SIM_enable_breakpoint(self.missing_breaks[addr])
-        self.lgr.debug('coverage enableAll enabled %d bb breaks and %d missing breaks' % (len(self.bp_list), len(self.missing_breaks)))
+        #self.lgr.debug('coverage enableAll enabled %d bb breaks and %d missing breaks' % (len(self.bp_list), len(self.missing_breaks)))
 
     def resetCoverage(self):
         self.funs_hit = []
-        self.lgr.debug('coverge resetCoverage %d in did_missing_break, clearing %d records from blocks_hit' % (len(self.did_missing_break), len(self.blocks_hit)))
+        #self.lgr.debug('coverge resetCoverage %d in did_missing_break, clearing %d records from blocks_hit' % (len(self.did_missing_break), len(self.blocks_hit)))
         self.blocks_hit = OrderedDict()
 
         # bp and haps added to bp_list as a result of paging
@@ -1350,15 +1350,15 @@ class Coverage():
         for hap in self.did_missing_hap:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
 
-        self.lgr.debug('resetCoverage, were %d breaks in bp_list and %d in original list and %d in did_missing' % (len(self.bp_list), len(self.orig_bp_list), len(self.did_missing)))
+        #self.lgr.debug('resetCoverage, were %d breaks in bp_list and %d in original list and %d in did_missing' % (len(self.bp_list), len(self.orig_bp_list), len(self.did_missing)))
         self.did_missing = []
         self.did_missing_break = []
         self.did_missing_hap = []
 
         self.bp_list = list(self.orig_bp_list)
         self.bb_hap = list(self.orig_bb_hap)
-        self.lgr.debug('resetCoverage %d missing_breaks %d missing_pages %d missing tables %d missing page bases' % (len(self.missing_breaks), len(self.missing_pages), len(self.missing_tables),
-               len(self.missing_page_bases)))
+        #self.lgr.debug('resetCoverage %d missing_breaks %d missing_pages %d missing tables %d missing page bases' % (len(self.missing_breaks), len(self.missing_pages), len(self.missing_tables),
+        #       len(self.missing_page_bases)))
         '''
         for addr in self.missing_breaks:
             bp = self.missing_breaks[addr]
@@ -1382,7 +1382,7 @@ class Coverage():
         #self.handleUnmapped() 
 
         if self.afl:
-            self.lgr.debug('resetCoverage resetting trace_bits')
+            #self.lgr.debug('resetCoverage resetting trace_bits')
             #self.trace_bits.__init__(self.map_size)
             self.trace_bits = bytearray(self.map_size)
         self.hit_count = 0
@@ -1545,8 +1545,9 @@ class Coverage():
         if self.begin_tmp_bp is None:
             self.begin_tmp_bp = bb_index
             self.begin_tmp_hap = len(self.bb_hap)
-            print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
-            self.lgr.debug('coverage ptegUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
+            if not self.afl:
+                print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
+                self.lgr.debug('coverage ptegUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
         prev_bp = None
         got_one = False
         got_missing = False
@@ -1572,17 +1573,17 @@ class Coverage():
             if adjusted_addr not in self.dead_list:
                 got_one = True
                 bp = self.setPhysBreak(addr)
-                self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                #self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
                 self.addr_map[bp] = bb
                 if prev_bp is not None and bp != (prev_bp+1):
-                    self.lgr.debug('coverage tableHap broken sequence set hap and update index')
+                    #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
                     SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
                     bb_index = len(self.bp_list)
                 self.bp_list.append(bp)                 
                 prev_bp = bp
                 self.did_missing.append(bb)
                 self.did_missing_break.append(bp)
-                self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
+                #self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
             else:
                 #self.lgr.debug('tableHap addr 0x%x in dead map, skip' % addr)
                 pass
