@@ -324,6 +324,10 @@ class StackTrace():
                 #if cur_fun is not None and ret_to is not None:
                 #    self.lgr.debug('isCallToMe eip: 0x%x (cur_fun 0x%x) lr 0x%x (ret_to fun 0x%x) ' % (eip, cur_fun, lr, ret_to))
                 #    pass
+                if cur_fun == ret_to and self.cpu.architecture == 'ppc32':
+                    lr = self.mem_utils.getRegValue(self.cpu, 'r0')
+                    ret_to = self.fun_mgr.getFun(lr)
+                    self.lgr.debug('stackTrace isCallToMe lr was current function, try r0 0x%x' % lr) 
                 if cur_fun != ret_to:
                     try:
                         instruct = SIM_disassemble_address(self.cpu, call_instr, 1, 0)
