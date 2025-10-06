@@ -562,7 +562,12 @@ class ReverseMgr():
         '''
         self.reverse_to =  reverse_to
         self.was_at_origin = False
+        # stop hap if native reverse and callback given
+        retval = None
         if self.nativeReverse():
+            if callback is not None:
+                retval = self.top.RES_add_stop_callback(callback, None)
+                
             if self.reverse_to is not None:
                 cmd = 'reverse-to cycle=0x%x' % self.reverse_to
                 self.lgr.debug('reverseMgr reverse is reverse_to, cmd %s' % cmd)
@@ -593,6 +598,7 @@ class ReverseMgr():
             else:
                 self.lgr.debug('reverseMgr reverse, bp list %s' % self.bp_list)
                 self.skipBackAndRunForward(True)
+        return retval
 
     def hasSnapFor(self, cycles):
         cycle_mark = 'cycle_%x' % cycles
