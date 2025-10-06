@@ -787,3 +787,23 @@ def isCall(cpu, instruct):
         return decodePPC32.isCall(cpu, instruct)
     else: 
         return decode.isCall(cpu, instruct)
+
+def parseScanfFormat(format_string):
+    """
+    Parses a sscanf-like format string and returns a list of inferred Python types.
+    This function handles common sscanf format specifiers like %d, %f, %s, %c, %x.
+    It does not handle width specifiers or more complex sscanf features.
+    """
+    type_list = ['d', 'i', 'u', 'f', 'e', 'g', 's','c', 'x', 'X']
+    retval = []
+    # Find all format specifiers (e.g., %d, %s, %f)
+    matches = re.findall(r'%(\w)', format_string)
+
+    for specifier in matches:
+        if specifier in type_list:
+            retval.append(specifier)
+        else:
+            # Handle unknown specifiers or provide a default (e.g., str)
+            retval.append('s') # Default to string for unknown specifiers
+    return retval
+
