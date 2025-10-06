@@ -1827,7 +1827,6 @@ class Syscall():
                         call_param.match_param = exit_info.new_fd
                         self.lgr.debug('syscall dup Changed match param to new fd of %d' % exit_info.new_fd)
         elif callname == 'clone':        
-
             flags = frame['param1']
             child_stack = frame['param2']
             # HACK store child stack addr as fname_addr
@@ -1852,6 +1851,11 @@ class Syscall():
                         addParam(exit_info, call_param)
                         self.lgr.debug('syscall clone added call_param')
             #self.traceProcs.close(tid, fd)
+        elif callname == 'fork':        
+            ida_msg = '%s tid:%s (%s)' % (callname, tid, comm)
+            if self.name == 'runToIO':
+                self.lgr.debug('syscall fork, increment FD count for threads/forks')
+                self.clone_fd_count += 1
         elif callname == 'pipe' or callname == 'pipe2':        
             exit_info.retval_addr = frame['param1']
             
