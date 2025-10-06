@@ -1561,3 +1561,21 @@ class MemUtils():
             ret_reg = cpu.iface.int_register.get_number("elr_el1")
             retval = cpu.iface.int_register.read(ret_reg)
         return retval
+
+    def getStrLen(self, cpu, src, only_ascii=False):
+        addr = src
+        done = False
+        #self.lgr.debug('getStrLen from 0x%x' % src)
+        while not done:
+            v = self.readByte(cpu, addr)
+            #if v is not None:
+            #    self.lgr.debug('getStrLen got 0x%x from 0x%x' % (v, addr))
+            if v is None:
+                self.lgr.debug('getStrLen got NONE for 0x%x' % (addr))
+                done = True
+            elif v == 0:
+                done = True
+            elif only_ascii and v > 127:
+                done = True
+            addr += 1
+        return addr - src
