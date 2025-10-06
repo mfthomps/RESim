@@ -62,7 +62,10 @@ class StackFrameManager():
             tid = in_tid
         else:
             tid = cur_tid
-        st = self.checkIpSpCache(tid)
+        if use_cache:
+            st = self.checkIpSpCache(tid)
+        else:
+            st = None
         if st is None:
             cycle = self.cpu.cycles
             if cycle in self.stack_cache and use_cache:
@@ -246,7 +249,11 @@ class StackFrameManager():
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        key = '0x%x-0x%x' % (sp, ip)
+        if self.cpu.architecture == 'ppc32':
+            lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+            key = '0x%x-0x%x-0x%x' % (sp, ip, lr)
+        else:
+            key = '0x%x-0x%x' % (sp, ip)
         return key
 
     def checkIpSpCache(self, tid):
