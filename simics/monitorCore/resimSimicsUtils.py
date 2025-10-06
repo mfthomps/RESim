@@ -4,6 +4,9 @@ from simics import *
 import time
 import subprocess
 import shlex
+import decode
+import decodeArm
+import decodePPC32
 def fdString(fd):
     if memUtils.isNull(fd):
         return 'NULL'
@@ -235,3 +238,12 @@ def transType(op_type):
     elif op_type == Sim_Trans_Cache:
         retval = 'instr_cache'
     return retval
+
+def getDecoder(cpu):
+    if cpu.architecture in ['arm', 'arm64']:
+        decode = decodeArm
+    if cpu.architecture in ['ppc32']:
+        decode = decodePPC32
+    else:
+        decode = decode
+    return decode
