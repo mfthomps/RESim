@@ -2378,9 +2378,11 @@ class GenMonitor():
             SIM_run_alone(SIM_run_command, 'reverse-step-instruction')
 
     def revStepOver(self):
+        self.lgr.debug('revStepOver')
         self.reverseToCallInstruction(False)
 
     def revStepInto(self):
+        self.lgr.debug('revStepInto')
         self.reverseToCallInstruction(True)
  
     def reverseToCallInstruction(self, step_into):
@@ -2390,6 +2392,8 @@ class GenMonitor():
             self.lgr.debug('reverseToCallInstruction, step_into: %r  on entry, gdb_mailbox: %s' % (step_into, self.gdb_mailbox))
             self.removeDebugBreaks()
             #self.context_manager[self.target].showHaps()
+            
+            self.lgr.debug('reverseToCallInstruction, removed debug breaks, call reverseToCall.doRevToCall')
             self.rev_to_call[self.target].doRevToCall(step_into)
             self.lgr.debug('reverseToCallInstruction back from call to reverseToCall ')
         else:
@@ -3887,6 +3891,7 @@ class GenMonitor():
                     calls.append(c)
 
             calls.append('clone')
+            calls.append('fork')
             calls.append('execve')
             if self.mem_utils[target].WORD_SIZE == 8:
                 calls.append('dup3')
@@ -6029,7 +6034,7 @@ class GenMonitor():
         self.context_manager[self.target].setIdaMessage('')
         cpu = self.cell_config.cpuFromCell(self.target)
         self.user_break = userBreak.UserBreak(self, cpu, addr, count, self.context_manager[self.target], self.lgr)
-        self.lgr.debug('doBreak context %s' % cpu.current_context)
+        self.lgr.debug('doBreak current cpu context %s' % cpu.current_context)
         if run:
             SIM_continue(0)
 
@@ -7118,9 +7123,11 @@ class GenMonitor():
 
     def stepOver(self):
         cpu = self.cell_config.cpuFromCell(self.target)
+        decoder = resimSimicsUtils.getDecoder(cpu)
         eip = self.getEIP()
         instruct = SIM_disassemble_address(cpu, eip, 1, 0)
-        if instruct[1].startswith('call') or instruct[1].startswith('bl '):
+        self.lgr.debug('stepOver from 0x%x %s' % (eip, instruct[1]))
+        if decoder.isCall(cpu, instruct[1]): 
             next_eip = eip + instruct[0]
             self.doBreak(next_eip)
             SIM_continue(0)
