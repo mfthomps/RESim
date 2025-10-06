@@ -137,6 +137,8 @@ class reverseToCall():
             self.lgr.debug('__init__ bookmarks is %s' % self.bookmarks)
 
             self.callmn = None
+            # recent process attributes otherwise passed as user value in Haps
+            self.recent_proc_info = None
 
     def noWatchSysenter(self):
         self.record_entry.noWatchSysenter()
@@ -171,6 +173,7 @@ class reverseToCall():
                 self.lgr.debug('reverseToCall setup bookmarks set to %s' % str(bookmarks))
             if (hasattr(self.param, 'sysenter') and self.param.sysenter is not None) or \
                (hasattr(self.param, 'sys_entry') and self.param.sys_entry is not None) or \
+               (hasattr(self.param, 'ppc32_entry') and self.param.ppc32_entry is not None) or \
                (hasattr(self.param, 'arm_entry') and self.param.arm_entry is not None):
                 '''  Track sysenter to support reverse over those.  TBD currently only works with genMonitor'''
                 #SIM_run_alone(self.watchSysenter, None)
@@ -256,6 +259,7 @@ class reverseToCall():
 
     def pageTableBreaks(self, call_ret):
         ''' set call/ret breaks on all pages that appear executable '''
+        # TBD does not handle ppc with bl blr confusion
         pages = pageUtils.getPageBases(self.cpu, self.lgr, self.param.kernel_base)
         range_start = None
         prev_physical = None
@@ -291,8 +295,7 @@ class reverseToCall():
         dum_cpu, comm, tid = self.task_utils.curThread()
         self.tid = tid
         self.lgr.debug('reservseToCall, back from call get procInfo %s' % comm)
-        my_args = procInfo.procInfo(comm, self.cpu, tid)
-        self.stop_hap = self.top.RES_add_stop_callback(self.stoppedReverseToCall, my_args)
+        self.recent_proc_info = procInfo.procInfo(comm, self.cpu, tid)
         self.lgr.debug('doUncall, added stop hap')
         self.need_calls = 1
         self.uncall = True
@@ -301,47 +304,140 @@ class reverseToCall():
         #    self.setBreakRange(self.cell_name, tid, item.address, item.length, self.cpu, comm, True)
         self.lgr.debug('doUncall, set break range')
         
-        self.reverse_mgr.reverse()
+        self.stop_hap = self.reverse_mgr.reverse(callback=self.stoppedReverseToCall)
         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
         self.lgr.debug('doUncall, did reverse')
 
-    def tryBackOne(self, my_args):
-        self.stop_hap = self.top.RES_add_stop_callback(self.tryOneStopped, my_args)
-        self.lgr.debug('tryBackOne from cycle 0x%x' % my_args.cpu.cycles)
-        SIM_run_command('rev 1')
-
-    def tryBackToCall(self, my_args):
-        # Doing a step-over, we stepped into a ret.
-        # my_args.eip is where we came from.  find its previous instruction 
-        # mftmft 
-        call_addr = self.findCallBehind(my_args.eip)
-        if call_addr is not None:
-            cell = self.top.getCell()
-            self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
-            self.stop_hap = self.top.RES_add_stop_callback(self.tryBackToCallStopped, my_args)
-            self.lgr.debug('tryBackToCall from cycle 0x%x' % my_args.cpu.cycles)
-            self.reverse_mgr.reverse()
-        else:
-            self.lgr.error('tryBackToCall failed to find call behind 0x%x' % my_args.eip)
-
-    def tryBackToCallStopped(self, my_args, one, exception, error_string):
-        if self.stop_hap is None:
+    def tryBackOne(self, dumb=None):
+        '''
+        Skip back one cycle.  If at a return, find the call.  If in the kernel, back out of it
+        '''
+        self.lgr.debug('tryBackOne from cycle 0x%x' % self.recent_proc_info.cpu.cycles)
+        self.top.rev1NoMail()
+        if self.tooFarBack():
+            self.lgr.debug('reverseToCall tryBackOne at start of recording, cycle: 0x%x' % self.cpu.cycles)
+            print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
+            self.cleanup(None)
+            self.top.skipAndMail() 
             return
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        if tid != my_args.tid:
-            self.lgr.debug('tryBackToCallStopped tid:%s but expected %s' % (tid, my_args.tid))
+        self.lgr.debug('tryBackOne, tid:%s entered at cycle 0x%x' % (tid, self.cpu.cycles))
+        eip = self.top.getEIP(self.cpu)
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        self.lgr.debug('tryBackOne reversed 1, eip: %x  %s' % (eip, instruct[1]))
+        cpl = memUtils.getCPL(self.cpu)
+        done = False
+        entry_cycles = self.record_entry.getEnterCycles(tid)
+        if cpl > 0 or self.kernel:
+            if cpl > 0:
+                self.lgr.debug('tryBackOne user space')
+            else:
+                self.lgr.debug('tryBackOne kernel space')
+            if self.step_into or not self.isRet(instruct[1], eip):
+                self.lgr.debug('tryBackOne worked ok')
+                done = True
+                self.cleanup(None)
+                self.top.skipAndMail()
+                self.context_manager.setExitBreaks()
+            elif self.isRet(instruct[1], eip):
+                ''' First step back from a reverse step over got a ret.  Assume previous instruction is a call '''
+                SIM_run_alone(self.tryBackToCall, None)
+
+                '''
+                cell = self.top.getCell()
+                self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, my_args.eip-1, 1, 0)
+                self.uncall_hap = self.top.RES_add_stop_callback(self.uncallHapSimple, None)
+                self.lgr.debug('tryBackOne found ret, try running backwards to previous eip-1.  break %d set at 0x%x now do rev' % (self.uncall_break, my_args.eip-1))
+                #self.top.removeDebugBreaks()
+                self.lgr.debug('now rev')
+                SIM_run_alone(SIM_run_command, 'rev')
+                self.lgr.debug('did rev')
+                '''
+                done = True
+
+        elif len(entry_cycles) > 0:
+            cur_cycles = self.cpu.cycles
+            self.lgr.debug('tryBackOne kernel space tid %s expected %s' % (tid, self.recent_proc_info.tid))
+            is_exit = self.isExit(instruct[1], eip)
+            if is_exit:
+                self.lgr.debug('tryBackOne is sysexit, cur_cycles is 0x%x' % cur_cycles)
+                prev_cycles = None
+                got_it = None
+                # TBD why call it page cycles?
+                page_cycles = entry_cycles
+                if self.page_faults is not None:
+                    pass
+                    #self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
+                    #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                for cycles in sorted(page_cycles):
+                    if cycles > cur_cycles:
+                        self.lgr.debug('tryBackOne found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                        got_it = prev_cycles - 1
+                        break
+                    else:
+                        #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
+                        prev_cycles = cycles
+
+                if not got_it:
+                    self.lgr.debug('tryBackOne nothing between, assume last cycle of 0x%x' % prev_cycles)
+                    got_it = prev_cycles - 1
+                SIM_run_alone(self.jumpCycle, got_it)
+                done = True
+            else:
+                self.lgr.debug('tryBackOne in kernel but not exit? 0x%x  %s' % (eip, instruct[1]))
+        
+
+        if not done:
+            self.lgr.debug('tryBackOne, back one did not work, starting at %x' % eip)
+            if self.cpu.architecture == 'ppc32':
+                self.lgr.error('reverseToCall tryOneStopped did not work, and is ppc32, bail')
+                return
+            self.lgr.debug('tryBackOne, added stop hap')
+            self.uncall = False
+            self.pageTableBreaks(False)
+            self.lgr.debug('tryBackOne, set break range')
+            SIM_run_alone(self.reverseAlone, stoppedReverseToCall)
+            #self.lgr.debug('reverseToCall, did reverse-step-instruction')
+            self.lgr.debug('tryBackOne, did reverse')
+
+        #SIM_run_command('rev 1')
+
+    def tryBackToCall(self, dumb):
+        # Doing a step-over, we stepped into a ret.
+        # self.recent_proc_info.eip is where we came from.  find its previous instruction 
+        # mftmft 
+        call_addr = self.findCallBehind(self.recent_proc_info.eip)
+        if call_addr is not None:
+            self.lgr.debug('tryBackToCall got 0x%x from findCallBehind' % call_addr)
+            cell = self.top.getCell()
+            self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
+            #self.stop_hap = self.top.RES_add_stop_callback(self.tryBackToCallStopped, my_args)
+            self.lgr.debug('tryBackToCall from cycle 0x%x' % self.recent_proc_info.cpu.cycles)
+            self.stop_hap = self.reverse_mgr.reverse(callback=self.tryBackToCallStopped)
+        else:
+            self.lgr.error('tryBackToCall failed to find call behind 0x%x' % self.recent_proc_info.eip)
+
+    def tryBackToCallStopped(self, param_from_rev_mgr, one, exception, error_string):
+        if self.stop_hap is None and param_from_rev_mgr is None:
+            return
+        cur_cpu, comm, tid  = self.task_utils.curThread()
+        if tid != self.recent_proc_info.tid:
+            self.lgr.debug('tryBackToCallStopped tid:%s but expected %s' % (tid, self.recent_proc_info.tid))
             return 
         self.reverse_mgr.SIM_delete_breakpoint(self.uncall_break)
         self.uncall_break = None
-        hap = self.stop_hap
-        SIM_run_alone(self.rmStopHap, hap) 
-        self.stop_hap = None
+        if self.stop_hap is not None:
+            hap = self.stop_hap
+            SIM_run_alone(self.rmStopHap, hap) 
+            self.stop_hap = None
         self.lgr.debug('tryBackToCallStopped tid:%s' % tid)
         self.cleanup(None)
+        #self.top.restoreDebugBreaks(was_watching=True)
         self.top.skipAndMail()
+        self.lgr.debug('tryBackToCallStopped did skipAndMail')
         self.context_manager.setExitBreaks()
 
-    def jumpStopped(self, my_args, one, exception, error_string):
+    def jumpStopped(self, dumb, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
         self.lgr.debug('jumpStopped at 0x%x' % eip)
         self.top.RES_delete_stop_hap(self.jump_stop_hap)
@@ -419,6 +515,9 @@ class reverseToCall():
 
             if parts[0] == 'pop' and 'pc' in instruct:
                 return True
+        elif self.cpu.architecture == 'ppc32':
+            if instruct.startswith('blr'):
+                return True
         else:
             if instruct.startswith('ret'):
                 return True
@@ -436,102 +535,6 @@ class reverseToCall():
     def rmStopHap(self, hap):
         self.top.RES_delete_stop_hap(hap)
 
-    def tryOneStopped(self, my_args, one, exception, error_string):
-        '''
-        Invoked when the simulation stops after trying to go back one
-        '''
-        if self.stop_hap is None:
-            self.lgr.error('stoppedReverseToCall invoked though hap is none')
-            return
-        self.lgr.debug('tryoneStopped delete stop hap')
-        hap = self.stop_hap
-        SIM_run_alone(self.rmStopHap, hap) 
-        self.stop_hap = None
-        if self.tooFarBack():
-            self.lgr.debug('reverseToCall At start of recording, cycle: 0x%x' % self.cpu.cycles)
-            print('At start of recording, cycle: 0x%x' % self.cpu.cycles)
-            self.cleanup(None)
-            self.top.skipAndMail() 
-            return
-        cur_cpu, comm, tid  = self.task_utils.curThread()
-        self.lgr.debug('tryOneStopped, tid:%s entered at cycle 0x%x' % (tid, self.cpu.cycles))
-        eip = self.top.getEIP(self.cpu)
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        self.lgr.debug('tryOneStopped reversed 1, eip: %x  %s' % (eip, instruct[1]))
-        cpl = memUtils.getCPL(self.cpu)
-        done = False
-        entry_cycles = self.record_entry.getEnterCycles(tid)
-        if cpl > 0 or self.kernel:
-            if cpl > 0:
-                self.lgr.debug('tryOneStopped user space')
-            else:
-                self.lgr.debug('tryOneStopped kernel space')
-            if self.step_into or not self.isRet(instruct[1], eip):
-                self.lgr.debug('tryOneStopped worked ok')
-                done = True
-                self.cleanup(None)
-                self.top.skipAndMail()
-                self.context_manager.setExitBreaks()
-            elif self.isRet(instruct[1], eip):
-                ''' First step back from a reverse step over got a ret.  Assume previous instruction is a call '''
-                SIM_run_alone(self.tryBackToCall, my_args)
-
-                '''
-                cell = self.top.getCell()
-                self.uncall_break = SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, my_args.eip-1, 1, 0)
-                self.uncall_hap = self.top.RES_add_stop_callback(self.uncallHapSimple, None)
-                self.lgr.debug('tryBackOne found ret, try running backwards to previous eip-1.  break %d set at 0x%x now do rev' % (self.uncall_break, my_args.eip-1))
-                #self.top.removeDebugBreaks()
-                self.lgr.debug('now rev')
-                SIM_run_alone(SIM_run_command, 'rev')
-                self.lgr.debug('did rev')
-                '''
-                done = True
-
-        elif len(entry_cycles) > 0:
-            cur_cycles = self.cpu.cycles
-            self.lgr.debug('tryOneStopped kernel space tid %s expected %s' % (tid, my_args.tid))
-            is_exit = self.isExit(instruct[1], eip)
-            if is_exit:
-                self.lgr.debug('tryOneStopped is sysexit, cur_cycles is 0x%x' % cur_cycles)
-                prev_cycles = None
-                got_it = None
-                # TBD why call it page cycles?
-                page_cycles = entry_cycles
-                if self.page_faults is not None:
-                    pass
-                    #self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                    #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
-                for cycles in sorted(page_cycles):
-                    if cycles > cur_cycles:
-                        self.lgr.debug('tryOneStopped found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
-                        got_it = prev_cycles - 1
-                        break
-                    else:
-                        #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
-                        prev_cycles = cycles
-
-                if not got_it:
-                    self.lgr.debug('tryOneStopped nothing between, assume last cycle of 0x%x' % prev_cycles)
-                    got_it = prev_cycles - 1
-                SIM_run_alone(self.jumpCycle, got_it)
-                done = True
-            else:
-                self.lgr.debug('tryOneStopped in kernel but not exit? 0x%x  %s' % (eip, instruct[1]))
-        
-
-        if not done:
-            self.lgr.debug('tryOneStopped, back one did not work, starting at %x' % eip)
-            self.stop_hap = self.top.RES_add_stop_callback(self.stoppedReverseToCall, my_args)
-            self.lgr.debug('tryOneStopped, added stop hap')
-            self.uncall = False
-            self.pageTableBreaks(False)
-            self.lgr.debug('tryOneStopped, set break range')
-            SIM_run_alone(self.reverse_mgr.reverse, None)
-            #self.lgr.debug('reverseToCall, did reverse-step-instruction')
-            self.lgr.debug('tryOneStopped, did reverse')
-
-        
     def doRevToCall(self, step_into):
         self.noWatchSysenter()
         '''
@@ -546,9 +549,9 @@ class reverseToCall():
         self.first_back = True
         self.lgr.debug('reservseToCall, call get procInfo')
         eip = self.top.getEIP(self.cpu)
-        my_args = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
+        self.recent_proc_info = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
         self.lgr.debug('reverseToCall doRevtoCall, got my_args ')
-        self.tryBackOne(my_args)
+        self.tryBackOne()
         self.lgr.debug('reservseToCall, back from tryBackOne')
 
     def jumpOverKernel(self, tid):
@@ -652,11 +655,10 @@ class reverseToCall():
             else:
                 cell = self.top.getCell()
                 self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, rev_to-4, 1, 0)
-                self.uncall_hap = self.top.RES_add_stop_callback(self.kernInterruptHap, None)
                 self.lgr.debug('jumpOverKernel, NOT syscall or page fault, try runnning backwards to eip-4, ug.  break %d set at 0x%x now do rev' % (self.uncall_break, rev_to-4))
                 self.top.removeDebugBreaks()
                 self.context_manager.showHaps()
-                self.reverse_mgr.reverse()
+                self.uncall_hap = self.reverse_mgr.reverse(callback=self.kernInterruptHap)
                 retval = None
         return retval
 
@@ -716,7 +718,7 @@ class reverseToCall():
                         best = cycle
         return best
         
-    def kernInterruptHap(self, my_args, one, exception, error_string):
+    def kernInterruptHap(self, dumb, one, exception, error_string):
         if self.uncall_break is None:
             return
         eip = self.top.getEIP(self.cpu)
@@ -800,8 +802,7 @@ class reverseToCall():
                             done = True
                     else:
                         ''' TBD use cheesy jumpOverKernel instead ?? '''
-                        my_args = procInfo.procInfo(comm, self.cpu, self.tid)
-                        self.stop_hap = self.top.RES_add_stop_callback(self.stoppedReverseModReg, my_args)
+                        self.recent_proc_info = procInfo.procInfo(comm, self.cpu, self.tid)
                         dum_cpu, comm, tid = self.task_utils.curThread()
                         self.lgr.debug('doRevToModReg, added stop hap tid %s' % ntid)
                         self.cell_name = self.top.getTopComponentName(self.cpu)
@@ -809,7 +810,7 @@ class reverseToCall():
                         #for item in self.x_pages:
                         #    self.setBreakRange(self.cell_name, tid, item.address, item.length, self.cpu, comm, False, reg)
                         self.lgr.debug('doRevToModReg, set break range')
-                        SIM_run_alone(self.reverse_mgr.reverse, None)
+                        SIM_run_alone(self.reverseAlone, self.stoppedReverseModReg)
                         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
                         self.lgr.debug('reverseToModReg, did reverse')
                         done=True
@@ -866,6 +867,9 @@ class reverseToCall():
             else:
                 self.lgr.debug('doRevToModReg bailed, maybe trying uncall')
                 done=True
+
+    def revAlone(self, callback):
+        self.stop_hap = self.reverse_mgr.reverse(callback=callback)
 
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
@@ -1071,12 +1075,11 @@ class reverseToCall():
                                     cell = self.top.getCell()
                                     pre_call = pc - 4
                                     self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, pre_call, 1, 0)
-                                    self.uncall_hap = self.top.RES_add_stop_callback(self.uncallHap, None)
                                     retval = RegisterModType(None, RegisterModType.BAIL)
                                     self.lgr.debug('cycleRegisterMod set break number %d stop hap, now rev to 0x%x' % (self.uncall_break, pre_call))
                                     self.save_cycle = self.cpu.cycles
                                     self.save_reg_mod = RegisterModType(addr, RegisterModType.ADDR)
-                                    self.reverse_mgr.reverse()
+                                    self.uncall_hap = self.reverse_mgr.reverse(callback=self.uncallHap)
                                 else:
                                     self.lgr.debug('cycleRegisterMod at %x, armLDM got None for addr, do for that addr 0x%x' % (eip, addr))
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
@@ -1103,7 +1106,7 @@ class reverseToCall():
                     self.lgr.debug('resumeAlone follow taint')
                     self.followTaint(self.save_reg_mod)
 
-    def uncallHap(self, my_args, one, exception, error_string):
+    def uncallHap(self, dumb, one, exception, error_string):
         ''' used in back-tracing registers '''
         if self.uncall_break is None:
             return
@@ -1330,7 +1333,7 @@ class reverseToCall():
                 else:
                     self.lgr.debug('cycleAlone must backed to first cycle 0x%x' % self.top.getFirstCycle())
  
-    def stoppedReverseModReg(self, my_args, one, exception, error_string):
+    def stoppedReverseModReg(self, dumb, one, exception, error_string):
         '''
         Invoked when the simulation stops while looking for a modified register
         '''
@@ -1377,11 +1380,11 @@ class reverseToCall():
             self.top.skipAndMail()
         self.lgr.debug('cleanup complete')
 
-    def stoppedReverseToCall(self, my_args, one, exception, error_string):
+    def stoppedReverseToCall(self, param_from_rev_mgr, one, exception, error_string):
         '''
         Invoked when the simulation stops while looking for a previous call
         '''
-        if self.stop_hap is None:
+        if self.stop_hap is None and param_from_rev_mgr is None:
             self.lgr.error('stoppedReverseToCall invoked though hap is none')
             return
         dum_cpu, comm, tid = self.task_utils.curThread()
@@ -1411,7 +1414,8 @@ class reverseToCall():
                     self.cleanup(None)
                 else:
                    self.lgr.debug('stoppedReverseToCall 0x%x got call %s   got_calls %d, need %d' % (eip, instruct[1], self.got_calls, self.need_calls))
-                   SIM_run_alone(self.reverse_mgr.reverse, None)
+                   SIM_run_alone(self.reverseAlone, self.stoppedReverseToCall)
+
             elif self.isRet(instruct[1], eip):
                 self.need_calls += 1
                 self.lgr.debug('stoppedReverseToCall 0x%x got ret %s  need: %d' % (eip, instruct[1], self.need_calls))
@@ -1420,13 +1424,13 @@ class reverseToCall():
                     ''' TBD fix this? '''
                     for item in self.x_pages:
                         self.setBreakRange(self.cell_name, tid, item.address, item.length, cpu, comm, True)
-                SIM_run_alone(self.reverse_mgr.reverse, None)
+                SIM_run_alone(self.reverseAlone, self.stoppedReverseToCall)
             else:
                 self.lgr.debug('stoppedReverseToCall Not call or ret at %x, is %s' % (eip, instruct[1]))
-                SIM_run_alone(self.reverse_mgr.reverse, None)
+                SIM_run_alone(self.reverseAlone, self.stoppedReverseToCall)
         else:
             self.lgr.debug('stoppedReverseInstruction in wrong tid (%s) or in kernel, try again' % tid)
-            SIM_run_alone(self.reverse_mgr.reverse, None)
+            SIM_run_alone(self.reverseAlone, self.stoppedReverseToCall)
         self.first_back = False
    
     def setOneBreak(self, address, cpu):
@@ -1444,7 +1448,7 @@ class reverseToCall():
         self.lgr.debug('setBreakRange begin')
         start, end = pageUtils.adjust(start, length, self.page_size)
         cell = cpu.physical_memory
-        my_args = procInfo.procInfo(comm, cpu, tid, None, False)
+        self.recent_proc_info = procInfo.procInfo(comm, cpu, tid, None, False)
         self.tid = tid
       
         self.lgr.debug('Adding breakpoints for %s:%s (%s) at %x through %x, given length was %x' % (cell_name, tid, comm, start, end, length))
@@ -1609,12 +1613,12 @@ class reverseToCall():
     def findCallBehind(self, return_to):
         ''' given a returned to address, look backward for the address of the call instruction '''
         retval = None
-        if self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm') or self.cpu.architecture == 'ppc32':
             eip = return_to - 4
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('findCallBehind instruct is %s' % instruct[1])
             if self.decode.isCall(self.cpu, instruct[1], ignore_flags=True):
-                self.lgr.debug('followCall arm eip 0x%x' % eip)
+                self.lgr.debug('followCall arm or ppceip 0x%x' % eip)
                 retval = eip
         else:
             eip = return_to - 2
