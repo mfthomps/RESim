@@ -217,6 +217,7 @@ class ReverseMgr():
         else:
             SIM_take_snapshot(name)
         self.snapshot_names.append(name)
+        #self.lgr.debug('reverseMgr took snapshot %s' % name)
 
     def getPreviousName(self, name):
         retval = None
@@ -253,8 +254,7 @@ class ReverseMgr():
                         self.lgr.debug('reverseMgr restoreSnapshot %s race condition?' % name)
                         if name in self.snapshot_names:
                             # assume race due to runAlone
-                            raw_list = cli.quiet_run_command('list-snapshots')[1]
-                            snap_list = self.parselist(raw_list)
+                            snap_list = self.getSnapList()
                             self.lgr.debug('snap_list %s' % str(snap_list))
                             cur_name = name
                             count = 0
@@ -345,7 +345,6 @@ class ReverseMgr():
     def parselist(self, the_list):
         retval = []
         for line in the_list.splitlines():
-            #self.lgr.debug('line is %s' % line)
             parts = line.split()
             i = None
             try:
@@ -375,8 +374,7 @@ class ReverseMgr():
             self.origin_cycle = None
          
             if self.oldSimics():
-                raw_list = cli.quiet_run_command('list-snapshots')[1]
-                snap_list = self.parselist(raw_list)
+                snap_list = self.getSnapList()
                 self.lgr.debug('disableReverse snap_list %s' % str(snap_list))
                 for name in snap_list:
                     if '>' not in name:
@@ -602,8 +600,7 @@ class ReverseMgr():
 
     def hasSnapFor(self, cycles):
         cycle_mark = 'cycle_%x' % cycles
-        raw_list = cli.quiet_run_command('list-snapshots')[1]
-        snap_list = self.parselist(raw_list)
+        snap_list = self.getSnapList()
         if cycle_mark in snap_list:
             return True
         else:
@@ -611,8 +608,7 @@ class ReverseMgr():
 
     def getLatestSnapCycle(self):
         retval = None
-        raw_list = cli.quiet_run_command('list-snapshots')[1]
-        snap_list = self.parselist(raw_list)
+        snap_list = self.getSnapList()
         self.lgr.debug('reverseMgr getLatestSnapCycle snaplist has %d items' % len(snap_list))
         if len(snap_list)>1:
             name = snap_list[-1]
@@ -1115,6 +1111,19 @@ class ReverseMgr():
 
     def version(self):
         return self.version_string
+
+    def getSnapList(self):
+        if not self.version().startswith('7'):
+            raw_list = cli.quiet_run_command('list-snapshots')[1]
+            retval = self.parselist(raw_list)
+        else:
+            retval = SIM_list_snapshots()
+            retval.sort()
+        return retval
+
+    def showSnapLen(self):
+        snap_list = self.getSnapList()
+        print('reverseManager has %d items in snap_list' % len(snap_list))
 
 '''
 Everything below is for use running directly from the Simics command prompt, e.g., for testing.
