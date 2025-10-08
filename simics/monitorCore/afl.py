@@ -210,7 +210,6 @@ class AFL():
         if target_proc is None:
             self.top.debugTidGroup(self.tid, to_user=False, track_threads=False)
             self.finishInit()
-            #self.disableReverse()
 
         else:
             # Target is a process other than the current.
@@ -342,16 +341,6 @@ class AFL():
         tid = self.top.getTID()
         self.lgr.debug('afl finishCallback, restored to original bookmark and reset target to %s tid: %s call goN cycle 0x%x' % (self.cell_name, tid, self.cpu.cycles))
         self.goN(0)
-
-    def disableReverse(self):
-        if not self.top.nativeReverse():
-            self.top.disableReverse()
-            self.top.takeSnapshot('origin')
-        else:
-            cli.quiet_run_command('disable-reverse-execution')
-            #VT_take_snapshot('origin')
-            cli.quiet_run_command('enable-unsupported-feature internals')
-            cli.quiet_run_command('save-snapshot name = origin')
 
     def finishInit(self, dumb=None):
             if len(self.tid_list) == 0:
@@ -906,10 +895,13 @@ class AFL():
         if self.top.nativeReverse():
             cli.quiet_run_command('restore-snapshot name=origin')
         else:
-            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
-                cli.quiet_run_command('restore-snapshot name=origin')
+            if not self.version_string.startswith('7'):
+                if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
+                    cli.quiet_run_command('restore-snapshot name=origin')
+                else:
+                    VT_take_restoreshot('origin')
             else:
-                VT_take_restoreshot('origin')
+                SIM_restore_snapshot('origin')
 
     def setOrigin(self):
         if self.top.nativeReverse():
@@ -918,14 +910,17 @@ class AFL():
             cmd = 'save-snapshot origin'
             cli.quiet_run_command(cmd)
         else:
-            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
-                self.lgr.debug('afl setOrigin old ppc32, use save-snapshot')
-                cli.quiet_run_command('enable-unsupported-feature internals')
-                cmd = 'save-snapshot origin'
-                cli.quiet_run_command(cmd)
+            if not self.version_string.startswith('7'):
+                if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
+                    self.lgr.debug('afl setOrigin old ppc32, use save-snapshot')
+                    cli.quiet_run_command('enable-unsupported-feature internals')
+                    cmd = 'save-snapshot origin'
+                    cli.quiet_run_command(cmd)
+                else:
+                    self.lgr.debug('afl setOrigin not native, use VT_take_snapshot')
+                    VT_take_snapshot('origin')
             else:
-                self.lgr.debug('afl setOrigin not native, use VT_take_snapshot')
-                VT_take_snapshot('origin')
+                SIM_take_snapshot('origin')
 
     def stopAll(self):
         SIM_run_alone(self.rmStopHap, None)

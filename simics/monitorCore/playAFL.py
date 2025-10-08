@@ -1095,7 +1095,10 @@ class PlayAFL():
         if self.top.nativeReverse():
             cli.quiet_run_command('restore-snapshot name=origin')
         else:
-            if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
-                cli.quiet_run_command('restore-snapshot name=origin')
+            if not self.version_string.startswith('7'):
+                if self.target_cpu.architecture == 'ppc32' and self.version_string.startswith('6.0.146'):
+                    cli.quiet_run_command('restore-snapshot name=origin')
+                else:
+                    VT_restore_snapshot('origin')
             else:
-                VT_take_restoreshot('origin')
+                SIM_restore_snapshot('origin')
