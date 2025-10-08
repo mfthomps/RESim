@@ -897,8 +897,11 @@ class GenMonitor():
                        self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
                                            self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
-
-            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.lgr, top=self)
+            span = self.getCompDict(cell_name, 'REVERSE_SPAN')
+            if span is not None:
+                span = int(span, 16)
+                self.lgr.debug('Using reverse span of 0x%x' % span)
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.lgr, top=self, span=span)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
                  self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
@@ -5988,6 +5991,8 @@ class GenMonitor():
     def backtraceAddr(self, addr, cycles):
         ''' Look at watch marks to find source of a given address by backtracking through watchmarks '''
         retval = None
+        if not self.dataWatch[self.target].didSomething():
+            return retval
         self.lgr.debug('backtraceAddr %x cycles: 0x%x' % (addr, cycles))
         tm = traceMarks.TraceMarks(self.dataWatch[self.target], self.lgr)
         cpu = self.cell_config.cpuFromCell(self.target)
@@ -7137,6 +7142,9 @@ class GenMonitor():
     def stopAFL(self):
         if self.afl_instance is not None:
             self.afl_instance.stopAll()
+
+    def showSnapLen(self):
+        self.reverse_mgr[self.target].showSnapLen()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
