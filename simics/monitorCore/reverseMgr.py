@@ -679,9 +679,15 @@ class ReverseMgr():
             self.rmContinuationHap()
             self.disableSimBreaks()
             expect = self.cpu.cycles + delta
-            SIM_continue(delta)
+            #print('would run forward 0x%x cycles. remove this' % delta)
+            #return
+            # TBD running steps vs cycles creates problems.  Where else does SIM_continue fail?
+            cmd = 'r 0x%x cycles' % delta
+            SIM_run_command(cmd)
+            self.lgr.debug('reverseMgr skipBackAndRunForward cmd: %s' % cmd)
+            #SIM_continue(delta)
             count = 0
-            while self.cpu.cycles != expect:
+            while self.cpu.cycles < expect:
                 eip = self.top.getEIP()
                 self.lgr.error('reverseMgr skipBackAndRunForward expected 0x%x but got 0x%x after running forward delta eip 0x%x' % (expect, self.cpu.cycles, eip))
                 new_delta = expect - self.cpu.cycles
@@ -690,6 +696,10 @@ class ReverseMgr():
                 if count > 5:
                     self.lgr.error('reverseMgr skipBackAndRunForward too much, bail')
                     return
+            if self.cpu.cycles > expect:
+                too_far = self.cpu.cycles - expect
+                self.lgr.error('reverseMgr skipBackAndRunForrward ran past the delta by 0x%x cycles, now at 0x%x?' % (too_far, self.cpu.cycles))
+                return
             self.enableSimBreaks()
             self.lgr.debug('reverseMgr skipBackAndRunForward ran forward to the reverse_to point so we can set breaks and run from there.  cycles now 0x%x' % self.cpu.cycles)
             self.was_at_reverse_point = True
