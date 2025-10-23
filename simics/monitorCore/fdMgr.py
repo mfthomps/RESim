@@ -73,4 +73,11 @@ class FDMgr():
                 retval = True
         return retval
 
+    def dupFD(self, tid, old_fd, new_fd, dmod_path):
+        if tid in self.fd_map and old_fd in self.fd_map[tid]:
+            key = '%s:%d' % (tid, old_fd)
+            if self.dmod_map[key] == dmod_path:
+                self.fd_map[tid].append(new_fd) 
+                new_key = '%s:%d' % (tid, new_fd)
+                self.dmod_map[new_key] = dmod_path
 
