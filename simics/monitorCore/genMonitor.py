@@ -5009,7 +5009,7 @@ class GenMonitor():
             sor=False, cover=False, target=None, targetFD=None, trace=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
-            trace_all=False, run=True, reset_debug=True, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False):
+            trace_all=False, run=True, reset_debug=False, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
         ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
