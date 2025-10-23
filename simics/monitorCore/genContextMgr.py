@@ -1038,10 +1038,11 @@ class GenContextMgr():
             if self.task_rec_bp[tid] is not None:
                 self.lgr.debug('contextManager stopWatchTid delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
-                hap = self.task_rec_hap[tid]
-                SIM_run_alone(RES_delete_mem_hap, hap)
+                if tid in self.task_rec_hap:
+                    hap = self.task_rec_hap[tid]
+                    SIM_run_alone(RES_delete_mem_hap, hap)
+                    del self.task_rec_hap[tid]
             del self.task_rec_bp[tid]
-            del self.task_rec_hap[tid]
         cur_tid = self.task_utils.curTID()
         if force or (tid == cur_tid and self.debugging_tid is not None):
             ''' we are stopping due to a clone doing an exec or something similar.  in any event, remove haps and change context if needed '''
@@ -1293,7 +1294,7 @@ class GenContextMgr():
         print('Process %s exited.' % tid)
 
     def resetAlone(self, tid):
-        #self.lgr.debug('contextManager resetAlone')
+        self.lgr.debug('contextManager resetAlone')
         dead_rec = self.task_utils.getRecAddrForTid(tid)
         if dead_rec is not None:
             list_addr = self.task_utils.getTaskListPtr(dead_rec)
