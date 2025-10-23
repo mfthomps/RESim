@@ -1826,6 +1826,8 @@ class Syscall():
                     if call_param.match_param != 0:
                         call_param.match_param = exit_info.new_fd
                         self.lgr.debug('syscall dup Changed match param to new fd of %d' % exit_info.new_fd)
+            # check for use of dmod openReplace fd
+            self.checkReadParams(callname, exit_info, tid, comm, frame)
         elif callname == 'clone':        
             flags = frame['param1']
             child_stack = frame['param2']
@@ -2026,7 +2028,7 @@ class Syscall():
             ''' check runToIO '''
             self.lgr.debug('syscall read loop %d call_params ' % len(self.call_params))
             ''' Look for matching params, preference to non-Dmods.  TBD refine this to allow Dmods with other call params.'''
-            self.checkReadParams(exit_info, tid, comm, frame)
+            self.checkReadParams(callname, exit_info, tid, comm, frame)
         elif callname == 'write':        
             exit_info.old_fd = frame['param1']
             count = frame['param3']
@@ -2128,7 +2130,7 @@ class Syscall():
             exit_info.retval_addr = frame['param2']
             # iovcnt
             exit_info.count = frame['param3']
-            self.checkReadParams(exit_info, tid, comm, frame)
+            self.checkReadParams(callname, exit_info, tid, comm, frame)
             ida_msg = '%s tid:%s (%s) FD: %d iovec: 0x%x iovcnt: %d' % (callname, tid, comm, exit_info.old_fd, exit_info.retval_addr, exit_info.count)
  
         elif callname == 'mmap' or callname == 'mmap2':        
@@ -3429,12 +3431,12 @@ class Syscall():
         self.lgr.debug('syscall noExitMaze') 
         self.no_exit_maze = True
 
-    def checkReadParams(self, exit_info, tid, comm, frame):
+    def checkReadParams(self, callname, exit_info, tid, comm, frame):
         for call_param in self.call_params:
             ''' look for matching FD '''
             if call_param.match_param is None:
                 continue
-            if type(call_param.match_param) is int:
+            if callname.startswith('read') and type(call_param.match_param) is int:
                 if call_param.match_param == frame['param1'] and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     if call_param.nth is not None and self.kbuffer is not None and (call_param.count+1) >= call_param.nth:
                         self.lgr.debug('syscall checkCallParams kbuffer for addr 0x%x' % exit_info.retval_addr)
@@ -3456,5 +3458,5 @@ class Syscall():
                         continue
                 self.lgr.debug('syscall checkCallParams dmod %s FD: %d add call param' % (call_param.match_param.path, exit_info.old_fd))
                 exit_info.call_params.append(call_param)
-            if type(call_param.match_param) is str:
+            if callname.startswith('read') and type(call_param.match_param) is str:
                 exit_info.call_params.append(call_param)
