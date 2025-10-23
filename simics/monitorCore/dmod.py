@@ -78,6 +78,8 @@ class Dmod():
 
         self.open_replace_fh = {}
         self.open_replace_fname = {}
+  
+        self.bytes_file = None
 
         if os.path.isfile(path):
             with open(path) as fh:
@@ -117,6 +119,8 @@ class Dmod():
                                    self.break_on_dmod = True
                            elif key == 'length':
                                self.length = int(value)
+                           elif key == 'bytes_file':
+                               self.bytes_file = value
 
                self.lgr.debug('dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, str(self.comm)))
                if self.kind == 'full_replace':
@@ -509,6 +513,20 @@ class Dmod():
 
     def hasFDOpen(self, tid, fd):
         return self.fd_mgr.hasFDOpen(tid, fd, self.path)
+
+    def dupFD(self, tid, old_fd, new_fd):
+        self.fd_mgr.dupFD(tid, old_fd, new_fd, self.path)
+
+    def getBytes(self):
+        retval = None
+        if self.bytes_file is not None:
+            if os.path.isfile(self.bytes_file):
+                with open(self.bytes_file, 'rb') as fh:
+                    retval = fh.read()
+            else:
+                self.lgr.error('dmod failed to find bytes file %s' % self.bytes_file)
+                self.top.quit()
+        return retval
 
 if __name__ == '__main__':
     print('begin')
