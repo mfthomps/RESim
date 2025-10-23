@@ -234,6 +234,9 @@ class ReverseMgr():
         self.disableSimBreaks()
         if name == 'origin':
             self.was_at_origin = True
+            if self.cpu.cycles == self.origin_cycle:
+                self.lgr.debug('restoreSnapshot to origin, already there')
+                return
         if not self.version().startswith('7'):
             if self.oldSimics():
                 go_forward = False
