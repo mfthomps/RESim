@@ -1248,6 +1248,26 @@ class SharedSyscall():
                 else:
                     trace_msg = trace_msg+('old_fd: and new both %d   Eh?\n' % (eax))
                 self.traceFiles.dup(exit_info.old_fd, exit_info.new_fd)
+            else:
+                did_dmod = False
+                for call_param in exit_info.call_params:
+                    if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod':
+                        dmod = call_param.match_param
+                        if not dmod.commMatch(comm):
+                            continue
+                        if dmod.kind != 'open_replace':
+                            continue
+                        has_fd_open = dmod.hasFDOpen(tid, exit_info.old_fd)
+                        if has_fd_open:
+                            self.lgr.debug('sharedSyscall dup Dmod FD and tid match')     
+                            dmod.dupFD(tid, exit_info.old_fd, exit_info.new_fd)
+                            self.top.writeRegValue('syscall_ret', 0, alone=True)
+                            if self.cpu.architecture == 'ppc32':
+                                self.top.writeRegValue('cr', 0x40000002, alone=True)
+                            did_dmod = True
+                            trace_msg = trace_msg+' DMOD! forced return of 0, modified dmod FD'
+                if not did_dmod: 
+                    trace_msg = trace_msg+' ERROR return 0x%x\n' % eax
         elif callname == 'mmap2' or callname == 'mmap':
                 self.lgr.debug('sharedSyscall exitHap for %s' % callname)
                 # TBD still need error detection/handline
@@ -1726,6 +1746,11 @@ class SharedSyscall():
                     self.top.writeRegValue('syscall_ret', 0, alone=True)
                     if self.cpu.architecture == 'ppc32':
                         self.top.writeRegValue('cr', 0x40000002, alone=True)
+                    if callname == 'stat64':
+                        use_bytes = dmod.getBytes()
+                        if use_bytes is not None:
+                            self.mem_utils.writeBytes(self.cpu, exit_info.retval_addr, use_bytes)
+                            self.lgr.debug('sharedSyscall wrote %d bytes to 0x%x' % (len(use_bytes), exit_info.retval_addr))
                     did_dmod = True
                     if callname == 'rename':
                         dmod.rename(exit_info.fname, exit_info.fname2)
