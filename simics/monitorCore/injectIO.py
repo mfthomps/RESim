@@ -174,6 +174,8 @@ class InjectIO():
         self.no_page_faults = no_page_faults
         self.no_trace_dbg = no_trace_dbg
         self.run = run
+        # TBD use of reset_debug.  kills dmods, leading to potential confusing divergence
+        # Need analysis of effects of dmods on injectIO since they cause origin resets
         self.reset_debug = reset_debug
         self.src_addr = src_addr
         self.malloc = malloc
@@ -283,8 +285,8 @@ class InjectIO():
                     return 
             if self.reset_debug:
                 self.top.stopDebug()
-                self.lgr.debug('injectIO call debugTidGroup')
-                self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+            self.lgr.debug('injectIO call debugTidGroup')
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
 
             clib_ok = self.so_map.checkClibAnalysis(self.tid)
             if not clib_ok:
