@@ -1470,8 +1470,8 @@ class DataWatch():
         elif self.mem_something.fun == 'sscanf':
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             param_count = self.mem_utils.getSigned(eax)
-            self.lgr.debug('dataWatch returnHap, sscanf return from sscanf src 0x%x param_count %d ret_addr_addr 0x%x' % (self.mem_something.src, param_count,
-                    self.mem_something.ret_addr_addr))
+            self.lgr.debug('dataWatch returnHap, sscanf return from sscanf src 0x%x param_count %d first return param addr 0x%x' % (self.mem_something.src, 
+                    param_count, self.mem_something.dest_list[0]))
             buf_start = self.findRange(self.mem_something.src)
             format_str = self.mem_utils.readString(self.cpu, self.mem_something.dest, 40)
             if format_str is None:
