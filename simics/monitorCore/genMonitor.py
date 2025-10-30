@@ -4126,6 +4126,9 @@ class GenMonitor():
     def recordStackClone(self, tid, parent):
         self.stackFrameManager[self.target].recordStackClone(tid, parent)
  
+    def resetOriginIfReversing(self, cpu=None, enable=True):
+        self.resetOrigin(cpu=cpu, enable=False)
+
     def resetOrigin(self, cpu=None, enable=True):
         ''' reset the reverse origin.  NOTE: if enable is true, will enable reversing whether 
             currently enabled or not '''
