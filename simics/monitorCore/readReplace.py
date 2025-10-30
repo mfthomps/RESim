@@ -279,7 +279,7 @@ class ReadReplace():
                 memUtils.setMemoryValue(self.cpu, memory, our_value)
                 mod_addr = replace_entry.linear_addr
                 #SIM_run_alone(self.top.clearBookmarks, None)
-                SIM_run_alone(self.top.resetOrigin, None)
+                SIM_run_alone(self.top.resetOriginIfReversing, None)
             else:
                 mod_addr = self.doReplace(replace_entry, prog)
 
