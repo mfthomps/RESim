@@ -387,7 +387,10 @@ class StackTrace():
                                         except:
                                             self.lgr.debug('isCallToMe failed to get dest from %s' % parts[1])
                                             pass
-                                        if dest == cur_fun:
+                                        if cur_fun is None:
+                                            self.lgr.debug('isCallToMe direct branch to 0x%x cur_fun is none' % (dest))
+
+                                        elif dest == cur_fun:
                                             new_instruct = '%s   %s' % (self.callmn, fun)
                                             frame, adjust_sp = self.genFrame(call_instr, new_instruct, ptr, fun_hex, fun, lr, None, msg='isCallToMe direct branch')
                                             retval = (lr, adjust_sp)
