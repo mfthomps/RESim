@@ -358,7 +358,7 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
-                while not done and not DRIVER_WAIT: 
+                while not done and not DRIVER_WAIT and not RESIM_TARGET.lower() == 'none':
                     #print('***RUN SOME **')
                     #run_command('c 50000000000')
                     run_command('c 500000000')
