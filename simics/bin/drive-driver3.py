@@ -121,6 +121,7 @@ class Directive():
         self.client = None
         self.header = None
         self.iface = None
+        self.ssl = False
         self.file = []
         self.commands = []
         self.hang = False
@@ -172,6 +173,8 @@ class Directive():
             retval = retval + ' --header %s' % self.header
         if self.hang:
             retval = retval + ' --hang'
+        if self.ssl:
+            retval = retval + ' --ssl'
         farg = ''
         for f in self.file:
             farg = farg + ' /tmp/%s' % os.path.basename(f)
@@ -203,6 +206,9 @@ def main():
             client_cmd = 'serverTCP3'
         elif directive.session.lower() == 'tcp':
             client_cmd = 'clientTCP3'
+        elif directive.session.lower() == 'ssl':
+            client_cmd = 'clientTCP3'
+            directive.ssl = True
         elif directive.session.lower() == 'udp_json':
             if directive.src_ip is not None:
                 client_cmd = 'clientudpJsonScapy'
