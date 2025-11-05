@@ -920,40 +920,6 @@ class GetKernelParams():
         
         
    
-    def entryModeChangedPPC32(self, dumb, one, old, new):
-        if self.ignore_mode:
-            return
-        if self.entry_mode_hap is None:
-            return
-        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        self.lgr.debug('entryModeChanged PPC32, pc is  0x%x ' % (eip))
-        if old == Sim_CPU_Mode_Supervisor and new == Sim_CPU_Mode_User:
-            #self.lgr.debug('entryModeChanged PPC32, user mode')
-            ''' leaving kernel, capture address, note instruction cannot be read '''
-            if eip not in self.hits:
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                if instruct[1] == '<illegal memory mapping>':
-                    self.lgr.debug('entryModeChangedPPC32 return to user, nothing mapped at eip 0x%x ' % (eip))
-                    pass
-                if self.param.arm_ret is None:
-                    self.lgr.debug('entryModeChangedPPC32 return to user, think ppc32_ret is 0x%x' % eip)
-                    self.param.ppc32_ret = eip
-                else:
-                    self.lgr.debug('entryModeChanged PPC32 return to user, found both ret')
-                    SIM_break_simulation('entryModeChanged ret: 0x%x' % (self.param.ppc32_ret))
-                    
-        elif old == Sim_CPU_Mode_User:
-            #if self.param.page_table is None:
-            #    self.param.page_table = self.getPageTableDirectory()
-            self.dumb_count += 1
-            self.lgr.debug('entryModeChanged PPC32 enter supervisor, from user pc 0x%x' % eip)
-            # cannot read eip from supervisor
-            #if self.param.ppc32_entry is None and instruct[1].startswith('sc'):
-            if self.param.ppc32_entry is None: 
-                self.prev_instruct = 'cannot read'
-                self.lgr.debug('entryModeChanged PPC32 maybe found sc')
-                SIM_break_simulation('entryModeChanged ppc32 maybe found sc')
-
     def entryModeChangedARM(self, dumb, one, old, new):
         if self.ignore_mode:
             return
@@ -1556,45 +1522,6 @@ class GetKernelParams():
         self.lgr.debug('getEL1 reg_value 0x%x retval 0x%x' % (reg_value, ret_value))
         return ret_value
 
-    def entryPPC32Alone(self, dumb):
-        # we entered supervisor on ppc32 from what we think is a syscall.  record syscall address
-        # NOTE returns
-        eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        call_num = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-        here = self.cpu.cycles 
-        prev = self.cpu.cycles - 1
-        self.ignore_mode = True
-        self.skip_to_mgr.skipToTest(prev)
-        self.lgr.debug('entryPPC32Alone here 0x%x prev 0x%x' % (here, prev))
-        prev_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        prev_instruct = SIM_disassemble_address(self.cpu, prev_eip, 1, 0)
-        if 'illegal' in prev_instruct[1]:
-            self.lgr.debug('entryPPC32Alone failed to get prev_instruct, maybe page fu, jump forward and try again')
-            self.skip_to_mgr.skipToTest(here)
-            self.ignore_mode = False
-            SIM_continue(0)
-            return 
-        self.lgr.debug('entryPPC32Alone instruct is %s eip 0x%x  len %d prev pc 0x%x instruct is %s' % (instruct[1], eip, instruct[0], prev_eip, prev_instruct[1]))
-        if self.param.ppc32_entry is None and prev_instruct[1].startswith('sc'): 
-            self.lgr.debug('entryStopHapPPC32 set ppc32_entry to 0x%x' % eip) 
-            self.param.ppc32_entry = eip 
-        done = False
-        if self.param.ppc32_entry is not None and self.param.ppc32_ret is not None:
-                done = True
-        self.ignore_mode = False
-        
-        if done:
-            self.deleteHaps(None)
-            self.lgr.debug('kernel entry and exits found')
-
-            ''' HERE is where we do more stuff, at the end of this HAP '''
-            #param_json = json.dumps(self.param)
-            #SIM_run_alone(self.fixStackFrame, None)
-            self.findCompute(False)
-        else:
-            self.lgr.debug('entryStopHapARM missing exit or entry, now continue')
-            self.continueAhead(None)
 
     def entryArmAlone(self, dumb):
         # we entered supervisor on arm from what we think is a syscall.  record syscall address
@@ -1682,12 +1609,6 @@ class GetKernelParams():
             return
         SIM_run_alone(self.entryArmAlone, None)
 
-    def entryStopHapPPC32(self, dumb, one, exception, error_string):
-        self.lgr.debug('stopHapPPC32')
-        if self.stop_hap is None: 
-            return
-        SIM_run_alone(self.entryPPC32Alone, None)
-
     def stopCompat32Hap(self, dumb, one, exception, error_string):
         if self.stop_hap is None: 
             return
@@ -1728,10 +1649,7 @@ class GetKernelParams():
             self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.entryModeChangedARM, False)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.entryStopHapARM, None)
         elif self.cpu.architecture == 'ppc32':
-            self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.entryModeChangedPPC32, False)
-            self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.entryStopHapPPC32, None)
-            self.lgr.debug('checkKernelEntry added mode changed for ppc32')
-            SIM_run_command('enable-reverse-execution')
+            self.lgr.error('checkKernelEntry not expected for for ppc32')
         elif self.os_type == 'WIN7':
             self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.entryModeChangedWin, False)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.entryStopHapWin, None)
@@ -2165,12 +2083,13 @@ class GetKernelParams():
             self.lgr.debug('arm64 current_task phys at 0x%x' % self.current_task_phys)
             self.findSwapper()
 
-    def ppcParams(self, kernel_enter, kernel_exit, current_task, phys_addr, compute_jump):
+    def ppcParams(self, kernel_enter, kernel_exit, current_task, phys_addr, compute_jump, super_pc):
         self.param.current_task = current_task
         self.current_task_phys = phys_addr
         self.param.page_fault = 0x400
         self.param.ppc32_entry = kernel_enter
         self.param.ppc32_ret = kernel_exit[0]
+        self.param.ppc32_super_enter = super_pc
         if len(kernel_exit) > 1:
             self.param.ppc32_ret2 = kernel_exit[1]
         if len(kernel_exit) > 2:

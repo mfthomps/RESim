@@ -81,6 +81,7 @@ class Kparams():
         self.ppc32_entry = None
         self.ppc32_ret = None
         self.ppc32_ret2 = None
+        self.ppc32_super_enter = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None
