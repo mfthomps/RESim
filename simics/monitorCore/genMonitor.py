@@ -5325,13 +5325,14 @@ class GenMonitor():
         self.coverage.difCoverage(fname)
 
     def precall(self, tid=None):
+        retval = True
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         cycle_list = self.record_entry[self.target].getEnterCycles(tid)
         self.lgr.debug('precall tid:%s len of cycle_list %d' % (tid, len(cycle_list)))
         if cycle_list is None:
             print('No cycles for tid:%s' % tid)
-            return
+            return False
         else:
             ''' find latest cycle that preceeds current cycle '''
             cpu = self.cell_config.cpuFromCell(self.target)
@@ -5362,9 +5363,11 @@ class GenMonitor():
                         cpl = memUtils.getCPL(cpu)
                         if cpl == 0: 
                             self.lgr.error('precall ended up in kernel, quit')
+                            retval = False
                             #self.quit()
                 if did_remove:
                     self.restoreDebugBreaks(was_watching=True)
+        return retval
 
     def taskSwitches(self):
         cpu = self.cell_config.cpuFromCell(self.target)

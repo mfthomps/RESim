@@ -103,7 +103,8 @@ class PrepInjectWatch():
            
             ''' Jump to prior to call to record the call address ''' 
             cycle_was = self.cpu.cycles
-            self.top.precall()
+            if not self.top.precall():
+                return
             self.call_ip = self.top.getEIP(self.cpu)
 
             if not is_ioctl:
