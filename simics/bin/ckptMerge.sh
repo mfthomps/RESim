@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 move_pickle(){
     plist=$(ls $1/*.pickle)
     for p in $plist; do
