@@ -126,7 +126,6 @@ class Kbuffer():
             self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
             our_reg = op1
             #self.top.revRegSrc(op1, kernel=True, callback=self.gotBufferCallback, taint=False)
-            ''' Simulation is running.  So make hacky assumption about there being a recent ldm instruction to avoid stopping '''
             limit = 20
             gotone = False
             for i in range(limit):
@@ -177,6 +176,45 @@ class Kbuffer():
         else:
             self.lgr.error('findArmBuf, expected str instruction, got %s' % instruct[1])
             
+    def findPPCBuf(self, dumb=None):
+        # Find kernel buffers for ppc32 processors.  First skip to the cycle that got us here, which is likely -1 from where we are
+        self.top.skipToCycle(self.write_cycle, disable=True)
+        eip = self.top.getEIP()
+        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        self.lgr.debug('Kbuffer FindPPCBuf eip 0x%x  cycle: 0x%x, is PPC, expect a st2: %s' % (eip, self.cpu.cycles, instruct[1]))
+        if instruct[1].startswith('stw') or instruct[1].startswith('stb'):
+            op2, op1 = decodeArm.getOperands(instruct[1])
+            self.lgr.debug('Kbuffer FindPPCBuf op1 is %s' % op1)
+            our_reg = op1
+            #self.top.revRegSrc(op1, kernel=True, callback=self.gotBufferCallback, taint=False)
+            limit = 20
+            gotone = False
+            for i in range(limit):
+                prev = self.cpu.cycles - 1 
+                self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
+                eip = self.top.getEIP()
+                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                self.lgr.debug('FindPPCBuf pc: 0x%x instruct: %s' % (eip, instruct[1]))
+                if instruct[1].startswith('lw'):
+                    op2, op1 = decodeArm.getOperands(instruct[1])
+                    writeback = False
+                    if op1 == our_reg:
+                        value = decodePPC32.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
+                    else:
+                        self.lgr.debug('findPPCBuf lw not our reg, skip it')
+                        continue
+                    self.lgr.debug('FindPPCBuf buf found at 0x%x' % value)
+                    if self.kernel_cycle_of_write is None:
+                        # before kernel starts reading buffer
+                        self.kernel_cycle_of_write = self.cpu.cycles - 1
+                        self.lgr.debug('FindPPCBuf buf kernel_cycle_of_write is 0x%x' % self.kernel_cycle_of_write)
+                    self.updateBuffers(value)
+                    gotone = True
+                    break
+            if not gotone:
+                self.lgr.error('FindPPCBuf failed to find instruction sequence')
+        else:
+            self.lgr.error('FindPPCBuf, expected str instruction, got %s' % instruct[1])
 
     def updateBuffers(self, src):
         if len(self.kbuf_len) > 0 and src > self.kbufs[-1] and src < (self.kbufs[-1]+self.kbuf_len[-1]):
@@ -280,7 +318,33 @@ class Kbuffer():
         self.lgr.debug('Kbuffer writeHap this tid:%s watching tid:%s addr 0x%x physical 0x%x, value 0x%x watching_addr: 0x%x eip: 0x%x cycle: 0x%x' % (tid, self.tid, 
                 memory.logical_address, memory.physical_address, value, self.watching_addr, eip, self.cpu.cycles))
         self.write_cycle = self.cpu.cycles
-        if not self.cpu.architecture.startswith('arm'):
+        if self.cpu.architecture.startswith('arm'):
+            # ARM
+            hap = self.write_hap
+            SIM_run_alone(self.removeHap, hap)
+            self.write_hap = None
+            
+            if memory.logical_address != self.watching_addr:
+                self.lgr.debug('Kbuffer writeHap seems ass backwards')
+                self.ass_backwards = True 
+           
+            #self.removeHap(None)
+            #self.top.stopTrackIO()
+            #src = self.findArmBuf()
+            SIM_run_alone(self.top.stopAndCall, self.findArmBuf)
+            #SIM_break_simulation('arm writeHap')
+        if self.cpu.architecture == 'ppc32':
+            # PPC
+            hap = self.write_hap
+            SIM_run_alone(self.removeHap, hap)
+            self.write_hap = None
+            
+            if memory.logical_address != self.watching_addr:
+                self.lgr.debug('Kbuffer writeHap seems ass backwards')
+                self.ass_backwards = True 
+           
+            SIM_run_alone(self.top.stopAndCall, self.findPPCBuf)
+        else:
             if self.top.isWindows() and self.hack_count < 1:
                 self.hack_count = self.hack_count + 1
                 self.lgr.debug('Kbuffer writeHap skip first write.  Windows fu. eip: 0x%x' % eip)
@@ -302,21 +366,7 @@ class Kbuffer():
                     self.updateBuffers(src)
                 else:
                     self.top.stopAndGo(self.findWinBuf)
-        else:
-            # ARM
-            hap = self.write_hap
-            SIM_run_alone(self.removeHap, hap)
-            self.write_hap = None
-            
-            if memory.logical_address != self.watching_addr:
-                self.lgr.debug('Kbuffer writeHap seems ass backwards')
-                self.ass_backwards = True 
-           
-            #self.removeHap(None)
-            #self.top.stopTrackIO()
-            #src = self.findArmBuf()
-            SIM_run_alone(self.top.stopAndCall, self.findArmBuf)
-            #SIM_break_simulation('arm writeHap')
+
 
     def removeHap(self, hap, immediate=False):
         if hap is not None:
