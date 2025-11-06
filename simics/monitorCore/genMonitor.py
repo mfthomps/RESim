@@ -5959,7 +5959,7 @@ class GenMonitor():
     def stopAndCall(self, callback):
         self.lgr.debug('stopAndCall')
         self.stop_hap = self.RES_add_stop_callback(self.stopAndCallHap, callback)
-        SIM_break_simulation('stopAndCall')
+        SIM_break_simulation('stopping simulation...')
 
     def stopAndCallHap(self, callback, one, exception, error_string):
         if self.stop_hap is not None:
