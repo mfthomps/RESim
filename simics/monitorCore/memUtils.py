@@ -879,26 +879,9 @@ class MemUtils():
         else:
             return None
 
-    def getRegValue(self, cpu, reg):
-        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
-        reg_value = None
+    def getRegNum(self, cpu, reg):
         reg_num = None
-        mask = None
-        if reg.startswith('xmm'):
-            h_l = None
-            if reg.endswith('L'):
-                h_l = 0
-            elif reg.endswith('H'):
-                h_l = 1
-            if h_l is None:
-                index = int(reg[3:])
-                reg_value = cpu.xmm[index][0]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
-            else:
-                index = int(reg[3:-1])
-                reg_value = cpu.xmm[index][h_l]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
-        else:     
+        if reg is not None:             
             if cpu.architecture != 'arm64':
                 if reg in self.regs:
                     reg_num = cpu.iface.int_register.get_number(self.regs[reg])
@@ -953,6 +936,31 @@ class MemUtils():
                             reg_num = cpu.iface.int_register.get_number('x15')
                         elif reg == 'lr_usr':
                             reg_num = cpu.iface.int_register.get_number('x14')
+        else:
+            self.lgr.error('memUtils getRegNum with no reg')
+        return reg_num
+
+    def getRegValue(self, cpu, reg):
+        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
+        reg_value = None
+        reg_num = None
+        mask = None
+        if reg.startswith('xmm'):
+            h_l = None
+            if reg.endswith('L'):
+                h_l = 0
+            elif reg.endswith('H'):
+                h_l = 1
+            if h_l is None:
+                index = int(reg[3:])
+                reg_value = cpu.xmm[index][0]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
+            else:
+                index = int(reg[3:-1])
+                reg_value = cpu.xmm[index][h_l]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
+        else:     
+            reg_num = self.getRegNum(cpu, reg)
             if reg_num is not None:
                 reg_value = cpu.iface.int_register.read(reg_num)
             else:
@@ -996,13 +1004,10 @@ class MemUtils():
             return 'x86_32'
 
     def setRegValue(self, cpu, reg, value):
-        if reg in self.regs:
-            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-        elif reg in param_map[self.kernelArch(cpu)]:
-            reg_num = cpu.iface.int_register.get_number(param_map[self.kernelArch(cpu)][reg])
-        else:
-            reg_num = cpu.iface.int_register.get_number(reg)
-        reg_value = cpu.iface.int_register.write(reg_num, value)
+        #self.lgr.debug('setRegValue reg %s value 0x%x' % (reg, value))
+        reg_num = self.getRegNum(cpu, reg)
+        
+        cpu.iface.int_register.write(reg_num, value)
 
     def getESP(self):
         if self.WORD_SIZE == 4:
