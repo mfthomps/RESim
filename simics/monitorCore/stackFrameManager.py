@@ -228,9 +228,10 @@ class StackFrameManager():
                     self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
                 else:
                     name = 'unknown'
-            print('%16x   %16x %s' % (ptr, value, name))
+            so = self.top.getSO(value, just_name=True)
+            print('%16x   %16x %s %s' % (ptr, value, name, so))
             if fh is not None:
-                fh.write('%16x   %16x %s\n' % (ptr, value, name))
+                fh.write('%16x   %16x %s %s\n' % (ptr, value, name, so))
             ptr = ptr + offset
         if fh is not None:
             fh.close()
