@@ -758,6 +758,7 @@ class GenContextMgr():
         if self.onlyOrIgnore(tid, comm, new_addr):
             return 
         else:
+            self.lgr.debug('changedThread, call checkFirstSchedule for %s' % comm)
             self.checkFirstSchedule(new_addr, tid, comm)
         if len(self.pending_watch_tids) > 0:
             ''' Are we waiting to watch tids that have not yet been scheduled?
@@ -1561,6 +1562,9 @@ class GenContextMgr():
         self.lgr.debug('contectManager noWatch tid:%s' % tid)
 
     def newProg(self, prog_string, tid):
+        # use comm for checkFirstScheduled so it does not match if we are not yet debugging after an exec
+        dumcpu, comm, cur_tid = self.task_utils.curThread()
+        self.checkFirstSchedule(None, tid, comm)
         if len(self.ignore_progs) > 0:
             base = os.path.basename(prog_string)
             self.lgr.debug('contextManager newProg, ignore tid %s check for base %s' % (tid, base))
