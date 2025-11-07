@@ -521,7 +521,7 @@ class SharedSyscall():
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 self.lgr.debug('sharedSyscall matched_param is %s, my_syscall %s linger %r' % (str(exit_info.matched_param), my_syscall.name, my_syscall.linger))
-                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger or self.top.tracking()) and self.dataWatch is not None:
                     if not self.checkCount(eax, exit_info, trace_msg, s):
                         self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                         if exit_info.src_addr is not None:
@@ -569,7 +569,7 @@ class SharedSyscall():
                 if exit_info.matched_param is not None:
                     self.lgr.debug('sharedSyscall recvmsg has param %s' % exit_info.matched_param)
                 my_syscall = exit_info.syscall_instance
-                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None:
+                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger or self.top.tracking()) and self.dataWatch is not None:
                     ''' in case we want to break on a read of this data. ''' 
                     self.lgr.debug('sharedSyscall recvmsg call checkCount')
                     if not self.checkCount(eax, exit_info, trace_msg, s):
@@ -996,9 +996,12 @@ class SharedSyscall():
                 self.lgr.debug(trace_msg)
 
                 my_syscall = exit_info.syscall_instance
-                self.lgr.debug('sharedSyscall return from read matched_param is %s linger %r my_syscall %s' % (str(exit_info.matched_param), my_syscall.linger, my_syscall.name))
-                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger) and self.dataWatch is not None \
+                self.lgr.debug('sharedSyscall return from read matched_param is %s linger %r break_simulation %r my_syscall %s match_param type %s' % (str(exit_info.matched_param), 
+                     exit_info.matched_param.break_simulation, my_syscall.linger, my_syscall.name, type(exit_info.matched_param.match_param)))
+                if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or my_syscall.linger or self.top.tracking()) \
+                                and self.dataWatch is not None \
                                 and type(exit_info.matched_param.match_param) is int and exit_info.matched_param.match_param == exit_info.old_fd:
+                    self.lgr.debug('sharedSyscall maybe dataWatch, check count')
                     if not self.checkCount(eax, exit_info, trace_msg, s):
                         self.dataWatch.setRange(exit_info.retval_addr, eax, msg=trace_msg, max_len=exit_info.count, fd=exit_info.old_fd, data_stream=True, kbuffer=self.kbuffer)
                 # TBD make a config parameter
