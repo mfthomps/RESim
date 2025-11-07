@@ -496,8 +496,10 @@ class Dmod():
             SIM_run_alone(self.scheduledAlone, tid)
 
     def scheduledAlone(self, tid):
-        self.lgr.debug('dmod %s scheduled tid %s' % (self.toString(), tid))
-        self.top.runTo(self.op_set, self.call_params, ignore_running=True, run=False)
+        operation = self.getOperation()
+        name = 'dmod-%s' % operation
+        self.lgr.debug('dmod %s scheduled tid %s name %s' % (self.toString(), tid, name))
+        self.top.runTo(self.op_set, self.call_params, ignore_running=True, run=False, name=name)
         self.op_set = None
 
     def rename(self, fname, fname2):
