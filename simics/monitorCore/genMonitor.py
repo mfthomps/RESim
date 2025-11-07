@@ -359,7 +359,7 @@ class GenMonitor():
 
         self.disassemble_instruct = {}
         self.max_marks = None
-        self.no_reset = False
+        self.no_reset = None
         self.record_entry = {}
         self.reverse_mgr = {}
         self.skip_to_mgr = {}
@@ -1544,6 +1544,7 @@ class GenMonitor():
             ''' Our first debug '''
             cpu, comm, tid = self.task_utils[self.target].curThread() 
             self.lgr.debug('debug tid:%s (%s)' % (tid, comm))
+            self.context_manager[cell_name].checkFirstSchedule(None, tid, comm)
             if self.full_path is None:
                 ''' This will set full_path'''
                 self.setPathToProg(tid)
@@ -3505,7 +3506,7 @@ class GenMonitor():
         #else:
         #    #self.call_traces[self.target]['open'] = self.traceSyscall(callname='open', soMap=self.soMap)
         if not self.isWindows():
-            call_list = ['open', 'mmap']
+            call_list = ['open', 'openat', 'mmap']
             if self.mem_utils[self.target].WORD_SIZE == 4 or self.is_compat32: 
                 call_list.append('mmap2')
 
@@ -3696,7 +3697,7 @@ class GenMonitor():
         elif self.isVxDKM():
             open_call_list = ['fopen']
         else:
-            open_call_list = ['open']
+            open_call_list = ['open', 'openat']
         call_params = syscall.CallParams('runToOpen', open_call_list[0], substring, break_simulation=True)
         self.lgr.debug('runToOpen to %s' % substring)
         self.runTo(open_call_list, call_params, name='open', run=run)
@@ -3851,7 +3852,7 @@ class GenMonitor():
     
             if not just_input:
                 # add open to catch Dmods for open_replace
-                calls = ['open', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
+                calls = ['open', 'openat', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
                 accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
                 for c in accept_call:
                     calls.append(c)
@@ -4169,7 +4170,7 @@ class GenMonitor():
         return True
 
     def writeRegValue(self, reg, value, alone=False, reuse_msg=False, target_cpu=None):
-        if self.no_reset:
+        if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
@@ -4178,6 +4179,7 @@ class GenMonitor():
             target_cpu = self.cell_config.cpuFromCell(self.target)
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
+        value = self.mem_utils[target].getUnsigned(value)
         self.mem_utils[target].setRegValue(target_cpu, reg, value)
         #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if alone:
@@ -4186,7 +4188,7 @@ class GenMonitor():
             self.clearBookmarks(reuse_msg=reuse_msg)
 
     def writeWord(self, address, value, target_cpu=None, word_size=None):
-        if self.no_reset:
+        if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
@@ -4209,7 +4211,7 @@ class GenMonitor():
         self.clearBookmarks()
 
     def writeByte(self, address, value, target_cpu=None):
-        if self.no_reset:
+        if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
@@ -4226,7 +4228,7 @@ class GenMonitor():
         self.clearBookmarks()
 
     def writeString(self, address, string, target_cpu=None):
-        if self.no_reset:
+        if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
@@ -4243,7 +4245,7 @@ class GenMonitor():
             self.clearBookmarks()
 
     def writeBytes(self, cpu, address, bstring, target_cpu=None):
-        if self.no_reset:
+        if self.no_reset is not None:
             SIM_break_simulation('no reset')
             print('Would reset origin, bail')
             return
@@ -4722,7 +4724,7 @@ class GenMonitor():
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, 
-                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None):
+                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None):
         if max_marks is None:
             max_marks = self.max_marks
         self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
@@ -4761,6 +4763,9 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         self.clearWatches(cycle=cpu.cycles)
         self.restoreDebugBreaks()
+        if no_reset is not None:
+            self.lgr.debug('trackIO no reset')
+            self.dataWatch[self.target].noReset()
         if callback is None:
             done_callback = self.resetTrackIOBackstop
         elif callback == 'skipAndMail':
@@ -5011,7 +5016,7 @@ class GenMonitor():
     def injectIO(self, dfile, stay=False, keep_size=False, callback=None, n=1, cpu=None, 
             sor=False, cover=False, target=None, targetFD=None, trace=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
-            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=False, count=1, no_page_faults=False, 
+            break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=None, count=1, no_page_faults=False, 
             trace_all=False, run=True, reset_debug=False, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  '''
@@ -5978,7 +5983,7 @@ class GenMonitor():
     def injectToBB(self, bb, target=None, targetFD=None, fname=None):
         ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target, targetFD=targetFD, fname=fname)
 
-    def injectToWM(self, addr, target=None, targetFD=None, max_marks=None, no_reset=False, ws=None):
+    def injectToWM(self, addr, target=None, targetFD=None, max_marks=None, no_reset=None, ws=None):
         iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, target_prog=target, targetFD=targetFD, max_marks=max_marks, no_reset=no_reset, ws=ws)
 
     def getParam(self):
@@ -6969,7 +6974,7 @@ class GenMonitor():
         self.max_marks = max_marks 
 
     def noReset(self):
-        self.no_reset = True
+        self.no_reset = 0
 
     def findRefs(self, offset):
         marks = self.dataWatch[self.target].getAllJson()

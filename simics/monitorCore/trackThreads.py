@@ -236,7 +236,7 @@ class TrackThreads():
         if self.top.isWindows():
             call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateUserProcess', 'CreateFile', 'OpenSection']
         else:
-            call_list = ['open', 'mmap']
+            call_list = ['open', 'openat', 'mmap']
             if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
                 call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''

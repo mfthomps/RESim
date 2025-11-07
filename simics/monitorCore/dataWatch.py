@@ -339,7 +339,8 @@ class DataWatch():
         # for handling broken stack parsing that leads to ghost frames
         self.recent_ghost_call_addr = None
 
-        self.no_reset = False
+        self.no_reset = None
+        self.reset_count = 0
         self.failed_comm_list = []
 
     def addFreadAlone(self, dumb):
@@ -5478,7 +5479,7 @@ class DataWatch():
         if len(self.start) == 0:
             return
         # Returns false if directed to not reset the origin
-        if self.no_reset:
+        if self.no_reset is not None and self.no_reset >= self.reset_count:
             self.lgr.debug('dataWatch resetOrigin, but no_reset set.  Stop simulation')
             SIM_break_simulation('no reset')
             return False
@@ -6492,8 +6493,8 @@ class DataWatch():
         else:
             return False                    
                 
-    def noReset(self):
-        self.no_reset = True
+    def noReset(self, count=0):
+        self.no_reset = count
 
     def trackMalloc(self):
         self.lgr.debug('dataWatch trackMalloc') 

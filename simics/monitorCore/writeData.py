@@ -41,7 +41,7 @@ class WriteData():
     def __init__(self, top, cpu, in_data, expected_packet_count, 
                  mem_utils, context_manager, backstop, snapshot_name, lgr, udp_header=None, pad_to_size=None, filter=None, 
                  force_default_context=False, backstop_cycles=None, stop_on_read=False, ioctl_count_max=None, select_count_max=None, write_callback=None, limit_one=False, 
-                  dataWatch=None, shared_syscall=None, no_reset=False, set_ret_hap=True, backstop_delay=None, stop_callback=None):
+                  dataWatch=None, shared_syscall=None, no_reset=None, set_ret_hap=True, backstop_delay=None, stop_callback=None):
         ''' expected_packet_count == -1 for TCP '''
         # genMonitor
         self.top = top
@@ -375,7 +375,7 @@ class WriteData():
         ''' inject data into the application buffer and set the return count value seen by the application '''
         retval = None
         #self.lgr.debug('userBufWrite self.max_len is %d in data is %d bytes' % (self.max_len, len(self.in_data)))
-        if self.current_packet > 1 and self.no_reset:
+        if self.current_packet > 1 and self.no_reset is not None:
              self.lgr.debug('writeData userBufWrite, current packet %d, no reset so stop' % self.current_packet)
              SIM_break_simulation('writeData userBufWrite, no reset')
              if self.stop_callback is not None:
@@ -768,7 +768,7 @@ class WriteData():
         # return False if simulation being halted due to select count or poll count or no_reset
         # Also used for poll
         retval = True
-        if self.no_reset:
+        if self.no_reset is not None:
             #self.lgr.debug('writeData checkSelect no reset')
             self.doBreakSimulation('writeData checkSelect no reset')
             retval = False
@@ -795,7 +795,7 @@ class WriteData():
             return self.doRetFixup(fd)
         if fd == self.fd:
             if self.ioctl_flag is not None:
-                if not self.no_reset:
+                if self.no_reset is None:
                     # must be second call, return zero
                     if addr_of_count is None:
                         addr_of_count = self.addr_of_count
@@ -864,20 +864,20 @@ class WriteData():
                 self.stop_callback()
             return None
         self.total_read = self.total_read + eax
-        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
                 self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
-                if self.shared_syscall is not None and not self.no_reset:
+                if self.shared_syscall is not None and self.no_reset is None:
                     self.shared_syscall.foolSelect(self.fd)
         if self.total_read > self.read_limit:
             self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
-                 if eax > remain and not self.no_reset:
+                 if eax > remain and self.no_reset is None:
                      #if self.no_reset:
                      #    self.lgr.debug('writeData doRetFixup, would alter return value, but no_reset is set.  Stop simulation.')
                      #    SIM_break_simulation('writeData doRetFixup no reset')
@@ -925,7 +925,7 @@ class WriteData():
                 self.stop_callback()
             return None
         self.total_read = self.total_read + count
-        self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d no_reset: %r' % (count, self.read_limit, self.total_read, remain, self.no_reset))
+        self.lgr.debug('writeData windowsReadFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (count, self.read_limit, self.total_read, remain, self.no_reset))
 
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
@@ -936,7 +936,7 @@ class WriteData():
             self.lgr.debug('writeData windowsReadFixup read over limit of %d' % self.read_limit)
             if self.mem_utils.isKernel(self.addr):
                  ''' adjust the return value and continue '''
-                 if count > remain and not self.no_reset:
+                 if count > remain and self.no_reset is None:
                      if self.user_space_addr is not None:
                          start = self.user_space_addr + remain
                          self.lgr.debug('writeData windowsReadFixup restored original buffer, %d bytes starting at 0x%x' % (len(self.orig_buffer[remain:count]), start))

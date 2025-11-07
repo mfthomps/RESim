@@ -40,7 +40,7 @@ import defaultConfig
 class InjectIO():
     def __init__(self, top, cpu, cell_name, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
+           coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=None,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
            count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None):
         self.lgr = None
@@ -331,7 +331,7 @@ class InjectIO():
             use_data_watch = None
         else:
             use_data_watch = self.dataWatch
-        if self.no_reset:
+        if self.no_reset is not None:
             write_callback = self.callback
             self.dataWatch.noReset()
         else:
@@ -555,7 +555,7 @@ class InjectIO():
 
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
-        if self.no_reset:
+        if self.no_reset is not None:
             self.lgr.debug('resetReverseAlone no reset, so stop.')
         else:
             if count != 0:

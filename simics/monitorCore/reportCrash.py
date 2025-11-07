@@ -102,7 +102,7 @@ class ReportCrash():
         ''' Either inject or track '''
         if self.trackFD is None:
             self.top.injectIO(self.flist[self.index], keep_size = False, n=self.num_packets, cpu=self.cpu, target=self.target, 
-                   targetFD=self.targetFD, callback=self.doneForward, no_iterators=True, no_reset=False, max_marks=400)
+                   targetFD=self.targetFD, callback=self.doneForward, no_iterators=True, no_reset=None, max_marks=400)
             #      targetFD=self.targetFD, callback=self.top.stopTrackIO, no_iterators=True, no_reset=False, max_marks=400)
             #       targetFD=self.targetFD, callback=self.doneForward, no_iterators=True)
         else:
