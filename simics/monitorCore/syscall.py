@@ -1606,7 +1606,7 @@ class Syscall():
                 exit_info.retval_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+12)
             else:
                 domain = frame['param1']
-                socK_type = frame['param2']
+                sock_type = frame['param2']
                 protocol = frame['param3']
                 exit_info.retval_addr = frame['param4']
             ida_msg = '%s - %s %s tid:%s (%s) domain: 0x%x type: 0x%x protocol: 0x%x sv addr 0x%x' % (callname, 
@@ -1706,6 +1706,7 @@ class Syscall():
                 for call_param in self.call_params:
                     #self.lgr.debug('got param name %s type %s subcall %s' % (call_param.name, type(call_param.match_param), call_param.subcall))
                     if call_param.match_param.__class__.__name__ == 'Dmod':
+                         #self.lgr.debug('syscallparse is Dmod comm %s' % comm)
                          if not call_param.match_param.commMatch(comm): 
                              continue
                          exit_info.call_params.append(call_param)
