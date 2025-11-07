@@ -143,7 +143,7 @@ class DmodMgr():
         if operation == 'open':
            # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
            # Use a syscall dmod if you want to
-           op_set = ['open', 'read','write','close','lseek','_llseek']
+           op_set = ['open', 'openat', 'read','write','close','lseek','_llseek']
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
         else:
            op_set = [operation]
