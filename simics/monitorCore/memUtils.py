@@ -47,7 +47,13 @@ def readPhysBytes(cpu, paddr, count):
             #bytes_read = SIM_read_phys_memory(cpu, cur_addr, remain)
             bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 1)
         except:
-            raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+            # Simics ARM64 in fvp base revc is broken
+            simics_broken_int = SIM_read_phys_memory(cpu, cur_addr, remain)
+            if simics_broken_int is None:
+                raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+            else:
+                the_bytes = simics_broken_int.to_bytes(4, byteorder = 'little')
+                bytes_read = tuple(the_bytes)
         #retval = retval + tuple(bytes_read.to_bytes(4, 'little'))
         retval = retval + bytes_read
         tot_read = tot_read + remain
@@ -633,7 +639,13 @@ class MemUtils():
     def readString(self, cpu, vaddr, maxlen):
         retval = None
         ps = self.v2p(cpu, vaddr)
-        if ps is not None and ps != 0:
+        if ps is None:
+            #self.lgr.error('readString phys None for vaddr 0x%x' % vaddr)
+            pass
+        elif ps == 0:
+            #self.lgr.error('readString phys zero for vaddr 0x%x' % vaddr)
+            pass
+        else:
             #self.lgr.debug('readString vaddr 0x%x ps is 0x%x' % (vaddr, ps))
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
@@ -666,7 +678,7 @@ class MemUtils():
         try:
             read_data = readPhysBytes(cpu, paddr, maxlen)
         except ValueError:
-            self.lgr.debug('readStringPhys, error reading paddr 0x%x' % paddr)
+            self.lgr.debug('readStringPhys, error reading paddr 0x%x maxlen 0x%x' % (paddr, maxlen))
             return None
         for v in read_data:
             if v == 0:
