@@ -4765,7 +4765,7 @@ class GenMonitor():
         self.restoreDebugBreaks()
         if no_reset is not None:
             self.lgr.debug('trackIO no reset')
-            self.dataWatch[self.target].noReset()
+            self.dataWatch[self.target].noReset(count=no_reset)
         if callback is None:
             done_callback = self.resetTrackIOBackstop
         elif callback == 'skipAndMail':
@@ -6973,8 +6973,8 @@ class GenMonitor():
     def maxMarks(self, max_marks):
         self.max_marks = max_marks 
 
-    def noReset(self):
-        self.no_reset = 0
+    def noReset(self, count=0):
+        self.no_reset = count 
 
     def findRefs(self, offset):
         marks = self.dataWatch[self.target].getAllJson()
