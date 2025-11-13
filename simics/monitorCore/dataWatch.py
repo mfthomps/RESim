@@ -5479,10 +5479,14 @@ class DataWatch():
         if len(self.start) == 0:
             return
         # Returns false if directed to not reset the origin
-        if self.no_reset is not None and self.no_reset >= self.reset_count:
-            self.lgr.debug('dataWatch resetOrigin, but no_reset set.  Stop simulation')
-            SIM_break_simulation('no reset')
-            return False
+        if self.no_reset is not None:
+            self.lgr.debug('dataWatch resetOrigin, no_reset is %d count is %d' % (self.no_reset, self.reset_count))
+            if self.reset_count >= self.no_reset: 
+                self.lgr.debug('dataWatch resetOrigin, but no_reset set.  Stop simulation')
+                SIM_break_simulation('no reset')
+                return False
+            else:
+                self.reset_count = self.reset_count + 1
         data_watch_list = self.watchMarks.getDataWatchList()
         origin_watches = []
         if len(self.cycle) > 0 and cycle <= self.cycle[-1]:
