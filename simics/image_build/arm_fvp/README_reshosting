@@ -1,0 +1,17 @@
+
+Use the build_rootfs_image.sh script to create the ram disk from your file system.
+The uloader tells the kernel to expect an init in /, so if that is not there, create
+a link to your init.
+A successful boot will include:
+...
+[   86.547965] Sending DHCP requests .
+[   87.491967] IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready
+[   89.203962] ..... timed out!
+[  171.036368] IP-Config: Auto-configuration of network failed
+[  171.036377] ALSA device list:
+[  171.036383]   No soundcards found.
+[  171.038892] Freeing unused kernel memory: 1152K
+[  171.047983] Run /init as init process
+[  171.060963] init: Console is alive
+[  171.061615] kmodloader: no module folders for kernel version 5.3.0-00261-gbd616cebdde9 found
+...
