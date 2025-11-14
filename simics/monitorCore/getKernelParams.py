@@ -45,9 +45,24 @@ import reverseMgr
 import skipToMgr
 import ppcKernelParams
 import os
+import cli
 
 import w7Params
 import winKParams
+def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
+        instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
+        if 'cluster' in cpu.name:
+            cmd = 'disassemble address = 0x%x' % pc
+            dumb, cli_instruct = cli.quiet_run_command(cmd)
+            #print('cli_instruct is type %s' % type(cli_instruct))
+            instruct_parts = cli_instruct.split(' ',3)
+            #print('instruct_str value %s' % str(instruct_parts))
+            instruct_str = instruct_parts[3]
+            instruct = (4, instruct_str)
+            #print('instruct 1 is %s' % instruct[1])
+        else:
+            instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
+        return instruct
 
 class GetKernelParams():
     def __init__(self, conf, comp_dict, run_from_snap):
@@ -279,7 +294,7 @@ class GetKernelParams():
         ''' find the current_task record pointer ''' 
         if new == Sim_CPU_Mode_Supervisor:
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('taskModeChanged32 eip 0x%x %s' % (eip, instruct[1]))
             if 'illegal' in instruct[1]:
                 self.lgr.debug('taskModeChanged32 page fault, continue')
@@ -302,7 +317,7 @@ class GetKernelParams():
         ''' find the current_task record pointer ''' 
         if new == Sim_CPU_Mode_Supervisor:
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('taskModeChanged64 eip 0x%x %s' % (eip, instruct[1]))
             print('taskModeChanged64 eip 0x%x %s' % (eip, instruct[1]))
             if 'illegal' in instruct[1]:
@@ -433,7 +448,7 @@ class GetKernelParams():
         for i in range(1,self.fs_cycles):
             self.skip_to_mgr.skipToTest(self.fs_start_cycle+i)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'fs:' in instruct[1]:
                 prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
                 print('got addr %s from %s' % (addr, instruct[1]))
@@ -461,7 +476,7 @@ class GetKernelParams():
             want = self.gs_start_cycle + i
             self.skip_to_mgr.skipToTest(want)
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'gs:' in instruct[1]:
                 mn = decode.getMn(instruct[1])
                 op2, op1 = decode.getOperands(instruct[1])
@@ -511,7 +526,7 @@ class GetKernelParams():
                 retval = True
                 if self.os_type == 'WIN7':
                     next_eip = eip + instruct[0]
-                    next_instruct = SIM_disassemble_address(self.cpu, next_eip, 1, 0)
+                    next_instruct = my_SIM_disassemble_address(self.cpu, next_eip, 1, 0)
                     next_mn = decode.getMn(next_instruct[1])
                     next_op2, op1 = decode.getOperands(next_instruct[1])
  
@@ -550,7 +565,7 @@ class GetKernelParams():
             self.try_mode_switches += 1
             if new == Sim_CPU_Mode_Supervisor:
                 eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('entering sup mode eip: 0x%x  instruct: %s' % (eip, instruct[1]))
                 ta = self.mem_utils.getCurrentTask(self.cpu)
                 if ta is None or ta == 0:
@@ -811,7 +826,10 @@ class GetKernelParams():
         #self.lgr.debug('getInit real comm at %d' % (self.real_param.ts_comm))
         for i in range(800):
             comm = self.mem_utils.readString(self.cpu, task+comm_offset, 16)
-            if comm.startswith('init') or comm.startswith('systemd') or comm.startswith('linuxrc') or comm.startswith('swapper'):
+            if comm is None:
+                print('remove this')
+                return False 
+            if comm is not None and (comm.startswith('init') or comm.startswith('systemd') or comm.startswith('linuxrc') or comm.startswith('swapper')):
                 self.lgr.debug('getInit found comm %s at %d' % (comm, comm_offset))
                 self.param.ts_comm = comm_offset
                 got_comm = True
@@ -931,7 +949,7 @@ class GetKernelParams():
             #self.lgr.debug('entryModeChanged ARM, supervisor  mode')
             ''' leaving kernel, capture address, note instruction cannot be read '''
             if eip not in self.hits:
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if instruct[1] == '<illegal memory mapping>':
                     #self.lgr.debug('entryModeChangedARM, nothing mapped at eip 0x%x ' % (eip))
                     pass
@@ -965,7 +983,15 @@ class GetKernelParams():
             if self.cpu.architecture == 'arm64' and not self.isSyscall():
                 self.lgr.debug('entryModeChanged ARM, from user mode but not syscall, bail')
                 return
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+
+            if (self.param.arm_entry is None or self.param.arm64_entry is None): 
+                self.lgr.debug('mode changed old %d  new %d eip: 0x%x armv8 cannot get user instruction from kernel mode' % (old, new, eip))
+                self.prev_instruct = 'broken'
+                self.lgr.debug('entryModeChanged ARM must be armv8, stop simulation')
+                SIM_break_simulation('entryModeChanged stop simulation')
+
+            '''
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('entryModeChanged ARM, user mode instruct %s' % instruct[1])
             if self.param.arm_entry is None and instruct[1].startswith('svc 0'):
                 self.lgr.debug('mode changed svc old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
@@ -985,6 +1011,7 @@ class GetKernelParams():
             elif self.param.arm_entry is None:
                 self.lgr.debug('entryModeChanged ARM  eip 0x%x, instruct %s, what is it?' % (eip, instruct[1])) 
                 #self.stop_hap = None
+            '''
 
     def entryModeChanged(self, compat32, one, old, new):
         ''' HAP entered when mode changes looking for kernel entry and exits. 
@@ -1005,14 +1032,14 @@ class GetKernelParams():
             self.lgr.debug('entryModeChanged leaving kernel len of hits is %d' % len(self.hits))
             if eip not in self.hits:
                 self.hits.append(eip)
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('entryModeChanged pid:%s kernel exit eip 0x%x %s' % (pid, eip, instruct[1]))
                 if instruct[1].startswith('iret'):
                     self.param.iretd = eip
                     self.lgr.debug('entryModeChanged found iret')
                 elif instruct[1] == 'sysexit':
                     self.param.sysexit = eip
-                    self.lgr.debug('entryModeChanged found sysexit')
+                    self.lgr.debug('entryModeChanged found sysexit 0x%x' % eip)
                 elif instruct[1] == 'sysret64':
                     if self.param.sysret64 is not None:
                         ''' use sysexit to record 2nd sysret64 exit '''
@@ -1050,9 +1077,10 @@ class GetKernelParams():
             if self.dumb_count < 50:
                 if not self.isWindows() and self.param.mm_struct is None:
                     if not self.getPageTableDirectory():
-                        self.lgr.error('Failed to get page table offsets from process record')
+                        if self.dumb_count == 50:
+                            self.lgr.error('Failed to get page table offsets from process record, may not be fatal')
             self.dumb_count += 1
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
             self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
@@ -1064,7 +1092,7 @@ class GetKernelParams():
                 SIM_break_simulation('found int 128')
             elif self.param.sysenter is None and (instruct[1].startswith('sysenter') or instruct[1].startswith('syscall')):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
-                self.lgr.debug('entryModeChanged found sysenter')
+                self.lgr.debug('entryModeChanged found sysenter %s' % instruct[1])
                 self.hack_stop = True
                 SIM_break_simulation('entryModeChanged found sysenter')
             elif compat32:
@@ -1092,7 +1120,7 @@ class GetKernelParams():
         if old == Sim_CPU_Mode_Supervisor:
             if eip not in self.hits:
                 self.hits.append(eip)
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('entryModeChangedWin kernel exit eip 0x%x %s' % (eip, instruct[1]))
                 if instruct[1].startswith('iret'):
                     self.param.iretd = eip
@@ -1108,7 +1136,7 @@ class GetKernelParams():
         elif old == Sim_CPU_Mode_User:
             self.lgr.debug('entryModeChangedWin entering kernel')
             self.dumb_count += 1
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
             self.lgr.debug('entryModeChangedWin supervisor eip 0x%x instruct %s count %d' % (eip, instruct[1], self.dumb_count))
@@ -1134,6 +1162,8 @@ class GetKernelParams():
         SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.stop_hap)
         self.task_hap = None
         self.stop_hap = None
+        #print('remove this')
+        #return
         count = 0
         if self.cpu.architecture == 'arm':
             prefix = 'ldrcc pc, [r8, r7, LSL #2]'
@@ -1141,14 +1171,14 @@ class GetKernelParams():
             if not self.mem_utils.isKernel(eip):
                 self.lgr.error('stepCompute returned to user space')
                 return
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('stepCompute arm pc 0x%x  %s' % (eip, instruct[1]))
             while True:
                 SIM_run_command('si -q')
                 prev_eip = eip
                 prev_instruct = instruct
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 if not decodeArm.isBranch(self.cpu, prev_instruct[1])  and eip != prev_eip + 4:
                     self.lgr.debug('stepCompute eip 0x%x does not follow previous 0x%x, instruct %s' % (eip, prev_eip, instruct[1]))
                     print('stepping interrupted, try again')
@@ -1175,14 +1205,14 @@ class GetKernelParams():
             if not self.mem_utils.isKernel(eip):
                 self.lgr.error('stepCompute returned to user space')
                 return
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             self.lgr.debug('stepCompute arm64 pc 0x%x  %s' % (eip, instruct[1]))
             while True:
                 SIM_run_command('si -q')
                 prev_eip = eip
                 prev_instruct = instruct
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('stepCompute arm64 pc 0x%x  %s' % (eip, instruct[1]))
                 if not decodeArm.isBranch(self.cpu, prev_instruct[1])  and eip != prev_eip + 4:
                     self.lgr.debug('stepCompute eip 0x%x does not follow previous 0x%x, instruct %s' % (eip, prev_eip, instruct[1]))
@@ -1230,7 +1260,7 @@ class GetKernelParams():
             while True:
                 SIM_run_command('si -q')
                 rip = self.mem_utils.getRegValue(self.cpu, 'rip')
-                instruct = SIM_disassemble_address(self.cpu, rip, 1, 0)
+                instruct = my_SIM_disassemble_address(self.cpu, rip, 1, 0)
                 self.lgr.debug('stepCompute rip: 0x%x instruct: %s' % (rip, instruct[1]))
                 if not self.mem_utils.isKernel(rip):
                     self.lgr.error('stepCompute returned to user space rip 0x%X  kernel_base 0x%x' % (rip, self.param.kernel_base))
@@ -1292,8 +1322,8 @@ class GetKernelParams():
                 if not self.mem_utils.isKernel(eip):
                     self.lgr.error('stepCompute returned to user space')
                     return
-                instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-                self.lgr.debug('instruct: %s' % (instruct[1]))
+                instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
+                self.lgr.debug('eip: 0x%x instruct: %s' % (eip, instruct[1]))
                 if instruct[1].startswith(prefix) or instruct[1].startswith(prefix1) or instruct[1].startswith(prefix2):
                     if compat32:
                         self.param.compat_32_compute = eip
@@ -1370,7 +1400,7 @@ class GetKernelParams():
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         r15 = self.mem_utils.getRegValue(self.cpu, 'r15')
         rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('testComputeHap instruct is %s eip 0x%x  r15 0x%x  rcx 0x%x' % (instruct[1], eip, r15, rcx))
     
     def testCompute(self, eip):
@@ -1399,11 +1429,15 @@ class GetKernelParams():
         else:
             if compat32:
                 entry = self.param.compat_32_entry
-            elif self.mem_utils.WORD_SIZE == 4:
+            #elif self.mem_utils.WORD_SIZE == 4:
+            elif self.param.sysenter is None:
                 entry = self.param.sys_entry
             else:
                 entry = self.param.sysenter
-            self.lgr.debug('findCompute set break on sysenter 0x%x' % entry)
+            SIM_run_command('enable-reverse-execution')
+            # running room away from entry so we can debug
+            SIM_continue(100)
+            self.lgr.debug('findCompute set break on sysenter 0x%x cycle 0x%x' % (entry, self.cpu.cycles))
             self.task_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
             self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.computeDoStop, None, self.task_break)
             self.continueAhead()
@@ -1424,10 +1458,10 @@ class GetKernelParams():
             simulation so that we can get the kernel address that is hit. (during mode hap entry, the eip is from where we came from.)'''
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('getEntries instruct is %s prev_instruct %s eip 0x%x  len %d' % (self.prev_instruct, instruct[1], eip, instruct[0]))
         if self.prev_instruct.startswith('int 128') and self.param.sys_entry is None:
-            self.lgr.debug('getEntries is int 128')
+            self.lgr.debug('getEntries is int 128 0x%x' % eip)
             self.param.sys_entry = eip 
 
             ''' NOTE MUST delete these before call to findCompute'''
@@ -1438,7 +1472,7 @@ class GetKernelParams():
             #SIM_run_alone(self.findCompute, None)
 
         elif (self.prev_instruct == 'sysenter' or self.prev_instruct == 'syscall') and self.param.sysenter is None:
-            self.lgr.debug('getEntries is sysenter eax %d' % eax)
+            self.lgr.debug('getEntries is sysenter eax %d eip: 0x%x' % (eax, eip))
             #TBD FIX HACK
             if self.prev_instruct == 'syscall':
                 self.param.sys_entry = 0
@@ -1463,7 +1497,7 @@ class GetKernelParams():
     def getWinEntries(self):
         rip = self.mem_utils.getRegValue(self.cpu, 'rip')
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-        instruct = SIM_disassemble_address(self.cpu, rip, 1, 0)
+        instruct = my_SIM_disassemble_address(self.cpu, rip, 1, 0)
         self.lgr.debug('getWinEntries instruct is %s prev_instruct %s rip 0x%x  len %d' % (self.prev_instruct, instruct[1], rip, instruct[0]))
         do_not_continue = False
         if (self.prev_instruct == 'sysenter' or self.prev_instruct == 'syscall') and self.param.sysenter is None:
@@ -1487,15 +1521,20 @@ class GetKernelParams():
 
     def entryStopHap(self, dumb, one, exception, error_string):
         ''' called when mode hap determines this is a kernel entry, and other times.  Needs cleanup, very obscure. '''
+        self.lgr.debug('entryStopHap')
         if self.stop_hap is None:
+            self.lgr.debug('entryStopHap haps was none bail')
             return
-        self.lgr.debug('entryStopHap cycles: 0x%x exception %s  error_string %s' % (self.cpu.cycles, str(exception), error_string))
+        pc = self.mem_utils.getRegValue(self.cpu, 'pc')
+        self.lgr.debug('entryStopHap cycles: 0x%x exception %s  error_string %s pc 0x%x' % (self.cpu.cycles, str(exception), error_string, pc))
         if not self.hack_stop:
             self.lgr.debug('entryStopHap, hack stop not set')
             if self.param.syscall_jump is None:
                 SIM_run_alone(self.deleteHaps, None)
                 SIM_run_alone(self.findCompute, False)
             return
+        else:
+            self.lgr.debug('entryStopHap, hack stop set OK?')
         if self.cpu.cycles == self.hack_cycles:
             self.lgr.debug('entryStopHap, got nowhere before stop, continue and ignore?')
             SIM_run_alone(self.continueAhead, None)
@@ -1528,7 +1567,7 @@ class GetKernelParams():
         # NOTE returns
         eip = self.mem_utils.getRegValue(self.cpu, 'pc')
         call_num = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('entryArmAlone instruct is %s eip 0x%x  len %d prev is %s' % (instruct[1], eip, instruct[0], self.prev_instruct))
         if self.param.arm_entry is None and self.prev_instruct.startswith('svc 0'): 
             self.lgr.debug('entryStopHapARM set arm_entry to 0x%x' % eip) 
@@ -1562,14 +1601,14 @@ class GetKernelParams():
             self.skip_to_mgr.skipToTest(prev)
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             self.lgr.debug('entryStopHapARM went back one eip now 0x%x caller %s' % (eip, caller))
-            prev_instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            prev_instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if not prev_instruct[1].startswith('svc 0') and not prev_instruct[1].startswith('svc #0x0'):
                 self.lgr.debug('entryStopHapARM user instruct at 0x%x is %s NOT svc, so continue' % (eip, prev_instruct[1]))
                 self.ignore_mode = False
                 SIM_run_command('continue')
                 return
             else:
-                self.lgr.debug('etnryStopHapARM prev_instruct is %s' % prev_instruct[1])
+                self.lgr.debug('entryStopHapARM prev_instruct is %s' % prev_instruct[1])
                 self.skip_to_mgr.skipToTest(here)
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 if caller == 'aarch32':
@@ -1582,10 +1621,13 @@ class GetKernelParams():
            
         done = False
         if self.cpu.architecture == 'arm64':
+            self.lgr.debug('entryStopHapARM is arm64')
             if self.only_64:
+                self.lgr.debug('entryStopHapARM is only 64 bit')
                 if self.param.arm64_entry is not None and self.param.arm_ret is not None:
                     done = True
             else:
+                self.lgr.debug('entryStopHapARM is mixed 32/64 bit')
                 if self.param.arm_entry is not None and self.param.arm64_entry is not None and self.param.arm_ret is not None:
                     done = True
         else:
@@ -1617,7 +1659,7 @@ class GetKernelParams():
             self.lgr.debug('stopCompat32Hap entry is same as sysentry, ignore')
             return
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_num')
-        instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+        instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
         dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('stopCompat32Hap pid:%s instruct is %s prev %s  eip 0x%x  len %d' % (pid, instruct[1], self.prev_instruct, eip, instruct[0]))
        
@@ -1739,7 +1781,7 @@ class GetKernelParams():
     def fixFrameModeChanged(self, cpu, one, old, new):
         if old == Sim_CPU_Mode_User:
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if instruct[1].startswith('int 128'):
                 eax = self.mem_utils.getRegValue(self.cpu, 'eax')
                 dumb, comm, self.current_pid = self.taskUtils.curThread() 
@@ -2028,6 +2070,7 @@ class GetKernelParams():
         bailat = 1000
         i = 0
         our_reg = None
+        self.lgr.debug('getARM64Task find sp_el0')
         while not done:
             i = i + 1
             if i > bailat:
@@ -2035,7 +2078,8 @@ class GetKernelParams():
                 return
             SIM_continue(1)
             pc = self.mem_utils.getRegValue(self.cpu, 'pc')
-            instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, pc, 1, 0)
+            #print('instruct at 0x%x is %s' % (pc, instruct[1]))
             if instruct[1].startswith('msr sp_el0'):
                 done = True
                 print('got instruct at 0x%x' % pc)
@@ -2054,7 +2098,7 @@ class GetKernelParams():
             prev = self.cpu.cycles - 1
             self.skip_to_mgr.skipToTest(prev)
             pc = self.mem_utils.getRegValue(self.cpu, 'pc')
-            instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
+            instruct = my_SIM_disassemble_address(self.cpu, pc, 1, 0)
             if isinstance(instruct, tuple):
                 print(instruct[1])
                 op2, op1 = decodeArm.getOperands(instruct[1])
@@ -2099,6 +2143,8 @@ class GetKernelParams():
         print('think current_task is 0x%x phys: 0x%x' % (current_task, self.current_task_phys))
         self.findSwapper()
 
+
+        
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
