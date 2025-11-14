@@ -453,7 +453,7 @@ threads that are waiting in the kernel.  If you want to run ahead to let the sys
 
 \item {\tt stackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
 uses the IDA/Ghidra-generated function databases generated using idaDump.sh (or Ghidra) to aid in determining if 
-data references (watch marks) are made within known clib functions, e.g., strcpy.  The monitor-local {\tt stackTrace} command displays a
+data references (watch marks) are made within known libc functions, e.g., strcpy.  The monitor-local {\tt stackTrace} command displays a
 stack trace that uses the IDA function database to resolve names.  Be sure to have generated function databases for any libraries that appear in stack traces.
 This function \textbf{may not always be reliable}, e.g., phantom frames may appear based on calls that occurred previously. ARM stack frames may be
 difficult to determine due to its myriad ways of calling and returning. If the stack frame is not correct, and you rely on it, e.g., to reverse to some function
@@ -502,7 +502,8 @@ original program address, e.g., to include a jumper file for use over multiple l
 \item {\tt uncall} – Reverse execution until the call instruction that entered the current function.  This may be unreliable with some ARM
 programs.
 
-\item {\tt revToWrite(address)} – Reverse execution until a write operation to the given address within the debugged process.
+\item {\tt revToWrite(address)} – Reverse execution until a write operation to the given address within the debugged process. Execution is stopped immediately
+following execution of the instruction that causes the write.
 
 \item {\tt revToModReg(reg)} – Reverse execution until the given register is modified.
 
@@ -624,19 +625,18 @@ The optional {\tt target} and {\tt targetFD} parameters name a different process
 if the original receiving process does some processing and sends derivative data to a pipe, the target could be the process at the read side
 of the pipe.  If the {\tt cover} parameter is true, code coverage will be tracked and saved in a hits file.  This may take a while -- wait for the
 Simics prompt to display a message such as {\tt Coverage saveCoverage to...}.
+Other options:
+\begin{itemize}
+\item break\_on will break on execution of the given address. 
+\item trace option will generate a system call trace instead of watch marks, and the trace\_all to trace system calls from all processes. 
+\item mark\_logs to include log entries generated using traceFile or traceFD within the watch marks.
+\item trace\_fd to name a FD to be traced and include it in watch marks per mark\_logs (avoids having to separately issue the traceFD command).
+\item no\_reset to stop the simulation rather than resetting the origin, e.g., to adjust a return value from a read.
+\item max\_marks to cause the simulation to stop after generated that number of watch marks.  This value includes any marks that become stale due to origin resets.
+\item malloc Generate watch marks for each malloc call
+\item track\_malloc Track data within malloc buffers.  May be helpful if complex data movement from a buffer to a malloc'ed buffer is not caught by memsomething functons.
 
-The break\_on will break on execution of the given address. 
-
-The trace option will generate a system call trace instead of watch marks, and the trace\_all to trace system calls from all processes. 
-
-Use mark\_logs to include log entries generated using traceFile or traceFD within the watch marks.
-
-Use trace\_fd to name a FD to be traced and include it in watch marks per mark\_logs (avoids having to separately issue the traceFD command).
-
-Use no\_reset to stop the simulation rather than resetting the origin, e.g., to adjust a return value from a read.
-
-Use max\_marks to cause the simulation to stop after generated that number of watch marks.  This value includes any marks that become stale due to origin resets.
-
+\end{itemize}
 
 \item {\tt traceInject(iofile)} -- (DEPRECATED) See the {\tt trace\_all} options to injectIO and playAFL.
 
@@ -992,14 +992,17 @@ This can be helpful for Windows systems that include 32 and 64 bit applications.
 \item {\tt IGNORE\_BB\_LIST} -- File name to use when recording basic blocks that are to be ignored when running AFL or other coverage-related functions.  If this parameter
 is not present, then the basic blocks will be recorded in a file named by the current snapshot with a suffix of {\tt .dead}.
 \item {\tt MAIN\_LIBS} -- File name of a list of DLLs or SOs.  The runToMainSO command will run forward until one of these is entered.
+\item {\tt USER\_FUNS} -- Name of a file listing user-defined functions to be recognized by the data tracking as memory copy functions when generating watch marks. 
+See \ref{user-funs}
 \end{itemize}
 
 \subsection{Target platforms}
 \label{target-platforms}
+Example ini files for these target platforms are described in section \ref{example-targets}.
+
 Targets platforms from the RESim {\tt simics/simicsScripts/targets} include:
 \begin{itemize}
-\item x86-x58-ich10 -- An x86 platform with legacy BIOS that will boot many different x86 bootable disk images. Examples can be found in
-section \ref{example-targets}.
+\item x86-x58-ich10 -- An x86 platform with legacy BIOS that will boot many different x86 bootable disk images. 
 \item arm -- The Simics ARM QSP platform.  By default this boots the Simics-provided QSP kernel.  Alternately you can set the {\tt kernel\_image} 
 parameter to point to a different kernel.  See the directory at:
 \newline
@@ -1014,8 +1017,11 @@ partition is mounted on /mnt by the stock root fs as /dev/qspdc1.
 \newline
 \url{https://nps.box.com/v/resim-arm5-images}
 
-\item armv8a -- The Simics ARMv8-A Fixed Virtual Platform.  See the README at simics/image\_build/arm\_fvp/README for information on building a kernel
+\item armv8a -- The Simics ARMv8-A Fixed Virtual Platform.  See the READMEs at simics/image\_build/arm\_fvp/README for information on building a kernel
 and ram disk.
+
+\item ppc32 -- The Simics 32 bit PowerPC QSP platform.  See the README at simics/image\_build/ppc\_qsp for information on building a kernel. Root
+file systems disks can be simple ext2 file system images.
 \end{itemize}
 
 
@@ -1285,6 +1291,17 @@ is scheduled and use @cgc.writeConfig to save
 the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PARAMS to YES.  Then start the monitor and use
 {\tt @gkp.compat32()}.  This will modify the kernel parameters in the .param file to include those needed to monitor 32-bit applications.
 
+\subsection{Program binary locations}
+\label{program-binaries}
+Files containing binaries of programs to analzye will exist in two or three locations:
+\begin{enumerate}
+\item Within the file system on a virtual disk image named in the ini file, e.g., in the root file system image.
+\item Beneath the RESIM\_IMAGE directory (defined in your .resimrc file) will be a subdirectory whose path is named in the
+RESim ini file as {\tt RESIM\_ROOT\_PREFIX}, and the binaries will be beneath that, typically as a copy of the root file system.
+\item If your IDA or GHIDRA computer is other than the one that runs Simics, they you must also have a RESIM\_IMAGE directory on that
+computer, with a copy of the binaries for IDA or Ghidra to access.
+\end{enumerate}
+
 \subsection{Tracing processes}
 RESim provides a range of tracing functions.  A typical starting point is to trace all system calls made by all of the processes executing on a target.
 The resulting artifacts identify network bindings and connections that may be of interest in vulnerability analysis.  Once you've identified processes
@@ -1303,11 +1320,10 @@ System call tracing on some target systems can be very slow due to massive quant
 \end{itemize}
 
 
-
 \subsection{IDA Pro}
 \label{ida}
 Once you have identified a program to be analyzed, e.g., by reviewing a system trace, open the program in IDA Pro as described below.
-Alternately, use Ghidra as described in \ref{ghidra}.
+Alternately, use Ghidra as described in \ref{ghidra}.  Note you must have the binaries organized as described in \ref{program-binaries}.
 
 Get a separate terminal shell and cd to the location named by the {\tt RESIM\_ROOT\_PREFIX} path named in the RESim configuration (ini) file.  
 If you will run IDA on a different computer than the one running Simics, you will need access to that directory or a copy of it.
@@ -1455,7 +1471,7 @@ to add the modified package to your Simics installation.
 Once the RESimGhidraPlugins extension is installed (per the repo README): 
 \begin{itemize}
 \item Start Ghidra using runGhidra.sh script from a shell while in the target application root 
-per the RESim ini file.
+per the RESim ini file.  Note you must have the binaries organized as described in \ref{program-binaries}.
 
 \item Create a Ghidra project and import the target binary into the project.
 
@@ -1545,10 +1561,9 @@ load alternate modules, e.g., those for which you have modeled devices.  Modifyi
 image itself is not always convenient, e.g., \textit{tripwire} functions might manage checksums of
 configuration files.  It is therefore sometimes preferable to dynamically augment the software's perception of what is read.
 
-There are two mechanisms for dynamic memory modifications: one that modifies system memory content the first time an address is
-read (known as a \textit{ReadReplace}; and a \textit{Dmod} that modifies results of file read, write or open operations.
-
-The \textit{regSet} function sets a register to a given value whenever an execution address is hit.
+There are three mechanisms for dynamic modifications: one that modifies system memory content the first time an address is
+read (known as a \textit{ReadReplace}; the \textit{regSet} function that sets a register to a given value whenever an execution 
+address is hit; and a \textit{Dmod} that modifies the simulated topology or results of file read, write or open operations.
 
 Additionally, there is an experimental {\tt modFunction} to write a given word at an offset from the start of a named function.  
 Intended for use in setting return values, e.g., force eax to zero upon return.  Bring your own machine code.  
@@ -1594,6 +1609,11 @@ is read from the file each time the file is read.  However, if the program repea
 then the Dmod will occur repeatedly, resulting in a reset of the reverse execution origin (if enabled).
 An alternative is to use readReplace to replace the constant value the first time it is read.  
 
+When analysis reveals that a program would generate debugging messages if configuration values were
+suitably set, the readReplace can often alter configuration values accordingly.  However, fuzzing performance
+may be better those debugging alterations are not included in the prepInject snapshot, particularly if the debugging
+results in rescheduling.
+
 \subsubsection{regSet}
 \label{reg-set}
 The RESim {\tt regSet} function triggers on execution of a given program address
@@ -1635,7 +1655,8 @@ The first field is the kind, which can be:
 \item {\tt script\_replace} -- Similar to {\tt sub\_replace} but intended for use on scripts.  See the examples below.
 \item {\tt full\_replace} -- Replace an entire read or write buffer.
 \item {\tt match\_cmd} -- Execute a series of Simics commands when a given string is read or written.
-\item {\tt open\_replace} -- Mask a failure to open an named file, and spoof subsequent reads from that file with content of a named file.
+\item {\tt open\_replace} -- Mask a failure to open an named file, and spoof subsequent reads from that file with content of a named file, or, if files are written to, create those files in a parallel file system on the host and use those in subsequent accesses, e.g., to
+support {\tt /sys} device interfaces.
 \item {\tt syscall} -- Change return value of a system call.
 \end{itemize}
 The second field in the first line of the directive is the operation type, e.g., {\tt read}, {\tt write}, {\tt open}.
@@ -1718,6 +1739,8 @@ connect $TG1_eth1 cnt1 = (switch0.get-free-connector)
 
 \item {\tt open\_replace open} If a given file or device is opened and fails (because it is missing), the return from open
 masks the failure and returns FD 99.  When the application reads from that FD, the content of a data file is returned to the application.
+If the file is opened for writing, a host-local file is created in the {\tt dmod\_files} relative to the current workspace.  That file
+is the access for subsequent reads and writes.
 \begin{verbatim}
 open_replace open
 #
@@ -1731,12 +1754,18 @@ the missing file.
 Note that open\_replace does not affect stat64 calls.  Use syscall dmods if you wish to force a no-error return to the application.
 
 \item {\tt syscall} Set the return value of a syscall.  Behavior depends on the named syscall.   Calls having an filename parameter (1st parameter) 
-that matches a given string will return zero.  The getpid call will return a given value.
+that matches a given string will return zero.  
 \begin{verbatim}
 syscall stat64
 /var/proc/net/xt_recent
 \end{verbatim}
-\noindent causes the stat64 call to return zero instead of an error when stating that file.
+\noindent causes the stat64 call to return zero instead of an error when stating that file.  The stat64 kernel call returns a structure,
+which can be written by using the {\tt bytes\_file} option, e.g.,:
+\begin{verbatim}
+syscall stat64 bytes_file=stat64.bytes
+\end{verbatim}
+\noindent.  This is required if a script invokes {\tt test -f}.  Typically a single bytes file will work for different stat64 calls.
+
 \begin{verbatim}
 syscall getpid comm=must-run-as-pid1
 1
@@ -1893,7 +1922,7 @@ e.g., created use genJsonIO.py
 \label{tracking}
 RESim tracks program references to data consumed by processes, generating a list of \textit{watch marks} that represent
 execution points at which the process referenced input data.  Each watch mark has an associated cycles value that can be skipped to, setting the
-execution state to that when the reference was made.  If a data reference is made from within a clib function such as strcmp, the corresponding 
+execution state to that when the reference was made.  If a data reference is made from within a libc function such as strcmp, the corresponding 
 watch mark identifies the function, and its cycle is set at the return from the function.  RESim debugger plugins include a GUI window with a list data watch marks.
 Double clicking an entry in the list skips the simulation to that point of execution.  The {\tt showWatchMarks} command at the simics prompt displays the list,
 and {\tt goToWatchMark} skips to the cycle.  Watch marks include the information that varies depending on context, including:
@@ -1902,7 +1931,7 @@ and {\tt goToWatchMark} skips to the cycle.  Watch marks include the information
 \item The execution address (pc) of the process at the time of the watch mark.
 \item The data address being referenced, and sometimes information about the buffer being accessed, e.g., offset 9 within buffer starting at 0x123444.
 \item The simulation cycle at the time of the watch mark.
-\item The name of the clib function and selected parameters where applicable.
+\item The name of the libc function and selected parameters where applicable.
 \item A subsequent comparison instruction if found, though these are sometimes not germane to the data reference.
 \item If the watch mark represents a copy of data, the address of the new buffer.
 \item An indication that the reference was a modification, and optionally that the target buffer will no longer be tracked.
@@ -1971,6 +2000,9 @@ Watch mark entries may include information about compare or test instructions th
 that the comparison is relevant to the input data reference.  With ARM programs, some watch marks may reflect ``CBR'' (compare before reference) as the comparison, 
 which means that the data reference occurs subsequent to a {\tt cmp} instruction and prior to a conditional branch, i.e., the conditional branch is not dependent on the data reference.
 
+Watch marks might suggest permutations of input data that might lead to new code paths.  If there are multiple string compares, consider using the RESim 
+automated functions for generating new input files as described in \ref{new-inputs}.
+
 \subsubsection{Sending data to be tracked}
 In general, data should be sent to the target from a driver or other simulated computer rather than via a real network.  Use of real networks to
 send data for prepInject may fail because of the problems associated with real-world leakage, see \ref{real-networks}.
@@ -1999,6 +2031,16 @@ The file named by that env variable has entries of the form:
 lib:function
 \end{verbatim}
 \noindent where each entry names a program or library and function.  Data references made while within the named functions will not be tracked.
+
+\subsubsection{User defined memory functions}
+\label{user-funs}
+Program functions that copy input data can be tagged using the {\tt USER\_FUNCTIONS} value in the ini file to name a file having entries such as:
+\begin{verbatim}
+<comm> <function> <value_type> <param1> <param2>
+\end{verbatim}
+\noindent where {\tt comm} is the program name and {\tt function} is the name of the function per IDA or Ghidra.  Currently, the value type and
+parameters must be {\tt string}, {\tt dest}, {\tt src}.  RESim data tracking will treat the function as a strcpy, generating a single watchmark rather than
+watch marks for each memory reference.  This feature can be useful when you encounter hashing or encoding schemes.
 
 \subsubsection{When are you done?}
 When tracking data, you need to decide when to stop looking for data references.  The primary mechanism for this is the BACK\_STOP\_CYCLES
@@ -2110,8 +2152,11 @@ data to your target for use with trackIO.
 Do not boot your simulation from scratch with the driver as the target, or it may not stop before the target processes have been created.
 
 Create a json file as large as any you expect to inject using genJson.py.
-Use the drive-driver utility to tee up reading of the JSON on the driver, after first using {\tt debugProc('/tmp/clientudpJson')} to catch its execution. (Provide the full path
-to direct RESim to debug the program even though it does not find the program file in the root prefix directory.)
+%Use the drive-driver utility to tee up reading of the JSON on the driver, after first using {\tt debugProc('/tmp/clientudpJson')} 
+%to catch its execution. (Provide the full path
+%to direct RESim to debug the program even though it does not find the program file in the root prefix directory.)
+Use the drive-driver utility to tee up reading of the JSON on the driver, after first using {\tt debugProc('python3', new=True)}
+to catch execution of the client script that will send data to the target.  
 Then use {\tt runToOpen} to catch the opening of the JSON file (provide the full path, e.g., /tmp/foo.json), to see its FD.  You can then use prepInject on that FD
 to create a snapshot for use with injecting json data into the driver.  
 
@@ -2221,6 +2266,23 @@ Note that AFL does not report crashes as queue files and thus paths that always 
 The instruction addresses in hits files, (and those reported by findBNT.py) are based on static program values, i.e., when recording hits 
 in a shared library the runtime address values are reduced by the image base. 
 The RESim IDA plugin provides a {\tt GoTo} function to jump to a program address computed by adding the image base to the given value.  This is invoked using Ctrl-Shift-g.
+
+\subsection{Generating new input data sets}
+\label{new-inputs}
+A review of the watch marks generated by an input file may reveal multiple string comparisons.  Rather than manually creating new input file file variants, RESim
+includes a set of utilities to automate generation of new input files based on string comparisons found in watch marks.  Results of these scripts are placed
+in the user's home directory relative to the {\tt newio} subdirectory.  The starting point is an io file and a snapshot from prepInject.
+
+Use of the scripts (found in {\tt RESIM\_DIR/simics/simicsScripts/bin}) is described below.  
+\textbf{NOTE:} These scripts only currently support data tracking for a target process other than the one that ingests data. TBD expand
+scripts to include tracking of references by ingesting process.
+
+See the startNewIO.sh script which uses injectIO to create an initial watchmark json beneath the {\tt trackio} subdirectory from a given input file, and will 
+copy the input file to a {\tt queue} subdirectory.  It also uses playAFL to generate coverage data for the input file.  It then uses createNewIOFiles.py to
+generate a new input file for each string comparison found in the watchmarks.  It places these into a new {\tt next\_level/file/queue} subdirectory and 
+uses playAFL to create corresponding coverage files for each new queue file in {\tt next\_level/file/coverage}. Each queue file is then run with 
+injectIO and the resulting watch marks are recorded in the trackio subdirectory.  Another {\tt next\_level} directory is created under {\tt file} and then
+a subdirectory for each queue file, beneath which the directory structures repeat, with queue, coverage and trackio subdirectories.
 
 \subsection{Selecting checkpoints}
 Use of checkpoints can significantly simplify and speed up analysis, e.g., by not having to wait for simulated systems to boot each time.
@@ -2706,7 +2768,7 @@ connects to the service.
 should then cause RESim to stop on return from the ACCEPT call.  Observe the resulting FD.
 
 \item Use trackIO to note where input is processed.  The stack
-may reflect a call to clib from some other library.  Note
+may reflect a call to libc from some other library.  Note
 you may be in a thread that started in that library.  Use
 showSOMap to determine the address at which
 the library is loaded.
@@ -2867,7 +2929,16 @@ imics/examples/armA9
 \subsection{ARM5 Sample}
 A sample ini file and parameter file for the ARM5 Integrator platform is at:
 \begin{verbatim}
-imics/examples/integrator
+   simics/examples/integrator
+\end{verbatim}
+
+\subsection{ARMv8-A FVP Foundation}
+\begin{verbatim}
+   simics/examples/armv8a
+\end{verbatim}
+Informaton on building the kernel image and building a ram disk of a root file system are at
+\begin{verbatim}
+   simics/image_build/arm_fvp
 \end{verbatim}
 
 \subsection{Custom devices}
@@ -3715,10 +3786,10 @@ interacting directly with the driver.
 
 The driver device has 4 ethernet interfaces.  The mac addresses below are as defined in the ini file:
 \begin{itemize}
-\item ens11 -- 10.20.200.91/24  mac: 00:e1:27:0f:ca:a8
-\item ens25 -- 10.0.0.91/24     mac: 00:19:a0:e1:1c:9f
-\item ens12 -- 172.31.16.91/24  mac: 00:1a:a0:e1:1c:9f
-\item enp7s0:  not defined      mac: 00:1a:a0:e1:1c:a0 
+\item ens11 -- mac: 00:e1:27:0f:ca:a8
+\item ens25 -- mac: 00:19:a0:e1:1c:9f
+\item ens12 -- mac: 00:1a:a0:e1:1c:9f
+\item enp7s0:  mac: 00:1a:a0:e1:1c:a0 
 \end{itemize}
 Note that use of the ethernet 82559 device changes ethernet device names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
 
@@ -3784,11 +3855,41 @@ The pip3 system is sicker still and requires 3 trusted hosts.  This seems to wor
 pip3 -v install --trusted-host pypi.org --trusted-host files.pythonhosted.org scapy --trusted-host pypi.python.org
 \end{verbatim}
 
-To update the driver, e.g., with new packages, use the driver.ini configuration (after fist adding the {\tt DRIVER\_WAIT=NO} directive.  Then use mapdriver.simics to connect to the real network.
+To update the driver, e.g., with new packages, use the driver.ini configuration (after fist adding the {\tt DRIVER\_WAIT=NO} directive.  
+Set the default route on the driver to the service node address, e.g.,
+\begin{verbatim}
+    ip route add default via 10.0.0.1 dev ens25
+\end{verbatim}
+And connect to the real network:
+\begin{verbatim}
+connect-real-network 10.0.0.91 switch0
+\end{verbatim}
+And set the service node as the dns server in /etc/resolv.conf, e.g.,  {\tt nameserver 10.0.0.1}.
 You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and bin/checkpoint-merge to
 created a merged craff.  \textbf{Do not} forget to shutdown or sync before saving state!.  Give the driver craff a name that does not conflict with exising names.
 The files in {\tt simics/examples/driver} can be put into a new workspace for purposes of updating the existing driver.
 
+Creating a new driver:
+\begin{itemize}
+\item Create a new workspace using Simics 146 to avoid UEFI disks that do not work with RESim.
+\item Copy simics/workspace/dvd6.simics to the new workspace and edit it to point to the Linux installation iso image.
+\item Run {\tt ./simics dvd6.simics} and use the vga window to perform the installation.
+\item Stop simics and use save-persistent-state to save the disk.  This will take a while.
+\item use bin/checkpoint-merge to save a craff image.
+\item Copy the simics/workspace/driver.ini to the workspace
+\item Edit the driver.ini to point to your merged craff image and set TARGET to None.
+\item Use {\tt resim driver.ini} to boot the driver and login via the serial port terminal.
+\item Add this to the /etc/sudoers file: {\tt mike ALL=(ALL) NOPASSWD:ALL}
+\item Define a network device for temporary use, using IP that will be named in the real-network command below.
+\begin{verbatim}
+    sudo ip addr add 10.0.0.91/24 dev ens25
+\end{verbatim}
+\item Add the simics/workspace/authorized\_keys mike/.ssh/ on the driver using vi/copy/paste.
+\item At the simcs prompt, create a real network service node:
+\begin{verbatim}
+connect-real-network 10.0.0.91 switch0
+\end{verbatim}
+\end{itemize}
 If creating a new driver, add the simics-agent from RESim/simics/simics-agent to /usr/bin.  And create a systemd service to run the
 driver-init.sh script from the RESim/simics/workspace.  That script bootstraps the driver's ability to pull
 and execute the driver-script.sh from the workspace.
@@ -3967,7 +4068,7 @@ impacted by the raft of syscalls some applications make.  Also consider making u
 \item Using OpenFile/CreateFile and MapViewOfSection to track DLLs similar to how we use open/mmap to map so files.  This seems to be slow.
 Revisit for performance.  For now, use stopThreadTrack after you think DLLs have been loaded.
 
-\item trackIO mostly works, with initial processing of clib type data move functions.  Also try trackRecv to focus on windows recv calls for performance.  
+\item trackIO mostly works, with initial processing of libc type data move functions.  Also try trackRecv to focus on windows recv calls for performance.  
 
 \item prepInjectWatch will create a snapshot and record windows kernel buffers.  The snapshot will be just before the kernel starts to copy data to user space.
 
@@ -4105,8 +4206,6 @@ The paramOffPtr names parameters (starting at 1), so rsp3 would be 7.
 \begin{verbatim}
             count_value = self.paramOffPtr(7, [0, 0], frame, word_size) + 8
 \end{verbatim}
-
-
 
 \section{CADET01 networking}
 The cadet01 example can serve as a rapid prototyping testbed to explore Simics networking and RESim functions.
