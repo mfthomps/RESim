@@ -1110,12 +1110,16 @@ class MemUtils():
             if self.param.iretd is not None:
                 self.param.iretd = self.param.iretd + delta
             self.param.page_fault = self.param.page_fault + delta
-            self.param.syscall_compute = self.param.syscall_compute + delta
-
-            ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
-            self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                self.lgr.debug('memUtils adjustParam adjusting entire code jump table')
+                for call in self.param.code_jump_table:
+                    self.param.code_jump_table[call] = self.param.code_jump_table[call] + delta
+            else:
+                self.param.syscall_compute = self.param.syscall_compute + delta
+                ''' This value seems to get adjusted the other way.  TBD why? '''
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
+                self.param.syscall_jump = self.param.syscall_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
             if self.param.iretd is not None:
                 self.param.iretd = self.param.iretd + delta

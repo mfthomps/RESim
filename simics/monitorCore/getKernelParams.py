@@ -1022,14 +1022,14 @@ class GetKernelParams():
             return
         self.hack_stop = False
         eip = self.mem_utils.getRegValue(self.cpu, 'eip')
-        self.lgr.debug('entryModeChanged eip 0x%x compat32: %r cycles: 0x%x' % (eip, compat32, self.cpu.cycles)) 
+        #self.lgr.debug('entryModeChanged eip 0x%x compat32: %r cycles: 0x%x' % (eip, compat32, self.cpu.cycles)) 
         dumb, comm, pid = self.taskUtils.curThread() 
         if pid is None:
             self.lgr.debug('entryModeChanged failed to get pid, continue?')
             return
         if old == Sim_CPU_Mode_Supervisor and not compat32:
             ''' leaving kernel, capture iret and sysexit '''
-            self.lgr.debug('entryModeChanged leaving kernel len of hits is %d' % len(self.hits))
+            #self.lgr.debug('entryModeChanged leaving kernel len of hits is %d' % len(self.hits))
             if eip not in self.hits:
                 self.hits.append(eip)
                 instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -1069,11 +1069,12 @@ class GetKernelParams():
                         SIM_break_simulation('found sysexit and iretd and sysret64')
                 '''
             else:
-                self.lgr.debug('entryModeChanged, 0x%x in already hits?' % eip)
+                #self.lgr.debug('entryModeChanged, 0x%x in already hits?' % eip)
+                pass
         elif old == Sim_CPU_Mode_Supervisor and compat32:
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
-            self.lgr.debug('entryModeChanged entering kernel')
+            #self.lgr.debug('entryModeChanged entering kernel')
             if self.dumb_count < 50:
                 if not self.isWindows() and self.param.mm_struct is None:
                     if not self.getPageTableDirectory():
@@ -1083,7 +1084,7 @@ class GetKernelParams():
             instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
-            self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
+            #self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
@@ -1101,7 +1102,8 @@ class GetKernelParams():
                     self.hack_stop = True
                     SIM_break_simulation('entryModeChanged compat32 found sysenter')
             else:
-                self.lgr.debug('entryModeChanged nothing to do, continue')
+                #self.lgr.debug('entryModeChanged nothing to do, continue')
+                pass
             #if self.param.sys_entry is not None and self.skip_sysenter:
             #    self.lgr.debug('entryModeChanged got sys_entry and told to skip sysenter')
             #    SIM_break_simulation('skip sysenter')
@@ -1316,6 +1318,8 @@ class GetKernelParams():
                 prefix = 'call qword ptr [rax*8'
                 prefix1 = 'mov rax,qword ptr [rbx*8-'
                 prefix2 = 'mov rax,qword ptr [rax*8-'
+            prev_instruct = None
+            prev_eip = None
             while True:
                 SIM_run_command('si -q')
                 eip = self.mem_utils.getRegValue(self.cpu, 'eip')
@@ -1336,10 +1340,18 @@ class GetKernelParams():
                         self.param.syscall_jump = int(instruct[1].split('-')[1][:-1], 16)
                         self.lgr.debug('got compute at count %d 0x%x jump constant is 0x%x  %s' % (count, eip, self.param.syscall_jump, instruct[1]))
                     break
+                elif instruct[1].startswith('je ') and prev_instruct.startswith('cmp edx'):
+                    self.lgr.debug('stepCompute believe coded jump table at 0x%x' % prev_eip)
+                    self.computeJumpTable(prev_eip)
+                    # kernel syscall handling location for use in fixStackFrame
+                    self.param.syscall_compute = prev_eip
+                    break
                 count += 1
                 if count > 3000:
                     self.lgr.error('x86 failed to find compute %s for X86' % prefix)
                     break
+                prev_instruct = instruct[1]
+                prev_eip = eip
             if compat32:
                 self.saveParam()
             elif self.mem_utils.WORD_SIZE == 4:
@@ -1740,6 +1752,9 @@ class GetKernelParams():
         SIM_run_alone(self.setPageFaultHap, None)
         
     def findUserEIP(self, user_eip, third, forth, memory):
+        '''
+        Find the user eip in the kernel parameter stack frame
+        '''
         dumb, comm, pid = self.taskUtils.curThread() 
         self.lgr.debug('findUserEIP of 0x%x pid %s wanted %s' % (user_eip, pid, self.current_pid))
         if self.current_pid != pid:
@@ -1767,6 +1782,9 @@ class GetKernelParams():
         
 
     def fixFrameHap(self, user_eip):
+        '''
+        For 32 bit x86 find where user eip is stored
+        '''
         if self.entry_mode_hap is None:
             return
         #cell = self.cell_config.cell_context[self.target]
@@ -2020,20 +2038,22 @@ class GetKernelParams():
         while ptr < end:
             maybe = self.mem_utils.readPtr(self.cpu, ptr)
             self.lgr.debug('getPageTableDirectory ptr 0x%x maybe 0x%x' % (ptr, maybe))
-            pgd_ptr = maybe
-            for i in range(100):
-                pgd = self.mem_utils.readWord32(self.cpu, pgd_ptr)
-                if pgd is not None:
-                    self.lgr.debug('\t pgd_ptr 0x%x   pgd 0x%x' % (pgd_ptr, pgd))
-                    if pgd == page_dir_addr:
-                        mm_struct = ptr - proc_rec
-                        self.param.mm_struct = mm_struct
-                        mm_struct_off = i * 4
-                        self.param.mm_struct_offset = mm_struct_off
-                        self.lgr.debug('getPageTableDirectory got it  mm_struct %d  offset %d' % (mm_struct, mm_struct_off))
-                        retval = True
-                        break
-                pgd_ptr = pgd_ptr+4
+            # noise reduction
+            if maybe > 0x500:
+                pgd_ptr = maybe
+                for i in range(100):
+                    pgd = self.mem_utils.readWord32(self.cpu, pgd_ptr)
+                    if pgd is not None:
+                        self.lgr.debug('\t pgd_ptr 0x%x   pgd 0x%x' % (pgd_ptr, pgd))
+                        if pgd == page_dir_addr:
+                            mm_struct = ptr - proc_rec
+                            self.param.mm_struct = mm_struct
+                            mm_struct_off = i * 4
+                            self.param.mm_struct_offset = mm_struct_off
+                            self.lgr.debug('getPageTableDirectory got it  mm_struct %d  offset %d' % (mm_struct, mm_struct_off))
+                            retval = True
+                            break
+                    pgd_ptr = pgd_ptr+4
             ptr = ptr + 4
             if retval:
                 break
@@ -2143,6 +2163,50 @@ class GetKernelParams():
         print('think current_task is 0x%x phys: 0x%x' % (current_task, self.current_task_phys))
         self.findSwapper()
 
+    def computeJumpTable(self, begin):
+        #begin = 0x00000000c1000d43
+        current = begin
+        call_map = {}
+        # code uses process of elimination
+        last_call_elimination = None
+        last_call = None
+        look_for_call = False
+        for i in range(18000):
+            instruct = SIM_disassemble_address(self.cpu, current, 1, 0)
+            if instruct[1].startswith('cmp edx'):
+                last_call_elimination = None
+                try:
+                    current_call = int(instruct[1].strip().split(',')[1], 16)
+                    last_call = current_call
+                except:
+                    current = current + instruct[0]
+                    pass
+                look_for_call = False
+            elif instruct[1].startswith('jne'):
+                look_for_call = True
+            elif instruct[1].startswith('je'):
+                destination = instruct[1].strip().split()[1]
+                call_map[current_call] = int(destination, 16)
+                last_call_elimination = current_call
+                look_for_call = False
+            elif instruct[1].startswith('call ') and last_call_elimination is not None:
+                maybe_call = last_call_elimination + 1
+                if maybe_call not in call_map:
+                    destination = instruct[1].strip().split()[1]
+                    call_map[maybe_call] = int(destination, 16)
+                last_call_elimination = None
+                look_for_call = False
+            elif instruct[1].startswith('call ') and look_for_call:
+                destination = instruct[1].strip().split()[1]
+                call_map[last_call] = int(destination, 16)
+                look_for_call = False
+            else:
+                last_call_elimination = None
+                look_for_call = False
+            current = current + instruct[0]
+        self.param.code_jump_table = call_map
+        key_list = call_map.keys()
+        self.lgr.debug('computeJumpTable len of key_list is %d' % len(key_list))
 
         
 

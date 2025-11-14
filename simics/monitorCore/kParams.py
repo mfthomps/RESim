@@ -101,6 +101,9 @@ class Kparams():
         # some linux don't use same registers for syscalls at sysenter as they do at the computed jump table
         self.x86_reg_swap = False
 
+        # New linux hardcoded jump table
+        self.code_jump_table = None
+
     def printParams(self):
         print('Kernel parameters:')
         for k in sorted(self.__dict__.keys()):

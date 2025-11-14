@@ -1056,6 +1056,11 @@ class TaskUtils():
             entry = self.mem_utils.readPtr(self.cpu, val)
             self.lgr.debug('getSyscallEntry call 0x%x entry 0x%x' % (callnum, entry))
     
+        elif hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None: 
+            if callnum in self.param.code_jump_table:
+                entry = self.param.code_jump_table[callnum]
+            else:
+                self.lgr.error('getSyscallEntry code_jump_table missing call for %d' % callnum)
         elif not compat32:
             ''' compute the entry point address for a given syscall using constant extracted from kernel code '''
             val = callnum * self.mem_utils.WORD_SIZE - self.param.syscall_jump
