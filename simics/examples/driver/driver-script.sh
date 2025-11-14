@@ -11,19 +11,20 @@ echo "mike ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 mkdir -p /home/mike/.ssh
 /usr/bin/simics-agent --executable --overwrite --download authorized_keys --to /home/mike/.ssh
 chown -R mike:mike /home/mike/.ssh
+# warning: the authoritative driver-server.py is at $RESIM_DIR/simics/bin/driver-server.py
+# However this script grabs the copy from the workspace, which should be a sym link to the repo.
+/usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
 
 ip route add default via 10.0.0.1 
 echo "nameserver 8.8.8.8" >> /etc/resolv.conf
 
-# NOTE: default driver image has 10.0.0.91 as IP, redefine that.
-ip addr del 10.0.0.91/24 dev ens25
 ip addr add 10.0.0.140/24 dev ens25
-#ip addr add 192.168.31.52 dev ens12
-#ip addr add 172.31.16.13 dev ens12
-#ip addr add 172.31.16.101 dev ens12
+
 #ethtool -K ens11 rx off tx off
 #ethtool -K ens12 rx off tx off
 #ethtool -K ens25 rx off tx off
+
+systemctl start start_driver_server
 
 ln -s /var/log/syslog /var/log/messages
 chmod a+r /var/log/syslog

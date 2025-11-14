@@ -1,0 +1,15 @@
+#
+#  Start the arm64 fvp base revc platform
+#
+$RESIM_IMAGE="/mnt/resim_eems/resim/archive/images"
+$bl1_image=$RESIM_IMAGE+/fvp_baser_images/bl1.bin
+$kernel_image=$RESIM_IMAGE+/fvp_baser_images/Image
+$fip_image=$RESIM_IMAGE+/fvp_baser_images/fip.bin
+$initrd_image=$RESIM_IMAGE+/fvp_baser_images/ramdisk.img
+$num_cores=1
+#
+# stata disk does not appear in linux devices? 
+#$sata_disk_image=my_disk.ext2
+$create_sata_disk=FALSE
+$virtio_disk_image=my_disk.ext2
+run-command-file targets/armv8a-fvp/fvp-base-revc-linux.simics
