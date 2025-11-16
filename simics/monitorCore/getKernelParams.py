@@ -1446,7 +1446,6 @@ class GetKernelParams():
                 entry = self.param.sys_entry
             else:
                 entry = self.param.sysenter
-            SIM_run_command('enable-reverse-execution')
             # running room away from entry so we can debug
             SIM_continue(100)
             self.lgr.debug('findCompute set break on sysenter 0x%x cycle 0x%x' % (entry, self.cpu.cycles))
