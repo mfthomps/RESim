@@ -141,6 +141,7 @@ import skipToMgr
 import defaultConfig
 import watchWrite
 import doInUser
+import runToModeChange
 
 #import fsMgr
 import json
@@ -699,12 +700,13 @@ class GenMonitor():
             #    return
         dumb, comm, this_tid = self.task_utils[self.target].curThread() 
         ''' note may both be None due to failure of getProc '''
+        bail = False
         if this_tid not in tid_list:
             ''' or just want may be None if debugging some windows dead zone '''
             #if want_tid is None and this_tid is not None:
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
             if this_tid is not None:            
-                self.lgr.debug('mode changed to %d wrong tid, wanted %s got %s' % (mode, str(tid_list), this_tid))
+                self.lgr.debug('modeChanged mode changed to %d wrong tid, wanted %s got %s (%s)' % (mode, str(tid_list), this_tid, comm))
                 alive = False
                 for tid in tid_list:
                     rec = self.task_utils[self.target].getRecAddrForTid(tid)
@@ -717,16 +719,17 @@ class GenMonitor():
                     self.context_manager[self.target].setIdaMessage('Process gone')
                     SIM_break_simulation('mode changed, tid %s threads all gone' % str(tid_list))
                     
-                return
+                bail = True
             else:
                 self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
-        instruct = SIM_disassemble_address(cpu, eip, 0, 0)
-        self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
-                mode, str(one), old, new, eip, instruct[1]))
-        SIM_break_simulation('mode changed, break simulation')
+        if not bail:
+            instruct = SIM_disassemble_address(cpu, eip, 0, 0)
+            self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
+                    mode, str(one), old, new, eip, instruct[1]))
+            SIM_break_simulation('mode changed, break simulation')
         
     def stopHap(self, stop_action, one, exception, error_string):
-        self.lgr.debug('stopHap')
+        self.lgr.debug('stopHap stop_hap %s' % self.stop_hap)
         if self.stop_hap is not None:
             SIM_run_alone(self.stopHapAlone, stop_action)
 
@@ -801,75 +804,12 @@ class GenMonitor():
         SIM_break_simulation('stopAndAction')
 
     def run2Kernel(self, cpu, flist=None):
-        cpl = memUtils.getCPL(cpu)
-        if cpl != 0:
-            dumb, comm, tid = self.task_utils[self.target].curThread() 
-            self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
-            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, [tid])
-            hap_clean = hapCleaner.HapCleaner(cpu)
-            hap_clean.add("Core_Mode_Change", self.mode_hap)
-            stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-            self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
-            SIM_continue(0)
-        else:
-            self.lgr.debug('run2Kernel, already in kernel')
-            if flist is not None: 
-                #if len(flist) == 1:
-                for fun_item in flist:
-                    if len(fun_item.args) ==  0:
-                        fun_item.fun()
-                    else:
-                        fun_item.fun(fun_item.args)
+        run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        run_to_mode_change.run2Kernel(cpu, flist=flist)
 
     def run2User(self, cpu, flist=None, want_tid=None):
-        cpl = memUtils.getCPL(cpu)
-        if cpl == 0:
-            tid = self.task_utils[self.target].curTID() 
-            self.lgr.debug('run2User want_tid %s tid:%s' % (want_tid, tid))
-            ''' use debug process if defined, otherwise default to current process '''
-            if want_tid is not None:
-                want_tid = str(want_tid)
-                self.lgr.debug('run2User has want_tid of %s' % want_tid)
-                tid_list = [want_tid]
-            else:
-                tid_list = self.context_manager[self.target].getThreadTids()
-                if len(tid_list) == 0:
-                    tid_list.append(tid)
-                    self.lgr.debug('run2User tidlist from context_manager empty, add self %s' % tid)
-                else:
-                    self.lgr.debug('run2User tidlist from context_manager is %s' % tid_list)
-            #if debug_tid is not None:
-            #    if debug_tid != tid:
-            #        self.lgr.debug('debug_tid:%s  tid %s' % (debug_tid, tid))
-            #        ''' debugging, but not this tid.  likely a clone '''
-            #        if not self.context_manager[self.target].amWatching(tid):
-            #            ''' stick with original debug tid '''
-            #            tid = debug_tid
-                    
-            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid_list)
-            self.lgr.debug('run2User tid %s in kernel space (%d), set mode hap %d' % (str(tid_list), cpl, self.mode_hap))
-            hap_clean = hapCleaner.HapCleaner(cpu)
-            # fails when deleted? 
-            hap_clean.add("Core_Mode_Change", self.mode_hap)
-            stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
-            self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
-            self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
-            simics_status = SIM_simics_is_running()
-            if not simics_status:
-                self.lgr.debug('run2User continue')
-                #SIM_run_alone(SIM_continue, 0)
-                SIM_run_alone(self.continueForward, None)
-            else:
-                self.lgr.debug('run2User would continue, but already running?')
-        else:
-            self.lgr.debug('run2User, already in user')
-            if flist is not None: 
-                #if len(flist) == 1:
-                for fun_item in flist:
-                    if len(fun_item.args) ==  0:
-                        fun_item.fun()
-                    else:
-                        fun_item.fun(fun_item.args)
+        run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
+        run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid)
 
     def finishInit(self, cell_name):
         
@@ -3479,6 +3419,8 @@ class GenMonitor():
                 # assume dynamic load.  Set break on zero to start of loader
                 start = 0
                 count = loader_load_info.addr 
+                print('remove this')
+                count = loader_load_info.addr - 0x1abc0
                 self.lgr.debug('runToText dynamic load break on range 0x%x 0x%x tid:%s' % (start, count, tid))
             else:
                 self.lgr.error('runToText dynamic load but no load info for the loader itself')
@@ -7115,10 +7057,12 @@ class GenMonitor():
         self.lgr.debug('doInUser')
         doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.lgr, tid=tid)
 
-    def RES_delete_stop_hap(self, hap):
+    def RES_delete_stop_hap(self, hap, your_stop=False):
         self.pending_stop_hap = None
         SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
         self.lgr.debug('RES_delete_stop_hap')
+        if your_stop:
+            self.stop_hap = None
 
     def RES_delete_stop_hap_run_alone(self, hap):
         # race condition of 2 stop haps existing?
@@ -7126,7 +7070,7 @@ class GenMonitor():
         self.lgr.debug('RES_delete_stop_hap_run_alone')
         SIM_run_alone(RES_delete_stop_hap, hap)
 
-    def RES_add_stop_callback(self, callback, param):
+    def RES_add_stop_callback(self, callback, param, your_stop=False):
         retval = None
         if self.pending_stop_hap is not None:
             self.lgr.error('RES_add_stop_callback called for %s, but already pending stop with callback %s!' % (str(callback), str(self.pending_stop_hap)))
@@ -7135,6 +7079,8 @@ class GenMonitor():
             retval = SIM_hap_add_callback('Core_Simulation_Stopped', callback, param)
             self.pending_stop_hap = callback
             self.lgr.debug('RES_add_stop_callback for %s' % str(callback))
+            if your_stop:
+                self.stop_hap = retval
         return retval
 
     def stepOver(self):
