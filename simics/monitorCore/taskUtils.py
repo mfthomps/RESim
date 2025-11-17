@@ -812,8 +812,7 @@ class TaskUtils():
                 arg_string = self.mem_utils.readString(cpu, arg_addr, 512)
                 if arg_string is not None:
                     arg_string_list.append(arg_string.strip())
-                    #self.lgr.debug('readExecParamStrings adding arg %s' % (arg_string))
-
+                    self.lgr.debug('readExecParamStrings adding arg %s read from 0x%x' % (arg_string, arg_addr))
             prog_string = prog_string.strip()
             self.exec_addrs[tid].prog_name = prog_string
             self.exec_addrs[tid].arg_list = arg_string_list
@@ -874,8 +873,11 @@ class TaskUtils():
                 if not at_enter:
                     ''' ebx not right?  use stack '''
                     esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-                    sptr = esp + 2*self.mem_utils.WORD_SIZE
-                    argv = self.mem_utils.readPtr(cpu, sptr)
+                    if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                        sptr = esp + 12*self.mem_utils.WORD_SIZE
+                    else:
+                        sptr = esp + self.mem_utils.WORD_SIZE
+                    argv = self.mem_utils.readPtr(cpu, sptr+self.mem_utils.WORD_SIZE)
                     while not done and i < limit:
                         xaddr = argv + mult*self.mem_utils.WORD_SIZE
                         arg_addr = self.mem_utils.readPtr(cpu, xaddr)
@@ -888,7 +890,6 @@ class TaskUtils():
                            done = True
                         mult = mult + 1
                     i = i + 1
-                    sptr = esp + self.mem_utils.WORD_SIZE
                     prog_addr = self.mem_utils.readPtr(cpu, sptr)
                 else:
                     ''' sysenter or int80, trust ebx and ecx '''
@@ -1080,10 +1081,17 @@ class TaskUtils():
             frame = self.frameFromRegs()
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
-            regs_addr = esp + self.mem_utils.WORD_SIZE
-            regs = self.mem_utils.readPtr(self.cpu, regs_addr)
-            #self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x  regs is 0x%x' % (regs_addr, regs))
-            frame = self.getFrame(regs_addr, self.cpu)
+            if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+                regs_addr = rax
+                self.lgr.debug('frameFromStackSyscall with code_jump_table, regs_addr is 0x%x' % (regs_addr))
+                frame = self.getFrame(regs_addr, self.cpu)
+                self.lgr.debug('frame: %s' % stringFromFrame(frame))
+            else:
+                regs_addr = esp + self.mem_utils.WORD_SIZE
+                #regs = self.mem_utils.readPtr(self.cpu, regs_addr)
+                self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x' % (regs_addr))
+                frame = self.getFrame(regs_addr, self.cpu)
         return frame
     
     def frameFromStack(self):
