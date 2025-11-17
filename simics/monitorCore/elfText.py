@@ -119,6 +119,18 @@ def getText(path, lgr):
             mem_size = int(parts[1], 16)
             size = addr_start + mem_size
             #lgr.debug('got size now 0x%x' % size)
+        elif 'LOAD' in line and is_dyn and not is_aarch64:
+            # not quite, but better
+            if size is None:
+                size = 0
+            parts = line.strip().split()
+            addr_start = int(parts[2], 16)
+            next_line = next(line_iterator)
+            lgr.debug('got LOAD next line: %s' % next_line)
+            parts = next_line.strip().split()
+            mem_size = int(parts[1], 16)
+            size = addr_start + mem_size
+            lgr.debug('got size now 0x%x' % size)
             
         ''' section numbering has whitespace '''
         hack = line[7:]
