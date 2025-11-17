@@ -1,0 +1,7 @@
+Example ini and param files for x86-based openwrt platform.
+Note use of ignore.txt to improve speed.
+Also, since many processes are created at the same time,
+consider running a while with trackThreads enabled before debugging.
+Or, if debugging early, "debugProc('uhttpd', track_threads=False) to
+let you debug uhttpd while skipping thread tracking syscalls for the
+other processes being created at that moment.
