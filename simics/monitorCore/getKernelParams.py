@@ -2164,6 +2164,9 @@ class GetKernelParams():
         self.findSwapper()
 
     def computeJumpTable(self, begin):
+        '''
+        The begin is the start of an in-code jump table.  Read the instructions to create a dictionary of calls to addresses
+        '''
         #begin = 0x00000000c1000d43
         current = begin
         call_map = {}
@@ -2171,6 +2174,7 @@ class GetKernelParams():
         last_call_elimination = None
         last_call = None
         look_for_call = False
+        # record address of the call instructions (we think)
         for i in range(18000):
             instruct = SIM_disassemble_address(self.cpu, current, 1, 0)
             if instruct[1].startswith('cmp edx'):
@@ -2179,36 +2183,36 @@ class GetKernelParams():
                     current_call = int(instruct[1].strip().split(',')[1], 16)
                     last_call = current_call
                 except:
-                    current = current + instruct[0]
                     pass
                 look_for_call = False
             elif instruct[1].startswith('jne'):
                 look_for_call = True
+                last_call_elimination = None
             elif instruct[1].startswith('je'):
                 destination = instruct[1].strip().split()[1]
-                call_map[current_call] = int(destination, 16)
+                if current_call not in call_map:
+                    call_map[current_call] = int(destination, 16)
                 last_call_elimination = current_call
                 look_for_call = False
             elif instruct[1].startswith('call ') and last_call_elimination is not None:
                 maybe_call = last_call_elimination + 1
                 if maybe_call not in call_map:
-                    destination = instruct[1].strip().split()[1]
-                    call_map[maybe_call] = int(destination, 16)
+                    call_map[maybe_call] = current
                 last_call_elimination = None
                 look_for_call = False
             elif instruct[1].startswith('call ') and look_for_call:
-                destination = instruct[1].strip().split()[1]
-                call_map[last_call] = int(destination, 16)
+                if current_call not in call_map:
+                    call_map[last_call] = current
                 look_for_call = False
+                last_call_elimination = None
             else:
                 last_call_elimination = None
                 look_for_call = False
             current = current + instruct[0]
+
         self.param.code_jump_table = call_map
         key_list = call_map.keys()
         self.lgr.debug('computeJumpTable len of key_list is %d' % len(key_list))
-
-        
 
 if __name__ == '__main__':
     gkp = GetKernelParams()
