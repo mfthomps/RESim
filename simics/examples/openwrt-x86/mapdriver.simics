@@ -1,0 +1,18 @@
+#
+# This script creates a new service node connected to switch1, and configures the new service
+# node to link to the driver computer at 10.20.200.91 for ssh over 4022.
+# Will also map port 6459 for use by drive-driver to send data to the driver.
+#
+# The driver's service node should be independent and able to be arbitrarily cut off, e.g., to isolate the
+# simulation.
+#
+try{
+    $exists=(driver_service_node)
+}except{
+    $sn=(new-service-node-comp name=driver_service_node)
+    $sn_conn=($sn.add-connector ip=10.20.200.1)
+    connect $sn.$sn_conn (switch1.get-free-connector)
+    connect-real-network-port-in target-port = 22 host-port = 4022 ethernet-link = switch1 target-ip = 10.20.200.91
+    connect-real-network-port-in target-port = 6459 host-port = 6459 ethernet-link = switch1 target-ip = 10.20.200.91
+}
+
