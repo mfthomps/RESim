@@ -333,7 +333,7 @@ class LaunchRESim():
                     elif name == 'INTERACT_SCRIPT':
                         interact = self.comp_dict['driver'][name]
 
-                run_command('$create_network="NONE"')
+                run_command('$create_network=FALSE')
         
                 driver_script = self.getSimicsScript('driver',lgr)
                 if os.path.isfile('./driver-script.sh'):
