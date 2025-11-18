@@ -333,7 +333,7 @@ class LaunchRESim():
                     elif name == 'INTERACT_SCRIPT':
                         interact = self.comp_dict['driver'][name]
 
-                run_command('$create_network=FALSE')
+                run_command('$create_network="NONE"')
         
                 driver_script = self.getSimicsScript('driver',lgr)
                 if os.path.isfile('./driver-script.sh'):
@@ -494,7 +494,7 @@ class LaunchRESim():
                             cmd = '%s=%s' % (name, value)
                             run_command(cmd)
                             #print('cmd is %s' % cmd)
-                if 'genx86' in script and not did_net_create:
+                if 'x86' in script and not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
             if did_net_create:
