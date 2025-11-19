@@ -174,7 +174,7 @@ class SockStruct():
             self.port = mem_utils.readWord16le(cpu, self.addr+2)
             self.sin_addr = mem_utils.readWord32(cpu, self.addr+4)
         elif self.sa_family == AF_NETLINK:
-            pid = mem_utils.readWord16le(cpu, self.addr+4)
+            pid = mem_utils.readWord32(cpu, self.addr+4)
             groups = mem_utils.readWord32(cpu, self.addr+8)
             self.sock_addr_nl = SockAddrNL(pid, groups)
 
@@ -242,7 +242,7 @@ class SockStruct():
             retval = ('%s sa_family%d: %s %s %s IP address: %s:%d' % (fd, self.sa_family, self.famName(), sock_type, addr, self.dottedIP(), self.port))
         elif self.sa_family == AF_NETLINK:
             if self.sock_addr_nl is not None:
-                retval = ('%s sa_family%d: %s %s %s sock_addr_nl.pid %d sock_addr_nl.groups: 0x%x ' % (fd, self.sa_family, self.famName(), sock_type, addr, self.sock_addr_nl.nl_pid, self.sock_addr_nl.nl_groups))
+                retval = ('%s sa_family%d: %s %s %s sock_addr_nl.pid %d (0x%x) sock_addr_nl.groups: 0x%x ' % (fd, self.sa_family, self.famName(), sock_type, addr, self.sock_addr_nl.nl_pid, self.sock_addr_nl.nl_pid, self.sock_addr_nl.nl_groups))
             else:
                 retval = ('%s sa_family%d: %s %s %s sock_addr_nl IS NONE ' % (fd, self.sa_family, self.famName(), sock_type, addr))
         else:
