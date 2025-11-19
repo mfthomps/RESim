@@ -17,7 +17,7 @@ chown -R mike:mike /home/mike/.ssh
 
 # Define the IP addresses we will use
 ip addr add 10.20.200.91/24 dev ens25
-ip addr add 10.0.0.91/24 dev ens11f0
+ip addr add 192.168.1.91/24 dev ens11f0
 ip link set ens11f0 up
 #ethtool -K ens11 rx off tx off
 #ethtool -K ens12 rx off tx off
