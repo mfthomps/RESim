@@ -483,8 +483,19 @@ class RunTo():
            return False
 
     def soLoadedAlone(self, section):
+        if type(section) is int:
+            load_addr = section
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            code_section_list = self.so_map.getCodeSections(cur_tid)
+            for this_section in code_section_list:
+                if this_section.addr == load_addr:
+                    section = this_section
+                    break
+            if type(section) is int:
+                self.lgr.error('runTo soLoadedAlone sectoin stil int...')
+             
         self.lgr.debug('runto soLoadedAlone file %s, call setRuntoSOBreak' % section.fname)
-        self.setRunToSOBreak(section.addr, section.size)
+        self.setRunToSOBreak([section])
      
     def soLoaded(self, section):
         SIM_run_alone(self.soLoadedAlone, section)
