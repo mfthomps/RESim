@@ -157,7 +157,7 @@ class TrackThreads():
         self.traceProcs.setName(tid, prog_string, None)
         param = (prog_string, tid)
         self.cur_comm = comm
-        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.context_manager, self.lgr)
         #self.addSO(prog_string, tid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
         RES_delete_breakpoint(self.finish_break[tid])
@@ -228,7 +228,7 @@ class TrackThreads():
             self.traceProcs.setName(tid, prog_string, None)
             param = (prog_string, tid)
             self.cur_comm = comm
-            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.context_manager, self.lgr)
             #self.addSO(prog_string, tid)
 
 
