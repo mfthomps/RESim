@@ -2432,9 +2432,11 @@ class Syscall():
 
             
         else:
-            ida_msg = '%s %s   tid:%s (%s) cycle:0x%x' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
+            ida_msg = '%s %s   tid:%s (%s) cycle:0x%x\n' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
             self.context_manager.setIdaMessage(ida_msg)
+        if ida_msg is not None and not ida_msg.endswith('\n'):
+            ida_msg = ida_msg+'\n' 
         if exit_info is not None:
             exit_info.trace_msg = ida_msg
         if ida_msg is not None and not quiet:
@@ -2541,9 +2543,9 @@ class Syscall():
         exit_eip1 = None
         exit_eip2 = None
         exit_eip3 = None
-        self.lgr.debug('syscall getExitAddrs break_eip 0x%x' % break_eip)
+        #self.lgr.debug('syscall getExitAddrs break_eip 0x%x' % break_eip)
         if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
-            self.lgr.debug('syscall getExitAddrs frame in regs?')
+            #self.lgr.debug('syscall getExitAddrs frame in regs?')
             ''' caller frame will be in regs'''
             if frame is None:
                 frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
@@ -2560,7 +2562,7 @@ class Syscall():
                 self.lgr.debug('syscall getExitAddrs no sysret64 exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
             
         elif break_eip == self.param.sys_entry:
-            self.lgr.debug('syscall getExitAddrs is sys_entry')
+           # self.lgr.debug('syscall getExitAddrs is sys_entry')
             if frame is None:
                 frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 ''' fix up regs based on eip and esp found on stack '''
@@ -2592,7 +2594,7 @@ class Syscall():
                 frame = self.task_utils.frameFromRegs()
                 frame_string = taskUtils.stringFromFrame(frame)
         elif syscall_info.calculated:
-            self.lgr.debug('syscall getExitAddrs calculated')
+            #self.lgr.debug('syscall getExitAddrs calculated')
             ''' Note EIP in stack frame is unknown '''
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture.startswith('arm'):
@@ -3180,7 +3182,7 @@ class Syscall():
             syscall_info = SyscallInfo(self.cpu, None, True, self.trace)
             callname = self.task_utils.syscallName(callnum, False) 
 
-            frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frames=frames[tid])
+            frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frame=frames[tid])
             if tid == cur_tid:
                 if memUtils.getCPL(cpu) != 0:
                     self.lgr.debug('sharedSyscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
