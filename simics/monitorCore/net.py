@@ -357,7 +357,10 @@ class Msghdr():
                 limit = min(length, 1024)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
                 byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
-                retval = retval + bytearray(byte_tuple)
+                if None not in byte_tuple:
+                    retval = retval + bytearray(byte_tuple)
+                else:
+                    self.lgr.debug('net getByteArray failed on retval %s byte_tuple %s' % (str(retval), str(byte_tuple)))
                 iov_addr = iov_addr+iov_size
                 self.lgr.debug('len of byte tuple %d, current len of retval %d' % (len(byte_tuple), len(retval)))
         return retval
