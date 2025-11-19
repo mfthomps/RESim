@@ -1390,7 +1390,7 @@ class GenMonitor():
     def setDebugBookmark(self, mark, cpu=None, cycles=None, eip=None, steps=None):
         if self.bookmarks is not None:
             self.lgr.debug('setDebugBookmark')
-            if not self.reverse_mgr[self.target].reverseEnabled():
+            if not self.reverseEnabled():
                 self.lgr.warning('setDebugBookmark called, but reverse not enabled, will ignore')
             else:
                 tid, cpu = self.context_manager[self.target].getDebugTid() 
@@ -7055,20 +7055,28 @@ class GenMonitor():
             target = self.target
         cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('doInUser')
-        doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.lgr, tid=tid)
+        doInUser.DoInUser(self, cpu, callback, param, self.task_utils[target], self.mem_utils[target], self.context_manager[target], self.lgr, tid=tid)
 
     def RES_delete_stop_hap(self, hap, your_stop=False):
+        self.lgr.debug('RES_delete_stop_hap hap %s your_stop %r' % (str(hap), your_stop))
         self.pending_stop_hap = None
+        if hap is None and your_stop:
+            self.lgr.debug('RES_delete_stop_hap haps was none, set to our stop_hap %s' % str(self.stop_hap))
+            hap = self.stop_hap
         SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
-        self.lgr.debug('RES_delete_stop_hap')
         if your_stop:
             self.stop_hap = None
 
-    def RES_delete_stop_hap_run_alone(self, hap):
+    def RES_delete_stop_hap_run_alone(self, hap, your_stop=False):
         # race condition of 2 stop haps existing?
         self.pending_stop_hap = None
-        self.lgr.debug('RES_delete_stop_hap_run_alone')
-        SIM_run_alone(RES_delete_stop_hap, hap)
+        self.lgr.debug('RES_delete_stop_hap_run_alone hap: %s your_stop: %r' % (str(hap), your_stop))
+        if hap is None and your_stop:
+            hap = self.stop_hap
+            self.lgr.debug('RES_delete_stop_hap_run_alone hap was none and your_stop, set hap to %s' % str(hap))
+        SIM_run_alone(self.RES_delete_stop_hap, hap)
+        if your_stop:
+            self.stop_hap = None
 
     def RES_add_stop_callback(self, callback, param, your_stop=False):
         retval = None
@@ -7078,9 +7086,10 @@ class GenMonitor():
         else:
             retval = SIM_hap_add_callback('Core_Simulation_Stopped', callback, param)
             self.pending_stop_hap = callback
-            self.lgr.debug('RES_add_stop_callback for %s' % str(callback))
+            self.lgr.debug('RES_add_stop_callback for %s your_stop %r' % (str(callback), your_stop))
             if your_stop:
                 self.stop_hap = retval
+                self.lgr.debug('RES_add_stop_callback your stop set hap to %s' % str(retval))
         return retval
 
     def stepOver(self):
