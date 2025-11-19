@@ -303,8 +303,8 @@ class reverseToCall():
         #for item in self.x_pages:
         #    self.setBreakRange(self.cell_name, tid, item.address, item.length, self.cpu, comm, True)
         self.lgr.debug('doUncall, set break range')
-        
-        self.stop_hap = self.reverse_mgr.reverse(callback=self.stoppedReverseToCall)
+        self.stop_hap = 'set' 
+        self.reverse_mgr.reverse(callback=self.stoppedReverseToCall)
         #self.lgr.debug('reverseToCall, did reverse-step-instruction')
         self.lgr.debug('doUncall, did reverse')
 
@@ -411,9 +411,9 @@ class reverseToCall():
             self.lgr.debug('tryBackToCall got 0x%x from findCallBehind' % call_addr)
             cell = self.top.getCell()
             self.uncall_break = self.reverse_mgr.SIM_breakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, call_addr, 1, 0)
-            #self.stop_hap = self.top.RES_add_stop_callback(self.tryBackToCallStopped, my_args)
             self.lgr.debug('tryBackToCall from cycle 0x%x' % self.recent_proc_info.cpu.cycles)
-            self.stop_hap = self.reverse_mgr.reverse(callback=self.tryBackToCallStopped)
+            self.stop_hap = 'set'
+            self.reverse_mgr.reverse(callback=self.tryBackToCallStopped)
         else:
             self.lgr.error('tryBackToCall failed to find call behind 0x%x' % self.recent_proc_info.eip)
 
@@ -427,8 +427,7 @@ class reverseToCall():
         self.reverse_mgr.SIM_delete_breakpoint(self.uncall_break)
         self.uncall_break = None
         if self.stop_hap is not None:
-            hap = self.stop_hap
-            SIM_run_alone(self.rmStopHap, hap) 
+            self.top.RES_delete_stop_hap_run_alone(None, your_stop=True)
             self.stop_hap = None
         self.lgr.debug('tryBackToCallStopped tid:%s' % tid)
         self.cleanup(None)
@@ -531,9 +530,6 @@ class reverseToCall():
             return True
         else:
             return False
-
-    def rmStopHap(self, hap):
-        self.top.RES_delete_stop_hap(hap)
 
     def doRevToCall(self, step_into):
         self.noWatchSysenter()
@@ -869,7 +865,8 @@ class reverseToCall():
                 done=True
 
     def revAlone(self, callback):
-        self.stop_hap = self.reverse_mgr.reverse(callback=callback)
+        self.stop_hap = 'set'
+        self.reverse_mgr.reverse(callback=callback)
 
     def rmBreaks(self):
         self.lgr.debug('rmBreaks')
@@ -1351,8 +1348,7 @@ class reverseToCall():
         self.lgr.debug('reverseToCall cleanup')
         self.context_manager.setExitBreaks()
         if self.stop_hap is not None:
-            hap = self.stop_hap
-            SIM_run_alone(self.rmStopHap, hap)
+            self.top.RES_delete_stop_hap_run_alone(None, your_stop=True)
             self.stop_hap = None
         self.rmBreaks()
         self.is_monitor_running.setRunning(False)
