@@ -2571,7 +2571,9 @@ class Syscall():
                 frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
                 frame['esp'] = self.mem_utils.readPtr(self.cpu, esp+12)
                 frame_string = taskUtils.stringFromFrame(frame)
-            self.lgr.debug('syscall getExitAddrs sys_entry frame %s' % frame_string)
+                self.lgr.debug('syscall getExitAddrs sys_entry frame %s' % frame_string)
+            else:
+                 self.lgr.debug('syscall getExitAddrs is param.sys_entry but frame is None')
             exit_eip1 = self.param.iretd
         elif break_eip == self.param.arm_entry:
             exit_eip1 = self.param.arm_ret
