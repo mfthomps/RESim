@@ -1481,15 +1481,20 @@ class Syscall():
                 ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, frame['param2'], msghdr.getString())
  
             else:
-                self.lgr.error('syscall sendmsg not yet built for 32bit x86!')
-                return
-                ''' TBD is this right for x86 32?'''
-                params = frame['param2']
-                exit_info.old_fd = self.mem_utils.readWord32(self.cpu, params)
-                msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
-                exit_info.retval_addr = msg_hdr_ptr
+                exit_info.old_fd = frame['param1']
+                msg_hdr_ptr = frame['param2']
                 msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
                 ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                self.lgr.debug(ida_msg) 
+                #self.lgr.error('syscall recvmsg not yet built for 32bit x86!')
+                #return
+                #''' TBD is this right for x86 32?'''
+                #params = frame['param2']
+                #exit_info.old_fd = self.mem_utils.readWord32(self.cpu, params)
+                #msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
+                #exit_info.retval_addr = msg_hdr_ptr
+                #msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+                #ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
             exit_info.msghdr = msghdr
             sock_param = self.sockwatch.getParam(tid, exit_info.old_fd)
             if sock_param is not None:
@@ -1515,6 +1520,13 @@ class Syscall():
                 ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
                 self.lgr.debug(ida_msg) 
                 #SIM_break_simulation('sendmsg')
+            elif self.mem_utils.WORD_SIZE == 4:
+                exit_info.old_fd = frame['param1']
+                msg_hdr_ptr = frame['param2']
+                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+                exit_info.msghdr = msghdr
+                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+                self.lgr.debug(ida_msg) 
             else:
                 self.lgr.error('syscall sendmsg not yet built for x86!')
                 return
