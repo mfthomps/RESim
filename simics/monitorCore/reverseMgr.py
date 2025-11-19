@@ -560,6 +560,7 @@ class ReverseMgr():
         '''
         Reverse until either a breakpoint is hit, or we hit the origin.  If multiple breakpoionts are set, execution
         is set at the most recent.
+        Will return the stop hap if native reversing
         '''
         self.reverse_to =  reverse_to
         self.was_at_origin = False
@@ -567,7 +568,7 @@ class ReverseMgr():
         retval = None
         if self.nativeReverse():
             if callback is not None:
-                retval = self.top.RES_add_stop_callback(callback, None)
+                retval = self.top.RES_add_stop_callback(callback, None, your_stop=True)
                 
             if self.reverse_to is not None:
                 cmd = 'reverse-to cycle=0x%x' % self.reverse_to
