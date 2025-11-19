@@ -1011,7 +1011,7 @@ class SharedSyscall():
                 # TBD make a config parameter
                 if eax < 16000:
                     self.lgr.debug('sharedSyscall is read check %d params' % len(exit_info.call_params))
-                    trace_msg = self.checkReadParams(exit_info, trace_msg, eax, tid, comm, byte_array, exit_info.retval_addr)
+                    trace_msg = self.checkReadParams(exit_info, trace_msg, eax, tid, comm, byte_array, exit_info.retval_addr, callname)
 
             elif exit_info.old_fd is not None:
                 trace_msg = trace_msg+('FD: %d exception %d\n' % (exit_info.old_fd, eax))
@@ -1095,7 +1095,7 @@ class SharedSyscall():
                     buf_start = iov_set[1].addr
                     buf_len = len(iov_set[1].byte_array)
                     self.lgr.debug('sharedSyscall tid:%s (%s)  %s call checkReadParams add_msg %s' % (tid, comm, callname, add_msg))
-                    trace_msg = self.checkReadParams(exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start)
+                    trace_msg = self.checkReadParams(exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start, callname)
       
         elif callname in ['_llseek', 'lseek']:
             if eax >= 0:
@@ -1798,7 +1798,7 @@ class SharedSyscall():
                 exit_info.matched_param = None
         return trace_msg
 
-    def checkReadParams(self, exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start):
+    def checkReadParams(self, exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start, callname):
         self.lgr.debug('sharedSyscall checkReadParams tid:%s (%s)' % (tid, comm))
         for call_param in exit_info.call_params:
                 self.lgr.debug('sharedSyscall tid:%s (%s) checkReadParams look at call_param %s' % (tid, comm, call_param.name))
