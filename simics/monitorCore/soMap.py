@@ -385,7 +385,7 @@ class SOMap():
                     #self.checkSOWatch(load_addr, prog)
                     self.pending_execve[prog] = load_addr
                     mem_utils = self.task_utils.getMemUtils()
-                    doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.lgr, tid=tid)
+                    doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
                     retval = LoadInfo(load_addr, size, interp=interp)
                 else:
@@ -1038,7 +1038,8 @@ class SOMap():
             self.lgr.debug('soMap checkSOWatch found %s, len %d' % (use_name, len(self.so_watch_callback[use_name])))
             for name in self.so_watch_callback[use_name]:
                 if name == 'NONE':
-                    self.lgr.error('soMap checkSOWatch do callback for %s but name is NONE????' % use_name)
+                    self.lgr.debug('soMap checkSOWatch do callback for %s but name is NONE????' % use_name)
+                    self.so_watch_callback[use_name][name](load_addr)
                 else:
                     # pass the load address to the callback
                     self.lgr.debug('soMap checkSOWatch do callback for %s, name %s' % (use_name, name))
