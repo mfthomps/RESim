@@ -718,8 +718,8 @@ class GenContextMgr():
         else:
            proc_addr = new_addr
            tid = str(self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid))
-        exit_tid = self.task_utils.getExitTid()
-        #self.lgr.debug('contextManager changedThread exit_tid: %s' % exit_tid)
+        exit_tid = str(self.task_utils.getExitTid())
+        self.lgr.debug('contextManager changedThread exit_tid: %s' % exit_tid)
         if exit_tid is not None and tid.startswith(exit_tid):
             if self.top.isWindows(target=self.cell_name):
                 if '-' in exit_tid:
@@ -758,7 +758,7 @@ class GenContextMgr():
         if self.onlyOrIgnore(tid, comm, new_addr):
             return 
         else:
-            self.lgr.debug('changedThread, call checkFirstSchedule for %s' % comm)
+            #self.lgr.debug('changedThread, call checkFirstSchedule for %s' % comm)
             self.checkFirstSchedule(new_addr, tid, comm)
         if len(self.pending_watch_tids) > 0:
             ''' Are we waiting to watch tids that have not yet been scheduled?
