@@ -894,6 +894,7 @@ class MemUtils():
     def getRegNum(self, cpu, reg):
         reg_num = None
         if reg is not None:             
+            reg = reg.lower()
             if cpu.architecture != 'arm64':
                 if reg in self.regs:
                     reg_num = cpu.iface.int_register.get_number(self.regs[reg])
@@ -1018,8 +1019,10 @@ class MemUtils():
     def setRegValue(self, cpu, reg, value):
         #self.lgr.debug('setRegValue reg %s value 0x%x' % (reg, value))
         reg_num = self.getRegNum(cpu, reg)
-        
-        cpu.iface.int_register.write(reg_num, value)
+        if reg_num is None:
+            self.lgr.error('memUtils setRegValue failed to get register number for %s' % reg)
+        else: 
+            cpu.iface.int_register.write(reg_num, value)
 
     def getESP(self):
         if self.WORD_SIZE == 4:
