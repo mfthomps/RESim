@@ -322,7 +322,7 @@ class PageCallbacks():
             ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all assocaited addresses are mapped. '''
             self.rmTableHap(break_num)
             ''' Set a mode hap so we recheck page entries after kernel finishes its mappings. '''
-            mem_trans = self.MyMemTrans(self.cpu, memory)
+            mem_trans = self.MyMemTrans(self.cpu, memory, tid)
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedPageBase, mem_trans)
         else:
             self.lgr.error('pageCallbacks pageBaseHap op_type is not store')
