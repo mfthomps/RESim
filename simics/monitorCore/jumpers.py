@@ -237,11 +237,11 @@ class Jumpers():
     def fixAddr(self, addr, prog): 
         retval = addr
         if self.cpu.architecture != 'ppc32':
-            load_addr = self.so_map.getLoadAddr(jump_rec.prog)
-            if load_addr is None:
-                self.lgr.error('jumpers fixAddr load_addr is none for prog %s' % prog)
+            load_offset = self.so_map.getLoadOffset(prog)
+            if load_offset is None:
+                self.lgr.error('jumpers fixAddr load_offset is none for prog %s' % prog)
                 return
-            retval = addr + load_addr
+            retval = addr + load_offset
         return retval
 
     def setProgJumpersIfMapped(self, jump_rec):
@@ -301,7 +301,7 @@ class Jumpers():
         else:
             phys = self.mem_utils.v2p(self.cpu, addr)
             if phys is not None and phys != 0:
-                self.lgr.debug('jumper setProgJumper call setBreak for %s on phys 0x%x' % (jump_rec.prog, phys))
+                self.lgr.debug('jumper setProgJumper call setBreak for %s on phys 0x%x addr was 0x%x' % (jump_rec.prog, phys, addr))
                 self.setBreak(jump_rec, phys)
             else:
                 self.lgr.error('jumper failed to get phys for addr 0x%x' % addr)
@@ -311,23 +311,23 @@ class Jumpers():
         image_base = self.so_map.getImageBase(jump_rec.prog)
         if image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
-            self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s prog %s' % (jump_rec.lib_addr, jump_rec.prog))
+            self.lgr.debug('jumper handleSO no process has image loaded, set SO watch callback for %s prog %s' % (jump_rec.lib_addr, jump_rec.prog))
             self.so_map.addSOWatch(jump_rec.prog, self.libLoadCallback, name=jump_rec.lib_addr)
             self.pending_libs[jump_rec.lib_addr] = jump_rec
         elif self.top.isVxDKM(cpu=self.cpu):
             jump_rec.image_base = image_base
             load_addr = self.so_map.getLoadAddr(jump_rec.prog)
             addr = jump_rec.from_addr + load_addr
-            self.lgr.debug('jumper handleJumperEntry vxworks set break on 0x%x' % addr)
+            self.lgr.debug('jumper handleSO vxworks set break on 0x%x' % addr)
             self.setBreak(jump_rec, addr)
         else:
             # Library loaded by someone.  Get list of pids
             jump_rec.image_base = image_base
             loaded_pids = self.so_map.getSOPidList(jump_rec.prog)
             if len(loaded_pids) == 0:
-                self.lgr.error('jumper handleJumperEntry not at least one pid for %s' % jump_rec.prog)
+                self.lgr.error('jumper handleSO not at least one pid for %s' % jump_rec.prog)
                 return
-            self.lgr.debug('jumper handleJumperEntry %d pids with lib loaded, image_base 0x%x' % (len(loaded_pids), image_base))
+            self.lgr.debug('jumper handleSO %d pids with lib loaded, image_base 0x%x' % (len(loaded_pids), image_base))
             phys = None
             # a bit of hackery to avoid looking up another process's page table if threads of same process.
             # can remove after all params include the page table info (mm_struct)
@@ -340,7 +340,7 @@ class Jumpers():
                     use_pid = str(so_pid)
                 load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=use_pid)
                 if load_addr is not None:
-                    self.lgr.debug('jumper handleJumperEntrys pid:%s lib_addr %s load addr 0x%x, call getPhys' % (use_pid, jump_rec.lib_addr, load_addr))
+                    self.lgr.debug('jumper handleSO pid:%s lib_addr %s load addr 0x%x, call getPhys' % (use_pid, jump_rec.lib_addr, load_addr))
                     phys = self.getPhys(jump_rec, load_addr, use_pid)
                     if phys is not None and phys != 0:
                         self.setBreak(jump_rec, phys)
@@ -413,7 +413,7 @@ class Jumpers():
         if eip == self.prev_dest_eip:
             # break is hit a 2nd time?
             return
-        self.lgr.debug('doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
+        self.lgr.debug('jumper doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
         ''' callback when jumper breakpoint is hit'''
         #curr_addr = memory.logical_address 
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
