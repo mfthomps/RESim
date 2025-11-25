@@ -150,7 +150,7 @@ class SyscallInstance():
 
 class SyscallManager():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type):
+                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type, myIPC):
         self.top = top
         self.param = param
         self.cpu = cpu
@@ -169,6 +169,7 @@ class SyscallManager():
         self.targetFS = targetFS
         self.compat32 = compat32
         self.os_type = os_type
+        self.myIPC = myIPC
 
         self.syscall_dict = {}
         self.trace_all = {}
@@ -176,6 +177,9 @@ class SyscallManager():
             self.sharedSyscall = vxKCallExit.VxKCallExit(top, cpu, cell_name, mem_utils, task_utils, soMap, self.traceMgr, self.dataWatch, self.context_manager, lgr)
         else:
             self.sharedSyscall = sharedSyscall
+
+        self.sharedSyscall.setMyIPC(self.myIPC)
+        self.myIPC.setSyscallManager(self)
 
     def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
                          trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[], no_gui=False):
