@@ -149,6 +149,7 @@ class Coverage():
         self.report_coverage = False
 
         self.hacked_phys_map = {}
+        self.alternate_callback = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -301,8 +302,12 @@ class Coverage():
                     self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                        int(fun), bb, self.offset, bp))
                     if prev_bp is not None and bp != (prev_bp+1):
-                        self.doHapRange(tmp_list)
-                        tmp_list = []
+                        self.lgr.debug('cover setBlockBreaks prev_bp is %s bp is %s' % (prev_bp, bp))
+                        if len(tmp_list) > 0:
+                            self.doHapRange(tmp_list)
+                            tmp_list = []
+                        else:
+                            self.lgr.error('coverage setBlockBreaks tmp_list is empty?')
                     tmp_list.append(bp) 
                     prev_bp = bp
 
@@ -327,6 +332,7 @@ class Coverage():
             #hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bp_list[0], bp_list[-1])
         else:
+            self.lgr.debug('cover doHapRange bp_list[0] 0x%x, bp_list[-1] 0x%x len of bp_list %d' % (bp_list[0], bp_list[-1], len(bp_list)))
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bp_list[0], bp_list[-1])
         #self.lgr.debug('coverage cover add hap %d  bp %d-%d' % (hap, bp_list[0], bp_list[-1]))
         self.bb_hap.append(hap)
@@ -692,6 +698,10 @@ class Coverage():
     def bbHap(self, dumb, third, break_num, memory):
         ''' HAP when a bb is hit '''
         if self.halt_coverage:
+            return
+        if self.alternate_callback is not None:
+            logical = self.addr_map[break_num] 
+            self.alternate_callback(logical)
             return
         # TBD convoluted determination of phys vs linear
         if self.linear:
@@ -1595,4 +1605,21 @@ class Coverage():
         #del self.missing_ptegs[missing_entry]
         # for addr in redo_addrs:
         #     self.setTableHaps(addr)
-        
+       
+    def setAlternateCallback(self, callback):
+        self.alternate_callback = callback
+        self.lgr.debug('coverage setAltnerateCallback to %s' % str(callback)) 
+
+    def getBlocks(self):
+        return self.blocks
+
+    def enableForBB(self, bb):
+        self.lgr.debug('coverage enableForBB for bb 0x%x' % bb)
+        for bp in self.addr_map:
+            if self.addr_map[bp] == bb:
+                self.lgr.debug('coverage enableForBB will enable for bp %d' % bp)
+                SIM_enable_breakpoint(bp) 
+                break
+
+                
+      
