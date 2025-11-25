@@ -144,7 +144,7 @@ class ReadReplace():
         self.lgr.debug('readReplace: set %d breaks' % len(self.breakmap))
 
     def handleEntry(self, addr, lib, hexstring, comm, lib_addr, operation, fname, writable):
-        self.lgr.debug('readReplace handleEntry addr 0x%x lib %s hexstring %s' % (addr, lib, hexstring))
+        self.lgr.debug('readReplace handleEntry addr 0x%x lib or prog %s hexstring %s' % (addr, lib, hexstring))
         image_base = self.so_map.getImageBase(lib)
         replace_entry = ReplaceEntry(lib, addr, hexstring, comm, lib_addr, operation, fname, writable)
         if replace_entry.addr is None:
