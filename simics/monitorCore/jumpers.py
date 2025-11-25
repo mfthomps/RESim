@@ -40,6 +40,13 @@ program name or the SO/DLL basename and the addr as the original address.
     prog:addr addr [comm] [break]
 You can see original addresses via the cgc.getSO(addr, show_orig=True)
 
+Also manage dynamic setting of a register value based on execution of a
+memory address.  This is controlled by a
+"regSet" file.  There should be no more than one such file
+per target.  The format of the file is:
+    comm addr reg value
+Where "comm" is the process comm name; addr is the address; reg is a
+register name and value is the value to load into the register.
 '''
 from simics import *
 import os
@@ -47,6 +54,14 @@ import ntpath
 import winProg
 import resimUtils
 
+def getKeyValue(item):
+    key = None
+    value = None
+    if '=' in item:
+        parts = item.split('=', 1)
+        key = parts[0].strip()
+        value = parts[1].strip()
+    return key, value
 class Jumpers():
     def __init__(self, top, context_manager, so_map, mem_utils, task_utils, cpu, lgr):
         self.top = top
@@ -87,7 +102,7 @@ class Jumpers():
         self.hap = {}
         self.breakpoints = {}
 
-    def loadJumpers(self, fname_in):
+    def loadJumpers(self, fname_in, is_reg_set=False):
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
         self.lgr.debug('jumpers loadJumpers fname_in: %s Current tid:%s (%s)' % (fname_in, tid, comm))
         if ';' in fname_in:
@@ -106,7 +121,11 @@ class Jumpers():
                             continue
                         if len(line.strip()) == 0:
                             continue
-                        if ':' in line:
+                        if is_reg_set:
+                            if not self.handleRegSetEntry(line, fname):
+                                self.lgr.error('Failed handling RegSet entry %s' % line)
+                                return
+                        elif ':' in line:
                             if not self.handleJumperEntry(line, fname):
                                 self.lgr.error('Failed handling jumper entry %s' % line)
                                 return
@@ -195,6 +214,69 @@ class Jumpers():
             handle = '%s:0x%x' % (prog_comm, from_addr)
             self.prog_jumpers[handle] = jump_rec
             self.handleProg(jump_rec=jump_rec)
+
+        return True
+
+    def handleRegSetEntry(self, line, fname):
+        retval = True
+        if line in self.did_lines:
+            return retval
+        self.did_lines.append(line)
+        self.lgr.debug('jumpers handleRegSetEntry %s %s' % (fname, line))
+        parts = line.strip().split()
+        if '=' not in line and len(parts) != 4:
+            self.lgr.error('RegSet: Could not make sense of %s' % line)
+            return
+        prog = parts[0].strip()
+        prog_addr = None
+        try:
+            prog_addr = int(parts[1], 16)
+        except:
+            self.lgr.error('RegSet: bad addr in %s' % line)
+            return
+        indirect = False
+        jmp = None
+        break_on_it = False
+        if '=' in parts[2]:
+            for item in parts[2:]:
+                key, value = getKeyValue(item)
+                if key == 'reg':
+                    reg = value
+                elif key == 'reg_indirect':
+                    indirect = True 
+                    reg = value
+                elif key == 'value':
+                    try:
+                        new_value = int(value, 16)
+                    except:
+                        self.lgr.error('RegSet: bad value in %s' % line)
+                        return
+                elif key == 'hexstring':
+                    new_value = value
+                elif key == 'jmp':
+                    jmp = value
+                    self.lgr.debug('RegSet: jmp is %s' % jmp)
+                elif key == 'break':
+                    if value.lower() == 'true': 
+                        break_on_it = True
+                    self.lgr.debug('RegSet: jmp is %s' % jmp)
+        else:
+            reg = parts[2]
+            try:
+                new_value = int(parts[3], 16)
+            except:
+                self.lgr.error('RegSet: bad value in %s' % line)
+                self.top.quit()
+        
+        reg_set_rec = self.JumperRec(prog, None, prog_addr, to_addr=jmp, break_at_dest=break_on_it, reg=reg, value=new_value, indirect=indirect)
+        #def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
+        if resimUtils.isSO(prog):
+            self.handleSO(reg_set_rec)
+        else:
+            prog_comm = self.task_utils.progComm(prog)
+            handle = '%s:0x%x' % (prog_comm, prog_addr)
+            self.prog_jumpers[handle] = reg_set_rec
+            self.handleProg(jump_rec=reg_set_rec)
 
         return True
 
@@ -409,49 +491,80 @@ class Jumpers():
 
     def doJump(self, jump_rec, an_object, break_num, memory):
         #print('doJump')
-        eip = self.top.getReg('pc', self.cpu)
-        if eip == self.prev_dest_eip:
-            # break is hit a 2nd time?
-            return
-        self.lgr.debug('jumper doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
-        ''' callback when jumper breakpoint is hit'''
-        #curr_addr = memory.logical_address 
-        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-        self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it affects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
-        if jump_rec.lib_addr not in self.hap:
-            self.lgr.debug('jumper doJump lib_addr %s not in haps' % jump_rec.lib_addr)
-            return
-        if jump_rec.comm is not None:
-            if comm != jump_rec.comm:
-                self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, jump_rec.comm))
-                return
-        if self.reverse_enabled is None:
-            self.reverse_enabled = self.top.reverseEnabled()
-            self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
-
-        load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=tid)
-        if load_addr is None:
-            # Likely a true shared dll (same phys addr) but this process has no so map
-            self.lgr.debug('jumper doJump failed to get load_addr for %s in tid:%s (%s)' % (jump_rec.prog, tid, comm))
-            # TBD always do this instead of getting load_addr? 
-            delta = jump_rec.to_addr - jump_rec.from_addr
-            source = eip
-            destination = eip + delta
+        if jump_rec.reg is not None:
+            self.doRegSet(jump_rec, memory)
         else:
-            destination = self.fixAddr(jump_rec.to_addr, jump_rec.prog)
-            source = self.fixAddr(jump_rec.from_addr, jump_rec.prog)
-            #offset = load_addr - jump_rec.image_base
-            #destination = jump_rec.to_addr + offset
-            #source = jump_rec.from_addr + offset
+            eip = self.top.getReg('pc', self.cpu)
+            if eip == self.prev_dest_eip:
+                # break is hit a 2nd time?
+                return
+            self.lgr.debug('jumper doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
+            ''' callback when jumper breakpoint is hit'''
+            #curr_addr = memory.logical_address 
+            cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+            self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it affects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
+            if jump_rec.lib_addr not in self.hap:
+                self.lgr.debug('jumper doJump lib_addr %s not in haps' % jump_rec.lib_addr)
+                return
+            if jump_rec.comm is not None:
+                if comm != jump_rec.comm:
+                    self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, jump_rec.comm))
+                    return
+            if self.reverse_enabled is None:
+                self.reverse_enabled = self.top.reverseEnabled()
+                self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
+    
+            load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=tid)
+            if load_addr is None:
+                # Likely a true shared dll (same phys addr) but this process has no so map
+                self.lgr.debug('jumper doJump failed to get load_addr for %s in tid:%s (%s)' % (jump_rec.prog, tid, comm))
+                # TBD always do this instead of getting load_addr? 
+                delta = jump_rec.to_addr - jump_rec.from_addr
+                source = eip
+                destination = eip + delta
+            else:
+                destination = self.fixAddr(jump_rec.to_addr, jump_rec.prog)
+                source = self.fixAddr(jump_rec.from_addr, jump_rec.prog)
+                #offset = load_addr - jump_rec.image_base
+                #destination = jump_rec.to_addr + offset
+                #source = jump_rec.from_addr + offset
+    
+            self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
+            self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
+            self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
+            self.prev_dest_eip = self.top.getReg('pc', self.cpu)
+            if jump_rec.break_at_dest:
+                SIM_break_simulation('Jumper request')
+                self.lgr.debug('jumper doJump did break_simulation')
+            self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
 
-        self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
-        self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
-        self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
-        self.prev_dest_eip = self.top.getReg('pc', self.cpu)
-        if jump_rec.break_at_dest:
-            SIM_break_simulation('Jumper request')
-            self.lgr.debug('jumper doJump did break_simulation')
-        self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
+    def doRegSet(self, reg_set_rec, memory):
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        if True:
+            if reg_set_rec.indirect:
+                self.lgr.debug('jumper RegSet comm %s hit 0x%x will replace content of address in reg %s to %s' % (comm, memory.logical_address, reg_set_rec.reg, reg_set_rec.value)) 
+                addr = self.mem_utils.getRegValue(self.cpu, reg_set_rec.reg)
+                bstring = binascii.unhexlify(reg_set_rec.value.encode())
+                #self.top.writeString(addr, bstring, target_cpu=self.cpu)
+                self.top.writeBytes(self.cpu, addr, bstring)
+                self.lgr.debug('jumper RegSet indirect wrote %s to 0x%x' % (reg_set_rec.value, addr))
+            else:
+                self.lgr.debug('jumper RegSet comm %s hit 0x%x would update reg %s to 0x%x' % (comm, memory.logical_address, reg_set_rec.reg, reg_set_rec.value)) 
+                self.top.writeRegValue(reg_set_rec.reg, reg_set_rec.value, target_cpu=self.cpu)
+            if reg_set_rec.to_addr is not None:
+                if reg_set_rec.to_addr == 'lr':
+                    addr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                    self.top.writeRegValue('pc', addr, target_cpu=self.cpu)
+                    self.lgr.debug('jumper RegSet jmp to lr 0x%x' % addr)
+                     
+                else:
+                    addr = int(reg_set_rec.to_addr, 16)
+                    self.top.writeRegValue('pc', addr, target_cpu=self.cpu)
+                    self.lgr.debug('jumper RegSet jmp to 0x%x' % addr)
+            if reg_set_rec.break_at_dest:
+                SIM_break_simulation('regset break on it')
+                self.lgr.debug('jumper RegSet break on it')
+           
 
     def disableBreaks(self):
         self.lgr.debug('Jumpers disableBreaks')
@@ -464,7 +577,7 @@ class Jumpers():
             SIM_enable_breakpoint(self.breakpoints[lib_addr])
  
     class JumperRec():
-        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace):
+        def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
             self.prog = prog
             self.from_addr = from_addr
             self.to_addr = to_addr
@@ -475,3 +588,7 @@ class Jumpers():
             self.replace = replace
             self.lib_addr = '%s:0x%x' % (prog, from_addr)
             self.image_base = None
+            self.reg = reg
+            # hex string
+            self.value = value
+            self.indirect = indirect
