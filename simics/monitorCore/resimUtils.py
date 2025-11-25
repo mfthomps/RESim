@@ -807,3 +807,22 @@ def parseScanfFormat(format_string):
             retval.append('s') # Default to string for unknown specifiers
     return retval
 
+def getListFromComponentFile(top, cell_name, env_name, lgr):
+    '''
+    With top being the genMonitor, get an ini component
+    variable value assumed to be a file name and return
+    file content as a list.
+    '''
+    the_file = top.getCompDict(cell_name, env_name)
+    retval = []
+    if the_file is not None:
+        if os.path.isfile(the_file):
+            with open(the_file) as fh:
+                for line in fh:
+                    if line.strip().startswith('#'):
+                        continue
+                    retval.append(line.strip())
+        else:
+            lgr.error('The ini file has not %s entry for component %s' % (env_name, cell_name))
+            retval = None
+    return retval
