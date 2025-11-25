@@ -571,6 +571,7 @@ class SOMap():
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
             print('no so map for %s' % tid)
+            self.lgr.debug('soMap showSO no so map for %s' % tid)
         print('SO Map for threads led by group leader tid: %s' % tid)
         if tid in self.so_file_map:
             if save:
@@ -722,21 +723,33 @@ class SOMap():
  
     def getSOTid(self, tid):
         # all threads in a family share one record for what we think is the parent tid (group leader)
-        #self.lgr.debug('SOMap getSOTid for %s' % tid)
+        self.lgr.debug('SOMap getSOTid for %s' % tid)
         retval = None
         if tid is None:
             self.lgr.error('soMap getSOTid called with None for tid')
             return None
         retval = tid
         if tid not in self.so_file_map:
-            #self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
+            self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)
             #self.lgr.debug('SOMap getSOTid getCurrentTaskLeader got %s for current tid:%s' % (ptid, tid))
             if ptid != tid:
-                #self.lgr.debug('SOMap getSOTid use group leader')
-                retval = ptid
+                self.lgr.debug('SOMap getSOTid try group leader %s' % ptid)
+                if ptid in self.so_file_map:
+                    retval = ptid
+                else:
+                    comm = self.task_utils.getCommFromTid(tid)
+                    tid_list = self.task_utils.getTidsForComm(comm)
+                    self.lgr.debug('SOMap getSOTid try thread tids, len %d' % (len(tid_list)))
+                    for try_tid in tid_list:
+                        if try_tid in self.so_file_map:
+                            retval = try_tid
+                            break
+                    if retval is None:
+                        self.lgr.debug('SOMap getSOTid giving up, using failed group leader')
+                        retval = ptid
             #else:
             #    ptid = self.task_utils.getTidParent(tid)
             #    if ptid != tid:
@@ -1108,6 +1121,8 @@ class SOMap():
            
         else:
            self.lgr.debug('tid %s not in prog_start' % tid)
+        maybe_image_base = self.getImageBase(prog_in)
+        maybe_load_addr = self.getLoadAddr(prog_in)
         if tid in self.text_prog and tid in self.prog_start and self.text_prog[tid] == prog_in:
             load_addr = self.prog_start[tid]
             if prog in self.prog_info:
@@ -1120,6 +1135,9 @@ class SOMap():
                     retval = load_addr
             else:
                 self.lgr.error('soMap getLoadOffset prog %s not in prog_info' % prog)
+        elif maybe_image_base is not None and maybe_load_addr is not None:
+            retval = maybe_load_addr - maybe_image_base
+            self.lgr.debug('soMap getLoadOffset using image_base from getImageBase got retval 0x%x' % retval)
         else:
             self.lgr.debug('soMap getLoadOffset tid %s not somewhere, use getLoadAddr? ' % (tid))
             #if tid in self.text_prog:
