@@ -98,16 +98,6 @@ class DmodMgr():
                 else:
                     print('ReadReplace file %s is missing, cannot continue.' % read_replace)
                     self.top.quit()
-        if 'REG_SET' in self.comp_dict:
-            self.top.is_monitor_running.setRunning(False)
-            dlist = self.comp_dict['REG_SET'].split(';')
-            for reg_set in dlist:
-                reg_set = reg_set.strip()
-                if self.top.regSet(reg_set, cell_name=self.cell_name, snapshot=self.run_from_snap):
-                    print('RegSet %s set for cell %s' % (reg_set, self.cell_name))
-                else:
-                    print('RegSet file %s is missing, cannot continue.' % reg_set)
-                    self.top.quit()
        
     def pickleit(self, name): 
         self.lgr.debug('dmodMgr pickleIt')
@@ -145,6 +135,8 @@ class DmodMgr():
            # Use a syscall dmod if you want to
            op_set = ['open', 'openat', 'read','write','close','lseek','_llseek']
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
+           if self.mem_utils.WORD_SIZE == 8:
+               op_set.remove('_llseek')
         else:
            op_set = [operation]
         comm_running = False
