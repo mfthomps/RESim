@@ -142,6 +142,8 @@ import defaultConfig
 import watchWrite
 import doInUser
 import runToModeChange
+import myIPC
+import stupidClose
 
 #import fsMgr
 import json
@@ -207,6 +209,8 @@ class GenMonitor():
         self.trackFunction = {}
         self.traceFiles = {}
         self.sharedSyscall = {}
+        self.myIPC = {}
+        self.stupidClose = {}
         self.ropCop = {}
         self.back_stop = {}
         self.reverseTrack = {}
@@ -867,14 +871,17 @@ class GenMonitor():
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
             self.traceFiles[cell_name] = traceFiles.TraceFiles(self, self.traceProcs[cell_name], self.lgr, cpu)
+            self.stupidClose[cell_name] = stupidClose.StupidClose(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], 
+                  self.soMap[cell_name], self.context_manager[cell_name], self.lgr)
             self.sharedSyscall[cell_name] = sharedSyscall.SharedSyscall(self, cpu, cell, cell_name, self.param[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.traceProcs[cell_name], self.traceFiles[cell_name], 
-                  self.soMap[cell_name], self.dataWatch[cell_name], self.traceMgr[cell_name], self.lgr)
+                  self.soMap[cell_name], self.dataWatch[cell_name], self.traceMgr[cell_name], self.stupidClose[cell_name], self.lgr)
 
+            self.myIPC[cell_name] = myIPC.MyIPC(self, cpu, cell_name, self.lgr)
             self.syscallManager[cell_name] = syscallManager.SyscallManager(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name],
                                      self.context_manager[cell_name], self.traceProcs[cell_name], self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name], self.soMap[cell_name], 
-                                     self.dataWatch[cell_name], self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name])
+                                     self.dataWatch[cell_name], self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name], self.myIPC[cell_name])
 
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
@@ -6149,21 +6156,26 @@ class GenMonitor():
             self.loadJumpersTarget(target)
 
     def loadJumpersTarget(self, target):    
+        jumper_file = None
+        reg_set_file = None
         if 'EXECUTION_JUMPERS' in self.comp_dict[target]:
             jumper_file = self.comp_dict[target]['EXECUTION_JUMPERS']
-            if jumper_file is not None:
-                if target not in self.jumper_dict:
-                    cpu = self.cell_config.cpuFromCell(target)
-                    self.jumper_dict[target] = jumpers.Jumpers(self, self.context_manager[target], self.soMap[target], self.mem_utils[target], 
+        if 'REG_SET' in self.comp_dict[target]:
+            reg_set_file = self.comp_dict[target]['REG_SET']
+
+        if jumper_file is not None or reg_set_file is not None: 
+            if target not in self.jumper_dict:
+                cpu = self.cell_config.cpuFromCell(target)
+                self.jumper_dict[target] = jumpers.Jumpers(self, self.context_manager[target], self.soMap[target], self.mem_utils[target], 
                              self.task_utils[self.target], cpu, self.lgr)
-                    self.jumper_dict[target].loadJumpers(jumper_file)
-                    print('Loaded jumpers from %s' % jumper_file)
-                else:
-                    print('Jumpers for %s already loaded' % target)
             else:
-                print('No jumper file defined though ENV set for target %s.' % target)
-        else:
-            self.lgr.debug('LoadJumpersTarget No EXECUTION_JUMPERS defined for %s' % target)
+                print('Jumpers for %s already loaded' % target)
+        if jumper_file is not None:
+            self.jumper_dict[target].loadJumpers(jumper_file)
+            print('Loaded jumpers from %s' % jumper_file)
+        if reg_set_file is not None:
+            self.jumper_dict[target].loadJumpers(reg_set_file, is_reg_set=True)
+            print('Loaded jumpers from %s' % jumper_file)
 
     def getSyscallEntry(self, callname):
         retval = None
