@@ -38,6 +38,12 @@ def RES_hap_add_callback_index(hap_type, callback, param, breaknum):
     #print('done')
     return retval
 
+def RES_hap_add_callback_range(hap_type, callback, param, breaknum, max_break):
+    #print('add hap on break %d max %d' % (breaknum, max_break))
+    retval = SIM_hap_add_callback_range(hap_type, callback, param, breaknum, max_break)
+    #print('done')
+    return retval
+
 def RES_delete_breakpoint(bp):
     '''
     currentframe = inspect.currentframe()
