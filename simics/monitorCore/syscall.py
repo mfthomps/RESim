@@ -352,6 +352,12 @@ class PollInfo():
         fd_list = ', '.join(map(lambda x: str(x.fd), self.fds_list))
         return 'poll, %d FDs: %s Timeout: %d' % (self.nfds, fd_list, self.timeout) 
 
+class SocketInfo():
+    def __init__(self, domain, sock_type, protocol):
+        self.domain = domain
+        self.sock_type = sock_type
+        self.protocol = protocol
+
 class ExitInfo():
     def __init__(self, syscall_instance, cpu, tid, comm, callnum, callname, compat32, frame):
         self.cpu = cpu
@@ -393,6 +399,7 @@ class ExitInfo():
         self.trace_msg = None
         self.asynch_handler = None
         self.sock_addr = None
+        self.socket_info = None
         self.word_size = 8
         self.append_msg = None
 
@@ -1301,6 +1308,7 @@ class Syscall():
                     type_string = net.socktype[sock_type]
                     ida_msg = '%s - %s tid:%s (%s) domain: 0x%x type: %s protocol: 0x%x' % (callname, socket_callname, tid, comm, domain, type_string, protocol)
                     #self.lgr.debug(ida_msg)
+                    exit_info.socket_info = SocketInfo(domain, type_string, protocol)
                 except:
                     self.lgr.debug('syscall doSocket could not get type string from type 0x%x full 0x%x' % (sock_type, sock_type_full))
                     ida_msg = '%s - %s tid:%s (%s) domain: 0x%x type: %d protocol: 0x%x' % (callname, socket_callname, tid, comm, domain, sock_type, protocol)
@@ -1636,7 +1644,7 @@ class Syscall():
         do_stop_from_call = False
         # Optimization to see if call parameters exclude this sytem call
         # some exit_info params will be set in per-call blocks
-        if self.name not in ['traceAll', 'traceWindows', 'traceProcs']:
+        if True or self.name not in ['traceAll', 'traceWindows', 'traceProcs']:
             got_one = False
             bail_if_not_got = False
             for call_param in self.call_params:
@@ -1659,7 +1667,7 @@ class Syscall():
                         got_one = True
                       
                 elif call_param.name == 'runToCall':
-                    if callname not in self.call_list:
+                    if call_param.subcall != callname and (self.call_list is not None and callname not in self.call_list):
                         self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
                         bail_if_not_got = True
                     else:
