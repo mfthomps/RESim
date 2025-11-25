@@ -111,7 +111,6 @@ import jumpers
 import kbuffer
 import funMgr
 import readReplace
-import regSet
 import syscallManager
 import testSnap
 import winTaskUtils
