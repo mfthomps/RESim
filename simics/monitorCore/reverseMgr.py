@@ -372,6 +372,7 @@ class ReverseMgr():
         if self.nativeReverse():
             cmd = 'disable-reverse-execution'
             SIM_run_command(cmd)
+            self.lgr.debug('disableReverse is native, ran %s' % cmd)
         else:
             self.cancelSpanCycle()
             self.origin_cycle = None
