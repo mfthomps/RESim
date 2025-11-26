@@ -3427,7 +3427,7 @@ class GenMonitor():
                 count = loader_load_info.addr 
                 print('remove this')
                 count = loader_load_info.addr - 0x1abc0
-                self.lgr.debug('runToText dynamic load break on range 0x%x 0x%x tid:%s' % (start, count, tid))
+                self.lgr.error('runToText dynamic load break on range 0x%x 0x%x tid:%s lingering debug ???' % (start, count, tid))
             else:
                 self.lgr.error('runToText dynamic load but no load info for the loader itself')
                 return
@@ -4112,6 +4112,8 @@ class GenMonitor():
                 cpu, comm, tid = self.task_utils[self.target].curThread() 
                 #self.stopTrackIO()
                 self.lgr.debug('genMonitor clearBookmarks call clearWatches')
+            else:
+                self.lgr.debug('genMonitor clearBookmarks dataWatch says no')
         else:
             self.lgr.debug('genMonitor clearBookmarks reverse not enabled')
             pass
@@ -4495,7 +4497,7 @@ class GenMonitor():
         if status:   
             if not quiet:
                 print('Was running, set to not running')
-            #self.lgr.debug('notRunning set running false')
+            self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
