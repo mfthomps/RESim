@@ -62,16 +62,18 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
             'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
-            'UuidToStringA', 'fgets', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 
+            'UuidToStringA', 'fgets', 'readline', 'WSAAddressToStringA', 'win_streambuf_getc', 'realloc', 'String16fromAscii_helper', 'QStringHash', 'String5split', 
             'String14compare_helper', 'String14compare_helper_latin',
             'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'ByteArray5toInt', 'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
-''' Functions whose data must be hit, i.e., hitting function entry point will not work '''
+# Functions whose data must be hit, i.e., hitting function entry point will not work 
 funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY']
-#no_stop_funs = ['xml_element_free', 'xml_element_name']
-no_stop_funs = ['xml_element_free', 'JsonObject5value', 'JsonObjectix', 'JsonValueRefa']
-''' made up functions that could not have ghost frames?'''
+
+# Functions whose destination is returned in a register or otherwise does not require that we
+# reverse to the call to gather parameters.
+no_stop_funs = ['xml_element_free', 'JsonObject5value', 'JsonObjectix', 'JsonValueRefa', 'readline']
+#  made up functions that could not have ghost frames?
 no_ghosts = ['charLookup', 'charLookupX', 'charLookupY']
-''' TBD confirm end_cleanup is a good choice for free'''
+# TBD confirm end_cleanup is a good choice for free
 free_funs = ['free_ptr', 'free', 'regcomp', 'destroy', 'delete', 'end_cleanup', 'erase', 'new', 'DTDynamicString_', 'malloc', 'memset', 'ArrayData10deallocate']
 # remove allocators, should not get that as windows function
 allocators = ['string_basic_windows', 'malloc', 'ostream_insert', 'create']
@@ -150,7 +152,10 @@ class DataWatch():
         self.buffer_length = None
         self.finish_check_move_hap = None
         self.watchMarks = watchMarks.WatchMarks(top, mem_utils, cpu, cell_name, run_from_snap, lgr)
-        self.backstop_cycles = defaultConfig.backstopCycles()
+        if backstop_cycles is None:
+            self.backstop_cycles = defaultConfig.backstopCycles()
+        else:
+            self.backstop_cycles = backstop_cycles
         self.lgr.debug('dataWatch backstop_cycles %s' % self.backstop_cycles)
         read_loop_string = os.getenv('READ_LOOP_MAX')
         if read_loop_string is None:
@@ -391,7 +396,8 @@ class DataWatch():
         msg = 'fread to 0x%x %d bytes' % (start, self.mem_something.length)
         self.setRange(start, self.mem_something.length, msg=msg)
         self.enableBreaks()
-        self.backstop.setFutureCycle(self.backstop_cycles)
+        if self.backstop_cycles != 0:
+            self.backstop.setFutureCycle(self.backstop_cycles)
         #SIM_run_alone(SIM_run_command, 'c')
         SIM_run_alone(SIM_continue, 0)
 
@@ -555,7 +561,7 @@ class DataWatch():
                 self.buffer_offset = None
                 self.buffer_length = None
                 self.lgr.debug('dataWatch setRange adjusted start/length per buffer_offset to 0x%x %d' % (start, length))
-        if not self.use_backstop and backstop:
+        if not self.use_backstop and backstop and self.backstop_cycles != 0:
             self.use_backstop = True
             #self.lgr.debug('DataWatch, backstop set, start data session')
 
@@ -1927,6 +1933,16 @@ class DataWatch():
                 self.lgr.debug('%s src 0x%x count 0x%x retval addr 0x%x' % (self.mem_something.fun, self.mem_something.src, self.mem_something.length, self.mem_something.dest))
                 wm = self.watchMarks.copy(self.mem_something.src, self.mem_something.dest, self.mem_something.length, buf_start, Sim_Trans_Load, fun_name=self.mem_something.fun)
                 self.setRange(self.mem_something.dest, self.mem_something.length, watch_mark=wm)
+        elif self.mem_something.fun == 'readline':
+            src = self.mem_something.addr
+            returned_dest = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            self.lgr.debug('return from readline src 0x%x dest 0x%x' % (src, returned_dest))
+            the_string = self.mem_utils.readString(self.cpu, returned_dest, 200)
+            length = len(the_string)
+            #mark = self.watchMarks.fgetsMark(self.mem_something.fun, self.mem_something.dest, self.mem_something.length, buf_start)
+            msg = '%s 0x%x %s' % (self.mem_something.fun, returned_dest, the_string)
+            wm = self.watchMarks.markCall(msg, max_len=length, recv_addr=returned_dest, length=length, fd=None)
+            self.setRange(returned_dest, self.mem_something.length, watch_mark=wm)
             
         # Begin XML
         elif self.mem_something.fun == 'xmlGetProp':
@@ -1990,7 +2006,7 @@ class DataWatch():
 
         elif self.mem_something.fun in reg_return_funs:
             #adhoc = self.lookPushedReg()
-            self.lgr.debug('return from %s' % self.mem_something.fun)
+            self.lgr.debug('dataWatch fun in reg_return_funs return from %s' % self.mem_something.fun)
         elif self.mem_something.fun not in mem_funs:
             ''' assume iterator '''
             self.lgr.debug('dataWatch returnHap eip: 0x%x, return from iterator %s src: 0x%x ' % (eip, self.mem_something.fun, self.mem_something.src))
@@ -5477,7 +5493,8 @@ class DataWatch():
     def resetOrigin(self, cycle, reuse_msg=False, record_old=False):
         ''' remove all data watches and rebuild based on watchmarks earlier than given cycle '''
         if len(self.start) == 0:
-            return
+            # no data watch yet, tell caller ok to reset origin
+            return True
         # Returns false if directed to not reset the origin
         if self.no_reset is not None:
             self.lgr.debug('dataWatch resetOrigin, no_reset is %d count is %d' % (self.no_reset, self.reset_count))
@@ -5628,16 +5645,22 @@ class DataWatch():
         elif self.max_marks is None:
             self.max_marks = 2000
             self.lgr.debug('DataWatch trackIO NO watch max_marks given.  Use default set to %s' % max_marks)
-        if backstop_cycles is not None and backstop_cycles != 0:
-            self.backstop_cycles = backstop_cycles
-            self.lgr.debug('DataWatch trackIO backstop_cycles set to %d' % self.backstop_cycles)
-            self.backstop.setFutureCycle(self.backstop_cycles)
+        if backstop_cycles is not None:
+            if backstop_cycles != 0:
+                self.backstop_cycles = backstop_cycles
+                self.lgr.debug('DataWatch trackIO backstop_cycles set to %d' % self.backstop_cycles)
+                self.backstop.setFutureCycle(self.backstop_cycles)
+            else:
+                self.lgr.debug('DataWatch trackIO backstop_cycles 0, clear cycles')
+                self.backstop.clearCycle()
+       
         self.watch(break_simulation=False)
-        ''' what to do when backstop is reached (N cycles with no activity '''
-        self.setCallback(callback)
+        if self.backstop_cycles is None or backstop_cycles != 0:
+            ''' what to do when backstop is reached (N cycles with no activity '''
+            self.setCallback(callback)
+            report_backstop = not quiet
+            self.backstop.reportBackstop(report_backstop)
         self.enable()
-        report_backstop = not quiet
-        self.backstop.reportBackstop(report_backstop)
         fun_mgr = self.top.getFunMgr()
         self.readLib.trackReadLib(fun_mgr)
 
