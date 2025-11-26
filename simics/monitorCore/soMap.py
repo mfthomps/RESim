@@ -723,7 +723,7 @@ class SOMap():
  
     def getSOTid(self, tid):
         # all threads in a family share one record for what we think is the parent tid (group leader)
-        self.lgr.debug('SOMap getSOTid for %s' % tid)
+        #self.lgr.debug('SOMap getSOTid for %s' % tid)
         retval = None
         if tid is None:
             self.lgr.error('soMap getSOTid called with None for tid')
