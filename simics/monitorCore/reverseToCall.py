@@ -449,31 +449,8 @@ class reverseToCall():
         self.top.skipAndMail()
 
     def skipToTest(self, cycle):
-        retval = True
-        if not self.reverse_mgr.nativeReverse():
-            self.reverse_mgr.skipToCycle(cycle)
-        else:
-            count = 0 
-            while SIM_simics_is_running():
-                self.lgr.error('skipToTest but simics running')
-                time.sleep(1)
-                if count > 10:
-                    self.lgr.error('too much, bail')
-                    break 
-            SIM_run_command('pselect %s' % self.cpu.name)
-            cmd = 'skip-to cycle = %d ' % cycle
-            SIM_run_command(cmd)
-            now = self.cpu.cycles
-            if now != cycle:
-                self.lgr.error('skipToTest failed wanted 0x%x got 0x%x' % (cycle, now))
-                time.sleep(1)
-                SIM_run_command(cmd)
-                now = self.cpu.cycles
-                if now != cycle:
-                    self.lgr.error('skipToTest failed again wanted 0x%x got 0x%x' % (cycle, now))
-                    retval = False
-        return retval
-    
+        return self.top.skipToCycle(cycle)
+
     def isExit(self, instruct, eip):
         if self.cpu.architecture.startswith('arm'):
             lr = self.top.getReg('lr', self.cpu)
@@ -683,7 +660,7 @@ class reverseToCall():
         frame, closest_call = self.record_entry.getPreviousCycleFrame(tid)
         if closest_fault is None or closest_call > closest_fault:
             if closest_call is not None:
-                self.lgr.debug('tryRecentCycle skipping to recent call')
+                self.lgr.debug('tryRecentCycle skipping to recent call 0x%x' % closest_call)
                 self.skipToTest(closest_call-1)
                 retval = True
             else:
