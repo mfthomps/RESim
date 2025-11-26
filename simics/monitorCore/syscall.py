@@ -567,10 +567,13 @@ class Syscall():
             #for ph in self.proc_hap:
             #    hap_clean.add("GenContext", ph)
             #f1 = stopFunction.StopFunction(self.top.skipAndMail, [], nest=False)
-            f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
-            flist = [f1]
+            if not stop_on_call:
+                f1 = stopFunction.StopFunction(self.top.stepN, [1], nest=False)
+                flist = [f1]
+                self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
+            else:
+                flist = []
             self.stop_action = hapCleaner.StopAction(hap_clean, flist=flist, break_addrs = break_addrs)
-            self.lgr.debug('Syscall cell %s stop action includes stepN in flist. SOMap exists: %r linger: %r name: %s' % (self.cell_name, (soMap is not None), self.linger, name))
         else:
             hap_clean = hapCleaner.HapCleaner(cpu)
             #for ph in self.proc_hap:
@@ -2469,7 +2472,9 @@ class Syscall():
                     self.traceMgr.write(ida_msg+'\n')
 
         if do_stop_from_call:
+            self.lgr.debug('syscall syscallParse do_stop_from_call')
             self.top.rmSyscall('runToCall')
+            self.context_manager.setIdaMessage(ida_msg)
             SIM_run_alone(self.stopAlone, 'run to call %s' % callname)
 
         return exit_info
@@ -2530,7 +2535,7 @@ class Syscall():
                     self.lgr.debug('syscall stopHap 0x%x not in break list, not our stop %s' % (eip, ' '.join(hex(x) for x in break_list)))
                     #self.top.skipAndMail()
                     return
-       
+   
                 for hc in self.stop_action.hap_clean.hlist:
                     if hc.hap is not None:
                         #self.lgr.debug('will delete hap %s' % str(hc.hap))
@@ -3393,7 +3398,7 @@ class Syscall():
 
     def checkSendParams(self, syscall_info, exit_info, ss, dest_ss, s):
             for call_param in self.call_params:
-                self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
+                #self.lgr.debug('syscall checkSendParams subcall %s' % call_param.subcall)
                 if (call_param.subcall is None or call_param.subcall in ['send', 'sendto', 'sendmsg']) and type(call_param.match_param) is int and call_param.match_param == exit_info.old_fd and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     #self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, ss.fd))
                     exit_info.call_params.append(call_param)
