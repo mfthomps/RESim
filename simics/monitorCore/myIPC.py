@@ -48,7 +48,7 @@ class MyIPC():
     def socket(self, tid, comm, fd, socket_info):
         if comm in self.ignore_comm:
             return
-        if socket_info.domain == net.AF_NETLINK:
+        if socket_info is not None and socket_info.domain == net.AF_NETLINK:
             self.lgr.debug('myIPC socket is AF_NETLINK tid: %s fd %d' % (tid, fd))
             if tid not in self.sockets:
                 self.sockets[tid] = {}
