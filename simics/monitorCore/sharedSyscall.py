@@ -506,7 +506,7 @@ class SharedSyscall():
                     force_return = self.myIPC.sendmsg(tid, comm, exit_info.old_fd, exit_info.msghdr, eax)
                     if force_return is not None:
                         self.top.writeRegValue('syscall_ret', force_return, alone=True)
-                        trace_msg = trace_msg+('FD: %s count: %d %s MyIPC forced return of 0x%x' % (str(exit_info.old_fd), eax, msghdr.getString(), force_return))
+                        trace_msg = trace_msg+('FD: %s count: %d %s MyIPC forced return of 0x%x messge was: %s' % (str(exit_info.old_fd), eax, msghdr.getString(), force_return, msghdr.getString()))
                         self.lgr.debug(trace_msg)
                     else:
                         self.lgr.debug('sharedSyscall myIPC does not say force return')
