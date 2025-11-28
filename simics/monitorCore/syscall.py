@@ -1,3 +1,27 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 import os
 import re
 from simics import *
@@ -17,24 +41,22 @@ from resimHaps import *
 import resimSimicsUtils
 from resimSimicsUtils import rprint
 import openFlags
-'''
-how does simics not have this in its python sys.path?
-'''
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
 sys.path.append('/usr/local/lib/python3.6/dist-packages')
 sys.path.append('/usr/lib/python3/dist-packages')
 import magic
 '''
-    Trace syscalls.  Used for process tracing and debug, e.g., runToConnect.
-    When used in debugging, or tracing a single process, we assume that
+    Trace syscalls.  Used for process tracing and debug, e.g., traceAll or
+    runToConnect.  When used in debugging, or tracing a single process, we assume that
     genContextManager enables and disables breakpoints based on what process
-    is scheduled.
-    Will get parameters from registers:
-x86:32
-eyscall #	Param 1	Param 2	Param 3	Param 4	Param 5	Param 6
-eax		ebx	ecx	edx	esi	edi	ebp
-Return value
-eax
+    is scheduled.  All syscall module instances rely on a single sharedSyscall module to 
+    handle returns from syscalls.
+    Each syscall instance either handles all syscalls (breaking on kernel entry) or
+    a set of calls (by setting breaks on computed entry points to kernel processing of
+    individual calls).  A syscall instance may include a set of "call parameters" that
+    determine how the syscall is handled, e.g., to perform some function when a file
+    descriptor is read.  Call parameters also determine whether sharedSyscall will be
+    asked to catch and respond to returns from the syscall.
 
 '''
 exec_skip_list = ['sleep']
@@ -691,7 +713,7 @@ class Syscall():
                     self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.alt_syscall_info, proc_break2, 'syscall32'))
         
         else:
-            ''' will stop within the kernel at the computed entry point '''
+            #will stop within the kernel at the computed entry point.  Use setComputedBreaks to populate break_list and break_addrs
             if self.cpu.architecture == 'arm64':
                 platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
                 if platform == 'armMixed':
