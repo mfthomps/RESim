@@ -50,7 +50,7 @@ class Dmod():
             self.cmds = cmds        
 
 
-    def __init__(self, top, path, mem_utils, cell_name, comm, run_from_snap, fd_mgr, path_prefix, lgr):
+    def __init__(self, top, path, mem_utils, cell_name, comm, run_from_snap, fd_mgr, path_prefix, lgr, primary=None):
         self.top = top
         self.kind = None
         self.fiddle = None
@@ -71,6 +71,8 @@ class Dmod():
         self.break_on_dmod = False
         self.path_prefix = path_prefix
         self.length = None
+        self.primary = primary
+        self.secondary_count = 0
 
         # used for callback when comm of the dmod is first scheduled
         self.op_set = None
@@ -439,42 +441,45 @@ class Dmod():
 
     def readOpenReplace(self, tid, fd, count):
         key = '%s:%d' % (tid, fd) 
-        if key not in self.open_replace_fh:
+        if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod readOpenReplace %s tid:%s fd: %d readOpenReplace key %s not in dictionary' % (self.path, tid, fd, key))
             return
-        retval = self.open_replace_fh[key].read(count)
+        retval = self.primary.open_replace_fh[key].read(count)
         self.lgr.debug('dmod readOpenReplace read %d bytes %s' % (len(retval), str(retval)))
         return retval
 
     def writeOpenReplace(self, tid, fd, the_bytes):
         key = '%s:%d' % (tid, fd) 
-        if key not in self.open_replace_fh:
+        if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod writeOpenReplace %s tid:%s fd: %d readOpenReplace not in dictionary' % (self.path, tid, fd))
             return
         if self.kind != 'open_replace':
             self.lgr.error('dmod writeOpenReplace dmod %s not a open_replace' % self.path)
             return 
         self.lgr.debug('dmod writeOpenReplace')
-        retval = self.open_replace_fh[key].write(bytes(the_bytes))
-        self.open_replace_fh[key].flush()
-        self.lgr.debug('dmod writeOpenReplace wrote %d bytes to %s retval %d' % (len(the_bytes), self.open_replace_fname[key], retval))
+        retval = self.primary.open_replace_fh[key].write(bytes(the_bytes))
+        self.primary.open_replace_fh[key].flush()
+        self.lgr.debug('dmod writeOpenReplace wrote %d bytes to %s retval %d' % (len(the_bytes), self.primary.open_replace_fname[key], retval))
         return retval
         
     def resetOpen(self, tid, fd):
-        self.lgr.debug('dmod resetOpen dmod %s' % self.path)
-        self.fd_mgr.close(tid, fd, self.path)
-        key = '%s:%d' % (tid, fd) 
-        if key in self.open_replace_fh: 
-            try:
-                self.open_replace_fh[key].close()
-                self.lgr.debug('dmod %s resetOpen did close on %s' % (self.path, self.open_replace_fname[key]))
-            except:
-                pass
-            del self.open_replace_fh[key]
-            del self.open_replace_fname[key]
-            self.lgr.debug('dmod %s resetOpen key %s removed' % (self.path, key))
+        if self.primary is not None:
+            self.primary.resetOpen(tid, fd)
         else:
-            self.lgr.debug('dmod %s resetOpen key %s not in dict' % (self.path, key))
+            self.lgr.debug('dmod resetOpen dmod %s' % self.path)
+            self.fd_mgr.close(tid, fd, self.path)
+            key = '%s:%d' % (tid, fd) 
+            if key in self.open_replace_fh: 
+                try:
+                    self.open_replace_fh[key].close()
+                    self.lgr.debug('dmod %s resetOpen did close on %s' % (self.path, self.open_replace_fname[key]))
+                except:
+                    pass
+                del self.open_replace_fh[key]
+                del self.open_replace_fname[key]
+                self.lgr.debug('dmod %s resetOpen key %s removed' % (self.path, key))
+            else:
+                self.lgr.debug('dmod %s resetOpen key %s not in dict' % (self.path, key))
 
     def getCellName(self):
         return self.cell_name
@@ -528,6 +533,11 @@ class Dmod():
             else:
                 self.lgr.error('dmod failed to find bytes file %s' % self.bytes_file)
                 self.top.quit()
+        return retval
+
+    def getSecondaryCount(self):
+        self.secondary_count += 1
+        retval = self.secondary_count
         return retval
 
 if __name__ == '__main__':

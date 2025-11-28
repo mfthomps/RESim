@@ -120,23 +120,36 @@ class DmodMgr():
         for path in self.loaded_dmods:
             self.rmDmod(path)
 
-    def runToDmod(self, dfile, run=False, background=False, comm=None, break_simulation=False):
+    def runToSecondary(self, primary):
+        self.lgr.debug('dmodMgr runToSecondary %s' % primary.path)
+        self.runToDmod(primary.path, primary=primary)
+ 
+    def runToDmod(self, dfile, run=False, background=False, comm=None, break_simulation=False, primary=None):
         retval = True
         if not os.path.isfile(dfile):
             print('No file found at %s' % dfile)
             return False
-        mod = dmod.Dmod(self.top, dfile, self.mem_utils, self.cell_name, comm, self.run_from_snap, self.fd_mgr, self.path_prefix, self.lgr)
+        mod = dmod.Dmod(self.top, dfile, self.mem_utils, self.cell_name, comm, self.run_from_snap, self.fd_mgr, self.path_prefix, self.lgr, primary=primary)
         operation = mod.getOperation()
-        call_params = syscall.CallParams(dfile, operation, mod, break_simulation=break_simulation)        
+        if primary is None:
+            param_name = dfile
+        else:
+            secondary_count = primary.getSecondaryCount()
+            param_name = dfile+'_secondary'+'_%d' % secondary_count
+        call_params = syscall.CallParams(param_name, operation, mod, break_simulation=break_simulation)        
         self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, self.cell_name, operation))
         name = 'dmod-%s' % operation
         if operation == 'open':
            # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
            # Use a syscall dmod if you want to
-           op_set = ['open', 'openat', 'read','write','close','lseek','_llseek']
+           if primary is None:
+               op_set = ['open', 'openat']
+           else:
+               op_set = ['read','write','close','lseek','_llseek']
+               if self.mem_utils.WORD_SIZE == 8:
+                   op_set.remove('_llseek')
+               name=name+'_secondary'
            self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
-           if self.mem_utils.WORD_SIZE == 8:
-               op_set.remove('_llseek')
         else:
            op_set = [operation]
         comm_running = False
@@ -153,7 +166,10 @@ class DmodMgr():
                 break
         if comm_running or len(comm_list) == 0: 
             self.lgr.debug('runToDmod, at least one comm running (or no comm specified), call runTo')
-            self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True)
+            ignore_running = False
+            if primary is not None:
+                ignore_running = True
+            self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True, ignore_running=ignore_running)
         else:
             self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
             mod.setCommCallback(op_set, call_params)

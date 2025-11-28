@@ -943,6 +943,7 @@ class SharedSyscall():
                             if self.cpu.architecture == 'ppc32':
                                 self.top.writeRegValue('cr', 0x40000002, alone=True)
                             trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
+                            self.top.runToSecondaryDmod(dmod)
                         exit_info.matched_param = None
             for call_param in exit_info.call_params:
                 if type(call_param.match_param) is str:
@@ -1255,6 +1256,8 @@ class SharedSyscall():
                         trace_msg = err_trace_msg+('DMOD!, FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
                         got_msg = True
                         call_param.match_param.resetOpen(tid, exit_info.old_fd)
+                        self.lgr.debug('sharedSyscall close for open_replace, remove this secondary dmod')
+                        SIM_run_alone(self.rmDmod, (call_param, exit_info))
                 if not got_msg:
                     trace_msg = err_trace_msg+('FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
             else:
@@ -1828,6 +1831,27 @@ class SharedSyscall():
                 exit_info.matched_param = None
         return trace_msg
 
+    def rmDmod(self, call_param_exit_info):
+        call_param, exit_info = call_param_exit_info
+        dmod = call_param.match_param
+        if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
+            self.lgr.debug('sharedSyscall rmDmod Dmod stopping trace dmod %s' % dmod.getPath())
+            self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
+            #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
+            self.stopTrace()
+            # note rmDmod simply notes it has been removed so we know if future snapshot loads
+            self.top.rmDmod(self.cell_name, dmod.getPath())
+            #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
+            if dmod.getBreak():
+                self.top.notRunning(quiet=True)
+                SIM_break_simulation('dmod break_on_dmod,  on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+            elif not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
+                self.top.notRunning(quiet=True)
+                SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
+        else:
+            self.top.rmDmod(self.cell_name, dmod.getPath())
+            exit_info.syscall_instance.rmCallParam(call_param)
+
     def checkReadParams(self, exit_info, trace_msg, buf_len, tid, comm, byte_array, buf_start, callname):
         self.lgr.debug('sharedSyscall checkReadParams tid:%s (%s)' % (tid, comm))
         for call_param in exit_info.call_params:
@@ -1844,23 +1868,7 @@ class SharedSyscall():
                         
                         if dmod.getCount() == 0:
                             self.lgr.debug('sharedSyscall checkReadParams found final dmod %s' % dmod.getPath())
-                            if not exit_info.syscall_instance.remainingDmod(call_param.name) and exit_info.syscall_instance.name != 'traceAll':
-                                self.lgr.debug('sharedSyscall checkReadParams Dmod stopping trace dmod %s' % dmod.getPath())
-                                self.top.rmSyscall(call_param.name, cell_name=self.cell_name, all_contexts=True)
-                                #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
-                                self.stopTrace()
-                                # note rmDmod simply notes it has been removed so we know if future snapshot loads
-                                self.top.rmDmod(self.cell_name, dmod.getPath())
-                                #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
-                                if dmod.getBreak():
-                                    self.top.notRunning(quiet=True)
-                                    SIM_break_simulation('dmod break_on_dmod,  on cell %s file: %s' % (self.cell_name, dmod.getPath()))
-                                elif not self.top.remainingCallTraces(cell_name=self.cell_name, exception='_llseek') and SIM_simics_is_running():
-                                    self.top.notRunning(quiet=True)
-                                    SIM_break_simulation('dmod done on cell %s file: %s' % (self.cell_name, dmod.getPath()))
-                            else:
-                                self.top.rmDmod(self.cell_name, dmod.getPath())
-                                exit_info.syscall_instance.rmCallParam(call_param)
+                            self.rmDmod((call_param, exit_info))
                         else:
                             print('%s performed' % dmod.getPath())
                         if call_param.break_simulation:

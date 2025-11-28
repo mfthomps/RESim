@@ -3613,13 +3613,17 @@ class GenMonitor():
         call_params.nth = nth
         self.runTo(call, call_params, name='connect')
 
-    def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False):
+    def runToSecondaryDmod(self, primary):
+        self.lgr.debug('runToSecondaryDmod (but alone) for primary %s' % primary.path) 
+        SIM_run_alone(self.dmod_mgr[self.target].runToSecondary, primary)
+
+    def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False, primary=True):
         if cell_name is None:
             cell_name = self.target
             run = True
         else:
             run = False
-        self.dmod_mgr[cell_name].runToDmod(dfile, run=run, background=False, comm=None, break_simulation=False)
+        self.dmod_mgr[cell_name].runToDmod(dfile, run=run, background=False, comm=None, break_simulation=False, primary=primary)
 
 
     def runToWrite(self, substring):
