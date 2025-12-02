@@ -6387,7 +6387,8 @@ class GenMonitor():
             cell_name = self.target
         self.lgr.debug('readReplace %s' % fname)
         cpu, comm, tid = self.task_utils[cell_name].curThread() 
-        self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.soMap[cell_name], self.mem_utils[cell_name], self.lgr, snapshot=snapshot)
+        self.read_replace[cell_name] = readReplace.ReadReplace(self, cpu, cell_name, fname, self.soMap[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], 
+              self.context_manager[cell_name], self.lgr, snapshot=snapshot)
         return True
 
     def regSet(self, fname, cell_name=None, snapshot=None):
