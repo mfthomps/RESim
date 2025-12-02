@@ -25,6 +25,8 @@
 '''
 Intercept use of AF_NETLINK failures, e.g., due to use of custom kernel modules
 and mask some of the failures while documenting them for analysis.
+RESim must be run with traceAll for this to work, e.g., trackThreads does not
+watch bind/sendmsg...
 '''
 import net
 import resimUtils
@@ -90,7 +92,7 @@ class MyIPC():
         if comm in self.ignore_comm:
             return None
         # return True if we should force return value to return length
-        if eax == -1:
+        if eax == -1 or eax == -111:
             return None
         retval = None
         self.lgr.debug('myIPC sendmsg tid:%s fd: %d' % (tid, fd))
