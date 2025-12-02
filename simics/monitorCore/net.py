@@ -70,6 +70,9 @@ O_LARGEFILE =   0O00100000
 O_DIRECTORY =   0O00200000  
 O_NOFOLLOW  =   0O00400000 
 
+#./include/linux/socket.h
+MSG_PEEK=2
+
 def fcntlCmdIs(cmd, s):
     retval = False
     if cmd in range(len(F_CNTL_CMDS)):
