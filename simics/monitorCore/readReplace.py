@@ -84,12 +84,14 @@ class ReplaceEntry():
         self.writable = writable
 
 class ReadReplace():
-    def __init__(self, top, cpu, cell_name, fname, so_map, mem_utils, lgr, snapshot=None):
+    def __init__(self, top, cpu, cell_name, fname, so_map, mem_utils, task_utils, context_manager, lgr, snapshot=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.top = top
         self.so_map = so_map
         self.mem_utils = mem_utils
+        self.task_utils = task_utils
+        self.context_manager = context_manager
         self.lgr = lgr
         if cpu.architecture.startswith('arm'):
             self.decode = decodeArm
@@ -103,7 +105,9 @@ class ReadReplace():
         self.breakmap = {}
         self.pending_libs = {}
         self.pending_pages = {}
+        self.pending_progs = []
         self.done_list = []
+        self.prog_entries = {}
         if not os.path.isfile(fname):
             self.lgr.error('readReplace: Could not find readReplace file %s' % fname)
             return
@@ -152,10 +156,9 @@ class ReadReplace():
             self.top.quit()
         did_write = False
         # See if this snapshot was created after the replace was done.  If so, do the replace immediately.
-        # TBD this is incomplete.  Pre-supposes program of interest is scheduled.
-        # See jumpers.py for strategy to split entry handling between SO and programs.
         mod_fname = self.getModFname(replace_entry)
         if os.path.isfile(mod_fname) and resimUtils.isSO(lib):
+            # is shared library
             with open(mod_fname) as fh:
                 line = fh.read()
                 parts = line.split()
@@ -184,8 +187,15 @@ class ReadReplace():
                 self.lgr.debug('readReplace handleEntry no process has image loaded, set SO watch callback for %s' % lib_addr)
                 self.so_map.addSOWatch(lib, self.libLoadCallback, name=lib_addr)
                 self.pending_libs[lib_addr] = replace_entry
+            elif not resimUtils.isSO(lib):
+                # a program
+                prog_comm = self.task_utils.progComm(lib)
+                handle = '%s:0x%x' % (prog_comm, addr)
+                replace_entry.image_base = image_base
+                self.prog_entries[handle] = replace_entry
+                self.handleProg(replace_entry)
             else:
-                # Library loaded by someone.  Get list of pids
+                # Library or loaded by someone.  Get list of pids
                 replace_entry.image_base = image_base
                 loaded_pids = self.so_map.getSOPidList(lib)
                 if len(loaded_pids) == 0:
@@ -200,6 +210,50 @@ class ReadReplace():
                         phys = self.getPhys(replace_entry, load_addr, pid)
                         if phys is not None and phys != 0:
                             self.setBreak(replace_entry, phys)
+
+    def handleProg(self, replace_entry):
+        ''' Handle for program.  May be called via a callback once program is scheduled, which may pass a string we do not want '''
+        if replace_entry is not None and type(replace_entry) is str:
+            replace_entry = None
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('readReplace handleProg tid:%s (%s)' % (tid, comm))
+        if replace_entry is None:
+            # Via a callback indicating the program is now scheduled
+            # process every replace_entry for this prog
+            for handle in self.prog_entries:
+                 if handle.startswith(comm+':'):
+                     self.setProgBreaksIfMapped(self.prog_entries[handle])
+            if comm in self.pending_progs:
+                self.pending_progs.remove(comm)
+        else:
+            # Called from handleJumperEntry, if program not scheduled, use a callback
+            prog_comm = self.task_utils.progComm(replace_entry.lib)
+            if prog_comm != comm:
+                if prog_comm not in self.pending_progs:
+                    self.pending_progs.append(prog_comm)
+                    self.lgr.debug('readReplace handleProg prog %s not current running (%s is), set callback when scheduled' % (replace_entry.lib, comm))
+
+                    tid_list = self.task_utils.getTidsForComm(prog_comm)
+                    if len(tid_list) == 0:
+                        self.lgr.debug('readReplace handleProg prog %s not running, set callback first created' % (replace_entry.lib))
+                        self.context_manager.callWhenFirstScheduled(prog_comm, self.handleProg)
+                    else:
+                        self.lgr.debug('readReplace handleProg prog %s running, set callback for when next scheduled' % (replace_entry.lib))
+                        self.context_manager.catchTid(tid_list[0], self.handleProg)
+                else:
+                    self.lgr.debug('readReplace handleProg program %s already pending' % prog_comm)
+            else:
+                self.lgr.debug('readReplace handleProg prog %s running, set prog jumper' % (replace_entry.lib))
+                self.setProgBreaksIfMapped(replace_entry)
+
+    def setProgBreaksIfMapped(self, replace_entry):
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        load_addr = self.so_map.getLoadAddr(replace_entry.lib)
+        if load_addr is not None:
+            self.lgr.debug('readReplace setProgBreaksIfMapped tid %s load addr 0x%x, call getPhys' % (tid, load_addr))
+            phys = self.getPhys(replace_entry, load_addr, tid)
+            if phys is not None and phys != 0:
+                self.setBreak(replace_entry, phys)
 
     def getPhys(self, replace_entry, load_addr, pid):
         offset = load_addr - replace_entry.image_base
@@ -310,10 +364,9 @@ class ReadReplace():
             mod_addr = replace_entry.linear_addr
             phys = self.mem_utils.v2p(self.cpu, mod_addr)
             self.lgr.debug('readReplace doReplace comm %s would write %s to linear addr of interest is 0x%x phys: 0x%x cycle: 0x%x' % (prog, bstring, mod_addr, phys, self.cpu.cycles))
-
+          
         # actually writing bytes
         self.top.writeString(mod_addr, bstring, target_cpu=self.cpu)
-        #SIM_break_simulation('remove me')
         done = '%s:0x%x' % (replace_entry.comm, replace_entry.addr)
         self.done_list.append(done) 
         return mod_addr
