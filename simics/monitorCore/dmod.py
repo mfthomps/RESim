@@ -72,6 +72,8 @@ class Dmod():
         self.path_prefix = path_prefix
         self.length = None
         self.primary = primary
+        if primary is not None:
+            self.lgr.debug('wtf path %s primary %s' % (path, str(primary)))
         self.secondary_count = 0
 
         # used for callback when comm of the dmod is first scheduled
@@ -177,6 +179,7 @@ class Dmod():
                    #with open(becomes_file, 'rb') as bf_fh:
                    #    becomes = bf_fh.read()
                    self.fiddle = self.Fiddle(match, 'open_replace', becomes_file)
+                   self.lgr.debug('dmod init is open_replace %s' % path)
                elif self.kind == 'syscall':
                    match = nextLine(fh) 
                    self.fiddle = self.Fiddle(match, None, None)
@@ -443,6 +446,8 @@ class Dmod():
         key = '%s:%d' % (tid, fd) 
         if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod readOpenReplace %s tid:%s fd: %d readOpenReplace key %s not in dictionary' % (self.path, tid, fd, key))
+            for wtf in self.primary.open_replace_fh:
+                self.lgr.error('dmod key is %s' % key)
             return
         retval = self.primary.open_replace_fh[key].read(count)
         self.lgr.debug('dmod readOpenReplace read %d bytes %s' % (len(retval), str(retval)))
@@ -536,8 +541,9 @@ class Dmod():
         return retval
 
     def getSecondaryCount(self):
-        self.secondary_count += 1
+        self.secondary_count = self.secondary_count + 1
         retval = self.secondary_count
+        self.lgr.debug('dmod getSecondaryCount for %s is %d' % (self.path, retval))
         return retval
 
 if __name__ == '__main__':

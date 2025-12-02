@@ -137,7 +137,7 @@ class DmodMgr():
             secondary_count = primary.getSecondaryCount()
             param_name = dfile+'_secondary'+'_%d' % secondary_count
         call_params = syscall.CallParams(param_name, operation, mod, break_simulation=break_simulation)        
-        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, self.cell_name, operation))
+        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s param_name: %s' % (mod.toString(), dfile, self.cell_name, operation, param_name))
         name = 'dmod-%s' % operation
         if operation == 'open':
            # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
@@ -148,8 +148,8 @@ class DmodMgr():
                op_set = ['read','write','close','lseek','_llseek']
                if self.mem_utils.WORD_SIZE == 8:
                    op_set.remove('_llseek')
-               name=name+'_secondary'
-           self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
+               name = name+'_secondary'+'_%d' % secondary_count
+           self.lgr.debug('runToDmod file op_set now %s name %s' % (str(op_set), name))
         else:
            op_set = [operation]
         comm_running = False
