@@ -841,7 +841,7 @@ class WriteData():
                 #self.doBreakSimulation('writeData doRetSelect select on our fd')
         return retval
                 
-    def doRetFixup(self, fd, callname=None, addr_of_count=None):
+    def doRetFixup(self, fd, callname=None, addr_of_count=None, peek=0):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
         self.lgr.debug('writeData doRetFixup fd %d looking for %d' % (fd, self.fd))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -863,8 +863,11 @@ class WriteData():
             if self.stop_callback is not None:
                 self.stop_callback()
             return None
-        self.total_read = self.total_read + eax
-        self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        if peek == 0:
+            self.total_read = self.total_read + eax
+            self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        else:
+            self.lgr.debug('writeData doRetFixup WAS PEEK read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
