@@ -158,7 +158,7 @@ class Kbuffer():
                     else:
                         ''' assume ldr '''
                         if op1 == our_reg:
-                            value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=True)
+                            value = decodeArm.getAddressFromOperand(self.cpu, op2, self.lgr, after=False)
                                 
                         else:
                             self.lgr.debug('findARmBuf not our reg, skip it')
@@ -333,7 +333,7 @@ class Kbuffer():
             #src = self.findArmBuf()
             SIM_run_alone(self.top.stopAndCall, self.findArmBuf)
             #SIM_break_simulation('arm writeHap')
-        if self.cpu.architecture == 'ppc32':
+        elif self.cpu.architecture == 'ppc32':
             # PPC
             hap = self.write_hap
             SIM_run_alone(self.removeHap, hap)
