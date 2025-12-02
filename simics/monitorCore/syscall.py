@@ -1456,6 +1456,7 @@ class Syscall():
                 exit_info.call_params.append(sock_param)
             src_addr = None
             src_addr_len = 0
+            exit_info.flags = frame['param4']
             if socket_callname == 'recvfrom':
                 if callname == 'socketcall':        
                     src_addr = self.mem_utils.readWord32(self.cpu, frame['param2']+16)
@@ -1469,7 +1470,7 @@ class Syscall():
                 if source_ss.sa_family is not None:
                     exit_info.src_addr = src_addr
                     exit_info.src_addr_len = src_addr_len
-                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d flags: 0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count, exit_info.flags)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
                 #    print(frame_string)
@@ -1479,7 +1480,7 @@ class Syscall():
             elif tid is None:
                 self.lgr.error('tid is none') 
             else:
-                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count)
+                ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d flags: 0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count, exit_info.flags)
             for call_param in self.call_params:
                 self.lgr.debug('syscall parse tid:%s socket rec... param: %s subcall is %s exit_info.old_fd is %s match_param is %s' % (tid, call_param.name, call_param.subcall, str(exit_info.old_fd), str(call_param.match_param)))
                 if call_param.name == 'runToReceive':
@@ -3506,6 +3507,8 @@ class Syscall():
                     self.lgr.debug('syscall read, is dmod %s, but comm does not match,  match' % call_param.match_param.path) 
                     continue
                 if call_param.match_param.kind == 'open_replace':
+                    if call_param.match_param.primary is None:
+                        continue 
                     has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
                     if not has_fd_open:
                         self.lgr.debug('syscall read, is dmod %s, but tid or fd does not match, tid:%s fd:%d ' % (call_param.match_param.path, tid, exit_info.old_fd ))
