@@ -839,7 +839,7 @@ class GenContextMgr():
             self.catch_tid.append(add_tid)
         if callback is not None:
             self.catch_callback[add_tid] = callback 
-        self.lgr.debug('contectManager catchTid %s callback %s' % (add_tid, str(callback)))
+        self.lgr.debug('contextManager catchTid %s callback %s' % (add_tid, str(callback)))
         self.setTaskHap(tid=tid)
 
     def watchAll(self):
@@ -1559,7 +1559,7 @@ class GenContextMgr():
         if tid in self.tid_cache:
             self.tid_cache.remove(tid)
         self.rmTask(tid)
-        self.lgr.debug('contectManager noWatch tid:%s' % tid)
+        self.lgr.debug('contextManager noWatch tid:%s' % tid)
 
     def newProg(self, prog_string, tid):
         # use comm for checkFirstScheduled so it does not match if we are not yet debugging after an exec
