@@ -175,6 +175,7 @@ class DataWatch():
         # ignore modify of ad-hoc buffer for same cycle '''
         self.move_cycle = 0
         self.move_cycle_max = 0
+        self.move_ip = None
         self.fun_mgr = None
         # optimize parameter gathering without having to reverse. Keyed by function and eip to handle multiple instances of sameish functions '''
         self.mem_fun_entries = {}
@@ -1206,28 +1207,35 @@ class DataWatch():
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
                 return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.kernelReturnHap, kernel_return_info, proc_break, 'kernel_return_hap')
        
-      
+     
+    def armNumericStore(self, next_instruct): 
+        retval = False
+        if next_instruct[1].startswith('str'):
+            op2, op1 = self.decode.getOperands(next_instruct[1])
+            self.lgr.debug('dataWatch armNumericStore is str op1 %s op2 %s' % (op1, op2))
+            if op1 in ['x0', 'w0']:
+                self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
+                addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                if addr is not None:
+                    count = self.mem_utils.wordSize(self.cpu)
+                    if next_instruct[1].startswith('strh'):
+                        count = int(self.mem_utils.wordSize(self.cpu)/2)
+                    self.lgr.debug('dataWatch checkNumericStore is numeric store addr 0x%x count %d' % (addr, count))
+                    self.setRange(addr, count, 'fun result')
+                    self.last_fun_result = addr
+                    self.move_cycle = self.cpu.cycles
+                    self.move_cycle_max = self.cpu.cycles+1
+                    self.lgr.debug('armNumericStore move_cycle_max now 0x%x' % self.move_cycle_max)
+                    retval = True
+        return retval
+
     def checkNumericStore(self): 
         if self.mem_something.ret_ip is not None:
             next_ip = self.mem_something.ret_ip
             next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
             self.lgr.debug('dataWatch checkNumericStore next instruct 0x%x  %s' % (next_ip, next_instruct[1]))
             if self.cpu.architecture.startswith('arm'):
-                if next_instruct[1].startswith('str'):
-                    op2, op1 = self.decode.getOperands(next_instruct[1])
-                    ret_reg =  self.mem_utils.getCallRetReg(self.cpu)
-                    if self.decode.regIsPart(op1, ret_reg):
-                        self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
-                        addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
-                        if addr is not None:
-                            count = self.mem_utils.wordSize(self.cpu)
-                            if next_instruct[1].startswith('strh'):
-                                count = int(self.mem_utils.wordSize(self.cpu)/2)
-                            self.setRange(addr, count, 'fun result')
-                            self.last_fun_result = addr
-                            self.move_cycle = self.cpu.cycles
-                            self.move_cycle_max = self.cpu.cycles+1
-                            self.lgr.debug('move_cycle_max now 0x%x' % self.move_cycle_max)
+                self.armNumericStore(next_instruct)
             elif self.cpu.architecture == 'ppc32':
                 if next_instruct[1].startswith('st'):
                     op2, op1 = self.decode.getOperands(next_instruct[1])
@@ -3565,15 +3573,15 @@ class DataWatch():
         if self.fun_mgr is None:
             self.lgr.debug('dataWatch checkNTOHL with no fun_mgr')
             return False
-        self.lgr.debug('dataWatch checkNTOHL addr 0x%x' % addr)
+        self.lgr.debug('dataWatch checkNTOHL addr 0x%x next_ip 0x%x' % (addr, next_ip))
         orig_ip = self.top.getEIP(self.cpu)
         orig_cycle = self.cpu.cycles
         instruct = self.top.disassembleAddress(self.cpu, next_ip)
         fun = self.isDataTransformCall(instruct, next_ip, recent_instructs=recent_instructs)
         reg_values = {}
         if fun is not None:
-                self.lgr.debug('dataWatch checkNTOHL is %s' % fun)
                 our_reg = self.mem_utils.getCallRetReg(self.cpu)
+                self.lgr.debug('dataWatch checkNTOHL is %s our_reg from getCallRetReg %s' % (fun, our_reg))
                 next_instruct = instruct
                 for i in range(5):
                     next_ip = next_ip + next_instruct[0]
@@ -3588,7 +3596,11 @@ class DataWatch():
                         break
                     op2, op1 = self.decode.getOperands(next_instruct[1])
                     self.lgr.debug('datawatch checkNTOHL, next inst at 0x%x is %s' % (next_ip, next_instruct[1]))
-                    if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPart(op2, our_reg):
+                    if self.cpu.architecture.startswith('arm'): 
+                       if self.armNumericStore(next_instruct):
+                           self.move_ip = next_ip
+                           break
+                    elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPart(op2, our_reg):
                         if self.decode.isReg(op1):
                             self.lgr.debug('dataWatch checkNTOHL, our reg now is %s' % op1)
                             our_reg = op1
@@ -3731,9 +3743,9 @@ class DataWatch():
         next_ip = eip
         next_instruct = instruct
         op2, op1 = self.decode.getOperands(next_instruct[1])
-        mn = self.decode.getMn(next_instruct[1])
+        orig_mn = self.decode.getMn(next_instruct[1])
         track_sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-        #self.lgr.debug('dataWatch loopAdHoc, sp from reg 0x%x' % track_sp)
+        self.lgr.debug('dataWatch loopAdHoc, sp from reg 0x%x orign_mn %s op1 %s op2 %s our reg %s' % (track_sp, orig_mn, op1, op2, our_reg))
         new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
         if new_sp is not None:
             #self.lgr.debug('dataWatch loopAdHoc, sp from adjustSP 0x%x' % new_sp)
@@ -3751,13 +3763,18 @@ class DataWatch():
         for move_cycles in range(max_num):
              
             next_ip, next_instruct, mn, jump_cycles = self.getNextInstruct(next_instruct, next_ip, flags, our_reg)
+            self.lgr.debug('dataWatch loopAdHoc mn %s next_instruct %s our_reg %s next_ip 0x%x' % (mn, next_instruct[1], our_reg, next_ip))
             if next_ip is None:
                 break
             if mn.startswith('j') or mn.startswith('b') or mn.startswith('call'):
+                if self.cpu.architecture.startswith('arm') and mn == 'bl' and our_reg in ['x0', 'w0']:
+                    self.lgr.debug('dataWatch loopAdHoc arm check ntohl')
+                    adhoc = self.checkNTOHL(next_ip, addr, trans_size, start, length)
+                
                 break
             op2, op1 = self.decode.getOperands(next_instruct[1])
             mn = self.decode.getMn(next_instruct[1])
-            #self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
+            self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
             new_sp = self.adjustSP(track_sp, next_instruct, op1, op2)
             dest_addr = None
             if not only_push:
@@ -4730,7 +4747,7 @@ class DataWatch():
                 return
         if op_type != Sim_Trans_Load:
             self.lgr.debug('dataWatch readHap check move cycle current 0x%x move_cycle 0x%x max 0x%x' % (self.cpu.cycles, self.move_cycle, self.move_cycle_max))
-            if self.move_cycle <= self.cpu.cycles and self.move_cycle_max >= self.cpu.cycles:
+            if (self.move_cycle <= self.cpu.cycles and self.move_cycle_max >= self.cpu.cycles) or eip == self.move_ip:
                 ''' just writing to memory as part of previously recorded ad-hoc copy '''
                 self.lgr.debug('dataWatch readHap just writing to memory as part of previously recorded ad-hoc copy')
                 return
