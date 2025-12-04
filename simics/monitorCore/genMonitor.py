@@ -835,9 +835,6 @@ class GenMonitor():
 
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
-            if cell_name != 'driver': 
-                self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
-                       self.task_utils[cell_name], self.context_manager[cell_name], self.lgr)
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
                                            self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
             span = self.getCompDict(cell_name, 'REVERSE_SPAN')
@@ -859,6 +856,9 @@ class GenMonitor():
                           self.targetFS[cell_name], self.comp_dict[cell_name], self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+            if cell_name != 'driver': 
+                self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
+                       self.task_utils[cell_name], self.context_manager[cell_name], self.soMap[cell_name], self.lgr)
             self.disassemble_instruct[cell_name] = disassemble.Disassemble(self, cpu, self.soMap[cell_name], self.lgr)
             ''' ugly circular dependency'''
             self.context_manager[cell_name].setSOMap(self.soMap[cell_name])
@@ -3847,12 +3847,12 @@ class GenMonitor():
                     calls.append(c)
 
             calls.append('clone')
-            calls.append('fork')
             calls.append('execve')
             if self.mem_utils[target].WORD_SIZE == 8:
                 calls.append('dup3')
             else:
                 calls.append('dup2')
+                calls.append('fork')
             skip_and_mail = True
             if flist_in is not None:
                 ''' Given callback functions, use those instead of skip_and_mail '''
