@@ -31,6 +31,7 @@ import hapCleaner
 import resimUtils
 import cycleCallback
 import decodePPC32
+import signalLib
 from resimHaps import *
 '''
 Watch page faults for indications of a SEGV exception
@@ -48,7 +49,7 @@ class Prec():
         self.page_fault = page_fault
 
 class PageFaultGen():
-    def __init__(self, top, target, param, cell_config, mem_utils, task_utils, context_manager, lgr):
+    def __init__(self, top, target, param, cell_config, mem_utils, task_utils, context_manager, so_map, lgr):
         self.cell_config = cell_config
         self.top = top
         self.target = target
@@ -56,6 +57,7 @@ class PageFaultGen():
         self.param = param
         self.mem_utils = mem_utils
         self.task_utils = task_utils
+        self.so_map = so_map
         self.lgr = lgr
         self.exit_break = {}
         self.exit_break2 = {}
@@ -102,6 +104,9 @@ class PageFaultGen():
         # TBD MAKE THIS A PARAM
         self.data_storage_fault = 0x300
 
+        cell_name = self.top.getTopComponentName(self.cpu)
+        self.signal_lib = signalLib.SignalLib(self.top, self.cpu, self.cell, cell_name, self.task_utils, self.mem_utils, self.context_manager, self.so_map, self.lgr)
+
     def rmExit(self, tid):
         if tid in self.exit_break:
             self.context_manager.genDeleteHap(self.exit_hap[tid])
@@ -111,10 +116,10 @@ class PageFaultGen():
             del self.exit_hap2[tid]
         self.context_manager.watchPageFaults(False)
         if tid in self.pending_faults:
-            #self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_faults[tid])))
+            self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_faults[tid])))
             del self.pending_faults[tid]
         if tid in self.pending_sigill:
-            #self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_sigill[tid])))
+            self.lgr.debug('pageFaultGen rmExit remove pending for %s %s' % (tid, str(self.pending_sigill[tid])))
             del self.pending_sigill[tid]
         
     def rmPDirHap(self, hap):
@@ -254,6 +259,7 @@ class PageFaultGen():
         if fault_addr in self.faulted_pages[tid]:
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
+        
         self.faulted_pages[tid].append(fault_addr)
         page_info = pageUtilsPPC32.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
@@ -373,6 +379,8 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
         self.faulted_pages[tid].append(fault_addr)
+        self.signal_lib.watchThis(tid)
+
         #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
 
         #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
@@ -387,7 +395,7 @@ class PageFaultGen():
             page_info = pageUtils.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
-            #self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
+            self.lgr.debug('pageFaultHap add pending fault for %s addr 0x%x cycle 0x%x' % (tid, prec.cr2, prec.cycles))
             if self.mem_utils.isKernel(fault_addr):
                 if not self.top.isWindows(target=self.target):
                     self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
@@ -397,7 +405,7 @@ class PageFaultGen():
             else:
                 self.pending_faults[tid] = prec
                 if self.mode_hap is None:
-                    self.lgr.debug('pageFaultGen adding mode hap')
+                    #self.lgr.debug('pageFaultGen adding mode hap')
                     self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
@@ -442,12 +450,12 @@ class PageFaultGen():
                 #        #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
                 #        phys_addr = phys_block.address
                   
-                if phys_block is not None:  
+                if phys_block is not None and phys_block.address != 0:  
                     phys_addr = phys_block.address
                     if tid in self.pending_double_faults:
                         self.pending_double_faults[tid].cancel()
                         del self.pending_double_faults[tid]
-                    #self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
+                    self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
                     del self.pending_faults[tid]
                     if self.ptable_hap is not None:
                         hap = self.ptable_hap
@@ -876,6 +884,7 @@ class PageFaultGen():
         return retval
 
     def getPendingFault(self, tid):
+        self.lgr.debug('pageFaultGen getPendingFault tid:%s' % tid)
         if tid in self.pending_faults:
             return self.pending_faults[tid]
         else:
@@ -918,6 +927,7 @@ class PageFaultGen():
             SIM_run_alone(self.rmModeHapAlone, None) 
 
     def clearPendingFaults(self):
+        self.lgr.debug('pageFaultGen clearPendingFaults')
         self.pending_faults.clear()
         self.pending_sigill.clear()
         self.pending_double_faults.clear()
