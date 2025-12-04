@@ -3772,6 +3772,8 @@ class DataWatch():
                     adhoc = self.checkNTOHL(next_ip, addr, trans_size, start, length)
                 
                 break
+            if next_instruct[1] == 'ret':
+                break
             op2, op1 = self.decode.getOperands(next_instruct[1])
             mn = self.decode.getMn(next_instruct[1])
             self.lgr.debug('datawatch loopAdHoc, next inst at 0x%x is %s  --- op1: %s  op2: %s' % (next_ip, next_instruct[1], op1, op2))
@@ -3801,7 +3803,7 @@ class DataWatch():
                 # TBD fix for arm
                 #self.lgr.debug('dataWatch loopAdHoc, removing %s from our_reg_list' % op1)
                 our_reg_list.remove(op1)
-            elif self.cpu.architecture in ['arm', 'arm64'] and self.decode.isReg(op1) and op1 in our_reg_list and \
+            elif self.cpu.architecture in ['arm', 'arm64'] and op1 is not None and self.decode.isReg(op1) and op1 in our_reg_list and \
                                                     (next_instruct[1].startswith('mov') or next_instruct[1].startswith('sub') or next_instruct[1].startswith('add')):
                     our_reg_list.remove(op1)
             elif new_sp is not None:
@@ -3816,7 +3818,7 @@ class DataWatch():
                     break
                 else:
                     track_sp = track_sp - word_size
-            elif  next_instruct[1].startswith('bswap') and op1 in our_reg_list:
+            elif  (next_instruct[1].startswith('bswap') or next_instruct[1].startswith('rev')) and op1 in our_reg_list:
                 byte_swap = True
                 # TBD hacky hueristic to know if we should break up a buffer just because some part is written to.
                 self.last_byteswap = self.cpu.cycles
