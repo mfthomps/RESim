@@ -1,3 +1,27 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 from simics import *
 import os
 import sys
@@ -871,7 +895,8 @@ class SOMap():
             else:
                 self.lgr.debug('soMap knownHap wrong tid, wanted %s got %s' % (tid, cur_tid))
         
-    def runToKnown(self, skip=None):        
+    def runToKnown(self, skip=None, threads=None):        
+       # TBD why this and the one in runTo???  threads is not used here
        cpu, comm, cur_tid = self.task_utils.curThread() 
        map_tid = self.getSOTid(cur_tid)
        if map_tid in self.prog_start: 
@@ -1152,6 +1177,17 @@ class SOMap():
             for load_info in self.so_file_map[tid]:
                 code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
                 retval.append(code_section) 
+        return retval
+
+    def findCodeSection(self, tid, name):
+        retval = None
+        tid = self.getSOTid(tid)
+        name = name.lower()
+        if tid in self.so_file_map: 
+            for load_info in self.so_file_map[tid]:
+                if self.so_file_map[tid][load_info].lower().endswith(name):
+                    retval = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
+                    break 
         return retval
 
     def getProgSize(self, prog_in):
