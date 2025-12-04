@@ -784,7 +784,7 @@ class WriteData():
         return retval
 
 
-    def doRetIOCtl(self, fd, callname=None, addr_of_count=None):
+    def doRetIOCtl(self, fd, callname=None, addr_of_count=None, peek=False):
         retval = None
         tid = self.top.getTID()
         if tid != self.tid:
