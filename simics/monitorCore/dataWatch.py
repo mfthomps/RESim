@@ -3763,9 +3763,9 @@ class DataWatch():
         for move_cycles in range(max_num):
              
             next_ip, next_instruct, mn, jump_cycles = self.getNextInstruct(next_instruct, next_ip, flags, our_reg)
-            self.lgr.debug('dataWatch loopAdHoc mn %s next_instruct %s our_reg %s next_ip 0x%x' % (mn, next_instruct[1], our_reg, next_ip))
             if next_ip is None:
                 break
+            self.lgr.debug('dataWatch loopAdHoc mn %s next_instruct %s our_reg %s next_ip 0x%x' % (mn, next_instruct[1], our_reg, next_ip))
             if mn.startswith('j') or mn.startswith('b') or mn.startswith('call'):
                 if self.cpu.architecture.startswith('arm') and mn == 'bl' and our_reg in ['x0', 'w0']:
                     self.lgr.debug('dataWatch loopAdHoc arm check ntohl')
