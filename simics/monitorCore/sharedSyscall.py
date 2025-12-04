@@ -826,20 +826,26 @@ class SharedSyscall():
         err_trace_msg = '\terror return from %s tid:%s (%s) ' % (callname, tid, comm)
         if callname == 'clone':
             if eax == 0:
-                self.lgr.debug('handleExit is clone tid %s  eax zero just return' % tid)
+                self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax zero, must be in child just return' % tid)
                 return
           
-            self.lgr.debug('handleExit is clone tid %s  eax %d' % (tid, eax))
+            self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax %d' % (tid, eax))
             if eax > 20000:
                 SIM_break_simulation('confused clone')
                 return False
             #if eax == 120:
             #    SIM_break_simulation('clone faux return?')
             #    return
+            # Note hack of using fname_addr for stack base
             if exit_info.fname_addr is not None:
-                self.top.recordStackBase(eax, exit_info.fname_addr)
+                if exit_info.fname_addr == 0:
+                    self.lgr.debug('sharedSyscall exitHap clone, stack param null, will be cow of parent stack')
+                    sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+                    self.top.recordStackClone(str(eax), tid, sp=sp)
+                else:
+                    self.top.recordStackBase(eax, exit_info.fname_addr)
             else:
-                self.lgr.debug('exitHap clone fname_addr is None, cannot call recordStackBase')
+                self.lgr.debug('sharedSyscall exitHap clone fname_addr is None, cannot call recordStackBase')
             if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True):
                 trace_msg = trace_msg+('(tracing), new tid:%s\n' % (eax))
                 #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))

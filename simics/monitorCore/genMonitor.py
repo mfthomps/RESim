@@ -4076,8 +4076,8 @@ class GenMonitor():
     def recordStackBase(self, tid, sp):
         self.stackFrameManager[self.target].recordStackBase(tid, sp)
 
-    def recordStackClone(self, tid, parent):
-        self.stackFrameManager[self.target].recordStackClone(tid, parent)
+    def recordStackClone(self, tid, parent, sp=None):
+        self.stackFrameManager[self.target].recordStackClone(tid, parent, sp=sp)
  
     def resetOriginIfReversing(self, cpu=None, enable=True):
         self.resetOrigin(cpu=cpu, enable=False)

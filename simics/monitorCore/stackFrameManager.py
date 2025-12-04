@@ -171,14 +171,14 @@ class StackFrameManager():
         #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
         #self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
         if tid != want_tid:
-            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d bail' % (tid, want_tid, old, new))
+            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted:%s old: %d new: %d bail' % (tid, want_tid, old, new))
             return 
         #if new != Sim_CPU_Mode_Supervisor:
         ''' catch entry into kernel so that we can read SP without breaking simulation '''
         if new == Sim_CPU_Mode_Supervisor:
             esp = self.mem_utils.getRegValue(self.cpu, 'sp')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('stackFrameManager modeChangedForStack tid:%s , calling into kernel mode eip: 0x%x esp: 0x%x cycle: 0x%x' % (tid, eip, esp, self.cpu.cycles))
+            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s , calling into kernel mode eip: 0x%x esp: 0x%x cycle: 0x%x' % (tid, eip, esp, self.cpu.cycles))
             self.setStackBase()
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
@@ -190,9 +190,17 @@ class StackFrameManager():
             self.lgr.debug('stackFrameManager recordStackBase tid:%s 0x%x' % (tid, sp))
             self.stack_base[tid] = sp
 
-    def recordStackClone(self, tid, parent):
-        self.lgr.debug('stackFrameManager recordStackClone tid: %s parent: %s' % (tid, parent))
-        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
+    def recordStackClone(self, tid, parent, sp=None):
+        ''' Record stack base for a clone syscall. The SP is passed in when the stack value is null, indicating COW '''
+        if sp is not None:
+            self.stack_base[tid] = sp
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Use given stack base 0x%x' % (tid, parent, sp))
+        elif parent in self.stack_base:
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Using parent stack base of 0x%x' % (tid, parent, self.stack_base[parent]))
+            self.stack_base[tid] = self.stack_base[parent]
+        else:
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Use mode hap to record stack base' % (tid, parent))
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     def up(self):
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
@@ -237,6 +245,7 @@ class StackFrameManager():
             fh.close()
 
     def recordMissingStackBase(self, tid, base):
+        self.lgr.debug('stackFrameManager recordMissingStackBase tid:%s' % tid)
         if tid not in self.best_stack_base:
             self.best_stack_base[tid] = {}
         if base not in self.best_stack_base[tid]:
@@ -245,7 +254,7 @@ class StackFrameManager():
             self.best_stack_base[tid][base] = self.best_stack_base[tid][base] + 1
         if self.best_stack_base[tid][base] >= 5:
             self.stack_base[tid] = base
-            self.lgr.debug('stackFrameManager recordStackBase decided base is 0x%x for tid:%s' % (base, tid))
+            self.lgr.debug('stackFrameManager recordMissingStackBase decided base is 0x%x for tid:%s' % (base, tid))
 
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
