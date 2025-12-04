@@ -33,7 +33,7 @@ from simics import *
 MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
     pass
-def readPhysBytes(cpu, paddr, count):
+def readPhysBytes(cpu, paddr, count, lgr=None):
     tot_read = 0
     retval = ()
     cur_addr = paddr
@@ -48,9 +48,18 @@ def readPhysBytes(cpu, paddr, count):
             bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 1)
         except:
             # Simics ARM64 in fvp base revc is broken
-            simics_broken_int = SIM_read_phys_memory(cpu, cur_addr, remain)
+            if lgr is not None:
+                lgr.debug('memUtils readPhysBytes cur_addr 0x%x failed, cpu architecture %s' % (cur_addr, cpu.architecture))
+            simics_broken_int = None
+            try:
+                simics_broken_int = SIM_read_phys_memory(cpu, cur_addr, remain)
+            except:
+                if lgr is not None:
+                    lgr.debug('memUtils readPhysBytes tried SIM_read_phys_memory cur_addr 0x%x failed, cpu architecture %s' % (paddr, cpu.architecture))
+                break
             if simics_broken_int is None:
                 raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+                break
             else:
                 the_bytes = simics_broken_int.to_bytes(4, byteorder = 'little')
                 bytes_read = tuple(the_bytes)
@@ -676,7 +685,7 @@ class MemUtils():
     def readStringPhys(self, cpu, paddr, maxlen):
         s = ''
         try:
-            read_data = readPhysBytes(cpu, paddr, maxlen)
+            read_data = readPhysBytes(cpu, paddr, maxlen, lgr=self.lgr)
         except ValueError:
             self.lgr.debug('readStringPhys, error reading paddr 0x%x maxlen 0x%x' % (paddr, maxlen))
             return None
