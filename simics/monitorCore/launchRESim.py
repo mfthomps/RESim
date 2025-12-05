@@ -324,6 +324,8 @@ class LaunchRESim():
             if self.config.has_section('driver'):
                 cmd = '$machine_name="driver"' 
                 run_command (cmd)
+                cmd = '$host_name="driver"' 
+                run_command (cmd)
                 run_command('$eth_dev=i82543gc')
                 for name in self.comp_dict['driver']:
                     value = self.comp_dict['driver'][name]
@@ -337,12 +339,12 @@ class LaunchRESim():
         
                 driver_script = self.getSimicsScript('driver',lgr)
                 if os.path.isfile('./driver-script.sh'):
-                    print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
-                    lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                    print('Start the driver using %s' % (driver_script))
+                    lgr.debug('Start the driver using %s' % (driver_script))
                 else:
                     print('WARNING, starting driver but missing driver-script.sh script! *****************************')
                     lgr.debug('WARNING, starting driver but missing driver-script.sh script! *****************************')
-                lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                lgr.debug('Start the driver using %s' % (driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 run_command('driver.mb.log-level 0 -r')
@@ -450,8 +452,8 @@ class LaunchRESim():
             params=''
             script = self.getSimicsScript(section,lgr)
             did_net_create = False
-            #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
-            #sim7_params = ['disk0_image'] 
+
+            # use section name as hostname, except for old arm and arm5.
             if platform in ['arm', 'arm5']:
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
@@ -463,16 +465,20 @@ class LaunchRESim():
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
             elif platform == 'ppc32':
-                params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
-                params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
+                params = params+' default_system_info=%s' % section
+                #params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
+                params = params+' board_name=%s' % section
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
                         cmd = '%s=%s' % (name, value)
                         run_command(cmd)
             else:
+                run_command('$host_name=%s' % section)
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
+                        if name == '$host_name':
+                            continue
                         value = self.comp_dict[section][name]
                         #if self.SIMICS_VER.startswith('7'):
                         #    if name[1:] in sim7_params:
