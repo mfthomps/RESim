@@ -19,6 +19,7 @@ decl {
     #result switch0_con : string
     param resim_targets : string
 }
+$board_name=$host_name
 $num_cores=1
 $create_network = FALSE
 
