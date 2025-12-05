@@ -74,6 +74,8 @@ class RunTo():
         self.want_tid = None
         self.so_haps = {}
 
+        self.callback = {}
+
     def stopHap(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             eip = self.top.getEIP(self.cpu)
@@ -110,7 +112,7 @@ class RunTo():
         self.lgr.debug('runTo stopIt')
         self.rmHaps(None)
         self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, None)
-        SIM_break_simulation('soMap')
+        SIM_break_simulation('runTo')
 
     def knownHap(self, tid, the_obj, break_num, memory):
         if len(self.hap_list) > 0:
@@ -127,13 +129,29 @@ class RunTo():
                 value = memory.logical_address
                 fname, start, end = self.so_map.getSOInfo(value)
                 if fname is not None and start is not None:
-                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
+                    self.lgr.debug('runTo knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
                 else:
-                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
+                    self.lgr.debug('runTo knownHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
 
                 SIM_run_alone(self.stopIt, None)
             #else:
-            #    self.lgr.debug('soMap knownHap wrong tid, wanted %d got %d' % (tid, cur_tid))
+            #    self.lgr.debug('runTo knownHap wrong tid, wanted %d got %d' % (tid, cur_tid))
+
+    def knownHapCallback(self, tid, the_obj, break_num, memory):
+        if len(self.hap_list) > 0:
+            cpu, comm, cur_tid = self.task_utils.curThread() 
+            if True:
+                value = memory.logical_address
+                fname, start, end = self.so_map.getSOInfo(value)
+                if fname is not None and start is not None:
+                    self.lgr.debug('runTo knownHapCallback tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
+                else:
+                    self.lgr.debug('runTo knownHapCallback tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
+
+                SIM_run_alone(self.rmHaps, None)
+                SIM_run_alone(self.callback[tid], None)
+            #else:
+            #    self.lgr.debug('runTo knownHap wrong tid, wanted %d got %d' % (tid, cur_tid))
 
     def traceHap(self, start, the_obj, break_num, memory):
         if start not in self.so_haps or self.so_haps[start] is None:
@@ -159,17 +177,37 @@ class RunTo():
                         self.lgr.debug('runTo traceHap start 0x%x in so_haps as None' % start)
                    
                     else:
-                        self.lgr.debug('soMap traceHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
+                        self.lgr.debug('runTo traceHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (cur_tid, value, fname, start, end))
                         self.context_manager.genDeleteHap(self.so_haps[start])
                         self.so_haps[start] = None
                     
                 else:
-                    self.lgr.debug('soMap traceHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
+                    self.lgr.debug('runTo traceHap tid:%s memory 0x%x NO mapping file %s' % (cur_tid, value, fname))
             else:
-                #self.lgr.debug('soMap traceHap tid:%s is not the right tid %s' % (cur_tid, self.want_tid))
+                #self.lgr.debug('runTo traceHap tid:%s is not the right tid %s' % (cur_tid, self.want_tid))
                 pass
 
         
+    def runToKnownCallback(self, callback):
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.callback[cur_tid] = callback
+        code_section_list = self.so_map.getCodeSections(cur_tid)
+        self.lgr.debug('runTo runToKnownCallback tid:%s got %d code sections' % (cur_tid, len(code_section_list)))
+        if len(code_section_list) == 0:
+            self.lgr.debug('runTo runToKnownCallback warning, no code sections for tid:%s' % cur_tid)
+        for section in code_section_list:
+            if section.addr in self.skip_list:
+                continue
+            end = section.addr+section.size
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, section.addr, section.size, 0)
+            self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHapCallback, cur_tid, proc_break, 'runToKnownCallback'))
+            self.lgr.debug('runTo runToKnownCallback set break on 0x%x size 0x%x' % (section.addr, section.size))
+                
+        if len(self.hap_list) > 0:  
+            return True
+        else:
+            return False
+
     def runToKnown(self, skip=None, reset=False, threads=False):        
        self.threads = threads
        if reset:
@@ -177,6 +215,8 @@ class RunTo():
        cpu, comm, cur_tid = self.task_utils.curThread() 
        code_section_list = self.so_map.getCodeSections(cur_tid)
        self.lgr.debug('runTo runToKnown tid:%s got %d code sections' % (cur_tid, len(code_section_list)))
+       if len(code_sections_list) == 0:
+           self.lgr.debug('runTo runToKnownCallback warning, no code sections for tid:%s' % cur_tid)
        for section in code_section_list:
            if section.addr in self.skip_list:
                continue
@@ -187,7 +227,7 @@ class RunTo():
                self.lgr.debug('runTo runToKnown set break on 0x%x size 0x%x' % (section.addr, section.size))
            else:
                self.skip_list.append(section.addr)
-               self.lgr.debug('soMap runToKnow, skip 0x%x' % (skip))
+               self.lgr.debug('runTo runToKnow, skip 0x%x' % (skip))
                 
        if len(self.hap_list) > 0:  
            return True
