@@ -5087,9 +5087,17 @@ class GenMonitor():
             self.fun_mgr.addIterator(fun_addr)
 
     def runToKnown(self, go=True):
+        # TBD modify to use runTo?
         self.soMap[self.target].runToKnown()
         if go:
             SIM_continue(0)
+
+    def runToOtherCallback(self, callback):
+        ''' Run to some other library or code and invoke the callback '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        self.lgr.debug('runToOtherCallback eip 0x%x' % eip)
+        self.run_to[self.target].runToKnownCallback(callback)
 
     def runToOther(self, go=True, threads=False):
         ''' Continue execution until a different library is entered, or main text is returned to '''
@@ -5098,7 +5106,7 @@ class GenMonitor():
 
         if self.isWindows():
             self.lgr.debug('runToOther eip 0x%x' % eip)
-            self.run_to[self.target].runToKnown(eip, threads=threads)
+            self.run_to[self.target].runToKnown(threads=threads)
         else:
             self.soMap[self.target].runToKnown(eip, threads=threads)
         if go:
@@ -5863,6 +5871,7 @@ class GenMonitor():
 
     def watchExit(self):
         tid = self.getTID()
+        self.lgr.debug('watchExit tid:%s' % tid)
         self.watchingExitTIDs.append(tid)
         self.context_manager[self.target].watchExit(tid=tid)
         self.context_manager[self.target].setExitCallback(self.procExitCallback)
