@@ -55,15 +55,17 @@ class SignalLib():
         if self.signal_hap is None:
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('signal signalHap tid:%s (%s)' % (tid, comm))
-        if self.top.pendingFault():
-            self.lgr.debug('signal, was pending fault')
-        else:
-            self.lgr.debug('signal, was NOT a pending fault')
-            self.context_manager.genDisableHap(self.signal_hap)
-            self.top.setCommandCallback(self.outOfSignal)
-            self.top.runToOther()
+        # ignore if we do not have so info
+        if self.so_map.hasSOInfo(tid): 
+            self.lgr.debug('signal signalHap tid:%s (%s)' % (tid, comm))
+            if self.top.pendingFault():
+                self.lgr.debug('signal, was pending fault')
+            else:
+                self.lgr.debug('signal, was NOT a pending fault')
+                self.context_manager.genDisableHap(self.signal_hap)
+                #self.top.setCommandCallback(self.outOfSignal)
+                SIM_run_alone(self.top.runToOtherCallback, self.outOfSignal)
 
-    def outOfSignal(self):
+    def outOfSignal(self, dumb=None):
             self.lgr.debug('signal, outOfSignal')
             self.context_manager.genEnableHap(self.signal_hap)
