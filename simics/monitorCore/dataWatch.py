@@ -2035,6 +2035,8 @@ class DataWatch():
             ''' See if this return should result in deletion of temp stack buffers '''
             self.stackBufHap(None, None, None, memory)
             #self.lgr.debug('dataWatch returnHap done')
+        # hack for one byte copy logic
+        self.mem_something.dest = None
         
     def getXmlReturn(self): 
         retval = None
