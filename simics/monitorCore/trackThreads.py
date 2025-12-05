@@ -170,6 +170,8 @@ class TrackThreads():
         if comm == self.cur_comm:
             self.lgr.debug('trackThreads, addSO, execve must have failed comm is still %s' % comm)
             return
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.top.recordStackBase(tid, sp)
         prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         # in case we want to ignore this comm
