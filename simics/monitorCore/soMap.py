@@ -726,6 +726,12 @@ class SOMap():
            del self.prog_end[tid]
            del self.text_prog[tid]
 
+    def hasSOInfo(self, tid_in):
+        tid = self.getSOTid(tid_in)
+        if tid in self.prog_start:
+            return True
+        else:
+            return False
 
     def getThreadTid(self, tid, quiet=False):
         if tid in self.so_file_map:
@@ -1173,10 +1179,14 @@ class SOMap():
     def getCodeSections(self, tid):
         retval = []
         tid = self.getSOTid(tid)
-        if tid in self.so_file_map: 
-            for load_info in self.so_file_map[tid]:
-                code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
-                retval.append(code_section) 
+        size = self.prog_end[tid] - self.prog_start[tid] + 1
+        if tid in self.prog_start:
+            code_section = CodeSection(self.prog_start[tid], size, self.text_prog[tid])
+            retval.append(code_section)
+            if tid in self.so_file_map: 
+                for load_info in self.so_file_map[tid]:
+                    code_section = CodeSection(load_info.addr, load_info.size, self.so_file_map[tid][load_info])
+                    retval.append(code_section) 
         return retval
 
     def findCodeSection(self, tid, name):
