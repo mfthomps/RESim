@@ -30,6 +30,7 @@ class SignalLib():
         self.cell = cell
         self.cell_name = cell_name
         self.cpu = cpu
+        self.afl = False
         self.lgr = lgr
         self.task_utils = task_utils
         self.mem_utils = mem_utils
@@ -38,34 +39,68 @@ class SignalLib():
         self.signal_hap = None
         
 
-    def watchThis(self, tid):
+    def watchThis(self, tid, afl=False):
         if self.signal_hap is None:
+            self.afl = afl
+            if tid is None:
+                cpu, comm, tid = self.task_utils.curThread() 
             section = self.so_map.findCodeSection(tid, 'libsignal.so')
             if section is not None:
-               self.lgr.debug('signal watchThis found code section for libsignal.so tid:%s' % tid)
+               self.lgr.debug('signalLib watchThis found code section for libsignal.so tid:%s' % tid)
                phys = self.mem_utils.v2p(self.cpu, section.addr)
                proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, section.size, 0)
                self.signal_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.signalHap, tid, proc_break, 'signal')
-               self.lgr.debug('signal set braek on 0x%x (phys 0x%x) size 0x%x' % (section.addr, phys, section.size))
+               self.lgr.debug('signalLib set break on 0x%x (phys 0x%x) size 0x%x self.signal_hap is %d' % (section.addr, phys, section.size, self.signal_hap))
             else:
-                self.lgr.debug('signal watchThis NO code section for libsignal.so')
+                self.lgr.debug('signalLib watchThis NO code section for libsignal.so')
                 pass
 
     def signalHap(self, Dumb, the_object, break_num, memory):
+        #self.lgr.debug('signalLib signalHap hap is %s' % self.signal_hap)
         if self.signal_hap is None:
             return
+        if self.context_manager.isHapDisabled(self.signal_hap):
+            return
         cpu, comm, tid = self.task_utils.curThread() 
-        # ignore if we do not have so info
-        if self.so_map.hasSOInfo(tid): 
-            self.lgr.debug('signal signalHap tid:%s (%s)' % (tid, comm))
-            if self.top.pendingFault():
-                self.lgr.debug('signal, was pending fault')
-            else:
-                self.lgr.debug('signal, was NOT a pending fault')
-                self.context_manager.genDisableHap(self.signal_hap)
-                #self.top.setCommandCallback(self.outOfSignal)
-                SIM_run_alone(self.top.runToOtherCallback, self.outOfSignal)
+        if self.context_manager.watchingExit(tid):
+            # ignore if we do not have so info
+            if self.so_map.hasSOInfo(tid): 
+                pc = self.mem_utils.getRegValue(cpu, 'pc')
+                self.lgr.debug('signalLib signalHap tid:%s (%s) cycle: 0x%x afl: %r pc: 0x%x' % (tid, comm, self.cpu.cycles, self.afl, pc))
+                if self.afl:
+                    self.lgr.debug('signalLib signalHap is afl, call pendingFault with no_stop True')
+                    was_pending = self.top.pendingFault(no_stop=True)
+                    self.lgr.debug('signalLib signalHap back from pendingFault, was_pending is %r' % was_pending)
+                    if was_pending:
+                        self.lgr.debug('signalLib, afl was a pending fault break simulation')
+                        SIM_break_simulation('signalLib')
+                    else:
+                        self.lgr.debug('signalLib, afl was NOT a pending fault')
+                        self.context_manager.genDisableHap(self.signal_hap)
+                        #self.top.setCommandCallback(self.outOfSignal)
+                        print('remove this')
+                        SIM_break_simulation('remove this')
+                        #SIM_run_alone(self.top.runToOtherCallback, self.outOfSignal)
+                else:
+                    self.lgr.debug('signalLib signalHap NOT afl call pendingFault')
+                    if self.top.pendingFault():
+                        self.lgr.debug('signalLib, was pending fault')
+                    else:
+                        self.lgr.debug('signalLib, was NOT a pending fault')
+                        self.context_manager.genDisableHap(self.signal_hap)
+                        #self.top.setCommandCallback(self.outOfSignal)
+                        SIM_run_alone(self.top.runToOtherCallback, self.outOfSignal)
+        else:
+            #self.lgr.debug('signalLib signalHap tid:%s (%s) context manager NOT Watching this tid cycle: 0x%x' % (tid, comm, self.cpu.cycles))
+            pass
 
     def outOfSignal(self, dumb=None):
-            self.lgr.debug('signal, outOfSignal')
+            self.lgr.debug('signalLib, outOfSignal')
             self.context_manager.genEnableHap(self.signal_hap)
+
+    def rmHaps(self):
+        if self.signal_hap is not None:
+            self.context_manager.genDeleteHap(self.signal_hap, immediate=True)
+            self.signal_hap = None
+            self.lgr.debug('signalLib rmHaps signal_hap now none')
+
