@@ -299,8 +299,8 @@ class Coverage():
                 if bp is not None:
                     did_breaks_at.append(bb_rel)
                     self.bp_list.append(bp)                 
-                    self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
-                       int(fun), bb, self.offset, bp))
+                    #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
+                    #   int(fun), bb, self.offset, bp))
                     if prev_bp is not None and bp != (prev_bp+1):
                         self.lgr.debug('cover setBlockBreaks prev_bp is %s bp is %s' % (prev_bp, bp))
                         if len(tmp_list) > 0:
