@@ -512,7 +512,7 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         elif self.cpu.architecture == 'arm64':
-            self.lgr.debug('watchPageFaults set break at at arm entry 0x%x' % self.param.arm_entry)
+            self.lgr.debug('watchPageFaults set break at at arm entry 0x%x' % self.param.arm64_entry)
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
