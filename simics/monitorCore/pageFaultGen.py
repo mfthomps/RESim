@@ -275,7 +275,7 @@ class PageFaultGen():
             else:
                 self.pending_faults[tid] = prec
                 if self.mode_hap is None:
-                    #self.lgr.debug('pageFaultGen adding mode hap')
+                    self.lgr.debug('pageFaultGen adding mode hap')
                     self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
@@ -498,11 +498,14 @@ class PageFaultGen():
                         #SIM_break_simulation('remove this')
                 else:
                     pass
-                    #if self.user_eip is not None:
-                    #    instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
-                    #    self.lgr.debug('pageFaultGen modeChanged arm user space instruct %s' % instruct[1])
-                    #else:
-                    #    self.lgr.debug('pageFaultGen modeChanged arm user space user_eip None')
+                    if self.user_eip is not None:
+                        instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
+                        self.lgr.debug('pageFaultGen modeChanged arm user space instruct %s' % instruct[1])
+                        self.lgr.debug('pageFaultGen modeChanged arm in user 0x%x still not mapped. Instruct %s  did we crash?  what about brk??' % (prec.cr2, instruct[1]))
+                        SIM_run_alone(self.hapAlone, self.pending_faults[tid])
+                        SIM_run_alone(self.rmModeHapAlone, None) 
+                    else:
+                        self.lgr.debug('pageFaultGen modeChanged arm user space user_eip None')
                     
             if len(self.pending_faults) == 0:
                 SIM_run_alone(self.rmModeHapAlone, None) 
@@ -595,7 +598,7 @@ class PageFaultGen():
             #     self.faultCallback, self.cpu, 15, max_intr) 
         self.loadProbes()
         self.lgr.debug('pageFaultGen watch for signal lib')
-        self.signal_lib.watchThis(tid, afl=self.afl)
+        #self.signal_lib.watchThis(tid, afl=self.afl)
 
     def recordFault(self, tid, eip):
         if tid not in self.faulting_cycles:
