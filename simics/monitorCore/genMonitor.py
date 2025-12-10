@@ -4761,7 +4761,7 @@ class GenMonitor():
             target = self.target
         tid_list = self.context_manager[target].getThreadTids()
         self.lgr.debug('pendingFault got %d tids in tid_list no_stop %r' % (len(tid_list), no_stop))
-        if len(tid_list) is 0:
+        if len(tid_list) == 0:
             tid_list = self.context_manager[target].getWatchExitTids()
             self.lgr.debug('pendingFault got %d tids from getWatchExitTids' % (len(tid_list)))
          
