@@ -637,8 +637,8 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone will not watch page faults, will miss segv')
                 self.top.stopWatchPageFaults()
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
-                self.lgr.debug('playAFL goAlone is onePlay and not repeat, not calling resetOrigin')
-                #self.top.resetOrigin()
+                self.top.resetOrigin()
+                self.lgr.debug('playAFL goAlone is onePlay and not repeat, not called resetOrigin cycles:  0x%x' % self.cpu.cycles)
 
             if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
                 self.backstop.setFutureCycle(self.backstop_cycles, now=False)
