@@ -696,8 +696,6 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             print('skipping back to user space, please wait.')
-            print('remove this')
-            return
             if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
                 return
             print('Completed skip.')
