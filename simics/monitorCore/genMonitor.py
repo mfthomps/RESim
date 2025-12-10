@@ -4501,7 +4501,7 @@ class GenMonitor():
         if status:   
             if not quiet:
                 print('Was running, set to not running')
-            self.lgr.debug('notRunning set running false')
+            #self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
@@ -4755,25 +4755,31 @@ class GenMonitor():
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
-    def pendingFault(self, target=None):
+    def pendingFault(self, target=None, no_stop=False):
         retval = False
         if target is None:
             target = self.target
-        thread_tids = self.context_manager[target].getThreadTids()
-        self.lgr.debug('pendingFault got %d thread_tids' % (len(thread_tids)))
-        for tid in thread_tids:
+        tid_list = self.context_manager[target].getThreadTids()
+        self.lgr.debug('pendingFault got %d tids in tid_list no_stop %r' % (len(tid_list), no_stop))
+        if len(tid_list) is 0:
+            tid_list = self.context_manager[target].getWatchExitTids()
+            self.lgr.debug('pendingFault got %d tids from getWatchExitTids' % (len(tid_list)))
+         
+        for tid in tid_list:
             prec =  self.page_faults[target].getPendingFault(tid)
             if prec is not None:
                 comm = self.task_utils[target].getCommFromTid(tid)
                 if prec.page_fault:
                     print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                    leader = self.task_utils[target].getGroupLeaderTid(tid)
-                    self.page_faults[target].handleExit(tid, leader)
+                    if not no_stop:
+                        leader = self.task_utils[target].getGroupLeaderTid(tid)
+                        self.page_faults[target].handleExit(tid, leader)
                     retval = True 
                 else:
                     print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+                break
         return retval
 
     def stopTrackIOAlone(self, immediate=False, check_crash=True, target=None):
@@ -7104,6 +7110,9 @@ class GenMonitor():
         SIM_run_alone(self.RES_delete_stop_hap, hap)
         if your_stop:
             self.stop_hap = None
+
+    def RES_has_pending_stop(self):
+        return self.pending_stop_hap 
 
     def RES_add_stop_callback(self, callback, param, your_stop=False):
         retval = None
