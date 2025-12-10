@@ -479,7 +479,7 @@ class GenContextMgr():
         for rec in self.watch_rec_list:
             tid = self.watch_rec_list[rec]
             if tid != '0': 
-                #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
+                self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
                 retval.append(tid)
         return retval
 
@@ -1087,7 +1087,7 @@ class GenContextMgr():
         ''' stop watching for death of tasks ''' 
         for tid in self.task_rec_bp:    
             if self.task_rec_bp[tid] is not None:
-                #self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
+                self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
                 if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
                     RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[tid])        
@@ -1421,22 +1421,29 @@ class GenContextMgr():
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
             self.task_rec_bp[tid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, list_addr_phys, self.mem_utils.WORD_SIZE, 0)
-            self.lgr.debug('getnContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
+            self.lgr.debug('genContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
                    watch_comm, tid, list_addr, list_addr_phys, cell))
             if immediate:
                 self.watchTaskHapAlone(tid)
             else:
                 SIM_run_alone(self.watchTaskHapAlone, tid)
             self.task_rec_watch[tid] = list_addr
+        elif tid not in self.task_rec_hap or self.task_rec_hap[tid] is None:
+            self.lgr.debug('contextManager watchExit, tid:%s was in task_rec_bp but not in task_rec_hap, call watchTaskHapAlone' % tid)
+            if immediate:
+                self.watchTaskHapAlone(tid)
+            else:
+                SIM_run_alone(self.watchTaskHapAlone, tid)
+            self.task_rec_watch[tid] = list_addr
         else:
-            #self.lgr.debug('contextManager watchExit, already watching for tid %s' % tid)
+            self.lgr.debug('contextManager watchExit, already watching for tid %s with task_rec_hap of %s' % (tid, self.task_rec_hap[tid]))
             pass
         return retval
 
     def watchTaskHapAlone(self, tid):
         if tid in self.task_rec_bp and tid and self.task_rec_bp[tid] is not None:
             if tid not in self.task_rec_hap or self.task_rec_hap[tid] is None:
-                #self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
+                self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
                 self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
             else:
                 self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x ALREADY has hap' % (tid, self.task_rec_bp[tid]))
@@ -1469,11 +1476,15 @@ class GenContextMgr():
             else:
                 self.watchExit(rec, tid)
 
-    def clearExitBreaks(self):
-        SIM_run_alone(self.clearExitBreaksAlone, None)
+    def clearExitBreaks(self, immediate=False):
+        self.lgr.debug('contextManager clearExitBreaks')
+        if immediate:
+            self.clearExitBreaksAlone(None)
+        else:
+            SIM_run_alone(self.clearExitBreaksAlone, None)
 
     def clearExitBreaksAlone(self, dumb):
-        #self.lgr.debug('contextManager clearExitBreaks')
+        self.lgr.debug('contextManager clearExitBreaksAlone')
         for tid in self.task_rec_bp:
             if self.task_rec_bp[tid] is not None:
                 RES_delete_breakpoint(self.task_rec_bp[tid])
@@ -1550,9 +1561,13 @@ class GenContextMgr():
         self.pageFaultGen = pageFaultGen
 
     def getWatchTids(self):
+        ''' return list of tids we are watching.  Note we may instead be just watching tasks exits, which do not show up in this list. '''
         self.lgr.debug('getWatchTids len of task_rec_bp is %d  watch_rec_list is %d' % (len(self.task_rec_bp.keys()), len(self.watch_rec_list)))
         #return self.task_rec_bp.keys()
         return self.watch_rec_list.values()
+
+    def getWatchExitTids(self):
+        return self.task_rec_bp.keys()
 
     def noWatch(self, tid):
         self.no_watch.append(tid)
@@ -1771,7 +1786,7 @@ class GenContextMgr():
         self.soMap = soMap
 
     def disableAll(self, direction=None, filter=None):
-        self.lgr.debug('contextManager disableAll cycle: 0x%x' % self.cpu.cycles)
+        #self.lgr.debug('contextManager disableAll cycle: 0x%x' % self.cpu.cycles)
         for hap in self.haps:
             if filter is None or filter in hap.name:
                 hap.disable(direction)
@@ -1784,7 +1799,7 @@ class GenContextMgr():
 
 
     def enableAll(self, dumb=None):
-        self.lgr.debug('contextManager enableAll cycle 0x%x' % self.cpu.cycles)
+        #self.lgr.debug('contextManager enableAll cycle 0x%x' % self.cpu.cycles)
         for hap in self.haps:
             hap.enable()
         for tid in self.task_rec_bp:
