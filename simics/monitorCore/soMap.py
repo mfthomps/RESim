@@ -760,7 +760,7 @@ class SOMap():
             return None
         retval = tid
         if tid not in self.so_file_map:
-            self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
+            #self.lgr.debug('SOMap getSOTid for %s Not in so_file_map' % tid)
             if tid == self.cheesy_tid:
                 return self.cheesy_mapped
             ptid = self.task_utils.getGroupLeaderTid(tid)

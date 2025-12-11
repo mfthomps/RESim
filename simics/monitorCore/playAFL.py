@@ -637,7 +637,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone will not watch page faults, will miss segv')
                 self.top.stopWatchPageFaults()
             if self.dfile == 'oneplay' and not self.repeat and self.target_proc is None:
-                self.top.resetOrigin()
+                #self.top.resetOrigin()
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not called resetOrigin cycles:  0x%x' % self.cpu.cycles)
 
             if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
@@ -658,7 +658,7 @@ class PlayAFL():
             else:
                 self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
                 SIM_continue(0)
-                self.lgr.debug('playAFL goAlone repeat not set, back from did continue')
+                self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x' % self.cpu.cycles)
                 pass
         else:
             self.lgr.info('playAFL did all sessions.')
@@ -734,9 +734,8 @@ class PlayAFL():
             #force_default_context = True
             #if self.dfile == 'oneplay' and not self.repeat:
             #    force_default_context = False
-            self.lgr.debug('playAFL gen writeData')
             write_callback = None
-            if self.stop_on_read or self.ioctl_count_max is not None:
+            if self.stop_on_read or self.ioctl_count_max is not None or self.select_count_max is not None:
                 write_callback = self.stopOnRead
             self.write_data = writeData.WriteData(self.top, self.cpu, self.in_data, self.afl_packet_count, 
                      self.mem_utils, self.context_manager, self.backstop, self.snap_name, self.lgr, udp_header=self.udp_header, 

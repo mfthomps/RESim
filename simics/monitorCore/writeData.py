@@ -257,7 +257,7 @@ class WriteData():
                      break
                  count = min(self.k_buf_len[index], remain)
                  end = offset + count
-                 #self.lgr.debug('writeKdata write %d bytes to 0x%x.  k_buf_len is %d remain: %d count: %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index], remain, count))
+                 #self.lgr.debug('writeData writeKdata write %d bytes to 0x%x.  k_buf_len is %d remain: %d count: %d' % (len(data[offset:end]), self.k_bufs[index], self.k_buf_len[index], remain, count))
                  self.mem_utils.writeString(self.cpu, self.k_bufs[index], data[offset:end])
                  index = index + 1
                  offset = offset + count 
@@ -496,7 +496,8 @@ class WriteData():
         if self.call_hap is None:
             self.syscallManager = self.top.getSyscallManager()
             self.lgr.debug('writeData setCallHap call to watch all syscalls callback') 
-            self.call_hap = self.syscallManager.watchAllSyscalls(None, 'writeData', callback=self.callCallback)
+            #self.call_hap = self.syscallManager.watchAllSyscalls(None, 'writeData', callback=self.callCallback)
+            self.call_hap = self.syscallManager.watchAllSyscalls(self.cpu.current_context, 'writeData', callback=self.callCallback)
         
     def setSelectStopHap(self):
         if self.select_hap is None:
@@ -595,7 +596,7 @@ class WriteData():
 
     #def callHap(self, dumb, third, break_num, memory):
     def callCallback(self):
-        ''' Hit a call to recv or ioctl or... '''
+        ''' Hit a call to recv or ioctl or... This callback is made from syscall on entry, vice sharedSyscall on exit'''
         if self.call_hap is None:
             return
         tid = self.top.getTID()
@@ -632,13 +633,26 @@ class WriteData():
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
             frame = self.top.frameFromRegs()
+            peek = False
             if callname == 'socketcall':        
                 ''' must be 32-bit get params from struct '''
                 socket_callnum = frame['param1']
                 callname = net.callname[socket_callnum].lower()
-                fd = self.mem_utils.readWord32(self.cpu, frame['param2'])
+                ss = net.SockStruct(self.cpu, frame['param2'], self.mem_utils, lgr=self.lgr)
+                fd = ss.fd
+                count = ss.count
             else:
                 fd = frame['param1']
+                count = frame['param3']
+                if callname.startswith('recv'):
+                    flags = frame['param4']
+                    peek = flags & net.MSG_PEEK
+            # Adjust count of bytes read if a kernel buffer so we know when we hit the limit.
+            if self.mem_utils.isKernel(self.addr) and not peek and callname in ['recv', 'recvfrom', 'read']:
+                self.total_read = self.total_read + count
+                #self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
+                if self.read_limit < self.total_read:
+                    self.kernel_buf_consumed = True
             #self.lgr.debug('writeData callHap, callname  %s fd %s' % (callname, fd))
             if callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
                 skip_it = True
@@ -845,7 +859,7 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None, addr_of_count=None, peek=0):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        self.lgr.debug('writeData doRetFixup fd %d looking for %d' % (fd, self.fd))
+        self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d' % (fd, self.fd, self.total_read, self.read_limit))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
