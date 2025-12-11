@@ -207,9 +207,13 @@ class PageFaultGen():
     def hapAlone(self, prec):
        
         if self.top.isRunning():
-            self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, prec)
-            self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
-            self.top.undoDebug(None)
+            old_stop = self.top.RES_has_pending_stop()
+            if self.top.RES_has_pending_stop() is not None:
+                self.lgr.debug('pageFaultGen hapAlone already has a pending stop hap %s, just stop.' % old_stop)
+            else:
+                self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, prec)
+                self.lgr.debug('pageFaultGen hapAlone set stop hap, now stop?')
+                self.top.undoDebug(None)
             SIM_break_simulation('SEGV, task rec for %s (%s) modified mem reference was 0x%x' % (prec.tid, prec.comm, prec.cr2))
         else:
             self.lgr.debug('pageFaultGen hapAlone already stopped')
@@ -264,7 +268,7 @@ class PageFaultGen():
         page_info = pageUtilsPPC32.findPageTable(self.cpu, fault_addr, self.lgr)
         prec = Prec(self.cpu, comm, tid=tid, cr2=fault_addr, eip=cur_pc, page_fault=True)
         if tid not in self.pending_faults:
-            #self.lgr.debug('pageFaultHapPPC32 add pending fault for %s (%s) addr 0x%x cycle 0x%x' % (tid, comm, prec.cr2, prec.cycles))
+            self.lgr.debug('pageFaultHapPPC32 add pending fault for %s (%s) addr 0x%x cycle 0x%x' % (tid, comm, prec.cr2, prec.cycles))
             if self.mem_utils.isKernel(fault_addr):
                 #self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address is in kernel, treat as SEGV 0x%x cycles: 0x%x' % (tid, fault_addr, self.cpu.cycles))
                 self.pending_faults[tid] = prec
@@ -379,7 +383,6 @@ class PageFaultGen():
             #self.lgr.debug('pageFaultHap, addr 0x%x already handled for tid:%s cur_pc: 0x%x' % (fault_addr, tid, cur_pc))
             return
         self.faulted_pages[tid].append(fault_addr)
-        self.signal_lib.watchThis(tid)
 
         #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
 
@@ -455,7 +458,7 @@ class PageFaultGen():
                     if tid in self.pending_double_faults:
                         self.pending_double_faults[tid].cancel()
                         del self.pending_double_faults[tid]
-                    self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
+                    #self.lgr.debug('pageFaultGen modeChanged remove pending fault for %s phys_addr 0x%x' % (tid, phys_addr))
                     del self.pending_faults[tid]
                     if self.ptable_hap is not None:
                         hap = self.ptable_hap
@@ -551,12 +554,16 @@ class PageFaultGen():
         #    return 
         self.debugging_tid = tid
         ''' TBD explain why arm only uses faultCallback yet x86 also uses pageFaultHap '''
+        if afl:
+            use_context = self.cpu.current_context
+        else:
+            use_context = None
         if self.cpu.architecture == 'arm':
             
             #self.lgr.debug('watchPageFaults set break at page_fault 0x%x and data_abort 0x%x' % (self.param.page_fault, self.param.data_abort))
             #note page_fault is prefech abort 
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
-            proc_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
+            proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, self.mem_utils.WORD_SIZE, 0)
+            proc_break2 = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.data_abort, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, proc_break2, name='watchPageFaults')
            
             undefined_instruction = 5
@@ -566,18 +573,18 @@ class PageFaultGen():
                      self.faultCallback, self.cpu, undefined_instruction) 
             #self.lgr.debug('pageFaultGen watching Core_Exception faults')
         elif self.cpu.architecture == 'arm64':
-            #self.lgr.debug('watchPageFaults set break at at arm entry 0x%x' % self.param.arm_entry)
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
+            self.lgr.debug('pageFaultGen watchPageFaults set break at at arm entry 0x%x current_context %s' % (self.param.arm64_entry, self.cpu.current_context))
+            proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             self.fault_hap1 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,  self.faultCallback, self.cpu, 3, 5) 
         elif self.cpu.architecture == 'ppc32':
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
-            proc_break2 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.data_storage_fault, self.mem_utils.WORD_SIZE, 0)
+            proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
+            proc_break2 = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.data_storage_fault, self.mem_utils.WORD_SIZE, 0)
             self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHapPPC32, compat32, proc_break, proc_break2, name='watchPageFaults')
             #self.lgr.debug('watchPageFaults ppc32break at 0x%x  and 0x%x tid %s current context %s' % (self.param.page_fault, self.data_storage_fault, tid, self.cpu.current_context))
         else:
             #self.lgr.debug('watchPageFaults not arm set break at 0x%x tid %s current context %s' % (self.param.page_fault, tid, self.cpu.current_context))
-            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
+            proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.page_fault, 1, 0)
             self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
             ''' TBD catch illegal instruction '''
             #max_intr = 255
@@ -587,6 +594,8 @@ class PageFaultGen():
             #self.fault_hap2 = RES_hap_add_callback_obj_range("Core_Exception", self.cpu, 0,
             #     self.faultCallback, self.cpu, 15, max_intr) 
         self.loadProbes()
+        self.lgr.debug('pageFaultGen watch for signal lib')
+        self.signal_lib.watchThis(tid, afl=self.afl)
 
     def recordFault(self, tid, eip):
         if tid not in self.faulting_cycles:
@@ -632,7 +641,7 @@ class PageFaultGen():
                 del self.exit_break[tid]
                 del self.exit_hap[tid]
                 del self.exit_hap2[tid]
-        #self.lgr.debug('pageFaultGen stopWatchPageFaults before clear len is %s' % len(self.pending_faults))
+        self.lgr.debug('pageFaultGen stopWatchPageFaults before clear len is %s' % len(self.pending_faults))
         self.faulted_pages.clear()
         #self.faulting_cycles.clear()
         self.pending_faults.clear()
@@ -642,6 +651,7 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen stopWatchPageFaults remove mode hap')
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
+        self.signal_lib.rmHaps()
 
     def clearFaultingCycles(self):
         self.faulting_cycles.clear()
@@ -681,6 +691,7 @@ class PageFaultGen():
         ''' TBD what about segv generated within kernel '''
        
         self.lgr.debug('pageFaultGen skipAlone')
+        self.signal_lib.rmHaps()
         if self.top.hasBookmarks() and self.top.reverseEnabled():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
@@ -688,6 +699,7 @@ class PageFaultGen():
             if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
                 return
             print('Completed skip.')
+            self.lgr.debug('pageFaultGen skipAlone back from skip cycle now 0x%x' % self.cpu.cycles)
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if eip != prec.eip:
                 if not self.top.skipToCycle(target_cycles-1, self.cpu, disable=True):
@@ -879,8 +891,9 @@ class PageFaultGen():
                 retval = True
             else:
                 self.lgr.debug('pageFaultGen hasPendingFault tid:%s fault: %s pending fault eip 0x%x' % (tid, prec.name, prec.eip))
-        #else:
-        #    self.lgr.debug('pageFaultGen hasPendingFault NO pending fault for tid:%s' % tid)
+        else:
+            #self.lgr.debug('pageFaultGen hasPendingFault NO pending fault for tid:%s' % tid)
+            pass
         return retval
 
     def getPendingFault(self, tid):
@@ -927,7 +940,10 @@ class PageFaultGen():
             SIM_run_alone(self.rmModeHapAlone, None) 
 
     def clearPendingFaults(self):
-        self.lgr.debug('pageFaultGen clearPendingFaults')
-        self.pending_faults.clear()
-        self.pending_sigill.clear()
+        #self.lgr.debug('pageFaultGen clearPendingFaults')
+        #self.pending_faults.clear()
+        #self.pending_sigill.clear()
+        self.pending_faults = {}
+        self.pending_sigill = {}
         self.pending_double_faults.clear()
+

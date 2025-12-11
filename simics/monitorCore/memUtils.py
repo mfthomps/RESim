@@ -919,7 +919,9 @@ class MemUtils():
                 if reg == 'sp':
                     reg = 'sp_el0'
                 #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
-                if not arm64_app and reg in self.arm_regs:
+                if reg == 'far_el1':
+                    reg_num = cpu.iface.int_register.get_number(reg)
+                elif not arm64_app and reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
                 elif arm64_app and reg in self.arm64_regs:
@@ -953,7 +955,7 @@ class MemUtils():
                     if arm64_app:
                         if reg == 'lr':
                             reg_num = cpu.iface.int_register.get_number('x30')
-                    else:
+                    elif reg.endswith('_usr'):
                         if reg == 'sp_usr':
                             reg_num = cpu.iface.int_register.get_number('x15')
                         elif reg == 'lr_usr':

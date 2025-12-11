@@ -135,6 +135,7 @@ class AFL():
         select_s = os.getenv('SELECT_COUNT_MAX')
         if select_s is not None:
             self.select_count_max = int(select_s)
+            self.lgr.debug('SELECT_COUNT_MAX is %s' % self.select_count_max)
         else:
             self.select_count_max = None
 
@@ -318,7 +319,7 @@ class AFL():
         self.tid_list = self.context_manager.getWatchTids()
         self.lgr.debug('afl aflInitCallback. target tid: %s finish init to set coverage and such tid_list len %d' % (self.target_tid, len(self.tid_list)))
         # do not watch exit of consuming process, watch this one
-        self.context_manager.clearExitBreaks() 
+        self.context_manager.clearExitBreaks(immediate=True) 
         self.context_manager.watchExit()
         if self.targetFD is not None and self.count > 1 and self.commence_after_exits is None:
             ''' run to IO before finishing init '''
@@ -346,7 +347,7 @@ class AFL():
             if len(self.tid_list) == 0:
                 # If we did a pre-run ?
                 self.tid_list = self.context_manager.getWatchTids()
-            self.lgr.debug('afl finishInit %d tids in list' % len(self.tid_list))
+            self.lgr.debug('afl finishInit %d tids in self.tid_list' % len(self.tid_list))
             self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             #if self.orig_buffer is not None:
             #    self.lgr.debug('restored %d bytes 0x%x context %s' % (len(self.orig_buffer), self.addr, self.cpu.current_context))
@@ -439,10 +440,10 @@ class AFL():
                 status = AFL_OK
             else:
                 status = self.coverage.getStatus()
+                #self.lgr.debug('afl finishUp, status: %s' % status)
             if status == AFL_OK:
-                #tid_list = self.context_manager.getWatchTids()
                 if len(self.tid_list) == 0:
-                    self.lgr.error('afl finishUp no tids from getThreadTids')
+                    self.lgr.error('afl finishUp no tids in self.tid_list')
                 for tid in self.tid_list:
                     if self.page_faults.hasPendingPageFault(tid):
                         self.lgr.debug('afl finishUp found pending page fault for tid:%s' % tid)
@@ -618,7 +619,7 @@ class AFL():
 
         #self.lgr.debug('afl RESim got %d of data from afl iteration %d' % (len(self.in_data), self.iteration))
         if status == AFL_CRASH or status == AFL_HANG:
-            self.lgr.debug('afl goN after crash or hang. restored snapshot after getting %d bytes from afl' % len(self.in_data))
+            self.lgr.debug('afl goN after crash or hang. restored snapshot after getting %d bytes from afl cycle 0x%x' % (len(self.in_data), self.cpu.cycles))
        
         current_length = len(self.in_data)
         self.afl_packet_count = self.packet_count
@@ -650,14 +651,14 @@ class AFL():
 
         self.doWriteData()
 
-        self.page_faults.watchPageFaults(afl=True)
-        #if not self.did_page_faults: 
+        if not self.did_page_faults: 
         #    # TBD why again and again?
-        #    self.did_page_faults = True
+            self.did_page_faults = True
+            self.page_faults.watchPageFaults(afl=True)
 
         if self.iteration == 1:
-            self.context_manager.clearExitBreaks()
-            self.context_manager.clearExitBreaks()
+            self.lgr.debug('afl iteration 1')
+            self.context_manager.clearExitBreaks(immediate=True)
             self.context_manager.watchExit()
             self.setOrigin()
         else:
@@ -669,7 +670,7 @@ class AFL():
         if self.exit_syscall is not None:
             # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
             self.exit_syscall.resetHackCycle()
-        #self.lgr.debug('afl goN now continue current context %s cycle: 0x%x' % (str(self.cpu.current_context), self.cpu.cycles))
+        self.lgr.debug('afl goN now continue current context %s cycle: 0x%x' % (str(self.cpu.current_context), self.cpu.cycles))
         #cli.quiet_run_command('c') 
         SIM_continue(0)
 
@@ -891,6 +892,7 @@ class AFL():
 
     # manage our own snapshotting so we do not overload reverseMgr.
     def restoreOrigin(self):
+        self.context_manager.disableAll()
         #self.lgr.debug('restoreOrigin')
         if self.top.nativeReverse():
             cli.quiet_run_command('restore-snapshot name=origin')
@@ -902,6 +904,7 @@ class AFL():
                     VT_take_restoreshot('origin')
             else:
                 SIM_restore_snapshot('origin')
+        self.context_manager.enableAll()
 
     def setOrigin(self):
         if self.top.nativeReverse():

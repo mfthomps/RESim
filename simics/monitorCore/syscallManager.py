@@ -515,7 +515,7 @@ class SyscallManager():
             rm_list[context] = []
             for instance_name in self.syscall_dict[context]:
                 rm_list[context].append(instance_name)
-                self.syscall_dict[context][instance_name].stopTrace()
+                self.syscall_dict[context][instance_name].stopTrace(immediate=True)
                 self.lgr.debug('syscallManager rmAllSyscalls remove %s' % instance_name)
                 retval = True
         for context in rm_list:
@@ -526,7 +526,7 @@ class SyscallManager():
         rm_context = []
         for context in self.trace_all:
             self.lgr.debug('syscallManager rmAllSyscalls remove trace_all for context %s' % context)
-            self.trace_all[context].stopTrace()
+            self.trace_all[context].stopTrace(immediate=True)
             rm_context.append(context)
             retval = True
         for context in rm_context:
@@ -545,7 +545,7 @@ class SyscallManager():
                 if params is not None:
                     for p in params:
                         retval.append(p)
-                    self.syscall_dict[context][instance_name].stopTrace()
+                    self.syscall_dict[context][instance_name].stopTrace(immediate=True)
                     self.lgr.debug('syscallManager rmSyscallByContext remove %s' % instance_name)
 
             for instance_name in rm_list:
@@ -554,7 +554,7 @@ class SyscallManager():
 
         if context in self.trace_all:
             self.lgr.debug('syscallManager mrSyscallByContext remove trace_all for context %s' % context)
-            self.trace_all[context].stopTrace()
+            self.trace_all[context].stopTrace(immediate=True)
             del self.trace_all[context]
         return retval
 
@@ -642,7 +642,7 @@ class SyscallManager():
                 call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
                 if len(call_parameters) == 0:
                     self.lgr.debug('syscallManager rmAllDmods, no more call_params, remove syscall')
-                    self.syscall_dict[context][instance].stopTrace()
+                    self.syscall_dict[context][instance].stopTrace(immediate=True)
                     del self.syscall_dict[context][instance]
 
     def showDmods(self):

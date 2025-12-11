@@ -4501,7 +4501,7 @@ class GenMonitor():
         if status:   
             if not quiet:
                 print('Was running, set to not running')
-            self.lgr.debug('notRunning set running false')
+            #self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
@@ -4755,25 +4755,31 @@ class GenMonitor():
         else:
             SIM_run_alone(self.stopTrackIOAlone, immediate)
 
-    def pendingFault(self, target=None):
+    def pendingFault(self, target=None, no_stop=False):
         retval = False
         if target is None:
             target = self.target
-        thread_tids = self.context_manager[target].getThreadTids()
-        self.lgr.debug('pendingFault got %d thread_tids' % (len(thread_tids)))
-        for tid in thread_tids:
+        tid_list = self.context_manager[target].getThreadTids()
+        self.lgr.debug('pendingFault got %d tids in tid_list no_stop %r' % (len(tid_list), no_stop))
+        if len(tid_list) == 0:
+            tid_list = self.context_manager[target].getWatchExitTids()
+            self.lgr.debug('pendingFault got %d tids from getWatchExitTids' % (len(tid_list)))
+         
+        for tid in tid_list:
             prec =  self.page_faults[target].getPendingFault(tid)
             if prec is not None:
                 comm = self.task_utils[target].getCommFromTid(tid)
                 if prec.page_fault:
                     print('Tid %s (%s) has pending page fault, may be crashing. Cycle %s' % (tid, comm, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending page fault, may be crashing.' % (tid, comm))
-                    leader = self.task_utils[target].getGroupLeaderTid(tid)
-                    self.page_faults[target].handleExit(tid, leader)
+                    if not no_stop:
+                        leader = self.task_utils[target].getGroupLeaderTid(tid)
+                        self.page_faults[target].handleExit(tid, leader)
                     retval = True 
                 else:
                     print('Tid %s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
                     self.lgr.debug('pendingFault tid:%s (%s) has pending fault %s Cycle %s' % (tid, comm, prec.name, prec.cycles))
+                break
         return retval
 
     def stopTrackIOAlone(self, immediate=False, check_crash=True, target=None):
@@ -5087,9 +5093,17 @@ class GenMonitor():
             self.fun_mgr.addIterator(fun_addr)
 
     def runToKnown(self, go=True):
+        # TBD modify to use runTo?
         self.soMap[self.target].runToKnown()
         if go:
             SIM_continue(0)
+
+    def runToOtherCallback(self, callback):
+        ''' Run to some other library or code and invoke the callback '''
+        cpu = self.cell_config.cpuFromCell(self.target)
+        eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        self.lgr.debug('runToOtherCallback eip 0x%x' % eip)
+        self.run_to[self.target].runToKnownCallback(callback)
 
     def runToOther(self, go=True, threads=False):
         ''' Continue execution until a different library is entered, or main text is returned to '''
@@ -5098,7 +5112,7 @@ class GenMonitor():
 
         if self.isWindows():
             self.lgr.debug('runToOther eip 0x%x' % eip)
-            self.run_to[self.target].runToKnown(eip, threads=threads)
+            self.run_to[self.target].runToKnown(threads=threads)
         else:
             self.soMap[self.target].runToKnown(eip, threads=threads)
         if go:
@@ -5863,6 +5877,7 @@ class GenMonitor():
 
     def watchExit(self):
         tid = self.getTID()
+        self.lgr.debug('watchExit tid:%s' % tid)
         self.watchingExitTIDs.append(tid)
         self.context_manager[self.target].watchExit(tid=tid)
         self.context_manager[self.target].setExitCallback(self.procExitCallback)
@@ -7095,6 +7110,9 @@ class GenMonitor():
         SIM_run_alone(self.RES_delete_stop_hap, hap)
         if your_stop:
             self.stop_hap = None
+
+    def RES_has_pending_stop(self):
+        return self.pending_stop_hap 
 
     def RES_add_stop_callback(self, callback, param, your_stop=False):
         retval = None

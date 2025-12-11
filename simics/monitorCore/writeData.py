@@ -506,7 +506,7 @@ class WriteData():
                 entry = self.top.getSyscallEntry('pselect6')
             else:
                 entry = self.top.getSyscallEntry('_newselect')
-            #self.lgr.debug('writeData setSelectStopHap on 0x%x' % entry)
+            self.lgr.debug('writeData setSelectStopHap on 0x%x' % entry)
             if entry is not None:
                 self.select_break = SIM_breakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
                 if word_size == 8:
@@ -547,7 +547,7 @@ class WriteData():
         ''' Hit a call to select or poll'''
         if self.select_hap is None:
             return
-        #self.lgr.debug('writeData selectHap ')
+        self.lgr.debug('writeData selectHap ')
         if self.stop_on_read and self.mem_utils.isKernel(self.addr):
 
             #self.lgr.debug('writeData selectHap stop on read')
@@ -600,7 +600,7 @@ class WriteData():
             return
         tid = self.top.getTID()
         if tid != self.tid:
-            self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
+            #self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
             return
         skip_it = False
         if self.top.isWindows():
@@ -666,7 +666,7 @@ class WriteData():
 
         if not skip_it:
             self.read_count = self.read_count + 1
-            self.lgr.debug('writeData callHap, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
+            #self.lgr.debug('writeData callHap, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
             self.pending_call = True
             self.handleCall(callname)
 
@@ -691,7 +691,7 @@ class WriteData():
             self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if callname in ['recv', 'recvfrom', 'read', 'RECV', 'RECV_DATAGRAM', 'ReadFile']:
-            self.lgr.debug('writeData handleCall is recv')
+            #self.lgr.debug('writeData handleCall is recv')
             if self.max_packets is not None and self.current_packet >= self.max_packets:
                 self.doBreakSimulation('writeData handleCall max_packets')
             elif not self.mem_utils.isKernel(self.addr):
@@ -728,12 +728,13 @@ class WriteData():
                 # Kernel buffer
                 if self.kernel_buf_consumed:
                     self.doBreakSimulation('writeData handleCall kernel buffer consumed')
-
+        elif self.select_count_max is not None and callname in['select', '_newselect', 'pselect6']:
+            self.checkSelect()
         elif self.pending_select is not None:
             if callname not in['select', '_newselect', 'pselect6']:
                 self.lgr.error('writeData handleCall pending_select but not a select call, bail. cannot get here')
                 return
-            #self.lgr.debug('writeData handleCall is select')
+            self.lgr.debug('writeData handleCall is select')
             if self.mem_utils.isKernel(self.addr):
                 if self.kernel_buf_consumed:
                     #self.lgr.debug('writeData handleCall pending_select, kernel buffer consumed')
@@ -751,7 +752,7 @@ class WriteData():
         elif callname == 'close' and self.stop_on_close:
             self.doBreakSimulation('writeData handleCall close and stop_on_close')
         else:
-            #self.lgr.debug('writeData handleCall did not handle call %s' % callname)
+            self.lgr.debug('writeData handleCall did not handle call %s' % callname)
             pass
            
     def checkIOCtl(self):
@@ -776,6 +777,7 @@ class WriteData():
             #self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
             self.select_count = self.select_count+1
             if self.select_count_max is not None and self.select_count  >= self.select_count_max:
+                #self.lgr.debug('writeData checkSelect will break simulation cycles: 0x%x' % self.cpu.cycles)
                 self.doBreakSimulation('writeData checkSelect select count')
                 retval = False
             elif self.ret_hap is None:
@@ -975,7 +977,7 @@ class WriteData():
         if tid != self.tid:
             #self.lgr.debug('writeData retHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        #self.lgr.debug('writeData retHap pending_callname %s cycle 0x%x' % (self.pending_callname, self.cpu.cycles))
+        self.lgr.debug('writeData retHap pending_callname %s cycle 0x%x' % (self.pending_callname, self.cpu.cycles))
         if self.pending_callname is None and self.pending_select is None:
             return
         elif self.pending_callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
@@ -984,14 +986,14 @@ class WriteData():
             if self.pending_select.setHasFD(self.fd, self.pending_select.readfds): 
                 if self.mem_utils.isKernel(self.addr):
                     self.checkSelect()
-                #self.lgr.debug('writeData retHap was pending select now %s' % self.pending_select.getString())
+                self.lgr.debug('writeData retHap was pending select now %s' % self.pending_select.getString())
                 self.pending_select.resetFD(self.fd, self.pending_select.readfds)
                 eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
                 eax = eax -1
                 self.top.writeRegValue('syscall_ret', eax, alone=True)
                 #self.lgr.debug('writeData retHap modified select result, cleared fd and set eax to %d' % eax)
             else:
-                #self.lgr.debug('writeData retHap had pending_select, but not our fd, which is %d' % self.fd)
+                self.lgr.debug('writeData retHap had pending_select, but not our fd, which is %d' % self.fd)
                 pass
             self.pending_select = None
         elif self.pending_callname == 'ioctl' and self.watch_ioctl:
