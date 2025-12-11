@@ -55,7 +55,7 @@ def getText(path, lgr):
         lgr.debug('elfText nothing at %s' % path)
         return None
     retval = None
-    cmd = 'readelf -a %s' % path
+    cmd = 'readelf -a --wide %s' % path
     #grep = 'grep " .text"'
     #grep = 'grep "-e .plt -e .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
