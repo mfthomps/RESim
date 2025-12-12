@@ -801,7 +801,7 @@ class Coverage():
             #self.backstop.setFutureCycle(self.backstop_cycles, now=True)
             self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
-        tid = self.top.getTID(target=self.cell_name)
+        #tid = self.top.getTID(target=self.cell_name)
         #self.lgr.debug('coverage bbHap address 0x%x bp %d tid: %s cycle: 0x%x' % (this_addr, break_num, tid, self.cpu.cycles))
 
         if (not self.linear or self.context_manager.watchingThis()) and len(self.bb_hap) > 0:
