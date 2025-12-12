@@ -80,6 +80,7 @@ def getText(path, lgr):
     line_iterator = iter(line_list) 
     for line in line_iterator:
         #lgr.debug(line)
+        line = line.strip()
         if line.startswith('ELF Header'):
             iself = True
             continue
@@ -99,41 +100,33 @@ def getText(path, lgr):
         if '[Requesting program interpreter' in line:
             parts = line.strip().split()
             interp = parts[-1][:-1] 
-        if 'LOAD' in line and not is_dyn and is_aarch64 and offset is None:
+        if line.startswith('LOAD') and not is_dyn and is_aarch64 and offset is None:
             parts = line.strip().split()
             offset = int(parts[2], 16)
+            size = int(parts[3], 16)
             if lgr is not None:
                 lgr.debug('readelf got LOAD offset 0x%x' % offset)
-            next_line = next(line_iterator)
-            parts = next_line.strip().split()
-            size = int(parts[0], 16)
-        elif 'LOAD' in line and is_dyn and is_aarch64:
+        elif line.startswith('LOAD') and is_dyn and is_aarch64:
             # not quite, but better
             if size is None:
                 size = 0
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
-            next_line = next(line_iterator)
-            #lgr.debug('got LOAD next line: %s' % next_line)
-            parts = next_line.strip().split()
-            mem_size = int(parts[1], 16)
+            mem_size = int(parts[3], 16)
             size = addr_start + mem_size
             #lgr.debug('got size now 0x%x' % size)
-        elif 'LOAD' in line and is_dyn and not is_aarch64:
+        elif line.startswith('LOAD') and is_dyn and not is_aarch64:
             # not quite, but better
             if size is None:
                 size = 0
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
-            next_line = next(line_iterator)
-            lgr.debug('got LOAD next line: %s' % next_line)
-            parts = next_line.strip().split()
-            mem_size = int(parts[1], 16)
+            mem_size = int(parts[3], 16)
             size = addr_start + mem_size
             lgr.debug('got size now 0x%x' % size)
             
         ''' section numbering has whitespace '''
-        hack = line[7:]
+        hack = line[4:]
         #if lgr is not None:
         #    lgr.debug('readelf got %s from %s' % (hack, path))
         
