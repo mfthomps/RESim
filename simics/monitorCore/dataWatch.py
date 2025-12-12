@@ -2163,6 +2163,7 @@ class DataWatch():
                 else:
                     lr = self.mem_utils.getRegValue(self.cpu, 'lr')
                     self.lgr.debug('memSomethingEntry, addr_of_ret_addr 0x%x, ret_addr 0x%x, but lr is 0x%x' % (addr_of_ret_addr, ret_addr, lr))
+                    ret_addr = lr
         else: 
             ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr')
             ret_fun_name = self.fun_mgr.funFromAddr(ret_addr)
