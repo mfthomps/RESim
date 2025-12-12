@@ -551,8 +551,12 @@ class SharedSyscall():
                 #else:
                 #    count = exit_info.sock_struct.length
                 count = exit_info.count
-                trace_msg = trace_msg+('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s data:\n%s\n' % (socket_callname, tid, 
-                     exit_info.old_fd, count, eax, exit_info.retval_addr, src, s))
+                if peek:
+                    flags = 'flags: 0x%x (peek)' % exit_info.flags
+                else:
+                    flags = 'flags: 0x%x' % exit_info.flags
+                trace_msg = trace_msg+('\treturn from socketcall %s tid:%s, FD: %d, len: %d count: %d into 0x%x %s %s data:\n%s\n' % (socket_callname, tid, 
+                     exit_info.old_fd, count, eax, exit_info.retval_addr, flags, src, s))
                 self.lgr.debug(trace_msg)
                 my_syscall = exit_info.syscall_instance
                 self.lgr.debug('sharedSyscall matched_param is %s, my_syscall %s linger %r' % (str(exit_info.matched_param), my_syscall.name, my_syscall.linger))
