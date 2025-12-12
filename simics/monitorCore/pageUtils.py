@@ -52,13 +52,13 @@ class PtableInfo():
             retval = retval + ' ptable_addr: 0x%x' % self.ptable_addr
         if self.entry is not None:
             if self.phys_addr is not None:
-                retval = retval + ' phys_addr: 0x%x  nx:%d entry:0x%x' % (self.phys_addr, self.nx, self.entry)
+                retval = retval + ' phys_addr: 0x%x  nx:%d write_protect:%d entry:0x%x' % (self.phys_addr, self.nx, self.writable, self.entry)
                 other_info = PageEntryInfo(self.entry, self.cpu.architecture)
                 retval = retval + ' writable: %r accessed: %r' % (other_info.writable, other_info.accessed) 
         else:
               
             if self.phys_addr is not None:
-                retval = retval + ' page-addr: 0x%x  nx: %d  Entry is None' % (self.phys_addr, self.nx) 
+                retval = retval + ' page-addr: 0x%x  nx: %d writeable:%d Entry is None' % (self.phys_addr, self.nx, self.writable) 
             else:
                 retval = retval + ' page-addr is None'
                
@@ -307,11 +307,17 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
         l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
         l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
         if l3_base is not None:
-            if do_log: 
-                lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x' % (l2_basex, l3_index, l3_off, l3_base_addr, l3_base))
             l3_basex = l3_base & 0x0000fffffffff000 
             #lgr.debug('l3_base masked 0x%x' % l3_basex)
             phys = l3_basex + vaddr_off
+            ap = memUtils.bitRange(l3_base, 6,7)
+            if ap == 1:
+                ptable_info.writable = True 
+            ptable_info.nx = memUtils.testBit(l3_base, 54)
+            
+            if do_log: 
+                lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
+                      l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
         else:
             phys = None
         ptable_info.page_base_addr = l3_base_addr
