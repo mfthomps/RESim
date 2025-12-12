@@ -452,7 +452,9 @@ class PageFaultGen():
                 #    if phys_block is not None and phys_block.address is not None and phys_block.address != 0:
                 #        #self.lgr.debug('pageFaultGen modeChanged in user space cr2  0x%x mapped to phys 0x%x' % (prec.cr2, phys_block.address))
                 #        phys_addr = phys_block.address
-                  
+                page_boundary = False
+                if prec.cr2 & 0xfff == 0:  
+                    page_boundary = True
                 if phys_block is not None and phys_block.address != 0:  
                     phys_addr = phys_block.address
                     if tid in self.pending_double_faults:
@@ -471,7 +473,7 @@ class PageFaultGen():
                         self.pdir_hap = None
 
                 elif not self.cpu.architecture.startswith('arm'):
-                    ''' TBD handle reflection of segv to user space for arm? '''
+                    # This double fault logic is dubious.
                     instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
                    
                     if self.mem_utils.isKernel(prec.cr2): 
@@ -484,6 +486,15 @@ class PageFaultGen():
                     elif self.mem_utils.isKernel(self.user_eip):
                         self.lgr.debug('pageFaultHap tid:%s user_eip: 0x%x is kernel.  TBD misses kernel ref to passed pointers' % (tid, self.user_eip))
                         del self.pending_faults[tid]
+                    elif not page_boundary:
+                        self.lgr.debug('pageFaultGen modeChanged in user space 0x%x not a page boundary, assume fault. Instruct %s' % (prec.cr2, instruct[1]))
+                        if self.afl: 
+                            self.lgr.debug('pageFaultGen modeChanged is afl, stop simulation')
+                            SIM_break_simulation('page fault')
+                        else:
+                            SIM_run_alone(self.hapAlone, self.pending_faults[tid])
+                            SIM_run_alone(self.rmModeHapAlone, None) 
+                            #SIM_break_simulation('remove this')
                     elif tid not in self.pending_double_faults:
                         if len(self.pending_double_faults) > 0:
                             self.lgr.error('pageFaultGen have two pending double faults TBD fix this')
