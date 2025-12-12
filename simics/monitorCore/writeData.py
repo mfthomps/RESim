@@ -839,15 +839,17 @@ class WriteData():
         return retval
 
     def doRetSelect(self, select_info):
-        self.lgr.debug('writeData doRetSelect')
+        self.lgr.debug('writeData doRetSelect kernel_buf_consumed: %r select_count_max %s self.fd %d' % (self.kernel_buf_consumed, self.select_count_max, self.fd))
         # return False if simulation is being halted
         retval = True
-        if self.kernel_buf_consumed:
-            if select_info.setHasFD(self.fd, select_info.readfds): 
-                if not self.checkSelect():
-                    retval = False
-                self.lgr.debug('writeData doRetSelect kbuf consumed and has our FD as a read')
-                #self.doBreakSimulation('writeData doRetSelect select on our fd')
+        tid = self.top.getTID()
+        if tid == self.tid: 
+            if self.kernel_buf_consumed or self.select_count_max is not None:
+                if select_info.setHasFD(self.fd, select_info.readfds): 
+                    if not self.checkSelect():
+                        retval = False
+                    self.lgr.debug('writeData doRetSelect kbuf consumed and has our FD as a read retval:%r (false means we are halting simulation)' % retval)
+                    #self.doBreakSimulation('writeData doRetSelect select on our fd')
         return retval
 
     def doRetPoll(self, poll_info):
