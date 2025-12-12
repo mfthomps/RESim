@@ -514,11 +514,10 @@ class SharedSyscall():
                     self.lgr.debug('sharedSyscall no myIPC')
 
         elif socket_callname == "recv" or socket_callname == "recvfrom":
+            peek = 0
             if self.read_fixup_callback is not None and eax >= 0:
                 if exit_info.flags is not None:
                     peek = exit_info.flags & net.MSG_PEEK
-                else:
-                    peek = 0
                 self.lgr.debug('sharedSyscall recv call read_fixup_callback eax was %d fixup callback %s peek %d' % (eax, str(self.read_fixup_callback), peek))
                 fixed_eax = self.read_fixup_callback(exit_info.old_fd, callname=socket_callname, peek=peek)
                 if fixed_eax is not None:
@@ -1904,4 +1903,12 @@ class SharedSyscall():
         return trace_msg
 
     def setMyIPC(self, myIPC):
+      
         self.myIPC = myIPC
+
+    def checkSelectFixup(self, exit_info):
+        ''' Called by syscall to see if this select should halt simulation.  Return true if we should halt'''
+        if self.select_fixup_callback is not None and not self.select_fixup_callback(exit_info.select_info):
+            return True
+        else:
+            return False
