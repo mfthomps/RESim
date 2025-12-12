@@ -3153,6 +3153,7 @@ class Syscall():
         if 'ss' in frame and frame['ss'] is not None:
             ss = frame['ss']
             exit_info.old_fd = ss.fd
+            exit_info.flags = ss.flags
             exit_info.sock_struct = ss
             socket_callnum = frame['param1']
             exit_info.socket_callname = net.callname[socket_callnum].lower()
@@ -3176,6 +3177,8 @@ class Syscall():
         else:
             self.lgr.debug('syscall handleReadOrSocket setExits socket no ss struct, set old_fd to %d' % frame['param1'])
             exit_info.old_fd = frame['param1']
+            if callname.startswith('recv'):
+                exit_info.flags = frame['param4']
 
         if exit_info.old_fd is not None:
     
