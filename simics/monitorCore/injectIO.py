@@ -663,7 +663,8 @@ class InjectIO():
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
-        self.top.stopTrackIOAlone()
+        #self.top.stopTrackIOAlone()
+        self.top.stopTrackIO()
         if from_quit:
             self.callback = None
         self.lgr.debug('injectIO saveJson back from call to stopTrackIO from_quit was %r callback is %s' % (from_quit, self.callback))
