@@ -2249,6 +2249,9 @@ class Syscall():
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
+            if self.sharedSyscall.checkSelectFixup(exit_info):
+                self.lgr.debug('%s sharedSyscall says this select is fatal, bail' % (callname))
+                return
             ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
             self.lgr.debug('syscall: '+ida_msg)
             for call_param in self.call_params:
