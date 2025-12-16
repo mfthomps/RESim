@@ -150,7 +150,7 @@ class BackStop():
         self.setHangCallback(self.hang_callback, self.hang_cycles_delta)
 
     def setHangCallback(self, callback, cycles, now=True):
-        if self.delay is None:
+        if self.delay is not None:
             return
         self.hang_cycles_delta = cycles
         self.hang_callback = callback
