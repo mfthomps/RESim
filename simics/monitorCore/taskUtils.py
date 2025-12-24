@@ -39,7 +39,8 @@ def stringFromFrame(frame):
     retval = None
     if frame is not None:
         retval = ''
-        for item in frame:
+        the_keys = list(frame.keys())
+        for item in sorted(the_keys):
             if item.startswith('param') and frame[item] is not None:
                 try:
                     retval = retval + ' %s:0x%x' % (item, frame[item])
@@ -828,7 +829,7 @@ class TaskUtils():
         # Poor name.  Some come from regs depending on if we are at entry or computed
         if tid is None:
             return None, None
-        #self.lgr.debug('getProcArgsFromStack tid:%s at_enter %r' % (tid, at_enter))
+        self.lgr.debug('getProcArgsFromStack tid:%s at_enter %r' % (tid, at_enter))
         mult = 0
         done = False
         arg_addr_list = []
@@ -944,32 +945,70 @@ class TaskUtils():
                 mult = mult + 1
                 i = i + 1
         else:
-            #self.lgr.debug('getProcArgsFromStack word size 8')
-            # if swap, use rdx
-            if not at_enter and self.param.x86_reg_swap:
-                use_reg = 'rdx'
-            else:
-                use_reg = 'rsi'
-            reg_num = cpu.iface.int_register.get_number(use_reg)
-            reg_val = cpu.iface.int_register.read(reg_num)
-            prog_addr = self.mem_utils.readPtr(cpu, reg_val)
-            #if prog_addr is not None:
-            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
-            #else:
-            #    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
-            i=0
-            done = False
-            while not done and i < 30:
-                reg_val = reg_val+self.mem_utils.WORD_SIZE
-                arg_addr = self.mem_utils.readPtr(cpu, reg_val)
-                if arg_addr != 0:
-                    #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
-                    arg_addr_list.append(arg_addr)
-                else:
-                    done = True
-                i += 1
-     
+            # 64 bit 86
+            self.lgr.debug('getProcArgsFromStack word size 8')
+            if not at_enter and hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
+                #self.lgr.debug('getProcArgsFromStack has code jump table rdi 0x%x' % rdi)
+                sptr = rdi + 0x70
+                # in this scheme, they put the argv addr ptr after the prog string
+                prog_addr = self.mem_utils.readPtr(cpu, sptr)
+                prog_string = self.mem_utils.readString(cpu, prog_addr, 1024)
+                if prog_string is None:
+                    self.lgr.error('getProcArgsFromStack confused about prog string and argv')
+                    return None, None
+                argv_addr = prog_addr + len(prog_string) + 1
+                #self.lgr.debug('getProcArgsFromStack thinks argv_addr is 0x%x from prog_addr 0x%x' % (argv_addr, prog_addr))
+                argv = self.mem_utils.readPtr(cpu, argv_addr)
+                if argv is None:
+                    self.lgr.error('getProcArgsFromStack confused argv, argv_addr was 0x%x' % argv_addr)
+                    return None, None
+                #print('sptr is 0x%x' % sptr)
+                #SIM_break_simulation('remove this')
+                #return None, None
+                while not done and i < limit:
+                        xaddr = argv + mult*self.mem_utils.WORD_SIZE
+                        arg_addr = self.mem_utils.readPtr(cpu, xaddr)
+                        #self.lgr.debug('getProcArgsFromStack argv: 0x%x xaddr 0x%x rdi: 0x%x sptr: 0x%x' % (argv, xaddr, rdi, sptr))
+                        if arg_addr is not None and arg_addr != 0:
+                           #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, xaddr))
+                           arg_addr_list.append(arg_addr)
+                        else:
+                           #SIM_break_simulation('cannot read 0x%x' % xaddr)
+                           done = True
+                        mult = mult + 1
+                        i = i + 1
 
+            else:
+                # if swap, use rdx
+                if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                    use_reg = 'rdi'
+                    prog_addr = self.mem_utils.getRegValue(self.cpu, 'rdi')
+                    reg_val = self.mem_utils.getRegValue(self.cpu, 'rsi')
+                    #self.lgr.debug('getProcArgsFromStack 64 bit code_jump_table prog_addr 0x%x set reg value to rsi 0x%s' % (prog_addr, reg_val)) 
+                else:
+                    if not at_enter and self.param.x86_reg_swap:
+                        use_reg = 'rdx'
+                    else:
+                        use_reg = 'rsi'
+                    reg_num = cpu.iface.int_register.get_number(use_reg)
+                    reg_val = cpu.iface.int_register.read(reg_num)
+                    prog_addr = self.mem_utils.readPtr(cpu, reg_val)
+                if prog_addr is not None:
+                    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
+                else:
+                    self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr None' % (reg_val))
+                i=0
+                done = False
+                while not done and i < 30:
+                    reg_val = reg_val+self.mem_utils.WORD_SIZE
+                    arg_addr = self.mem_utils.readPtr(cpu, reg_val)
+                    if arg_addr != 0:
+                        #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, reg_val))
+                        arg_addr_list.append(arg_addr)
+                    else:
+                        done = True
+                    i += 1
         #xaddr = argv + 4*self.mem_utils.WORD_SIZE
         #arg2_addr = memUtils.readPtr(cpu, xaddr)
         #print 'arg2 esp is %x sptr at %x  argv %x xaddr %x saddr %x string: %s ' % (esp, sptr, 
@@ -981,9 +1020,9 @@ class TaskUtils():
         prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
         self.exec_addrs[tid].prog_name = prog_string
         self.exec_addrs[tid].arg_list = arg_string_list
+        #if 'python' in prog_string: 
+        #    SIM_break_simulation('remove this')
         #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
-        #if prog_string == 'cfe-poll-player':
-        #    SIM_break_simulation('debug')
         #self.lgr.debug('args are %s' % str(arg_string_list))
         '''
         if prog_string is None:
@@ -1082,11 +1121,18 @@ class TaskUtils():
         else:
             esp = self.mem_utils.getRegValue(self.cpu, 'esp')
             if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
-                rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-                regs_addr = rax
-                self.lgr.debug('frameFromStackSyscall with code_jump_table, regs_addr is 0x%x' % (regs_addr))
-                frame = self.getFrame(regs_addr, self.cpu)
-                self.lgr.debug('frame: %s' % stringFromFrame(frame))
+                if self.mem_utils.WORD_SIZE == 8:
+                    rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
+                    regs_addr = rdi 
+                    self.lgr.debug('frameFromStackSyscall with code_jump_table, 64bit regs_addr from rdi is 0x%x' % (regs_addr))
+                    frame = self.getFrameStrange(regs_addr, self.cpu)
+                    self.lgr.debug('frame: %s' % stringFromFrame(frame))
+                else:
+                    rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+                    regs_addr = rax
+                    self.lgr.debug('frameFromStackSyscall with code_jump_table, regs_addr from rax is 0x%x' % (regs_addr))
+                    frame = self.getFrame(regs_addr, self.cpu)
+                    self.lgr.debug('frame: %s' % stringFromFrame(frame))
             else:
                 regs_addr = esp + self.mem_utils.WORD_SIZE
                 #regs = self.mem_utils.readPtr(self.cpu, regs_addr)
@@ -1095,6 +1141,7 @@ class TaskUtils():
         return frame
     
     def frameFromStack(self):
+        self.lgr.debug('frameFromStack')
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
@@ -1111,7 +1158,7 @@ class TaskUtils():
     def getFrame(self, v_addr, cpu):
         retval = {}
         phys_addr = self.mem_utils.v2p(cpu, v_addr)
-        #self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
+        self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
         if phys_addr is not None:
             try:
                 retval['param1'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
@@ -1124,6 +1171,30 @@ class TaskUtils():
                 retval['sp'] = SIM_read_phys_memory(cpu, phys_addr+25*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
             except:
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
+        return retval
+
+    def getFrameStrange(self, v_addr, cpu):
+        retval = {}
+        x38_addr = v_addr + 0x38
+        phys_addr = self.mem_utils.v2p(cpu, x38_addr)
+        self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
+        if phys_addr is not None:
+            try:
+                retval['param4'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
+                retval['param6'] = SIM_read_phys_memory(cpu, phys_addr+self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+                retval['param5'] = SIM_read_phys_memory(cpu, phys_addr+2*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            except:
+                self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
+            x60_addr = v_addr + 0x60
+            phys_addr = self.mem_utils.v2p(cpu, x60_addr)
+            try:
+                retval['param3'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
+                retval['param2'] = SIM_read_phys_memory(cpu, phys_addr+self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+                retval['param1'] = SIM_read_phys_memory(cpu, phys_addr+2*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+                retval['pc'] = SIM_read_phys_memory(cpu, phys_addr+4*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+                retval['sp'] = SIM_read_phys_memory(cpu, phys_addr+7*self.mem_utils.WORD_SIZE, self.mem_utils.WORD_SIZE)
+            except:
+                self.lgr.error('taskUtils getFrame error reading param3 etc from stack from starting at 0x%x' % v_addr)
         return retval
 
     def frameArm64Computed(self):
@@ -1172,6 +1243,8 @@ class TaskUtils():
                 map_id = 'x86_64'
                 #self.lgr.debug('taskUtils frameFromRegs pc 0x%x sysenter 0x%x' % (frame['pc'], self.param.sysenter))
                 if self.param.x86_reg_swap and frame['pc'] != self.param.sysenter:
+                    self.lgr.debug('taskUtils frameFromRegs is reg_swap and sysenter')
+                    # At sysenter
                     map_id = 'x86_64swap'
                     # TBD Very odd way to load parameters.
                     offset = 0x70
@@ -1184,8 +1257,14 @@ class TaskUtils():
                         else:
                             addr = addr - 8
                 else:
-                    for p in memUtils.param_map[map_id]:
-                        frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
+                    if frame['pc'] != self.param.sysenter:
+                        self.lgr.debug('taskUtils frameFromRegs x86-64 not at entry use regs?')
+                        for p in memUtils.param_map[map_id]:
+                            frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
+                    else:
+                        self.lgr.debug('taskUtils frameFromRegs x86-64 at sysenter use regs')
+                        for p in memUtils.param_map[map_id]:
+                            frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map[map_id][p])
         
             else:
                 for p in memUtils.param_map['x86_32']:
