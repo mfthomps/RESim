@@ -68,8 +68,8 @@ class TrackThreads():
                     self.setExecveBreaks(arm64_app=False)
             else:
                 self.setExecveBreaks()
-
-        self.trackSO()
+        if not self.top.tracingAll(self.cell_name):
+            self.trackSO()
         #self.context_manager.watchTasks(restore_debug=False)
         #self.trackClone()
 
@@ -165,8 +165,11 @@ class TrackThreads():
         del self.finish_break[tid]
 
     def addSO(self, param_tuple):
+        ''' callback from doInUser when new exec returns to user space '''
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('trackThreads, addSO, back from execve via doInUser callback.  comm now %s was %s' % (comm, self.cur_comm))
+        self.lgr.debug('trackThreads, addSO, tid:%s back from execve via doInUser callback.  comm now %s was %s' % (tid, comm, self.cur_comm))
+        if self.sharedSyscall.isPendingExecve(tid):
+            self.lgr.error('trackThreads, addSO, unexpected pending execve for tid:%s' % tid)
         if comm == self.cur_comm:
             self.lgr.debug('trackThreads, addSO, execve must have failed comm is still %s' % comm)
             return
