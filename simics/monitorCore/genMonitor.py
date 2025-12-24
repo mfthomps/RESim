@@ -4992,6 +4992,12 @@ class GenMonitor():
                 dfile = dfile.replace('coverage', 'queue')
             else:
                 dfile = dfile.replace('trackio', 'queue')
+        if not os.path.isfile(dfile):
+            self.lgr.error('injectIO file not found: %s' % dfile)
+            return
+        if target is not None and not (trace_all or trace or instruct_trace) and targetFD is None:
+            self.lgr.error('injectIO target requires a targetFD')
+            return
         if type(save_json) is bool:
             if save_json:
                 save_json = 'logs/track.json'
