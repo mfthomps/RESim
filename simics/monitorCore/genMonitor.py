@@ -1891,7 +1891,7 @@ class GenMonitor():
                 prog_name = self.soMap[self.target].getProg(plist[0])
                 self.lgr.debug('debugProc prog_name %s' % prog_name)
                 if prog_name is None:
-                    print('\n*** Warning *** Requested debug of %s, which is already running, but it has no SO Map entries\n')
+                    print('\n*** Warning *** Requested debug of %s, which is already running, but it has no SO Map entries\n' % proc)
                     local_path = self.getFullPath(fname=proc)
                     self.soMap[self.target].addText(local_path, proc, plist[0])
                     self.lgr.debug('debugProc %s add to soMap' % proc)
