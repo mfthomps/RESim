@@ -1875,7 +1875,6 @@ class Syscall():
             exit_info.fname_addr = child_stack
             ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
                 child_stack, frame['param3'], frame['param4'], frame['param5'])
-
             #./include/linux/sched.h:#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
             if not flags & 0x00000400 and self.name == 'runToIO':
                 self.lgr.debug('syscall clone FD not shared, increment FD count for clones')
@@ -2249,11 +2248,11 @@ class Syscall():
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
+            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
+            self.lgr.debug('syscall: '+ida_msg)
             if self.sharedSyscall.checkSelectFixup(exit_info):
                 self.lgr.debug('%s sharedSyscall says this select is fatal, bail' % (callname))
                 return
-            ida_msg = '%s tid:%s (%s) %s\n' % (callname, tid, comm, exit_info.select_info.getString())
-            self.lgr.debug('syscall: '+ida_msg)
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -2597,26 +2596,42 @@ class Syscall():
         #self.lgr.debug('syscall getExitAddrs break_eip 0x%x' % break_eip)
         if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
             #self.lgr.debug('syscall getExitAddrs frame in regs?')
-            ''' caller frame will be in regs'''
+            # caller frame will be in regs
             if frame is None:
                 frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 frame_string = taskUtils.stringFromFrame(frame)
                 self.lgr.debug('syscall getExitAddrs first if, frame %s' % frame_string)
-            exit_eip1 = self.param.sysexit
-            ''' catch interrupt returns such as wait4 '''
-            exit_eip2 = self.param.iretd
-            if exit_eip3 is not None:
-                exit_eip3 = self.param.sysret64
-                self.lgr.debug('syscall getExitAddrs has sysret64 exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
-            else:
-                exit_eip3 = None
-                self.lgr.debug('syscall getExitAddrs no sysret64 exit1 0x%x 2 0x%x ' % (exit_eip1, exit_eip2))
-            
+            if self.param.sysexit is None and self.param.sysret64 is not None:
+                exit_eip1 = self.param.sysret64
+                if self.param.iretd is not None:
+                    exit_eip2 = self.param.iretd
+                    #self.lgr.debug('syscall getExitAddrs has sysret64 0x%x and iretd 0x%x' % (exit_eip1, exit_eip2))
+                else:
+                    #self.lgr.debug('syscall getExitAddrs has only sysret64 0x%x' % (exit_eip1))
+                    pass
+            elif self.param.sysexit is not None:
+                exit_eip1 = self.param.sysexit
+                if self.iretd is not None:
+                    exit_eip2 = self.param.iretd
+                    if self.param.sysret64 is not None:
+                        exit_eip3 = self.sysret64
+                        #self.lgr.debug('syscall getExitAddrs has all sys rets exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
+                    else:
+                        #self.lgr.debug('syscall getExitAddrs has 2 sysexit and iretd exit1 0x%x 2 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
+                        pass
+                else:
+                    if self.param.sysret64 is not None:
+                        exit_eip2 = self.sysret64
+                        #self.lgr.debug('syscall getExitAddrs has sysexit and sysret64 exit1 0x%x 2 0x%x' % (exit_eip1, exit_eip2))
+                    else: 
+                        #self.lgr.debug('syscall getExitAddrs has only sysexit 0x%x' % (exit_eip1))
+                        pass
+
         elif break_eip == self.param.sys_entry:
            # self.lgr.debug('syscall getExitAddrs is sys_entry')
             if frame is None:
                 frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
-                ''' fix up regs based on eip and esp found on stack '''
+                #fix up regs based on eip and esp found on stack 
                 reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
                 esp = self.cpu.iface.int_register.read(reg_num)
                 frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
@@ -2647,7 +2662,7 @@ class Syscall():
                 frame = self.task_utils.frameFromRegs()
                 frame_string = taskUtils.stringFromFrame(frame)
         elif syscall_info.calculated:
-            #self.lgr.debug('syscall getExitAddrs calculated')
+            self.lgr.debug('syscall getExitAddrs calculated')
             ''' Note EIP in stack frame is unknown '''
             #frame['eax'] = syscall_info.callnum
             if self.cpu.architecture.startswith('arm'):
@@ -2672,8 +2687,11 @@ class Syscall():
                 #    self.lgr.debug('getExitAddrs calculated exit_eip1 0x%x No second exit' % exit_eip1)
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    #self.lgr.debug('getExitAddrs calculated, word size 8')
-                    frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
+                    self.lgr.debug('getExitAddrs calculated, word size 8')
+                    if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                        frame = self.task_utils.frameFromStackSyscall()
+                    else:
+                        frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
                 exit_eip3 = self.param.sysret64
