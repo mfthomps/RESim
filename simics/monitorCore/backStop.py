@@ -110,29 +110,31 @@ class BackStop():
             #self.lgr.debug('backStop did registercancel')
         self.back_stop_cycle = self.cpu.cycles + cycles
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, cycles, cycles)
-        #self.lgr.debug('backStop setFuturecycleAlone, now: 0x%x  cycles: 0x%x should stop at 0x%x' % (self.cpu.cycles, cycles, self.back_stop_cycle))
+        #self.lgr.debug('backStop setFutureCycleAlone, now: 0x%x  cycles: 0x%x should stop at 0x%x' % (self.cpu.cycles, cycles, self.back_stop_cycle))
 
     def setFutureCycle(self, cycles, now=False):
+        #self.lgr.debug('backStop setFutureCycle')
         if self.hang_cycles is not None and self.cpu.cycles >= self.hang_cycles:
-            self.lgr.debug('backStop hang cycles delta of 0x%x exceeded.  Cycles now 0x%x call hang_callback %s' % (self.hang_cycles_delta, self.cpu.cycles, str(self.hang_callback)))
+            #self.lgr.debug('backStop setFutureCycle hang cycles delta of 0x%x exceeded.  Cycles now 0x%x call hang_callback %s' % (self.hang_cycles_delta, self.cpu.cycles, str(self.hang_callback)))
             SIM_run_alone(self.hang_callback, self.cpu.cycles)
-        if self.hang_cycles is None and self.hang_cycles_delta >0:
-            # crude way to defer hang cycle watch until first data read
-            #self.lgr.debug('backStop setFutureCycles call setHangCallbackAlone')
-            SIM_run_alone(self.setHangCallbackAlone, None)
-
-        if self.delay is not None:
-            self.delay = self.delay - 1
-            if self.delay == 0:
-                self.delay = None
-            else:
-                #self.lgr.debug('backStop setFuturecycle delay now %d, bail' % self.delay)
-                return
-         
-        if not now:
-            SIM_run_alone(self.setFutureCycleAlone, cycles)
         else:
-            self.setFutureCycleAlone(cycles)
+            if self.hang_cycles is None and self.hang_cycles_delta >0:
+                # crude way to defer hang cycle watch until first data read
+                self.lgr.debug('backStop setFutureCycle call setHangCallbackAlone')
+                SIM_run_alone(self.setHangCallbackAlone, None)
+
+            if self.delay is not None:
+                self.delay = self.delay - 1
+                if self.delay == 0:
+                    self.delay = None
+                else:
+                    #self.lgr.debug('backStop setFuturecycle delay now %d, bail' % self.delay)
+                    return
+         
+            if not now:
+                SIM_run_alone(self.setFutureCycleAlone, cycles)
+            else:
+                self.setFutureCycleAlone(cycles)
 
         # TBD why was this being canceled?
         #if self.hang_event is not None:
@@ -142,8 +144,9 @@ class BackStop():
 
     def hang_handler(self, obj, cycles):
         if self.delay is not None:
+            self.lgr.debug('backStop hang_handler but delay is 0x%x' % delay)
             return
-        self.lgr.debug('backStop hang_handler will call callback %s' % str(self.hang_callback))
+        #self.lgr.debug('backStop hang_handler will call callback %s' % str(self.hang_callback))
         self.hang_callback(self.cpu.cycles)
 
     def setHangCallbackAlone(self, dumb):
@@ -156,7 +159,7 @@ class BackStop():
         self.hang_callback = callback
         if now:
             self.hang_cycles = self.cpu.cycles + cycles
-            #self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
+            self.lgr.debug('backStop hang cycles 0x%x delta 0x%x setHangCallback to %s' % (self.hang_cycles, cycles, str(callback)))
             if self.hang_event is None:
                 self.hang_event = SIM_register_event("hang event", SIM_get_class("sim"), Sim_EC_Notsaved, self.hang_handler, None, None, None, None)
             SIM_event_post_cycle(self.cpu, self.hang_event, self.cpu, cycles, cycles)
@@ -165,6 +168,7 @@ class BackStop():
         self.report_backstop = report
 
     def setDelay(self, delay):
+        self.lgr.debug('backStop setDelay 0x%x' % delay)
         self.delay = delay
 
 if __name__ == "__main__":
