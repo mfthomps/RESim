@@ -60,7 +60,7 @@ def sendTCP(lgr):
     
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_addr = (host, port)
-        print('try connect host %s port %d' % (host, port))
+        lgr.debug('try connect host %s port %d' % (host, port))
         sockConnect(sock, server_addr, lgr)
         #TBD REMOVE/FIX
         delim = b"\r\n\r\n"
@@ -83,7 +83,7 @@ def sendTCP(lgr):
                 item_bytes = binascii.unhexlify(item_bytes)
             else:
                 get_next = True
-            lgr.debug('Next item to send %s' % item_bytes.decode())
+            lgr.debug('Next item to send %s' % item_bytes.decode(errors="ignore"))
             disconnect = False
             if b'RESIM_DISCONNECT' in item_bytes:
                 disconnect = True
@@ -112,7 +112,7 @@ def sendTCP(lgr):
             while not done:
                 got = sock.recv(1024)
                 lgr.debug('received len %d' % (len(got)))
-                got_str = got.decode()
+                got_str = got.decode(errors="ignore")
                 lgr.debug(got_str)
                 if 'set-cookie' in got_str.lower(): 
                     lgr.debug('sees set-cookie')
@@ -154,7 +154,7 @@ def createNewJson(host, port, infile, hang, lgr):
             jdict['data']=tcp_json
     with open('/tmp/catchme.json', 'w') as fh:
         fh.write(json.dumps(jdict))
-    print('did createNewJson')
+    lgr.debug('did createNewJson')
 
     
 def main():
@@ -174,7 +174,7 @@ def main():
     #lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
     #lgr.removeHandler(lhStdout)
     lgr.info('Start of log from clientTCP')
-    print('begin')
+    lgr.debug('begin')
     args = parser.parse_args()
     createNewJson(args.ip, args.port, args.file, args.hang, lgr)
     sendTCP(lgr)
