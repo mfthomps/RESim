@@ -9,6 +9,7 @@ import decodeArm
 import decodePPC32
 import pageUtils
 import aflPath
+import defaultConfig
 
 class ReportCrash():
     def __init__(self, top, cpu, tid, dataWatch, mem_utils, fname, num_packets, one_done, report_index, lgr, 
@@ -28,6 +29,7 @@ class ReportCrash():
         self.num_packets = num_packets
         self.target = target
         self.targetFD = targetFD
+        self.hit_max_marks = False
         self.index = 0
         if os.path.isfile(fname):
             self.flist.append(fname)
@@ -134,7 +136,11 @@ class ReportCrash():
         self.go() 
 
     def doneNothing(self, dumb):
-        self.crash_report.write("\n\nNothing found:\n")
+        if self.hit_max_marks:
+            self.crash_report.write("\n\nHit max marks, then nothing found.  Perhaps a hang.:\n")
+            self.hit_max_marks = False
+        else:
+            self.crash_report.write("\n\nNothing found:\n")
         orig_stdout = sys.stdout
         sys.stdout = self.crash_report
         self.top.setCommandCallback(None)
@@ -320,6 +326,11 @@ class ReportCrash():
         self.lgr.debug('reportCrash maxMarksCallback, call pendingFault to check for faults') 
         if not self.top.pendingFault(target=self.cell_name):
             self.lgr.debug('reportCrash maxMarksCallback, just continue') 
+            #self.top.stopThreadTrack(immediate=True)
+            self.top.stopTracking(keep_watching=True)
+            hang_cycles = defaultConfig.hangCycles() 
+            self.dataWatch.setHangCallback(self.doneForward, hang_cycles, now=True)
+            self.hit_max_marks = True
             SIM_run_alone(SIM_continue, 0)
         else:
             self.lgr.debug('reportCrash maxMarksCallback, got page fault, call doneForward') 
