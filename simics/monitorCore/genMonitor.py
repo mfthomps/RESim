@@ -3244,7 +3244,7 @@ class GenMonitor():
             #self.lgr.debug('restoreDebugBreaks back page')
             if self.trace_malloc is not None:
                 self.trace_malloc.setBreaks()
-            #self.lgr.debug('restoreDebugBreaks back  malloc')
+                self.lgr.debug('restoreDebugBreaks back  trace malloc')
             if self.injectIOInstance is not None:
                 self.injectIOInstance.restoreCallHap()
             #self.lgr.debug('restoreDebugBreaks back  inject')
@@ -3307,7 +3307,7 @@ class GenMonitor():
             if self.coverage is not None and not keep_coverage:
                 self.coverage.stopCover(keep_hits=True)
             if self.trace_malloc is not None:
-                #self.lgr.debug('genMon removeDebugBreaks trace_malloc')
+                self.lgr.debug('genMon removeDebugBreaks trace_malloc')
                 self.trace_malloc.stopTrace()
             if self.injectIOInstance is not None:
                 #self.lgr.debug('genMon removeDebugBreaks inject delcallhap')
@@ -3389,8 +3389,12 @@ class GenMonitor():
                 retval = True
             else:
                 #self.lgr.debug('tracingAll debug_tid:%s' % debug_tid)
-                if self.context_manager[self.target].amWatching(tid):
-                    #self.lgr.debug('tracingAll watching tid:%s' % tid)
+                if tid is None:
+                    use_tid = debug_tid
+                else:
+                    use_tid = tid
+                if self.context_manager[self.target].amWatching(use_tid):
+                    #self.lgr.debug('tracingAll watching tid:%s' % use_tid)
                     retval = True
                 else:
                     #self.lgr.debug('tracingAll not watching debug_tid:%s' % debug_tid)
@@ -4678,7 +4682,7 @@ class GenMonitor():
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, 
-                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None):
+                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None, track_malloc=False):
         if max_marks is None:
             max_marks = self.max_marks
         self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
@@ -4735,6 +4739,10 @@ class GenMonitor():
 
         self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet, offset=offset, length=length, backstop_cycles=backstop_cycles)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
+        if track_malloc:
+            self.traceMalloc()
+            self.lgr.debug('tracIO track malloc')
+            self.dataWatch[self.target].trackMalloc()
 
         if self.coverage is not None:
             self.coverage.doCoverage()
@@ -5030,7 +5038,7 @@ class GenMonitor():
             self.dataWatch[target_cell].resetWatch()
         if max_marks is not None:
             self.dataWatch[target_cell].setMaxMarks(max_marks) 
-        if target_prog is None:
+        if target_prog is None and target_cell in self.page_faults:
             self.page_faults[target_cell].stopWatchPageFaults()
             tid = self.getTID()
             # may be wrong tid, e.g., prepInjectWatch
@@ -5397,18 +5405,19 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         print('context for cell %s is  %s' % (self.target, str(cpu.current_context)))
 
-    def traceMalloc(self):
+    def traceMalloc(self, comm=None):
         self.lgr.debug('genMonitor traceMalloc')
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
         self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
-               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr)
+               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr, comm=comm)
 
     def showMalloc(self):
         self.trace_malloc.showList()
 
     def stopTraceMalloc(self):
         if self.trace_malloc is not None:
+            self.lgr.debug('stopTraceMalloc')
             self.trace_malloc.stopTrace()
         self.trace_malloc = None
 
