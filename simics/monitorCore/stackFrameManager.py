@@ -259,7 +259,7 @@ class StackFrameManager():
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        if self.cpu.architecture == 'ppc32':
+        if self.cpu.architecture in ['ppc32', 'arm', 'arm64']:
             lr = self.mem_utils.getRegValue(self.cpu, 'lr')
             key = '0x%x-0x%x-0x%x' % (sp, ip, lr)
         else:
