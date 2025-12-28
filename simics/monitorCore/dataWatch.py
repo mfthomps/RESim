@@ -6548,3 +6548,6 @@ class DataWatch():
     def trackMalloc(self):
         self.lgr.debug('dataWatch trackMalloc') 
         self.track_malloc = True
+
+    def setHangCallback(self, hang_callback, hang_cycles, now=True):
+        self.backstop.setHangCallback(hang_callback, hang_cycles, now=now)
