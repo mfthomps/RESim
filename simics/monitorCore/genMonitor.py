@@ -1561,8 +1561,8 @@ class GenMonitor():
                         load_info = self.soMap[self.target].getModuleInfo(prog_name)
                     else:
                         load_info = self.soMap[self.target].addText(real_path, prog_name, tid)
+                    root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                     if load_info is not None and load_info.addr is not None:
-                        root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
                         self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.task_utils[self.target], self.lgr)
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
@@ -1582,18 +1582,40 @@ class GenMonitor():
                             self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
                         ''' TBD alter stackTrace to use this and buid it out'''
                         #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
-                        self.soMap[self.target].setFunMgr(self.fun_mgr, tid)
-                        if self.bookmarks is not None:
-                            self.bookmarks.setFunMgr(self.fun_mgr)
-                        self.dataWatch[self.target].setFunMgr(self.fun_mgr)
                         self.lgr.debug('ropCop instance for %s' % self.target)
                         self.ropCop[self.target] = ropCop.RopCop(self, cpu, cell_name, self.context_manager[self.target],  self.mem_utils[self.target],
                              load_info.addr, load_info.size, self.bookmarks, self.task_utils[self.target], self.lgr)
                     elif load_info is not None:
                         self.lgr.error('debug, text segment missing load address for %s.  Perhaps program was running before being debugged?' % self.full_path)
-                  
+
                     else:
-                        self.lgr.error('debug, text segment None for %s' % self.full_path)
+                        python_path = resimUtils.getPyPath(self.full_path)
+                        if os.path.basename(python_path) == 'python':
+                            pylib = 'libpython'
+                            libpython = self.soMap[self.target].findSOPath(pylib)
+                            self.lgr.debug('debug, is python path %s libpython %s' % (python_path, libpython))
+                            if libpython is not None:
+                                load_offset = self.soMap[self.target].getLoadOffset(libpython)
+                                if load_offset is None:
+                                    self.lgr.error('debug found no load offset for python path %s' % libpython)
+                                    return
+                                self.lgr.debug('debug, python load offset %s' % load_offset)
+                                self.fun_mgr = funMgr.FunMgr(self, cpu, cell_name, self.mem_utils[self.target], self.task_utils[self.target], self.lgr)
+                                self.lgr.debug('debug, python call get full path for %s' % libpython)
+                                full_path = self.targetFS[self.target].getFull(libpython, self.lgr)
+                                self.lgr.debug('debug, python got full path %s' % full_path)
+                                self.lgr.debug('debug, python call getIDAFuns')
+                                self.fun_mgr.getIDAFuns(full_path, root_prefix, load_offset)
+                                self.lgr.debug('debug, python back from getIDAFuns')
+                            
+                        else:
+                            self.lgr.error('debug, text segment None for %s' % self.full_path)
+                    if self.fun_mgr is not None:
+                        self.soMap[self.target].setFunMgr(self.fun_mgr, tid)
+                        if self.bookmarks is not None:
+                            self.bookmarks.setFunMgr(self.fun_mgr)
+                        self.dataWatch[self.target].setFunMgr(self.fun_mgr)
+
                     self.lgr.debug('create coverage module')
                     ida_path = self.getIdaData(self.full_path)
                     if ida_path is not None and self.target in self.soMap:
@@ -2935,7 +2957,7 @@ class GenMonitor():
             self.ignoreThreadList()
         return retval
  
-    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True, trace_file=None, no_gui=False):
+    def traceAll(self, target=None, record_fd=False, swapper_ok=False, call_params_list=[], track_threads=True, trace_file=None, no_gui=False, trace_malloc=False):
         if target is None:
             target = self.target
 
@@ -2994,6 +3016,8 @@ class GenMonitor():
                 self.trackThreads()
 
             self.traceMgr[target].open(tf, cpu)
+            if trace_malloc:
+                self.traceMalloc()
             if not self.isVxDKM(target=target) and not self.isWindows(target=target):
                 if not self.context_manager[self.target].watchingTasks() and track_threads:
                     self.traceProcs[target].watchAllExits()
@@ -5410,7 +5434,7 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         cell = self.cell_config.cell_context[self.target]
         self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
-               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr, comm=comm)
+               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr, comm=comm, trace_mgr=self.traceMgr[self.target])
 
     def showMalloc(self):
         self.trace_malloc.showList()
