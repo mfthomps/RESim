@@ -482,6 +482,7 @@ class SOMap():
             load_info = sort_map[locate]
             fpath = self.so_file_map[tid][load_info]
             full_path = self.getAnalysisPath(fpath)
+            self.lgr.debug('soMap setFunMgr path %s' % fpath)
             # TBD can we finally get rid of old style paths?
             #if full_path is None:
             #    full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
@@ -587,7 +588,29 @@ class SOMap():
                 else:
                     #print('tid:%s  no text found' % tid)
                     pass
-          
+         
+    def findSOPath(self, starts, tid=None):
+        retval = None
+        if tid is None:
+            cpu, comm, tid = self.task_utils.curThread() 
+        tid = self.getSOTid(tid)
+        if tid is None:
+            cpu, comm, tid = self.task_utils.curThread() 
+            print('no so map for %s' % tid)
+            self.lgr.debug('soMap findSOPath no so map for %s' % tid)
+            return None
+        if tid in self.so_file_map:
+            sort_map = {}
+            for load_info in self.so_file_map[tid]:
+                prog = self.so_file_map[tid][load_info]
+                self.lgr.debug('soMap findSOPath try %s' % prog)
+                if  os.path.basename(prog).startswith(starts):
+                    retval = prog
+                    break
+        else:
+            self.lgr.debug('soMap findSOPath tid:%s not in so_file_map' % tid)
+        return retval
+
     def showSO(self, tid=None, filter=None, save=False):
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
