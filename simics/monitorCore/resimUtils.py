@@ -544,6 +544,14 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
             lgr.debug('resimUtils getAnalysis got it %s' % retval)
+        else:
+            relative = fname[len(root_prefix)+1:]
+            lgr.debug('resimUtils getAnalysis try simlink relative %s' % relative)
+            analysis_path = os.path.join(top_dir, relative)+'.funs'
+            lgr.debug('resimUtils getAnalysis try path %s' % analysis_path)
+            if os.path.isfile(analysis_path):
+                retval = analysis_path[:-5]
+                lgr.debug('resimUtils getAnalysis symlink got it %s' % retval)
     else:
         if fname.startswith('/'):
             fname = fname[1:]
@@ -825,4 +833,17 @@ def getListFromComponentFile(top, cell_name, env_name, lgr):
         else:
             lgr.error('The ini file has not %s entry for component %s' % (env_name, cell_name))
             retval = None
+    return retval
+
+def getPyPath(prog_path):
+    retval = None
+    if os.path.isfile(prog_path):
+        with open(prog_path) as fh:
+            for line in fh:
+                if line.startswith('#!/'):
+                    rest = line[2:].strip()
+                    parts = rest.split()
+                    if len(parts) == 1:
+                        retval = rest
+                break
     return retval
