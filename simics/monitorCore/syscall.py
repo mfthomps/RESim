@@ -1464,12 +1464,16 @@ class Syscall():
                 else:
                     src_addr = frame['param5']
                     src_addr_len = frame['param6']
+                    self.lgr.debug('syscall %s src_addr 0x%x' % (socket_callname, src_addr))
                     #SIM_break_simulation('recvfrom param5 0x%x' % src_addr)
             if src_addr is not None and src_addr != 0:
                 source_ss = net.SockStruct(self.cpu, src_addr, self.mem_utils, fd=-1, lgr=self.lgr)
                 if source_ss.sa_family is not None:
                     exit_info.src_addr = src_addr
+                    self.lgr.debug('syscall %s sa_family %s src_addr 0x%x' % (socket_callname, source_ss.sa_family, src_addr))
                     exit_info.src_addr_len = src_addr_len
+                else:
+                    self.lgr.debug('syscall %s sa_family is None' % (socket_callname))
                 ida_msg = '%s - %s tid:%s (%s) FD: %d len: %d flags: 0x%x' % (callname, socket_callname, tid, comm, exit_info.old_fd, exit_info.count, exit_info.flags)
                 #if source_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
