@@ -839,11 +839,11 @@ class SOMap():
         if tid in self.so_file_map:
             if tid not in self.prog_start or self.prog_start[tid] is None:
                 self.lgr.warning('SOMap getSOFile tid:%s in so_file map but not prog_start' % tid)
-                return None
-            if self.prog_end[tid] is None:
+                #return None
+            elif tid not in self.prog_end or self.prog_end[tid] is None:
                 self.lgr.warning('SOMap getSOFile tid:%s in so_file map but None for prog_end' % tid)
-                return None
-            if addr_in >= self.prog_start[tid] and addr_in <= self.prog_end[tid]:
+                #return None
+            if tid in self.prog_start and tid in self.prog_end and addr_in >= self.prog_start[tid] and addr_in <= self.prog_end[tid]:
                 retval = self.text_prog[tid]
             else:
                 #for text_seg in sorted(self.so_file_map[tid]):
