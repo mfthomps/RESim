@@ -379,7 +379,8 @@ class DataWatch():
     def freadCallback(self, dumb, one, exception, error_string):
         self.lgr.debug('dataWatch freadCallback')
         #SIM_run_alone(self.context_manager.enableAll, None)
-        SIM_run_command('enable-vmp') 
+        if self.reverse_mgr.nativeReverse():
+            SIM_run_command('enable-vmp') 
         if self.call_stop_hap is not None:
             cycle_dif = self.cycles_was - self.cpu.cycles
             #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
@@ -3117,7 +3118,8 @@ class DataWatch():
  
     def hitCallStopHapAlone(self, called_from_reverse_mgr):
         self.context_manager.clearReverseContext()
-        SIM_run_command('enable-vmp') 
+        if self.reverse_mgr.nativeReverse():
+            SIM_run_command('enable-vmp') 
         
         ''' we are at the call to a memsomething, get the parameters '''
         eip = self.top.getEIP(self.cpu)
@@ -3259,7 +3261,8 @@ class DataWatch():
                 self.reverse_mgr.setCallback(alternate_callback)
             else:
                 self.call_stop_hap = self.top.RES_add_stop_callback(alternate_callback, None)
-        SIM_run_command('disable-vmp') 
+        if self.reverse_mgr.nativeReverse():
+            SIM_run_command('disable-vmp') 
         self.context_manager.setReverseContext()
         #if delta > 1000:
         #    print('would run this: %s' % rev_cmd)
@@ -6178,7 +6181,8 @@ class DataWatch():
         '''
         self.lgr.debug('dataWatch memcpyCheck cycle: 0x%x' % self.cpu.cycles)
         SIM_run_alone(self.enableBreaks, None)
-        SIM_run_command('enable-vmp') 
+        if self.reverse_mgr.nativeReverse():
+            SIM_run_command('enable-vmp') 
         cycle_dif = self.cycles_was - self.cpu.cycles
         #self.lgr.debug('hit CallStopHap will delete hap %d break %d cycle_dif 0x%x' % (self.call_hap, self.call_break, cycle_dif))
         if called_from_reverse_mgr is None:
