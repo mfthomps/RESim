@@ -1088,6 +1088,8 @@ class MemUtils():
    
 
         delta = param_xs_base - new_xs_base
+        if delta == 0:
+            return
         self.lgr.debug('memUtils adjustParam word size %d delta 0x%x' % (self.WORD_SIZE, delta))
 
         ''' Adjust parameters for ASLR '''
@@ -1143,10 +1145,15 @@ class MemUtils():
 
             self.param.syscall_compute = self.param.syscall_compute - delta
 
-            ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
-            self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if self.param.syscall_jump is not None:
+                ''' This value seems to get adjusted the other way.  TBD why? '''
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
+                self.param.syscall_jump = self.param.syscall_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if self.param.syscall64_jump is not None:
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall64_jump)
+                self.param.syscall_jump = self.param.syscall64_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall64_jump adjusted to 0x%x' % self.param.syscall64_jump)
 
         if self.param.sys_entry is not None and self.param.sys_entry != 0: 
             if self.WORD_SIZE==4:

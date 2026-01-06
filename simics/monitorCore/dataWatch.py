@@ -5815,7 +5815,8 @@ class DataWatch():
             return retval
         max_index = index - 1
         index_so = self.top.getSOFile(frames[index].ip)
-        if os.path.basename(index_so) == os.path.basename(self.top.getFullPath()):
+        path = self.top.getFullPath()
+        if path is not None and index_so is not None and os.path.basename(index_so) == os.path.basename(path):
             is_static = True
         else:
             is_static = False
@@ -5830,7 +5831,7 @@ class DataWatch():
                         self.lgr.debug('dataWatch checkFrames above, found main fun_of_ip: %s  so_file: %s' % (fun_of_ip, so_file))
                         retval = i
                         break
-                    elif not is_static and so_file is not None:
+                    elif not is_static and so_file is not None and path is not None:
                         if os.path.basename(so_file) == os.path.basename(self.top.getFullPath()):
                             self.lgr.debug('dataWatch checkFrames above, found so file %s is our program, return false' % so_file)
                             retval = i

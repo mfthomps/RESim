@@ -212,7 +212,7 @@ class WriteData():
         self.syscallManager = None
 
     def reset(self, in_data, expected_packet_count, addr):
-        self.lgr.debug('writeData reset')
+        #self.lgr.debug('writeData reset')
         self.in_data = in_data
         self.addr = addr
         self.expected_packet_count = expected_packet_count

@@ -455,6 +455,9 @@ class Dmod():
 
     def writeOpenReplace(self, tid, fd, the_bytes):
         key = '%s:%d' % (tid, fd) 
+        if self.primary is None:
+            self.lgr.error('dmod writeOpenReplace %s tid:%s fd: %d readOpenReplace NO primary' % (self.path, tid, fd))
+            return
         if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod writeOpenReplace %s tid:%s fd: %d readOpenReplace not in dictionary' % (self.path, tid, fd))
             return

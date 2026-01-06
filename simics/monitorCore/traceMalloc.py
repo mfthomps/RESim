@@ -1,6 +1,6 @@
 from simics import *
 class TraceMalloc():
-    def __init__(self, top, fun_mgr, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr, comm=None):
+    def __init__(self, top, fun_mgr, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr, comm=None, trace_mgr=None):
         self.fun_mgr = fun_mgr
         self.cell = cell
         self.cpu = cpu
@@ -18,14 +18,17 @@ class TraceMalloc():
         self.malloc_list = []
         self.current_malloc = {}
         self.comm = comm
+        self.trace_mgr = trace_mgr
         self.setBreaks()
 
     class MallocRec():
-        def __init__(self, tid, size, cycle):
+        def __init__(self, fun, tid, size, cycle, realloc_ptr=None):
+            self.fun = fun
             self.tid = tid
             self.size = size
             self.addr = None
             self.cycle = cycle
+            self.cycle = realloc_ptr
 
     def stopTrace(self):
         self.lgr.debug('traceMalloc stopTrace')
@@ -87,7 +90,7 @@ class TraceMalloc():
                 size = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
                 #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
             if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec(tid, size, cpu.cycles)
+                malloc_rec = self.MallocRec('malloc', tid, size, cpu.cycles)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
             else:
@@ -121,7 +124,7 @@ class TraceMalloc():
                 size = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE) * nmemb
                 #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
             if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec(tid, size, cpu.cycles)
+                malloc_rec = self.MallocRec('calloc', tid, size, cpu.cycles)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
             else:
@@ -156,7 +159,7 @@ class TraceMalloc():
                 size = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
                 #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
             if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec(tid, size, cpu.cycles)
+                malloc_rec = self.MallocRec('realloc', tid, size, cpu.cycles, realloc_ptr=ptr)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
                 if ptr in self.current_malloc:
@@ -182,6 +185,9 @@ class TraceMalloc():
                 #self.lgr.debug('free addr 0x%x' % addr)
             if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
                 self.dataWatch.recordFree(addr)
+                if self.trace_mgr is not None:
+                    msg = 'free 0x%x tid:%s (%s)' % (addr, tid, comm)
+                    self.trace_mgr.write(msg)
             if addr in self.current_malloc:
                 del self.current_malloc[addr] 
                 self.lgr.debug('TraceMalloc freeHap ********* freed 0x%x' % addr)
@@ -212,6 +218,12 @@ class TraceMalloc():
             self.context_manager.genDeleteHap(self.malloc_hap_ret)
             self.malloc_hap_ret = None
             self.dataWatch.recordMalloc(addr, malloc_rec.size)
+            if self.trace_mgr is not None:
+                if malloc_rec.realloc_ptr is not None:
+                    msg = '%s 0x%x size 0x%x freed: 0x%x tid:%s (%s)' % (malloc_rec.fun, addr, malloc_rec.size, malloc_rec.realloc_ptr, tid, comm)
+                else:
+                    msg = '%s 0x%x size 0x%x tid:%s (%s)' % (malloc_rec.fun, addr, malloc_rec.size, tid, comm)
+                self.trace_mgr.write(msg)
 
     def showList(self):
         for rec in self.malloc_list:
