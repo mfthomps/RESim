@@ -417,6 +417,7 @@ class Coverage():
     def recordHang(self, cycles):
         self.proc_status = 2
         self.lgr.debug('coverage recordhang of program under test cycle 0x%x' % cycles)
+        print('Hang ')
         SIM_break_simulation('did hang')
 
     def watchExits(self, tid=None, callback=None, suspend_callback=None):
@@ -1161,6 +1162,9 @@ class Coverage():
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
             self.analysis_path = self.top.getAnalysisPath(fname)
+            if self.analysis_path is None:
+                self.lgr.error('coverage enableCoverage no analysis for %s' % fname)
+                self.top.quit()
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
             if self.analysis_path is None:
