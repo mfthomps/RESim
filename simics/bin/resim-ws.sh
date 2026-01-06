@@ -41,6 +41,9 @@ if [ ! -d ./targets/qsp-x86 ]; then
 #   Configure for use with Free Simics
 #
     $RESIM_DIR/simics/bin/free-ws.sh
+    mkdir targets/x58-ich10
+    cd targets/x58-ich10
+    ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
 else
     cd targets/x58-ich10
     ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
