@@ -2615,7 +2615,7 @@ class Syscall():
                     pass
             elif self.param.sysexit is not None:
                 exit_eip1 = self.param.sysexit
-                if self.iretd is not None:
+                if self.param.iretd is not None:
                     exit_eip2 = self.param.iretd
                     if self.param.sysret64 is not None:
                         exit_eip3 = self.sysret64
