@@ -988,6 +988,11 @@ class GenMonitor():
     def doInit(self):
         ''' Entry point from launchRESim '''
         self.lgr.debug('genMonitor doInit')
+        bad_backstop = os.getenv('BACKSTOP_CYCLES')
+        if bad_backstop is not None:
+            self.lgr.error('Found BACKSTOP_CYCLES, replace that with BACK_STOP_CYLES')
+            self.quit()
+            return
         if self.run_from_snap is not None:
             self.snapInit()
             self.runScripts()
