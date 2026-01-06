@@ -121,6 +121,7 @@ class Directive():
         self.client = None
         self.header = None
         self.iface = None
+        self.resim_token = None
         self.ssl = False
         self.file = []
         self.commands = []
@@ -158,6 +159,8 @@ class Directive():
                     self.commands.append(value)
                 elif key == 'IFACE':
                     self.iface = value
+                elif key == 'RESIM_TOKEN':
+                    self.resim_token = value
                 elif key == 'HANG':
                     if value.lower() in ['true', 'yes']:
                         self.hang = True
@@ -175,6 +178,8 @@ class Directive():
             retval = retval + ' --hang'
         if self.ssl:
             retval = retval + ' --ssl'
+        if self.resim_token is not None:
+            retval = retval + ' --resim_token %s' % self.resim_token
         farg = ''
         for f in self.file:
             farg = farg + ' /tmp/%s' % os.path.basename(f)
@@ -216,6 +221,9 @@ def main():
                 client_cmd = 'clientudpJson'
         elif directive.session.lower() == 'tcp_json':
             client_cmd = 'clientTCPJson'
+        elif directive.session.lower() == 'ssl_json':
+            client_cmd = 'clientTCPJson'
+            directive.ssl = True
         elif directive.session.lower() == 'client':
             client_cmd = directive.client
         elif directive.session.lower() not in ['replay', 'command']:
