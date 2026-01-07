@@ -36,14 +36,13 @@ if [ "$1" == "-e" ]; then
     cp $RESIM_DIR/simics/workspace/README-cadet01.txt .
 fi
 here=`pwd`
-if [ ! -d ./targets/qsp-x86 ]; then
+#if [ ! -d ./targets/qsp-x86 ]; then
+if [ ! -d ./targets/x58-ich10 ]; then
 #
 #   Configure for use with Free Simics
 #
+    echo "Configuring for use with free Simics7"
     $RESIM_DIR/simics/bin/free-ws.sh
-    mkdir targets/x58-ich10
-    cd targets/x58-ich10
-    ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
 else
     cd targets/x58-ich10
     ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
