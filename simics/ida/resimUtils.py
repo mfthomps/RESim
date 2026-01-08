@@ -256,8 +256,8 @@ class ImportNames():
         x86_call_reg = {}
         for ea in self.imports:
             fun = self.imports[ea]
-            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
+            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             for ref in refs:
                 ref_instruct = idc.GetDisasm(ref)
                 print('\timports for 0x%x found ref 0x%x instruct %s' % (ea, ref, ref_instruct))
@@ -280,6 +280,12 @@ class ImportNames():
                             break
                         #instruct_len = ida_bytes.get_item_size(next_pc)
                         insn = idaapi.insn_t()
+
+                fun_refs = idautils.DataRefsTo(ref)
+                for fr in fun_refs:
+                    fr_instruct = idc.GetDisasm(fr)
+                    print('\t\tfun ref 0x%x %s' % (fr, fr_instruct))
+                    x86_call_reg[fr] = fun
 
         with open(fname+'.x86_call_reg', "w") as fh:
             json.dump(x86_call_reg, fh)
