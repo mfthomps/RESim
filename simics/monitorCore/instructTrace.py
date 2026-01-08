@@ -1,5 +1,6 @@
 from simics import *
 import cli
+import resimSimicsUtils
 class InstructTrace():
     def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False):
         self.top = top
@@ -13,8 +14,16 @@ class InstructTrace():
         cmd = 'pselect %s' % cpu.name
         dumb, ret = cli.quiet_run_command(cmd)
 
-        SIM_run_command('load-module trace')
-        tracer_name = SIM_run_command('new-tracer cell= %s' % cell_name)
+        self.version = resimSimicsUtils.version()
+        self.lgr.debug('Simics version is %s' % self.version)
+        if self.version.startswith('7'):
+            tracer_name = 'my_tracer'
+            file = '/tmp/'+fname
+            cmd = 'new-tracer-tool name=%s file=%s processors=%s' % (tracer_name, file, cpu.name)
+            SIM_run_command(cmd)
+        else:
+            SIM_run_command('load-module trace')
+            tracer_name = SIM_run_command('new-tracer cell= %s' % cell_name)
         self.tracer = SIM_get_object(tracer_name)
         self.all_proc = all_proc
         self.kernel = kernel
@@ -22,11 +31,13 @@ class InstructTrace():
         self.watch_threads = watch_threads
         self.just_tid = just_tid
         print('tracer is %s' % tracer_name)
-        tfile = '/tmp/%s' % fname
-        #cmd = 'output-file-start %s' % tfile
-        cmd = 'start-command-line-capture %s' % tfile
-        #cmd = '%s->file=%s' % (tracer_name, tfile)
-        SIM_run_command(cmd)
+        
+        if not self.version.startswith('7'):
+            tfile = '/tmp/%s' % fname
+            #cmd = 'output-file-start %s' % tfile
+            cmd = 'start-command-line-capture %s' % tfile
+            #cmd = '%s->file=%s' % (tracer_name, tfile)
+            SIM_run_command(cmd)
         print('begin, or what?')
         if just_kernel:
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, None)
@@ -38,17 +49,24 @@ class InstructTrace():
         tid = self.top.getTID()
         print('instructTrace starting tid is %s' % tid)
         self.lgr.debug('instructTrace starting tid is %s' % tid)
-        self.tracer.cli_cmds.start()
+        if not self.version.startswith('7'):
+            self.tracer.cli_cmds.start()
+        else:
+            self.tracer.cli_cmds.enable_instrumentation()
 
     def stop(self,dumb=None):
         tid = self.top.getTID()
         print('instructTrace stopping tid is %s' % tid)
         self.lgr.debug('instructTrace stopping tid is %s' % tid)
-        self.tracer.cli_cmds.stop()
+        if not self.version.startswith('7'):
+            self.tracer.cli_cmds.stop()
+        else:
+            self.tracer.cli_cmds.disable_instrumentation()
 
     def endTrace(self):
-        cmd = 'output-file-stop'
-        SIM_run_command(cmd)
+        if not self.version.startswith('7'):
+            cmd = 'output-file-stop'
+            SIM_run_command(cmd)
 
     def modeChanged(self, want_tid, one, old, new):
         this_tid = self.top.getTID()
