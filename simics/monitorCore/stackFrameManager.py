@@ -29,6 +29,7 @@ TBD remind me why stackTrace is per-call and not per target?
 from simics import *
 import stackTrace
 import elfText
+import resimUtils
 from resimHaps import *
 import os
 import pickle
@@ -51,6 +52,13 @@ class StackFrameManager():
         self.best_stack_base = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        ignore_bp = self.top.getCompDict(cell_name, 'IGNORE_BP')
+        if resimUtils.yesNoTrueFalse(ignore_bp):
+            self.use_bp = False
+            self.lgr.debug('stackFrameManager will ignore bp')
+        else:
+            self.use_bp = True
+
 
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
@@ -82,7 +90,7 @@ class StackFrameManager():
                
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                          self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib)
+                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib, use_bp=self.use_bp)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -123,7 +131,7 @@ class StackFrameManager():
                 reg_frame = self.task_utils.frameFromRegs()
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                         self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
+                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib, use_bp=self.use_bp)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
