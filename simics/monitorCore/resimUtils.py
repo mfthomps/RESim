@@ -619,7 +619,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
     return retval
 
-clib_dep = {'libc': 0,  'libstdc': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 'msvcp': 0, 'kernel32': 0, 'ucrtbase': 0, 'mswsock.dll': 2, 
+clib_dep = {'libc': 0,  'libstdc': 0, 'ld-musl-i386': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 'msvcp': 0, 'kernel32': 0, 'ucrtbase': 0, 'mswsock.dll': 2, 
              'ws2_32.dll':2, 'qt5core': 5, 'qt5network':4}
 
 def getClibIndex(fname):
