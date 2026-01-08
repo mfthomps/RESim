@@ -217,7 +217,7 @@ class ReverseMgr():
         else:
             SIM_take_snapshot(name)
         self.snapshot_names.append(name)
-        #self.lgr.debug('reverseMgr took snapshot %s' % name)
+        self.lgr.debug('reverseMgr took snapshot %s' % name)
 
     def getPreviousName(self, name):
         retval = None
@@ -620,7 +620,8 @@ class ReverseMgr():
             try:
                 retval = int(name[6:], 16)
             except:
-                self.lgr.error('reverseMgr getLatestSnapCycle failed on name %s' % name)
+                if name != 'origin':
+                    self.lgr.error('reverseMgr getLatestSnapCycle failed on name %s' % name)
         return retval
 
     def skipBackAndRunForward(self, first_skip):
