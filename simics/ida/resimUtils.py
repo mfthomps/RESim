@@ -256,8 +256,8 @@ class ImportNames():
         x86_call_reg = {}
         for ea in self.imports:
             fun = self.imports[ea]
-            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
+            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             for ref in refs:
                 ref_instruct = idc.GetDisasm(ref)
                 print('\timports for 0x%x found ref 0x%x instruct %s' % (ea, ref, ref_instruct))
@@ -280,21 +280,12 @@ class ImportNames():
                             break
                         #instruct_len = ida_bytes.get_item_size(next_pc)
                         insn = idaapi.insn_t()
-        for seg_ea in idautils.Segments():
-            seg_name = idaversion.get_segm_name(seg_ea)
-            if seg_name == 'extern':
-                start = idaversion.get_segm_attr(seg_ea, idc.SEGATTR_START)
-                end = idaversion.get_segm_attr(seg_ea, idc.SEGATTR_END)
-                for function_ea in idautils.Functions(start,  end):
-                    function_name = idaversion.get_func_name(function_ea)
-                    refs = idautils.CodeRefsTo(function_ea, False)
-                    print('extern fun %s' % function_name)
-                    for ref in refs:
-                        ref_instruct = idc.GetDisasm(ref)
-                        print('\textern for %s found ref 0x%x instruct %s' % (function_name, ref, ref_instruct))
-                        if ref_instruct.startswith('call') and 'ds' in ref_instruct: 
-                            if ref not in x86_call_reg:
-                                x86_call_reg[ref] = fun
+
+                fun_refs = idautils.DataRefsTo(ref)
+                for fr in fun_refs:
+                    fr_instruct = idc.GetDisasm(fr)
+                    print('\t\tfun ref 0x%x %s' % (fr, fr_instruct))
+                    x86_call_reg[fr] = fun
 
         with open(fname+'.x86_call_reg', "w") as fh:
             json.dump(x86_call_reg, fh)
