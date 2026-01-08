@@ -7140,9 +7140,10 @@ class GenMonitor():
         if hap is None and your_stop:
             self.lgr.debug('RES_delete_stop_hap haps was none, set to our stop_hap %s' % str(self.stop_hap))
             hap = self.stop_hap
-        SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
-        if your_stop:
-            self.stop_hap = None
+        if hap is not None:
+            SIM_hap_delete_callback_id('Core_Simulation_Stopped', hap)
+            if your_stop:
+                self.stop_hap = None
 
     def RES_delete_stop_hap_run_alone(self, hap, your_stop=False):
         # race condition of 2 stop haps existing?
@@ -7191,6 +7192,10 @@ class GenMonitor():
 
     def showSnapLen(self):
         self.reverse_mgr[self.target].showSnapLen()
+
+    def showBlr(self, addr):
+        blr = self.fun_mgr.getBlr(addr) 
+        print('blr for 0x%x is %s' % (addr, blr))
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
