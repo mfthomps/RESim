@@ -280,21 +280,6 @@ class ImportNames():
                             break
                         #instruct_len = ida_bytes.get_item_size(next_pc)
                         insn = idaapi.insn_t()
-        for seg_ea in idautils.Segments():
-            seg_name = idaversion.get_segm_name(seg_ea)
-            if seg_name == 'extern':
-                start = idaversion.get_segm_attr(seg_ea, idc.SEGATTR_START)
-                end = idaversion.get_segm_attr(seg_ea, idc.SEGATTR_END)
-                for function_ea in idautils.Functions(start,  end):
-                    function_name = idaversion.get_func_name(function_ea)
-                    refs = idautils.CodeRefsTo(function_ea, False)
-                    print('extern fun %s' % function_name)
-                    for ref in refs:
-                        ref_instruct = idc.GetDisasm(ref)
-                        print('\textern for %s found ref 0x%x instruct %s' % (function_name, ref, ref_instruct))
-                        if ref_instruct.startswith('call') and 'ds' in ref_instruct: 
-                            if ref not in x86_call_reg:
-                                x86_call_reg[ref] = fun
 
         with open(fname+'.x86_call_reg', "w") as fh:
             json.dump(x86_call_reg, fh)
