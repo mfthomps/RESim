@@ -206,7 +206,15 @@ class SOMap():
                                 self.prog_end[tid] = self.prog_start[tid] + self.prog_info[prog].text_size
                                 #self.lgr.debug('soMap loadPickle self.prog_start[%s] is 0x%x end changed to 0x%x' % (tid, self.prog_start[tid], self.prog_end[tid]))
                                 break
-
+                if version < 26:
+                    self.lgr.debug('Got version %d' % version)
+                    for tid in self.so_file_map:
+                        for load_info in self.so_file_map[tid]:
+                            prog = self.so_file_map[tid][load_info]
+                            self.lgr.debug('wtf prog is %s' % prog)
+                            if 'libubox.so' in prog:
+                                self.lgr.debug('Got bad libubox.so')
+                                load_info.addr = load_info.addr - 0x3000
             else:
                 # backward compatability, but only most recent
                 # TBD remove all this
