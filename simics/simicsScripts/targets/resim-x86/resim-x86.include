@@ -144,7 +144,7 @@ decl {
     param mac_address_2 : string
     param mac_address_3 : string
 
-    param eth_dev : string = "i82543gc"
+    param eth_dev : string = "i82559"
 
     param host_name       : string
 
