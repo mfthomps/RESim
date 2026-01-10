@@ -326,7 +326,12 @@ class LaunchRESim():
                 run_command (cmd)
                 cmd = '$host_name="driver"' 
                 run_command (cmd)
-                run_command('$eth_dev=i82543gc')
+                if not self.SIMICS_VER.startswith('7'):
+                    run_command('$eth_dev=i82543gc')
+                
+                if self.SIMICS_VER > '7.57.0':
+                    lgr.debug('Setting x86QSP3 for driver')
+                    run_command('$cpu_comp_class="x86QSP3"')
                 for name in self.comp_dict['driver']:
                     value = self.comp_dict['driver'][name]
                     if name.startswith('$'):
@@ -444,7 +449,10 @@ class LaunchRESim():
             #print('assign %s CLI variables' % section)
             ''' hack defaults, Simics CLI has no undefine operation '''
             if platform is None or not platform.startswith('arm'):
-                run_command('$eth_dev=i82543gc')
+                if not self.SIMICS_VER.startswith('7'):
+                    run_command('$eth_dev=i82543gc')
+                else:
+                    run_command('$eth_dev=i82559')
                 run_command('$mac_address_3=None')
             
             cmd = '$machine_name="%s"' % section
@@ -475,6 +483,10 @@ class LaunchRESim():
                         run_command(cmd)
             else:
                 run_command('$host_name=%s' % section)
+                if self.SIMICS_VER > '7.57.0':
+                    lgr.debug('Setting x86QSP3 for %s' % section)
+                    run_command('$cpu_comp_class="x86QSP3"')
+                    
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         if name == '$host_name':
@@ -489,10 +501,7 @@ class LaunchRESim():
                                 did_net_create = True
                                 cmd = 'create_network=TRUE eth_link=%s' % value
                             else:     
-                                if False and self.SIMICS_VER.startswith('7') and name[1:] == 'disk_image':
-                                    cmd = 'disk0_image=%s' % (value)
-                                else: 
-                                    cmd = '%s=%s' % (name[1:], value)
+                                cmd = '%s=%s' % (name[1:], value)
                             params = params + " "+cmd
                             if self.SIMICS_VER.startswith('4'):
                                run_command('$'+cmd)
