@@ -94,19 +94,20 @@ def getText(path, lgr):
             parts = line.strip().split()
             if is_dyn:
                 offset = int(parts[3], 16)
+                lgr.debug('Entry point, setting offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
             continue
         if '[Requesting program interpreter' in line:
             parts = line.strip().split()
             interp = parts[-1][:-1] 
-        if line.startswith('LOAD') and not is_dyn and is_aarch64 and offset is None:
+        if line.startswith('LOAD') and not is_dyn and is_aarch64 and offset is None and ' E ' in line:
             parts = line.strip().split()
             offset = int(parts[2], 16)
             size = int(parts[3], 16)
             if lgr is not None:
                 lgr.debug('readelf got LOAD offset 0x%x' % offset)
-        elif line.startswith('LOAD') and is_dyn and is_aarch64:
+        elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
             # not quite, but better
             if size is None:
                 size = 0
@@ -115,7 +116,8 @@ def getText(path, lgr):
             mem_size = int(parts[3], 16)
             size = addr_start + mem_size
             #lgr.debug('got size now 0x%x' % size)
-        elif line.startswith('LOAD') and is_dyn and not is_aarch64:
+        elif line.startswith('LOAD') and is_dyn and not is_aarch64 and ' E ' in line:
+            lgr.debug('found load in line %s' % line)
             # not quite, but better
             if size is None:
                 size = 0
@@ -123,7 +125,10 @@ def getText(path, lgr):
             addr_start = int(parts[2], 16)
             mem_size = int(parts[3], 16)
             size = addr_start + mem_size
-            lgr.debug('got size now 0x%x' % size)
+            lgr.debug('got size now 0x%x offset %s' % (size, str(offset)))
+            if offset is None or offset == 0:
+                offset = int(parts[2], 16)
+                lgr.debug('got offset 0x%x' % offset)
             
         ''' section numbering has whitespace '''
         hack = line[4:]
