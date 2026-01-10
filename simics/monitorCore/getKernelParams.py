@@ -1255,6 +1255,7 @@ class GetKernelParams():
             ptr2stack_prefix = 'mov rsp,qword ptr gs:'
             other_ptr2stack_prefix = 'mov qword ptr gs:'
             prefix = 'movsx r11,dword ptr [r10'
+            other_prefix = 'movsxd r11,dword ptr [r10'
             reg_num = self.cpu.iface.int_register.get_number("cr3")
             cr3 = self.cpu.iface.int_register.read(reg_num)
             starting_cr3 = cr3
@@ -1272,9 +1273,10 @@ class GetKernelParams():
                     last = instruct[1].split()[-1].strip()
                     content = last.split('[', 1)[1].split(']')[0]
                     if '0x60' in content:
-                        self.lgr.debug('stepCompute we believe there is no saved cr3 in this kernel')
+                        self.lgr.debug('stepCompute we believe there is a saved cr3 in this kernel')
                         no_cr3 = False
                     else:
+                        self.lgr.debug('stepCompute we believe there is no saved cr3 in this kernel')
                         no_cr3 = True
                     if not no_cr3:
                         value = int(content, 16)
@@ -1300,7 +1302,7 @@ class GetKernelParams():
                     self.param.ptr2stack = value
                     self.lgr.debug('stepCompute saved other ptr2stack as 0x%x' % value)
                        
-                elif instruct[1].startswith(prefix):
+                elif instruct[1].startswith(prefix) or instruct[1].startswith(other_prefix):
                     self.param.syscall_compute = rip
                     self.param.syscall_jump = self.mem_utils.getRegValue(self.cpu, 'r10')
                     self.lgr.debug('stepCompute win7 syscall_compute 0x%x syscall_jump 0x%x' % (self.param.syscall_compute, self.param.syscall_jump))
@@ -1308,7 +1310,7 @@ class GetKernelParams():
                     break
             #end while
             SIM_run_alone(self.setPageFaultHap, None)
-
+            # Above is Windows
         else:
             ''' find where we do the syscall jump table computation '''
             prefix = 'call dword ptr [eax*4'
