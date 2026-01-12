@@ -993,6 +993,10 @@ class GenMonitor():
             self.lgr.error('Found BACKSTOP_CYCLES, replace that with BACK_STOP_CYLES')
             self.quit()
             return
+        no_vmp = os.getenv('NO_VMP')
+        if resimUtils.yesNoTrueFalse(no_vmp): 
+            SIM_run_command('disable-vmp')
+            self.lgr.debug('Disabled vmp per ini file')
         if self.run_from_snap is not None:
             self.snapInit()
             self.runScripts()
@@ -4119,6 +4123,10 @@ class GenMonitor():
         ''' reset the reverse origin.  NOTE: if enable is true, will enable reversing whether 
             currently enabled or not '''
         self.lgr.debug('resetOrigin')
+        #if self.reverse_mgr[self.target].reverseEnabled and self.reverse_mgr[self.target].atOrigin():
+        #    self.lgr.debug('resetOrigin declining to do so because the current cycles is at the origin.')
+        #    return
+
         #could be called with tid as the parameter. 
         if cpu is None or type(cpu) is str:
             tid, cpu = self.context_manager[self.target].getDebugTid() 
