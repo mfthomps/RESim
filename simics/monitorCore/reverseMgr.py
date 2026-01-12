@@ -230,13 +230,18 @@ class ReverseMgr():
             retval = 'cycle_%x' % prev_cycle
         return retval
 
-    def restoreSnapshot(self, name):
-        self.lgr.debug('restoreSnapshot %s' % name)
+    def atOrigin(self):
+        if self.origin_cycle is not None and self.cpu.cycles == self.origin_cycle:
+            return True
+        else:
+            return False
+    def restoreSnapshot(self, name, force=False):
+        self.lgr.debug('reverseMgr restoreSnapshot %s' % name)
         self.disableSimBreaks()
         if name == 'origin':
             self.was_at_origin = True
-            if self.cpu.cycles == self.origin_cycle:
-                self.lgr.debug('restoreSnapshot to origin, already there')
+            if self.cpu.cycles == self.origin_cycle and not force:
+                self.lgr.debug('reverseMgr restoreSnapshot to origin, already there')
                 return
         if not self.version().startswith('7'):
             if self.oldSimics():
@@ -289,7 +294,10 @@ class ReverseMgr():
             else:
                 VT_restore_snapshot(name)
         else:
+            
+            #cli.quiet_run_command('disable-vmp')
             SIM_restore_snapshot(name)
+            #cli.quiet_run_command('enable-vmp')
         self.enableSimBreaks()
         self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
@@ -336,10 +344,10 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
             # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
             #self.restoreSnapshot('origin')
-            if two_step:
+            if False and two_step:
                 # Simics gets confused when restoring memory snapshots.  Doing an immediate restore often avoids
                 # that confusion, however it can interere with real networks. Set two_step when calling due to real world cut. 
-                self.skipToOrigin()
+                self.skipToOrigin(force=True)
                 self.lgr.debug('reverseMgr enableReverse did 2-step')
             self.setNextCycle()
         else:
@@ -1087,9 +1095,9 @@ class ReverseMgr():
         '''
         return self.cycle_span
 
-    def skipToOrigin(self):
+    def skipToOrigin(self, force=False):
         self.lgr.debug('reverseMgr skipToOrigin')
-        self.restoreSnapshot('origin')
+        self.restoreSnapshot('origin', force=force)
         if self.oldSimics():
             self.latest_span_end = None
 
