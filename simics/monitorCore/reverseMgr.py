@@ -90,7 +90,7 @@ class ReverseMgr():
             self.cycle_span = span
         parts = cli.quiet_run_command('version')
         self.version_string = parts[0][0][2]
-        self.lgr.debug('reverseMgr simics version %s' % self.version_string)
+        self.lgr.debug('reverseMgr simics version %s reverse cycle_span 0x%x' % (self.version_string, self.cycle_span))
         if self.oldSimics():
             cli.quiet_run_command('enable-unsupported-feature internals')
 
@@ -231,6 +231,7 @@ class ReverseMgr():
         return retval
 
     def restoreSnapshot(self, name):
+        self.lgr.debug('restoreSnapshot %s' % name)
         self.disableSimBreaks()
         if name == 'origin':
             self.was_at_origin = True
@@ -290,7 +291,7 @@ class ReverseMgr():
         else:
             SIM_restore_snapshot(name)
         self.enableSimBreaks()
-        #self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
+        self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
     def cycleHandlerAlone(self, cycles):
         if self.latest_span_end != self.cpu.cycles:
