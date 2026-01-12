@@ -743,7 +743,7 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
-            self.lgr.debug('syscall computeBreaks to syscallInfo add callnum %d entry 0x%x arm64_app %r' % (callnum, entry, arm64_app))
+            self.lgr.debug('syscall computeBreaks to syscallInfo add %s callnum %d entry 0x%x arm64_app %r' % (call, callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -1230,6 +1230,7 @@ class Syscall():
         if tid in self.comm_cache:
             comm = self.comm_cache[tid]
         ida_msg = None
+        self.lgr.debug('socketParse callname %s' % callname)
         if callname == 'socketcall':        
             ''' must be 32-bit get params from struct '''
             socket_callnum = frame['param1']
@@ -1441,8 +1442,15 @@ class Syscall():
                     self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                     if type(call_param.match_param) is int:
                         if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
-                            self.lgr.debug('did accept match')
-                            addParam(exit_info, call_param)
+                             if call_param.nth is not None:
+                                 #self.lgr.debug('socketParse accept has call_param.nth is %s' % str(call_param.nth))
+                                 call_param.count = call_param.count + 1
+                                 if call_param.count >= call_param.nth:
+                                     addParam(exit_info, call_param)
+                                     self.lgr.debug('did accept match on nth %d' % call_param.nth)
+                             else:
+                                 self.lgr.debug('did accept match')
+                                 addParam(exit_info, call_param)
 
         elif socket_callname == 'getsockname':
             ida_msg = '%s - %s tid:%s (%s) FD: %d' % (callname, socket_callname, tid, comm, exit_info.old_fd)
@@ -1718,6 +1726,9 @@ class Syscall():
             exit_info.fname, exit_info.fname_addr, exit_info.flags, exit_info.mode, ida_msg = self.parseOpen(frame, callname)
             if self.record_fd and exit_info.fname is not None and (exit_info.fname.endswith('localtime') or exit_info.fname.startswith('/proc/')):
                 return None
+            #if exit_info.fname == '/etc/localtime':
+            #    # remove this
+            #    return None
             if exit_info.fname is None and not quiet:
                 if exit_info.fname_addr is None:
                     self.lgr.debug('exit_info.fname_addr is none')
@@ -2641,7 +2652,7 @@ class Syscall():
                 frame['eip'] = self.mem_utils.readPtr(self.cpu, esp)
                 frame['esp'] = self.mem_utils.readPtr(self.cpu, esp+12)
                 frame_string = taskUtils.stringFromFrame(frame)
-                self.lgr.debug('syscall getExitAddrs sys_entry frame %s' % frame_string)
+                #self.lgr.debug('syscall getExitAddrs sys_entry frame %s' % frame_string)
             else:
                  self.lgr.debug('syscall getExitAddrs is param.sys_entry but frame is None')
             exit_eip1 = self.param.iretd
@@ -2691,7 +2702,7 @@ class Syscall():
                 #    self.lgr.debug('getExitAddrs calculated exit_eip1 0x%x No second exit' % exit_eip1)
             elif self.mem_utils.WORD_SIZE == 8:
                 if frame is None:
-                    self.lgr.debug('getExitAddrs calculated, word size 8')
+                    #self.lgr.debug('getExitAddrs calculated, word size 8')
                     if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                         frame = self.task_utils.frameFromStackSyscall()
                     else:
@@ -2701,7 +2712,7 @@ class Syscall():
                 exit_eip3 = self.param.sysret64
             else:
                 if frame is None:
-                    self.lgr.debug('getExitAddrs calculated, word size 4')
+                    #self.lgr.debug('getExitAddrs calculated, word size 4')
                     frame = self.task_utils.frameFromStackSyscall()
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd

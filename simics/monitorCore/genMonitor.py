@@ -3764,13 +3764,13 @@ class GenMonitor():
         self.lgr.debug('runToRead to %s' % str(substring))
         self.runTo(['read', 'clone', 'execve'], call_params, name='read', ignore_running=ignore_running)
 
-    def runToAccept(self, fd, flist=None, proc=None, run=True, linger=False):
+    def runToAccept(self, fd, flist=None, proc=None, run=True, linger=False, nth=None):
         if not self.isWindows():
             call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
         else:
             call = ['ACCEPT', '12083_ACCEPT', 'DuplicateObject']
         call_params = syscall.CallParams('runToAccept', 'accept', fd, break_simulation=True, proc=proc)        
-           
+        call_params.nth = nth   
         self.lgr.debug('runToAccept on FD: %d call is: %s linger %r' % (fd, str(call), linger))
         #if flist is None and not self.isWindows():
         #    linger = True
@@ -4712,6 +4712,14 @@ class GenMonitor():
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, 
                 offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None, track_malloc=False):
+        if fd == -1:
+            ida_msg = self.getIdaMessage()
+            fd_string = resimUtils.getTokenValue(ida_msg, 'new_fd:')
+            if fd_string is not None:
+                fd = int(fd_string)
+            else:
+                self.lgr.debug('trackIO fd -1, failed using last accept FD from ida_msg %s' % (ida_msg))
+                self.quit()
         if max_marks is None:
             max_marks = self.max_marks
         self.lgr.debug('trackIO fd: 0x%x max_marks %s count %d' % (fd, max_marks, count)) 
