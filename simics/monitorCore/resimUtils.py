@@ -847,3 +847,14 @@ def getPyPath(prog_path):
                         retval = rest
                 break
     return retval
+
+def getTokenValue(line, token):
+    retval = None
+    if line is not None:
+        if token in line:
+            parts = line.split(token, 1)
+            remain = parts[1].strip()
+            tparts = remain.split(' ')
+            retval = tparts[0].strip()
+    return retval
+
