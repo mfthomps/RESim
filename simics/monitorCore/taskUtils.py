@@ -1136,7 +1136,7 @@ class TaskUtils():
             else:
                 regs_addr = esp + self.mem_utils.WORD_SIZE
                 #regs = self.mem_utils.readPtr(self.cpu, regs_addr)
-                self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x' % (regs_addr))
+                #self.lgr.debug('frameFromStackSyscall regs_addr is 0x%x' % (regs_addr))
                 frame = self.getFrame(regs_addr, self.cpu)
         return frame
     
@@ -1158,7 +1158,7 @@ class TaskUtils():
     def getFrame(self, v_addr, cpu):
         retval = {}
         phys_addr = self.mem_utils.v2p(cpu, v_addr)
-        self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
+        #self.lgr.debug('getFrame, v_addr: 0x%x  phys_addr: 0x%x' % (v_addr, phys_addr))
         if phys_addr is not None:
             try:
                 retval['param1'] = SIM_read_phys_memory(cpu, phys_addr, self.mem_utils.WORD_SIZE)
