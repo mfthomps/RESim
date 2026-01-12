@@ -344,7 +344,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
             # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
             #self.restoreSnapshot('origin')
-            if False and two_step:
+            if two_step:
                 # Simics gets confused when restoring memory snapshots.  Doing an immediate restore often avoids
                 # that confusion, however it can interere with real networks. Set two_step when calling due to real world cut. 
                 self.skipToOrigin(force=True)
