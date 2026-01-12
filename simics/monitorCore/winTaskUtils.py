@@ -165,6 +165,8 @@ class WinTaskUtils():
                         if self.param.saved_cr3 is not None:
                             self.phys_current_task = value['current_task_phys']
                             self.phys_saved_cr3 = value['saved_cr3_phys']
+                        else:
+                            self.phys_current_task = value['current_task_phys']
                         if 'system_proc_rec' in value:
                             self.system_proc_rec = value['system_proc_rec']
                         else:
@@ -241,7 +243,11 @@ class WinTaskUtils():
             for pointed to by the given address of a thread record.
         '''
         retval = None
+        #self.lgr.debug('winTaskUtils getCurProcRec')
         if cur_thread_in is None:
+            if self.phys_current_task is None:
+                self.lgr.error('winTaskUtils getCurProcRec, no self.phys_current_task is None, bail')
+                return None
             cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
             cur_thread = self.mem_utils.getUnsigned(cur_thread)
         else:
@@ -518,7 +524,7 @@ class WinTaskUtils():
             #self.lgr.debug('winTaskUtils getTaskListPtr compre 0x%x to 0x%x' % (task_structs[t].next, look_for))
             if task_structs[t].next == look_for:
                 retval = t + self.param.ts_next
-                self.lgr.debug('winTaskUtils getTaskListPtr got rec pointing to 0x%x, it is 0x%x returning 0x%x' % (task_rec_addr, t, retval))
+                #self.lgr.debug('winTaskUtils getTaskListPtr got rec pointing to 0x%x, it is 0x%x returning 0x%x' % (task_rec_addr, t, retval))
                 break
         return retval 
  
@@ -566,19 +572,21 @@ class WinTaskUtils():
         ''' get a list of processes (EPROCESS)'''
         got = []
         done = False
-        #self.lgr.debug('getTaskList ')
+        self.lgr.debug('getTaskList ')
         if self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
-            #self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
+            self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
         else:
             dum, dum1, pid = self.curThread()
+            if dum is None:
+                return got
             if pid != 0:
                 task_ptr = self.getCurProcRec()
             else:
                 self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
                 return got
             self.lgr.debug('getTaskList using results of curThread??? 0x%x' % task_ptr)
-        #self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
+        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
         #self.lgr.debug('getTaskList returning %d tasks' % len(got))
         return got
@@ -593,6 +601,7 @@ class WinTaskUtils():
     
     def getTaskStructs(self):
         retval = {}
+        self.lgr.debug('getTaskStructs call getTaskList')
         task_list = self.getTaskList()
         for task in task_list:
             comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.commSize())
@@ -922,6 +931,7 @@ class WinTaskUtils():
 
     def getSystemProcRec(self):
         retval = None
+        self.lgr.debug('getSystemProcRec call getTaskStructs')
         ts_list = self.getTaskStructs()
         for ts in ts_list:
            if ts_list[ts].pid == 4:
