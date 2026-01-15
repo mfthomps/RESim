@@ -47,6 +47,8 @@ class DmodMgr():
         self.fd_mgr = fdMgr.FDMgr(self.lgr)
         # for maintaining parallel file system, e.g. for /sys and /var/run
         self.path_prefix = None
+        # optimization to prevent dmod checks until comm is scheduled
+        self.waiting_on_comm = {}
         self.setupFileSystem()
         self.handleDmods()
 
@@ -137,7 +139,7 @@ class DmodMgr():
             secondary_count = primary.getSecondaryCount()
             param_name = dfile+'_secondary'+'_%d' % secondary_count
         call_params = syscall.CallParams(param_name, operation, mod, break_simulation=break_simulation)        
-        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s param_name: %s' % (mod.toString(), dfile, self.cell_name, operation, param_name))
+        self.lgr.debug('dmodMgr runToDmod %s file %s cellname %s operation: %s param_name: %s' % (mod.toString(), dfile, self.cell_name, operation, param_name))
         name = 'dmod-%s' % operation
         if operation == 'open':
            # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
@@ -149,7 +151,7 @@ class DmodMgr():
                if self.mem_utils.WORD_SIZE == 8:
                    op_set.remove('_llseek')
                name = name+'_secondary'+'_%d' % secondary_count
-           self.lgr.debug('runToDmod file op_set now %s name %s' % (str(op_set), name))
+           self.lgr.debug('dmodMgr runToDmod file op_set now %s name %s' % (str(op_set), name))
         else:
            op_set = [operation]
         comm_running = False
@@ -158,24 +160,33 @@ class DmodMgr():
         for mod_comm in comm_list:
             tids = self.task_utils.getTidsForComm(mod_comm)
             if len(tids) == 0:
-                self.lgr.debug('runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
+                self.lgr.debug('dmodMgr runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
                 comms_not_running.append(mod_comm)
             else:
-                self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
+                self.lgr.debug('dmodMgr runToDmod, has comm that is runing, no callback needed.')
                 comm_running = True
                 break
         if comm_running or len(comm_list) == 0: 
-            self.lgr.debug('runToDmod, at least one comm running (or no comm specified), call runTo')
+            self.lgr.debug('dmodMgr runToDmod, at least one comm running (or no comm specified), call runTo')
             ignore_running = False
             if primary is not None:
                 ignore_running = True
             self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True, ignore_running=ignore_running)
         else:
-            self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
+            self.lgr.debug('dmodMgr runToDmod, no comm is running, use comm callback for each comm')
             mod.setCommCallback(op_set, call_params)
             for mod_comm in comms_not_running:
-                self.context_manager.callWhenFirstScheduled(mod_comm, mod.scheduled)
+                if mod_comm not in self.waiting_on_comm:
+                    self.context_manager.callWhenFirstScheduled(mod_comm, self.commScheduled)
+                    self.waiting_on_comm[mod_comm] = [] 
+                self.waiting_on_comm[mod_comm].append(mod)
         return retval
+
+    def commScheduled(self, tid):
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.lgr.debug('dmodMgr commScheduled for tid:%s (%s)' % (tid, comm))
+        for dmod in self.waiting_on_comm[comm]:
+            dmod.scheduled(tid)
 
     def setupFileSystem(self):
         self.path_prefix = './dmod_files'
