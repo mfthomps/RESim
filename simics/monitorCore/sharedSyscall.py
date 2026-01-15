@@ -1488,7 +1488,7 @@ class SharedSyscall():
             else:
                 trace_msg = err_trace_msg+'failed code: 0x%x cycle:0x%x\n' % (eax, self.cpu.cycles)
                 self.lgr.debug(trace_msg.strip()) 
-        elif callname in ['rename', 'stat64']:
+        elif callname in ['rename', 'stat64', 'newfstatat']:
             if exit_info.fname is None:
                 exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
                 trace_msg = trace_msg+(' fname: %s ' % exit_info.fname)
