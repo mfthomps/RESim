@@ -143,6 +143,7 @@ import doInUser
 import runToModeChange
 import myIPC
 import stupidClose
+import cycleCallback
 
 #import fsMgr
 import json
@@ -372,6 +373,9 @@ class GenMonitor():
         self.SIMICS_VER = resimSimicsUtils.version()
         # for diagnostics
         self.pending_stop_hap = None
+
+        # used in runToCycle
+        self.cycle_event_callback = {}
 
         ''' **** NO init data below here**** '''
         self.lgr.debug('genMonitor call genInit')
@@ -6205,12 +6209,18 @@ class GenMonitor():
         if cycle < cpu.cycles:
             print('Cannot use this function to run backwards.')
             return
+
         delta = cycle - cpu.cycles
         print('will run forward 0x%x cycles' % delta)
-        cmd = 'run count = 0x%x unit = cycles' % (delta)
-        self.lgr.debug('runToCycle 0x%x cmd %s' % (cycle, cmd))
-        SIM_run_command(cmd)
-        print('Done, at cycle 0x%x.' % cpu.cycles)
+        self.lgr.debug('runToCycle will run forward 0x%x cycles' % delta)
+        name = 'runToCycle'
+        if self.target not in self.cycle_event_callback:
+            self.cycle_event_callback[self.target] = cycleCallback.CycleCallback(cpu, name, self.lgr)
+        self.cycle_event_callback[self.target].setCallback(delta, self.stopAndCall, self.nowAtCycle)
+        SIM_continue(0)
+
+    def nowAtCycle(self):
+        print('Ran to cycle 0x%x' % self.cpu.cycles)
 
     def runToSeconds(self, seconds):
         self.rmDebugWarnHap()
