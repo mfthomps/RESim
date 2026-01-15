@@ -28,7 +28,7 @@ class TraceMalloc():
             self.size = size
             self.addr = None
             self.cycle = cycle
-            self.cycle = realloc_ptr
+            self.realloc_ptr = realloc_ptr
 
     def stopTrace(self):
         self.lgr.debug('traceMalloc stopTrace')
