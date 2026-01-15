@@ -2336,14 +2336,20 @@ class Syscall():
 
         elif callname == 'rt_sigaction':
             handler = self.mem_utils.readPtr(self.cpu, frame['param2'])
+            signum = frame['param1']
             if handler is not None and handler > 100:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
-                self.sig_handler[tid] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, self.syscall_info, proc_break, 'sig_handler')
-                self.lgr.debug('syscallHap %s set break on handler 0x%x' % (callname, handler))
+                if tid not in self.sig_handler:
+                    self.sig_handler[tid] = {}
+                if signum in self.sig_handler[tid]:
+                    self.lgr.debug('syscallHap %s will remove sig_handler for tid:%s (%s) signum %d' % (callname, tid, comm, signum))
+                    self.context_manager.genDeleteHap(self.sig_handler[tid][signum], immediate=False)
+                self.sig_handler[tid][signum] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, signum, proc_break, 'sig_handler')
+                self.lgr.debug('syscallHap %s set break on handler 0x%x tid:%s (%s) signum: %rd' % (callname, handler, tid, comm, signum))
             if handler is not None:
-                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, comm, frame['param1'], frame['param2'], handler)
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, comm, signum, frame['param2'], handler)
             else:
-                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x no handler found' % (callname, tid, comm, frame['param1'], frame['param2'])
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x no handler found' % (callname, tid, comm, signum, frame['param2'])
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
@@ -2357,7 +2363,7 @@ class Syscall():
                 ida_msg = '%s tid:%s (%s) path: not yet mapped? return buffer: 0x%x' % (callname, tid, comm, retval_addr) 
             else:
                 ida_msg = '%s tid:%s (%s) path_addr: 0x%x path: %s return buffer: 0x%x' % (callname, tid, comm, fname_addr, exit_info.fname, retval_addr)
-            self.checkDmod('stat64', exit_info, comm)
+            self.checkDmod(callname, exit_info, comm)
             #SIM_break_simulation(ida_msg)
             #return
         elif callname.startswith('fstat'):
@@ -2366,16 +2372,18 @@ class Syscall():
             exit_info.retval_addr = retval_addr
             exit_info.old_fd = fd
             ida_msg = '%s tid:%s (%s) FD: %d return buffer: 0x%x' % (callname, tid, comm, fd, retval_addr)
+            self.checkDmod(callname, exit_info, comm)
             #SIM_break_simulation(ida_msg)
             #return
         elif callname.startswith('newfstatat'):
             exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
-            fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
+            exit_info.fname = self.mem_utils.readString(self.cpu, fname_addr, 256)
             retval_addr = frame['param2']
             exit_info.retval_addr = retval_addr
             fd = resimSimicsUtils.fdString(exit_info.old_fd)
-            ida_msg = '%s tid:%s (%s) FD: %s file: %s return buffer: 0x%x' % (callname, tid, comm, fd, fname, retval_addr)
+            ida_msg = '%s tid:%s (%s) FD: %s file: %s return buffer: 0x%x' % (callname, tid, comm, fd, exit_info.fname, retval_addr)
+            self.checkDmod(callname, exit_info, comm)
         elif callname.startswith('faccessat'):
             exit_info.old_fd = frame['param1']
             fname_addr = frame['param2']
@@ -2525,12 +2533,13 @@ class Syscall():
                 if call_param.match_param.__class__.__name__ == 'Dmod':
                      mod = call_param.match_param
                      #self.lgr.debug('syscall checkDmod is Dmod kind %s operation %s' % (mod.kind, mod.operation))
-                     if mod.kind != 'syscall' or mod.operation != callname:
+                     if mod.kind != 'syscall' or not callname.startswith(mod.operation):
                          continue
                      if not call_param.match_param.commMatch(comm):
                          continue
                      # No point doing an re.search here since we may not have the file name yet.
                      # Doing so would maybe be possible as some optimization...
+                     self.lgr.debug('syscall checkDmod is Dmod comm %s mod %s' % (comm, mod.path))
                      exit_info.call_params.append(call_param)
                      #self.lgr.debug('syscall checkDmod is dmod, mod.getMatch is %s' % mod.getMatch())
                      #if mod.operation != 'getpid': 
@@ -2721,9 +2730,11 @@ class Syscall():
             #self.lgr.debug('frame string %s' % frame_string)
         return frame, exit_eip1, exit_eip2, exit_eip3
         
-    def sigHandlerHap(self, syscall_info, context, break_num, memory):
+    def sigHandlerHap(self, signum, context, break_num, memory):
         cpu, comm, tid = self.task_utils.curThread() 
-        ida_msg = 'signal handler tid: %s (%s)' % (tid, comm)
+        if tid not in self.sig_handler or signum not in self.sig_handler[tid]:
+            return
+        ida_msg = 'signal handler tid: %s (%s) signum: %d' % (tid, comm, signum)
         self.lgr.debug(ida_msg)
         #SIM_break_simulation(ida_msg)
 
