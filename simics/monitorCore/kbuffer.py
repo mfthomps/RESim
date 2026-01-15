@@ -117,7 +117,7 @@ class Kbuffer():
 
     def findArmBuf(self, dumb=None):
         # Find kernel buffers for arm processors.  First skip to the cycle that got us here, which is likely -1 from where we are
-        self.top.skipToCycle(self.write_cycle, disable=True)
+        self.top.skipToCycle(self.write_cycle, disable=True, cpu=self.cpu)
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('Kbuffer findArmBuf eip 0x%x  cycle: 0x%x, is ARM, expect a str: %s' % (eip, self.cpu.cycles, instruct[1]))
@@ -454,13 +454,6 @@ class Kbuffer():
           
     def rmAllHaps(self, immediate=False):
         self.lgr.debug('kbuffer rmAllHaps')
-        if self.count_write_hap is not None:
-            hap = self.count_write_hap
-            if immediate:
-                self.removeHap(hap, immediate=True)
-            else:
-                SIM_run_alone(self.removeHap, hap) 
-            self.write_hap = None
 
     def gotCommence(self):
         # DataWatch got the commence string.  We need to back-up pre syscall and redo the read/recv 
