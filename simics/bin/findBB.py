@@ -18,7 +18,7 @@ class FindBB():
         self.track_marks = {}
         self.hit_list = {}
 
-    def findBB(self, target, bb, quiet=False, get_all=False, lgr=None, auto=False):
+    def getBBList(self, target, bb, quiet=False, get_all=False, lgr=None, auto=False):
         '''
         Return a list of queue files that hit a given BB start address
         '''

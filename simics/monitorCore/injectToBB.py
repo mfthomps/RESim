@@ -46,7 +46,8 @@ class InjectToBB():
         #print('afl_target is %s' % afl_target)
         os_type = top.getTargetEnv('OS_TYPE')
         root_prefix = top.getTargetEnv('RESIM_ROOT_PREFIX')
-        flist = findBB.findBB(afl_target, bb, quiet=True, lgr=lgr)
+        find_bb = findBB.FindBB()
+        flist = find_bb.getBBList(afl_target, bb, quiet=True, lgr=lgr)
         self.lgr.debug('InjectToBB bb: 0x%x afl_target is %s len of flist is %d target_prog %s fname %s' % (bb, afl_target, len(flist), target_prog, fname))
         self.inject_io = None
         if target_prog is None:
@@ -67,7 +68,7 @@ class InjectToBB():
             trackfile = f.replace('queue', 'trackio')
             if not os.path.isfile(trackfile):
                 continue
-            mark, packet_num, num_resets = findBB.getWatchMark(trackfile, basic_block, prog)
+            mark, packet_num, num_resets = find_bb.getWatchMark(trackfile, basic_block, prog)
             if mark is not None:
                 self.lgr.debug('injectToBB, found data ref for %s at 0x%x' % (f, mark))
                 good_bb = mark
