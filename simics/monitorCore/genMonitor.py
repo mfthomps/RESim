@@ -144,6 +144,7 @@ import runToModeChange
 import myIPC
 import stupidClose
 import cycleCallback
+import watchMalloc
 
 #import fsMgr
 import json
@@ -258,13 +259,15 @@ class GenMonitor():
         self.full_path = None
 
         self.aflPlay = None
-        ''' What to call when a command completes from skipAndMail (if anything '''
+        # to call when a command completes from skipAndMail (if anything 
         self.command_callback = None
         self.command_callback_param = None
-        ''' Command to run when debug commences '''
+        # Command to run when debug commences 
         self.debug_callback = None
         self.dubug_callback_param = None
 
+        # Over-ride normal process exit handling, e.g., a segv during runPlay
+        self.exit_callback = None
         ''' TBD safe to reuse this?  helps when detecting iterative changes in address value '''
         self.find_kernel_write = None
 
@@ -4012,7 +4015,7 @@ class GenMonitor():
         self.lgr.debug('getLoadSize for %s got 0x%x, 0x%x' % (fname, start, size))
         return start, size
 
-    def getSO(self, eip, show_orig=False, target_cpu=None, just_name=False):
+    def getSO(self, eip, show_orig=False, target_cpu=None, just_name=False, with_fun=False):
         retval = None
         if target_cpu is None:
             target = self.target
@@ -4030,6 +4033,9 @@ class GenMonitor():
                 self.lgr.debug('getSO eip 0x%x start 0x%x image_base 0x%x' % (eip, start, image_base))
                 orig_str = ' orig address: 0x%x' % orig
                 retval = ('%s:0x%x-0x%x %s' % (fname, start, end, orig_str))
+            elif with_fun:
+                fun_name = self.getFunName(eip)
+                retval = ('%s:%s' % (fname, fun_name))
             elif just_name:
                 retval = ('%s' % (fname))
             else:
@@ -4670,6 +4676,11 @@ class GenMonitor():
         cpu = self.cell_config.cpuFromCell(self.target)
         fname = self.mem_utils[self.target].readString(cpu, addr, size)
         print(fname) 
+
+    def readPtr(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        retval = self.mem_utils[self.target].readPtr(cpu, addr)
+        return retval
 
     def retrack(self, clear=True, callback=None, use_backstop=True, run=False):
         self.lgr.debug('retrack')
@@ -5464,6 +5475,9 @@ class GenMonitor():
     def showMalloc(self):
         self.trace_malloc.showList()
 
+    def saveMalloc(self):
+        self.trace_malloc.saveJson()
+
     def stopTraceMalloc(self):
         if self.trace_malloc is not None:
             self.lgr.debug('stopTraceMalloc')
@@ -5760,6 +5774,13 @@ class GenMonitor():
 
     def getCommandCallback(self):
         return self.command_callback 
+
+    def setExitCallback(self, callback):
+        self.lgr.debug('setExitCallback to %s' % str(callback))
+        self.exit_callback = callback 
+
+    def getExitCallback(self):
+        return self.exit_callback 
 
     def findBNT(self, hits, fun_blocks):
         for bb in fun_blocks['blocks']:
@@ -7222,6 +7243,19 @@ class GenMonitor():
     def showBlr(self, addr):
         blr = self.fun_mgr.getBlr(addr) 
         print('blr for 0x%x is %s' % (addr, blr))
+
+    def watchMallocMem(self, path):
+        if not os.path.isfile(path):
+            print('watchMalloc: No file at %s' % path)
+            return
+        watch_malloc = watchMalloc.WatchMalloc(self, path, self.context_manager[self.target], self.lgr)
+        cpu = self.cell_config.cpuFromCell(self.target)
+        cell = self.cell_config.cell_context[self.target]
+        dumb_cpu, comm, this_tid = self.task_utils[self.target].curThread() 
+        self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
+               self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr, comm=comm, callback=watch_malloc.allocCallback)
+        watch_malloc.watch()
+        
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
