@@ -844,7 +844,7 @@ class PageFaultGen():
             return {}
 
     def handleExit(self, tid, leader, report_only=False):
-        ''' We believe a process has been killed.  Determine if three is a pending page fault. 
+        ''' We believe a process has been killed.  Determine if there is a pending page fault. 
             If the tid is within a thread group, look at all threads for most recent reference, assuming a 
             true fault is handled without rescheduling. 
             Return True if we think a segv occured
@@ -869,7 +869,10 @@ class PageFaultGen():
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  SEGV?' % recent_tid)
                 else:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  %s' % (recent_tid, self.pending_faults[recent_tid].name))
-                if not report_only:
+                exit_override = self.top.getExitCallback()
+                if exit_override is not None:
+                    exit_override()
+                elif not report_only:
                     if self.top.isRunning():
                         self.lgr.debug('pageFaultGen handleExit, is running, call hapAlone')
                         SIM_run_alone(self.hapAlone, self.pending_faults[recent_tid])
