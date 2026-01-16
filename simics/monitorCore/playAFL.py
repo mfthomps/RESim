@@ -379,6 +379,7 @@ class PlayAFL():
             #VT_take_snapshot('origin')
             cli.quiet_run_command('enable-unsupported-feature internals')
             cli.quiet_run_command('save-snapshot name = origin')
+            self.top.setDisableReverse()
 
     def finishInit(self):
         self.lgr.debug('playAFL finishInit')
@@ -621,6 +622,7 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
+            self.top.setExitCallback(self.reportExit)
             if not self.afl_mode:
                 self.lgr.debug('playAFL goAlone call watch tasks target tid %s' % self.target_tid)
                 self.context_manager.watchTasks(tid=self.target_tid)
