@@ -211,7 +211,6 @@ class SOMap():
                     for tid in self.so_file_map:
                         for load_info in self.so_file_map[tid]:
                             prog = self.so_file_map[tid][load_info]
-                            self.lgr.debug('wtf prog is %s' % prog)
                             if 'libubox.so' in prog:
                                 self.lgr.debug('Got bad libubox.so')
                                 load_info.addr = load_info.addr - 0x3000
