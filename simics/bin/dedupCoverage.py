@@ -99,7 +99,10 @@ def checkFileFirst(f, udp_header, hit_dict, args, prefix):
             hits = json.load(open(f))
         except:
             print('Failed loading json %s' % f)
-            exit(1)
+            if args.ignore_missing:
+                return
+            else:
+                exit(1)
 
         # Is there already a hit_dict entry having the exact same hits?
         numhits = len(hits)
@@ -252,6 +255,7 @@ def main():
     parser.add_argument('ini', action='store', help='The name of the ini file.')
     parser.add_argument('target', action='store', help='The AFL target, generally the name of the workspace.')
     parser.add_argument('-s', '--max_size', action='store', type=int, help='Eleminate queue files larger than this value.')
+    parser.add_argument('-i', '--ignore_missing', action='store_true', help='Ignore missing coverage files.')
     args = parser.parse_args()
     if args.target.endswith('/'):
         args.target = args.target[:-1]
