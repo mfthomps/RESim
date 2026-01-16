@@ -73,7 +73,7 @@ class Dmod():
         self.length = None
         self.primary = primary
         if primary is not None:
-            self.lgr.debug('wtf path %s primary %s' % (path, str(primary)))
+            self.lgr.debug('dmod path %s primary %s' % (path, str(primary)))
         self.secondary_count = 0
 
         # used for callback when comm of the dmod is first scheduled
@@ -446,8 +446,8 @@ class Dmod():
         key = '%s:%d' % (tid, fd) 
         if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod readOpenReplace %s tid:%s fd: %d readOpenReplace key %s not in dictionary' % (self.path, tid, fd, key))
-            for wtf in self.primary.open_replace_fh:
-                self.lgr.error('dmod key is %s' % key)
+            for bad_key in self.primary.open_replace_fh:
+                self.lgr.error('dmod readOpenReplace bad dmod key is %s' % key)
             return
         retval = self.primary.open_replace_fh[key].read(count)
         self.lgr.debug('dmod readOpenReplace read %d bytes %s' % (len(retval), str(retval)))
