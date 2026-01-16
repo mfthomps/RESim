@@ -1,6 +1,7 @@
 from simics import *
+import json
 class TraceMalloc():
-    def __init__(self, top, fun_mgr, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr, comm=None, trace_mgr=None):
+    def __init__(self, top, fun_mgr, context_manager, mem_utils, task_utils, cpu, cell, dataWatch, lgr, comm=None, trace_mgr=None, callback=None):
         self.fun_mgr = fun_mgr
         self.cell = cell
         self.cpu = cpu
@@ -19,6 +20,7 @@ class TraceMalloc():
         self.current_malloc = {}
         self.comm = comm
         self.trace_mgr = trace_mgr
+        self.callback = callback
         self.setBreaks()
 
     class MallocRec():
@@ -64,7 +66,8 @@ class TraceMalloc():
             else:
                 self.lgr.error('TraceMalloc, address of malloc not found in idaFuns')
         else:
-            self.lgr.debug('TraceMalloc no fun_mgr')
+            self.lgr.warning('TraceMalloc no fun_mgr')
+            print('TraceMalloc requested, no fun_mgr')
 
     def mallocHap(self, dumb, context, break_num, memory):
         if self.malloc_hap is not None:
@@ -188,6 +191,8 @@ class TraceMalloc():
                 if self.trace_mgr is not None:
                     msg = 'free 0x%x tid:%s (%s)' % (addr, tid, comm)
                     self.trace_mgr.write(msg)
+                if self.callback is not None:
+                    self.callback('free', addr)
             if addr in self.current_malloc:
                 del self.current_malloc[addr] 
                 self.lgr.debug('TraceMalloc freeHap ********* freed 0x%x' % addr)
@@ -224,6 +229,11 @@ class TraceMalloc():
                 else:
                     msg = '%s 0x%x size 0x%x tid:%s (%s)' % (malloc_rec.fun, addr, malloc_rec.size, tid, comm)
                 self.trace_mgr.write(msg)
+            if self.callback is not None:
+                if malloc_rec.realloc_ptr is not None:
+                    self.callback('realloc', addr, size=malloc_rec.size)
+                else:
+                    self.callback('malloc', addr, size=malloc_rec.size)
 
     def showList(self):
         for rec in self.malloc_list:
@@ -232,3 +242,15 @@ class TraceMalloc():
         for addr in self.current_malloc:
             rec = self.current_malloc[addr] 
             print('Current: %4s \t0x%x\t%d' % (rec.tid, rec.addr, rec.size))
+
+    def saveJson(self):
+        jlist = []
+        for addr in self.current_malloc:
+            rec = self.current_malloc[addr] 
+            jrec = {}
+            jrec['tid'] = rec.tid
+            jrec['addr'] = rec.addr
+            jrec['size'] = rec.size
+            jlist.append(jrec)
+        with open('/tmp/alloc.json', 'w') as fh:
+            fh.write(json.dumps(jlist))
