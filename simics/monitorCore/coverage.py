@@ -725,7 +725,7 @@ class Coverage():
             if not self.report_coverage:
                 # User wants to identify breakpoints hit by other threads so they can later be masked 
                 tid = self.top.getTID(target=self.cell_name)
-                self.lgr.debug('wtf create dead zone not report cover tid %s' % tid)
+                self.lgr.debug('coverage create dead zone not report cover tid %s' % tid)
                 if tid != self.tid:
                     self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_list)))
                     dead_set = True
