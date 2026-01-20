@@ -591,6 +591,7 @@ class PlayAFL():
             self.lgr.debug('playAFL here')
             if self.write_data is None:
                 count= self.doWriteData()
+                self.write_data.setHangCallback(self.reportSuspend)
             else:
                 self.lgr.debug('playAFL goAlone **** write_data not None ***')
                 count = 0
@@ -622,7 +623,8 @@ class PlayAFL():
             else:
                 self.context_manager.watchGroupExits()
                 self.context_manager.setExitCallback(self.reportExit)
-            self.top.setExitCallback(self.reportExit)
+            if self.dfile != 'oneplay':
+                self.top.setExitCallback(self.reportExit)
             if not self.afl_mode:
                 self.lgr.debug('playAFL goAlone call watch tasks target tid %s' % self.target_tid)
                 self.context_manager.watchTasks(tid=self.target_tid)
