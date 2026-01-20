@@ -3850,8 +3850,9 @@ class DataWatch():
                 op_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
                 if op_addr is not None:
                     value = self.mem_utils.readPtr(self.cpu, op_addr) 
-                    self.lgr.debug('dataWatch loopAdHoc %s setting reg_values[%s] to 0x%x' % (next_instruct[1], op1, value))
-                    reg_values[op1] = value
+                    if value is not None:
+                        self.lgr.debug('dataWatch loopAdHoc %s setting reg_values[%s] to 0x%x' % (next_instruct[1], op1, value))
+                        reg_values[op1] = value
 
             recent_instructs.append(next_instruct[1])
         #self.lgr.debug('dataWatch loopAdHoc exit move_cycles is %d' % move_cycles)
@@ -4761,7 +4762,7 @@ class DataWatch():
             ''' first data read, start data session if doing coverage '''
             self.top.startDataSessions()
         if self.cpu.cycles == self.prev_cycle and not self.undo_pending:
-            if index != self.prev_index:
+            if self.prev_index is not None and index != self.prev_index:
                 self.lgr.debug('readHap hit twice this index %d  previous index %d' % (index, self.prev_index))
                 if self.start[self.prev_index] is not None and self.start[index] is not None: 
                     self.lgr.debug('readHap prev start[%d] is 0x%x start for this is 0x%x' % (self.prev_index, self.start[self.prev_index], self.start[index]))
