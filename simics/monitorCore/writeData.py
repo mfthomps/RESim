@@ -210,6 +210,9 @@ class WriteData():
         self.watch_ioctl = False
         self.tracing_io = False
         self.syscallManager = None
+        self.hang_callback = None
+        self.bad_read_count = 0
+        self.bad_read_bytes = 0
 
     def reset(self, in_data, expected_packet_count, addr):
         #self.lgr.debug('writeData reset')
@@ -231,6 +234,8 @@ class WriteData():
         self.pending_select = None
         if self.backstop_delay is not None:
             self.backstop.setDelay(self.backstop_delay)
+        self.bad_read_count = 0
+        self.bad_read_bytes = 0
 
     def writeKdata(self, data):
         ''' write data to kernel buffers '''
@@ -655,8 +660,24 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr) and callname in ['recv', 'recvfrom', 'read']:
                 if (self.total_read + count) > self.read_limit:
                     self.kernel_buf_consumed = True
+                    self.bad_read_count += 1
+                    if self.bad_read_count > 10:
+                        self.lgr.debug('writeData callHap kernel consumed bad_read_count %d > 100, treat as hang' % self.bad_read_count)
+                        if self.hang_callback is not None:
+                            self.hang_callback()
                 elif peek == 0:
                     self.total_read = self.total_read + count
+                else:
+                    self.lgr.debug('writeData callHap bad_read_count %d total_read %d' % (self.bad_read_bytes, self.total_read))
+                    if self.bad_read_bytes == self.total_read:
+                        self.bad_read_count += 1
+                        if self.bad_read_count > 10:
+                            self.lgr.debug('writeData callHap bad_read_count %d > 100, treat as hang' % self.bad_read_count)
+                            if self.hang_callback is not None:
+                                self.hang_callback()
+                    else:
+                        self.bad_read_bytes = self.total_read
+
                 self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
             #self.lgr.debug('writeData callHap, callname  %s fd %s' % (callname, fd))
             if callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
@@ -1219,3 +1240,6 @@ class WriteData():
                 self.lgr.debug('writeData load add_of_count 0x%x' % (self.addr_of_count))
         else:
             self.lgr.debug('injectIO load, no pickle file at %s' % afl_file)
+
+    def setHangCallback(self, callback):
+        self.hang_callback = callback
