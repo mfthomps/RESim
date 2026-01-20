@@ -37,6 +37,10 @@ if [[ "$1" == "-64" ]]; then
 fi
 target=$1
 echo "target is $1"
+if [[ "$target" == /* ]]; then
+    echo "Will not run on an absolute path"
+    exit
+fi
 target_base="$(basename -- "$target")"
 echo "the target base is $target_base"
 here="$(pwd)"
