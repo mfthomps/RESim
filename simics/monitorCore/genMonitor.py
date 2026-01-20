@@ -4249,6 +4249,16 @@ class GenMonitor():
             self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
             self.clearBookmarks()
 
+    def writeBytesFromFile(self, fname, addr): 
+        if not os.path.isfile(fname):
+            print('No file at %s' % fname)
+            return
+        cpu = self.cell_config.cpuFromCell(self.target)
+        with open(fname, 'rb') as fh:
+            bstring = fh.read()
+            self.writeBytes(cpu, addr, bstring)
+      
+
     def writeBytes(self, cpu, address, bstring, target_cpu=None):
         if self.no_reset is not None:
             SIM_break_simulation('no reset')
@@ -4288,9 +4298,10 @@ class GenMonitor():
         if start is not None:
             self.lgr.debug('genMonitory watchData 0x%x count %d' % (start, length))
             msg = "User range 0x%x count %d" % (start, length)
+            self.dataWatch[self.target].enable()
             self.dataWatch[self.target].setRange(start, length, msg) 
         self.is_monitor_running.setRunning(True)
-        if self.dataWatch[self.target].watch(show_cmp):
+        if self.dataWatch[self.target].watch(show_cmp, break_simulation=False):
             self.continueForward()
             #SIM_continue(0)
         else: 
@@ -6240,8 +6251,9 @@ class GenMonitor():
         self.cycle_event_callback[self.target].setCallback(delta, self.stopAndCall, self.nowAtCycle)
         SIM_continue(0)
 
-    def nowAtCycle(self):
-        print('Ran to cycle 0x%x' % self.cpu.cycles)
+    def nowAtCycle(self, dumb=None):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        print('Ran to cycle 0x%x' % cpu.cycles)
 
     def runToSeconds(self, seconds):
         self.rmDebugWarnHap()
