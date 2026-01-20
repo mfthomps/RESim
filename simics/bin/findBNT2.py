@@ -28,7 +28,7 @@ def findReadMarks(bnt_list, target, prog, auto, quiet, no_reset, lgr):
     lgr.debug('findBNT findReadMarks')
     for entry in bnt_list:
         bb_hit = entry['source']
-        queue_list = find_bb.findBB(target, bb_hit, True, lgr=lgr, auto=auto) 
+        queue_list = find_bb.getBBList(target, bb_hit, True, lgr=lgr, auto=auto) 
         lgr.debug('findBNT findReadMarks len of qlist for bb_hit 0x%x is %d' % (bb_hit, len(queue_list)))
         least_packet = 100000
         least_size = 100000
