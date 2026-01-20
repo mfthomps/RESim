@@ -401,9 +401,12 @@ class SharedSyscall():
                 trace_msg = err_trace_msg+('error: %d\n' % (eax))
             #elif exit_info.sock_struct is not None and exit_info.sock_struct.addr != 0:
             elif exit_info.retval_addr is not None and exit_info.retval_addr != 0:
+                if exit_info.count_addr is None:
+                    self.lgr.debug('sharedSyscall accept with count_addr of None, maybe from in-kernel snapshot?  bailing')
+                    return 'unexpected'
                 #in_ss = exit_info.sock_struct
                 addr_len = self.mem_utils.readWord32(self.cpu, exit_info.count_addr)
-                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %d' % (exit_info.retval_addr, exit_info.count_addr, addr_len))
+                self.lgr.debug('accept addr 0x%x  len_addr 0x%x, len %s' % (exit_info.retval_addr, exit_info.count_addr, addr_len))
                 ss = net.SockStruct(self.cpu, exit_info.retval_addr, self.mem_utils)
                 if ss.sa_family == 1:
                     if tid in self.trace_procs:
