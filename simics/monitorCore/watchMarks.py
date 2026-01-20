@@ -406,7 +406,7 @@ class MallocMark():
     def __init__(self, addr, size):
         self.addr = addr
         self.size = size
-        self.msg = 'malloc addr: 0x%08x size: %d' % (addr, size)
+        self.msg = 'malloc addr: 0x%08x size: 0x%x' % (addr, size)
     def getMsg(self):
         return self.msg
 
