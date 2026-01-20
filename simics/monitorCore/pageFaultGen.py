@@ -847,7 +847,7 @@ class PageFaultGen():
         ''' We believe a process has been killed.  Determine if there is a pending page fault. 
             If the tid is within a thread group, look at all threads for most recent reference, assuming a 
             true fault is handled without rescheduling. 
-            Return True if we think a segv occured
+            Return True if we think a segv occured, and somebody should do something about it.
         '''
         retval = False
         self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d' % (tid, str(leader), len(self.pending_faults)))
@@ -871,7 +871,11 @@ class PageFaultGen():
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  %s' % (recent_tid, self.pending_faults[recent_tid].name))
                 exit_override = self.top.getExitCallback()
                 if exit_override is not None:
+                    self.lgr.debug('pageFaultGen handleExit tid:%s calling exit_override %s' % (tid, str(exit_override)))
+                    self.top.RES_delete_stop_hap(self.stop_hap)
+                    self.stop_hap = None
                     exit_override()
+                    retval = False
                 elif not report_only:
                     if self.top.isRunning():
                         self.lgr.debug('pageFaultGen handleExit, is running, call hapAlone')
