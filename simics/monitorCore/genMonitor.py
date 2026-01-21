@@ -4028,6 +4028,8 @@ class GenMonitor():
             if show_orig:
                 cpu, comm, tid = self.task_utils[target].curThread() 
                 image_base = self.soMap[target].getImageBase(fname)
+                if image_base is None:
+                    image_base = 0
                 delta = eip - start
                 orig = image_base+delta  
                 self.lgr.debug('getSO eip 0x%x start 0x%x image_base 0x%x' % (eip, start, image_base))
@@ -4249,7 +4251,7 @@ class GenMonitor():
             self.lgr.debug('writeString, disable reverse execution to clear bookmarks, then set origin')
             self.clearBookmarks()
 
-    def writeBytesFromFile(self, fname, addr): 
+    def writeBytesFromFile(self, fname, addr, watch=False): 
         if not os.path.isfile(fname):
             print('No file at %s' % fname)
             return
@@ -4257,6 +4259,9 @@ class GenMonitor():
         with open(fname, 'rb') as fh:
             bstring = fh.read()
             self.writeBytes(cpu, addr, bstring)
+            if watch:
+                self.watchData(start=addr, length=len(bstring))
+                print('Data watch set of 0x%x' % addr)
       
 
     def writeBytes(self, cpu, address, bstring, target_cpu=None):
