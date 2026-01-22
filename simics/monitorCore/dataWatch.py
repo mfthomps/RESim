@@ -216,6 +216,11 @@ class DataWatch():
             self.userFuns = userFuns.UserFuns(fun_file, self.cpu, self.mem_utils, self.lgr)
         else:
             self.userFuns = None
+
+        self.ignore_bp = self.top.getCompDict(cell_name, 'IGNORE_BP')
+        if self.ignore_bp:
+            self.lgr.debug('dataWatch ignoring bp means we think ret addr is at SP at call entry')
+
         self.function_no_watch = None
         self.callback = None
         self.last_byteswap = 0
@@ -1403,7 +1408,7 @@ class DataWatch():
             if buf_start is None:
                 buf_start = self.findRange(self.mem_something.src)
                 if buf_start is None:
-                    self.lgr.error('dataWatch returnHap failed to find a buf_start for 0x%x' % self.mem_something.src)
+                    self.lgr.debug('dataWatch returnHap failed to find a buf_start for 0x%x cycle: 0x%X' % (self.mem_something.src, self.cpu.cycles))
                     return
             if self.mem_something.fun == 'strtok':
                 self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
@@ -2096,8 +2101,8 @@ class DataWatch():
             return
 
         sp = self.mem_utils.getRegValue(self.cpu, 'sp') 
-        if self.top.isWindows():
-            # stack cookies?  TBD fix this
+        if self.top.isWindows() or self.ignore_bp:
+            # stack cookies?  Return address at SP? TBD fix this
             param_sp = sp + word_size
         else:
             param_sp = sp
@@ -2106,6 +2111,7 @@ class DataWatch():
         if self.mem_something.fun in mem_copyish_functions:
 
             self.mem_something.dest, self.mem_something.src, self.mem_something.length = self.getCallParams(param_sp, word_size)
+            self.lgr.debug('dataWatch memSomethingEntry dest 0x%x src 0x%x cycle 0x%x param_sp 0x%x word_size %d' % (self.mem_something.dest, self.mem_something.src, self.cpu.cycles, param_sp, word_size))
 
             if self.mem_something.length == 1:
                 self.lgr.debug('dataWatch memSomethingEntry size one, src 0x%x dest 0x%x let it go.  Will catch special case in readHap' % (self.mem_something.src, self.mem_something.dest))
@@ -5128,7 +5134,7 @@ class DataWatch():
         if self.length[index] == 0:
             self.lgr.error('dataWatch setOneBreak length for index %d is zero?  bail start of that index is 0x%x' % (index, self.start[index]))
             return
-        self.lgr.debug('dataWatch setOneBreak index %d  force_cr3 to 0x%x' % (index, self.range_cr3[index]))
+        #self.lgr.debug('dataWatch setOneBreak index %d  force_cr3 to 0x%x' % (index, self.range_cr3[index]))
         phys = self.mem_utils.v2p(self.cpu, self.start[index], force_cr3=self.range_cr3[index], do_log=False)
         #phys_block = self.cpu.iface.processor_info.logical_to_physical(self.start[index], Sim_Access_Read)
         #if index == 52:
@@ -5149,12 +5155,12 @@ class DataWatch():
         end = self.start[index] + (self.length[index] - 1)
         eip = self.top.getEIP(self.cpu)
         hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.readHap, index, break_num, 'dataWatch')
-        if phys is not None and phys != 0:
-            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
-                break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
-        else:
-            self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
-                break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
+        #if phys is not None and phys != 0:
+        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x (physical 0x%x, cr3: 0x%x) hap: %d index now %d number of read_haps was %d  cpu context:%s cycles: 0x%x' % (eip, 
+        #        break_num, self.start[index], end, self.length[index], phys, self.range_cr3[index], hap, index, len(self.read_hap), self.cpu.current_context, self.cpu.cycles))
+        #else:
+        #    self.lgr.debug('DataWatch setOneBreak eip: 0x%x Adding breakpoint %d for 0x%x-%x length 0x%x NO PHYS hap: %d index now %d number of read_haps was %d   cpu context:%s' % (eip, 
+        #        break_num, self.start[index], end, self.length[index], hap, index, len(self.read_hap), self.cpu.current_context))
         if not replace:
             self.read_hap.append(hap)
         else:
