@@ -39,6 +39,7 @@ class CycleCallback():
         use_name = '%s_cycle_callback' % name
         self.lgr.debug('cycleCallback register for name %s' % use_name)
         self.cycle_event = SIM_register_event(use_name, SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
+        self.pending_event = False
 
     def setCallback(self, cycles, callback, param):
         self.cycles = cycles
@@ -52,10 +53,11 @@ class CycleCallback():
         commence_cycle = self.cpu.cycles + self.cycles
         self.lgr.debug('cycleCallback setCycleHap posted cycle of 0x%x cpu: %s look for cycle 0x%x (%d)' % (self.cycles, self.cpu.name, commence_cycle, commence_cycle))
         SIM_event_post_cycle(self.cpu, self.cycle_event, self.cpu, self.cycles, self.cycles)
+        self.pending_event = True
 
 
     def cycle_handler(self, obj, cycles):
-        if self.cycle_event is None:
+        if not self.pending_event: 
             return
         self.lgr.debug('cycleCallback cycle_handler') 
         self.lgr.debug('cycleCallback cycle_handler now do callback')
@@ -65,7 +67,7 @@ class CycleCallback():
 
     def doCycleCallback(self, dumb):
         SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
-        self.cycle_event = None
+        self.pending_event = False
         self.lgr.debug('cycleCallback doCycleCallback')
         self.callback(self.param)
 
