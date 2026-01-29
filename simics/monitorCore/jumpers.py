@@ -361,13 +361,13 @@ class Jumpers():
                 by_4 = int(less_8 / 4)
                 instruct = 0xea000000 + by_4
                 self.lgr.debug('jumper setProgJumpers delta %d by_4 %d addr 0x%x instruct 0x%x' % (delta, by_4, addr, instruct))
-                self.top.writeWord(addr, instruct, target_cpu=self.cpu)
+                self.top.writeWord32(addr, instruct, target_cpu=self.cpu)
                 print('patched address 0x%x with word 0x%x' % (addr, instruct))
                 self.lgr.debug('jumpers setProgJumper patched address 0x%x with word 0x%x' % (addr, instruct))
             elif self.cpu.architecture == 'ppc32':
                 delta = jump_rec.to_addr - jump_rec.from_addr
                 instruct = 0x48000000 + delta
-                self.top.writeWord(addr, instruct, target_cpu=self.cpu)
+                self.top.writeWord32(addr, instruct, target_cpu=self.cpu)
                 print('patched address 0x%x with word 0x%x' % (addr, instruct))
                 self.lgr.debug('jumper setProgJumper patched address 0x%x with word 0x%x' % (addr, instruct))
             else:
@@ -377,7 +377,7 @@ class Jumpers():
 
         elif jump_rec.replace:
             self.lgr.debug('jumper setProgJumpers replace instruct at 0x%x with 0x%x' % (addr, jump_rec.to_addr))
-            self.top.writeWord(addr, jump_rec.to_addr, target_cpu=self.cpu)
+            self.top.writeWord32(addr, jump_rec.to_addr, target_cpu=self.cpu)
             print('replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
             self.lgr.debug('jumper setProgJumper replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
         else:
