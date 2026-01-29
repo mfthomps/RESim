@@ -28,24 +28,32 @@ and mask some of the failures while documenting them for analysis.
 RESim must be run with traceAll for this to work, e.g., trackThreads does not
 watch bind/sendmsg...
 '''
+import struct
 import net
 import resimUtils
 import os
+import binascii
+from simics import *
 class NetLink():
     def __init__(self, pid, group):
         self.pid = pid
         self.group = group
 
 class MyIPC():
-    def __init__(self, top, cpu, cell_name, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, param, lgr):
         self.lgr = lgr
         self.cpu = cpu
+        self.mem_utils = mem_utils
+        self.param = param
         self.top = top
         self.syscallManager = None
         self.good_binds = {}
         self.failed_binds = {}
         self.sockets = {}
+        self.no_select_list = []
+        self.pending_recv = {}
         self.ignore_comm = resimUtils.getListFromComponentFile(top, cell_name, 'IPC_IGNORE_COMM', lgr)
+        self.fake_ipc = resimUtils.getListFromComponentFile(top, cell_name, 'IPC_FAKE', lgr)
 
     def socket(self, tid, comm, fd, socket_info):
         if comm in self.ignore_comm:
@@ -67,6 +75,7 @@ class MyIPC():
             self.good_binds[tid][fd] = ss
 
     def bindFailed(self, tid, comm, fd, ss):
+        ''' return 0 if the bind failure is to be masked. '''
         if comm in self.ignore_comm:
             return None
         retval = None
@@ -78,8 +87,63 @@ class MyIPC():
             self.failed_binds[tid][fd] = ss
             retval = 0
         return retval
-            
+
+    def select(self, exit_info):
+        ''' return true if we will handle change in execution '''
+        retval = None
+        self.lgr.debug('myIPC select tid:%s' % exit_info.tid) 
+        tid = exit_info.tid 
+        comm = exit_info.comm 
+        eret_addr = self.param.arm_ret
+        if tid in self.failed_binds and comm in self.fake_ipc and comm not in self.no_select_list:
+            for fd in self.failed_binds[tid]:
+                if self.failed_binds[tid][fd] is not None: 
+                    #check_fd = self.failed_binds[tid][fd]
+                    has_fd = exit_info.select_info.hasReadFD(fd)
+                    self.lgr.debug('myIPC tid:%s (%s) select fd: %d  does select read have it? %r' % (tid, comm, fd, has_fd))
+                    if has_fd:
+                        retval = fd
+                        self.lgr.debug('myIPC select return address 0x%x' % eret_addr)
+                        exit_info.select_info.clearAll()
+                        exit_info.select_info.setReadFD(fd)
+                        self.lgr.debug('myIPC select cleared FDs and set read for %d' % fd)
+                        self.mem_utils.setRegValue(self.cpu, 'pc', eret_addr)
+                        self.mem_utils.setRegValue(self.cpu, 'syscall_ret', 1)
+                        #self.top.writeRegValue('syscall_ret', 1)
+                        self.no_select_list.append(comm)
+                        self.pending_recv[tid] = fd
+                        break
+        return retval        
+
+    def recvmsg(self, exit_info):
+        ''' return true if we will handle change in execution '''
+        retval = False
+        self.lgr.debug('myIPC recvmsg tid:%s' % exit_info.tid) 
+        tid = exit_info.tid 
+        comm = exit_info.comm 
+        peek = False
+        if exit_info.flags is not None:
+            self.lgr.debug('myIPC recvmsg is peek')
+            peek = exit_info.flags & net.MSG_PEEK
+        eret_addr = self.param.arm_ret
+        x='DEADBEEFBABABABA00'
+        dog = binascii.unhexlify(x)
+        dog_array=bytearray(dog)
+        if tid in self.pending_recv and self.pending_recv[tid] == exit_info.old_fd:
+            self.lgr.debug('myIPC recvmsg pending recieve for tid:%s FD: %d' % (tid, exit_info.old_fd))
+            exit_info.msghdr.setByteArray(dog_array)
+            retval = True
+            self.mem_utils.setRegValue(self.cpu, 'pc', eret_addr)
+            #self.mem_utils.setRegValue(self.cpu, 'syscall_ret', len(dog))
+            self.top.writeRegValue('syscall_ret', len(dog))
+            if not peek:
+                self.pending_recv[tid] = None
+            else:
+                self.lgr.debug('myIPC recvmsg was peek, repeat for next recvmsg call')
+        return retval    
+
     def doSyscalls(self):
+        #NOT USED
         call_list = ['socket', 'bind', 'sendmsg', 'recvmsg']
         call_params = []
         self.sys_calls = self.syscallManager.watchSyscall(None, call_list, call_params, 'myIPC', stop_on_call=False, linger=True)
