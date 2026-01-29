@@ -110,7 +110,7 @@ class REWatch(object):
             while bail_count < bail_max:
                 #lgr.debug('reWatch isCharLookup ip: 0x%x bail_count %d %s' % (next_ip, bail_count, next_instruct[1]))
                 op2, op1 = decode.getOperands(next_instruct[1])
-                if decode.isReg(op1) and decode.isAdd(cpu, next_instruct[1]) \
+                if op1 is not None and decode.isReg(op1) and decode.isAdd(cpu, next_instruct[1]) \
                           and our_reg in op2 and ',' in op2:
                     lgr.debug('reWatch isCharLookup may be character table lookup at 0x%x' % next_ip)
                     parts = op2.split(',')
