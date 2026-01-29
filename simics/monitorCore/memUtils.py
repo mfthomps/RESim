@@ -140,7 +140,15 @@ def testBit(int_value, bit):
 
 def clearBit(int_value, bit):
     mask = 1 << bit
-    return(int_value & ~mask)
+    retval = int_value & ~mask
+    retval = retval & 0xffffffff
+    return retval
+
+def setBit(int_value, bit):
+    mask = 1 << bit
+    retval = int_value | mask
+    retval = retval & 0xffffffff
+    return retval
 
 def bitRange(value, start, end):
     retval = None
@@ -725,12 +733,13 @@ class MemUtils():
         start = vaddr
         retval = ()
         while remain > 0:
+            self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
             count = min(remain, 1024)
             ps = self.v2p(cpu, start)
             if ps is not None:
                 remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
-                if remain_in_page < count:
-                    #self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
+                if remain_in_page <= count:
+                    self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
                     try:
                         first_read = readPhysBytes(cpu, ps, remain_in_page)
                     except ValueError:
@@ -758,7 +767,7 @@ class MemUtils():
                         retval = retval+readPhysBytes(cpu, ps, count)
                     except ValueError:
                         self.lgr.error('memUtils readBytes, second read %d bytes from  0x%x' % (count, ps))
-                    #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+                    #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (str(retval), ps))
             #else:
             #    self.lgr.error('memUtils readBytes addr 0x%x not mapped?' % vaddr)
             #self.lgr.debug('readBytes got %d' % len(retval))
