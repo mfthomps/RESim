@@ -15,9 +15,12 @@ def modifiesOp0(mn):
     return False
 
 def isReg(reg):
-    reg = reg.lower()
-    if reg in reglist:
-        return True
+    if reg is not None:
+        reg = reg.lower()
+        if reg in reglist:
+            return True
+        else:
+            return False 
     else:
         return False 
 
