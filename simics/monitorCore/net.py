@@ -304,8 +304,11 @@ class Msghdr():
         if self.msg_name is None:
             retval = 'msg_name not initialized'
         else:
-            retval = 'msg_name 0x%x  msg_namelen: %d  msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
-                 self.msg_namelen, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
+            msg_name = ''
+            if self.msg_namelen > 0:
+                msg_name = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen).hex()
+            retval = 'msg_name addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
+                 self.msg_namelen, msg_name, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
             iov_size = 2*self.mem_utils.wordSize(self.cpu)
             iov_addr = self.msg_iov
             iov_string = ''
@@ -367,3 +370,26 @@ class Msghdr():
                 iov_addr = iov_addr+iov_size
                 self.lgr.debug('len of byte tuple %d, current len of retval %d' % (len(byte_tuple), len(retval)))
         return retval
+
+    def setByteArray(self, the_bytes):
+        if self.msg_name is None:
+            retval = 'msg_name not initialized'
+        else:
+            iov_size = 2*self.mem_utils.wordSize(self.cpu)
+            iov_addr = self.msg_iov
+            iov_string = ''
+            limit = min(10, self.msg_iovlen)
+            self.lgr.debug('MsgHdr setByteArray msg_iovlen is %d iov_addr 0x%x  iov_size %d limit %d' % (self.msg_iovlen, iov_addr, iov_size, limit))
+            index = 0
+            for i in range(limit):
+                base = self.mem_utils.readAppPtr(self.cpu, iov_addr)
+                length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.mem_utils.wordSize(self.cpu))
+                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
+                end = index + length 
+                if end > len(the_bytes):
+                    end = len(the_bytes)
+                self.mem_utils.writeBytes(self.cpu, base, the_bytes[index:end])
+                iov_addr = iov_addr+iov_size
+                index = end
+                if index >= len(the_bytes):
+                    break
