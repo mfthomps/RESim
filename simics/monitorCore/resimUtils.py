@@ -831,7 +831,7 @@ def getListFromComponentFile(top, cell_name, env_name, lgr):
                         continue
                     retval.append(line.strip())
         else:
-            lgr.error('The ini file has not %s entry for component %s' % (env_name, cell_name))
+            lgr.error('The ini file has no %s entry for component %s' % (env_name, cell_name))
             retval = None
     return retval
 
