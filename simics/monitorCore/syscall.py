@@ -205,6 +205,9 @@ class SelectInfo():
             fd_list = fd_list+' except FD: %s' % except_list
         return fd_list
 
+    def getReadFDs(self):
+        return self.readfds
+
     def getString(self):
 
         return 'nfds: %d  readfds: %s writefds: %s exceptfds: %s timeout: 0x%x %s' % (self.nfds, 
@@ -235,6 +238,30 @@ class SelectInfo():
                     self.writeit(fd_set, new_value)
                     #self.lgr.debug('SelectInfo reset fdset new value 0x%x' % new_value)
 
+    def clearAll(self):
+        self.clearSet(self.readfds)
+        self.clearSet(self.writefds)
+        self.clearSet(self.exceptfds)
+
+    def clearSet(self, fd_set):
+        self.writeit(fd_set, 0)
+
+    def setReadFD(self, fd):
+        self.lgr.debug('SelectInfo setReadFD %d' % fd)
+        self.setFD(fd, self.readfds)
+
+    def setFD(self, fd, fd_set):
+        self.lgr.debug('SelectInfo setFD fd %d nfds %d ' % (fd, self.nfds))
+        if fd < self.nfds:
+            self.lgr.debug('SelectInfo set fd %d' % fd)
+            if fd_set is not None:
+                read_low, read_high = self.readit(fd_set)
+                if read_low is not None:
+                    the_set = read_low | (read_high << 32) 
+                    new_value = memUtils.setBit(the_set, fd)
+                    self.writeit(fd_set, new_value)
+                    self.lgr.debug('SelectInfo set fdset new value 0x%x fd_set 0x%x orig value 0x%x' % (new_value, fd_set, the_set))
+
     def getFDString(self, fd_set):
         retval = ''
         for i in range(0, self.nfds):
@@ -248,6 +275,12 @@ class SelectInfo():
     def hasFD(self, fd):
         retval = False
         if self.setHasFD(fd, self.readfds) or self.setHasFD(fd, self.writefds) or self.setHasFD(fd, self.exceptfds):
+            retval = True
+        return retval 
+
+    def hasReadFD(self, fd):
+        retval = False
+        if self.setHasFD(fd, self.readfds):
             retval = True
         return retval 
 
@@ -475,11 +508,12 @@ skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
 class Syscall():
 
     def __init__(self, top, cell_name, cell, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, call_list=None, trace = False, flist_in=None, soMap = None, 
+                   traceMgr, myIPC, call_list=None, trace = False, flist_in=None, soMap = None, 
                    call_params=[], netInfo=None, binders=None, connectors=None, stop_on_call=False, targetFS=None, skip_and_mail=True, linger=False,
                    compat32=False, background=False, name=None, record_fd=False, callback=None, swapper_ok=False, kbuffer=None): 
         self.lgr = lgr
         self.traceMgr = traceMgr
+        self.myIPC = myIPC
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.context_manager = context_manager
@@ -1514,34 +1548,16 @@ class Syscall():
         elif socket_callname == "recvmsg": 
             #frame_string = taskUtils.stringFromFrame(frame)
             #self.lgr.debug('recvmsg frame %s' % frame_string)
-            if self.cpu.architecture.startswith('arm'):
-                exit_info.old_fd = frame['param1']
-                msg_hdr_ptr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
-                self.lgr.debug(ida_msg) 
-            elif self.mem_utils.WORD_SIZE==8 and not syscall_info.compat32:
-                exit_info.old_fd = frame['param1']
-                exit_info.retval_addr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, frame['param2'], self.lgr)
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, frame['param2'], msghdr.getString())
- 
-            else:
-                exit_info.old_fd = frame['param1']
-                msg_hdr_ptr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
-                self.lgr.debug(ida_msg) 
-                #self.lgr.error('syscall recvmsg not yet built for 32bit x86!')
-                #return
-                #''' TBD is this right for x86 32?'''
-                #params = frame['param2']
-                #exit_info.old_fd = self.mem_utils.readWord32(self.cpu, params)
-                #msg_hdr_ptr = self.mem_utils.readWord32(self.cpu, params+4)
-                #exit_info.retval_addr = msg_hdr_ptr
-                #msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                #ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+            exit_info.old_fd = frame['param1']
+            msg_hdr_ptr = frame['param2']
+            exit_info.retval_addr = frame['param2']
+            exit_info.flags = frame['param3']
+            msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+            ida_msg = '%s - %s tid:%s (%s) FD: %d flags: 0x%x msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, exit_info.flags, msghdr.getString())
+            self.lgr.debug(ida_msg) 
             exit_info.msghdr = msghdr
+            if self.myIPC is not None:
+                self.myIPC.recvmsg(exit_info)
             sock_param = self.sockwatch.getParam(tid, exit_info.old_fd)
             if sock_param is not None:
                 exit_info.call_params.append(sock_param)
@@ -1558,25 +1574,13 @@ class Syscall():
             
         elif socket_callname == "sendmsg":
             # TBD Not complete
-            if self.cpu.architecture.startswith('arm') or self.cpu.architecture == 'ppc32':
-                exit_info.old_fd = frame['param1']
-                msg_hdr_ptr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                exit_info.msghdr = msghdr
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
-                self.lgr.debug(ida_msg) 
-                #SIM_break_simulation('sendmsg')
-            elif self.mem_utils.WORD_SIZE == 4:
-                exit_info.old_fd = frame['param1']
-                msg_hdr_ptr = frame['param2']
-                msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
-                exit_info.msghdr = msghdr
-                ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
-                self.lgr.debug(ida_msg) 
-            else:
-                self.lgr.error('syscall sendmsg not yet built for x86!')
-                return
-                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d' % (callname, socket_callname, tid, comm, exit_info.retval_addr, exit_info.old_fd)
+            exit_info.old_fd = frame['param1']
+            msg_hdr_ptr = frame['param2']
+            msghdr = net.Msghdr(self.cpu, self.mem_utils, msg_hdr_ptr, self.lgr)
+            exit_info.msghdr = msghdr
+            ida_msg = '%s - %s tid:%s (%s) FD: %d msghdr: 0x%x %s' % (callname, socket_callname, tid, comm, exit_info.old_fd, msg_hdr_ptr, msghdr.getString())
+            self.lgr.debug(ida_msg) 
+            #SIM_break_simulation('sendmsg')
             self.checkSendParams(syscall_info, exit_info, None, None, None)
 
         elif socket_callname == "send" or socket_callname == "sendto":
@@ -1708,7 +1712,7 @@ class Syscall():
                     if call_param.subcall != callname and (self.call_list is not None and callname not in self.call_list):
                         self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
                         bail_if_not_got = True
-                    else:
+                    elif call_param.subcall == callname:
                         if self.stop_on_call:
                             do_stop_from_call = True
                         exit_info.call_params.append(call_param)
@@ -2268,6 +2272,13 @@ class Syscall():
             if self.sharedSyscall.checkSelectFixup(exit_info):
                 self.lgr.debug('%s sharedSyscall says this select is fatal, bail' % (callname))
                 return
+            if self.myIPC is not None:
+                fd_to_fake = self.myIPC.select(exit_info)
+                if fd_to_fake is not None:
+                    self.lgr.debug('myIPC says this select is to be bypassed, it will handle the jump to return')
+                    self.fd_to_fake = fd_to_fake 
+                    #SIM_break_simulation('remove this')
+                    #return 
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.select_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('call param found %d' % (call_param.match_param))
@@ -2500,8 +2511,17 @@ class Syscall():
             offset = frame['param3']
             exit_info.count = frame['param4']
             ida_msg = '%s tid:%s (%s) out_fd: 0x%x in_fd: 0x%x offset_addr 0x%x count 0x%x' % (callname, tid, comm, exit_info.old_fd, exit_info.new_fd, offset, exit_info.count)
+        elif callname == "inotify_init1":
+            exit_info.flags = frame['param1']
+            ida_msg = '%s tid:%s (%s) flags: 0x%x' % (callname, tid, comm, exit_info.flags)
 
-            
+        elif callname == "inotify_add_watch":
+            exit_info.old_fd = frame['param1']
+            exit_info.fname_addr = frame['param2']
+            exit_info.fname = self.mem_utils.readString(self.cpu, exit_info.fname_addr, 256)
+            exit_info.flags = frame['param3']
+            ida_msg = '%s tid:%s (%s) FD: %d path: %s mask: 0x%x' % (callname, tid, comm, exit_info.old_fd, exit_info.fname, exit_info.flags) 
+
         else:
             ida_msg = '%s %s   tid:%s (%s) cycle:0x%x\n' % (callname, taskUtils.stringFromFrame(frame), tid, comm, self.cpu.cycles)
             self.lgr.debug(ida_msg)
