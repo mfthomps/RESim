@@ -306,7 +306,10 @@ class Msghdr():
         else:
             msg_name = ''
             if self.msg_namelen > 0:
-                msg_name = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen).hex()
+                if self.msg_namelen > 100:
+                    self.lgr.error('net MsgHeader getString msg_namelen seems large %d' % self.msg_namelen)
+                else:
+                    msg_name = self.mem_utils.readBytes(self.cpu, self.msg_name, self.msg_namelen).hex()
             retval = 'msg_name addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
                  self.msg_namelen, msg_name, self.msg_iov, self.msg_iovlen, self.msg_control, self.msg_controllen, self.flags)
             iov_size = 2*self.mem_utils.wordSize(self.cpu)
