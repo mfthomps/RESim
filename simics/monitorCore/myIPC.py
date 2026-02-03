@@ -91,6 +91,10 @@ class MyIPC():
     def select(self, exit_info):
         ''' return true if we will handle change in execution '''
         retval = None
+
+        return retval
+
+
         self.lgr.debug('myIPC select tid:%s' % exit_info.tid) 
         tid = exit_info.tid 
         comm = exit_info.comm 
@@ -118,6 +122,8 @@ class MyIPC():
     def recvmsg(self, exit_info):
         ''' return true if we will handle change in execution '''
         retval = False
+
+        return retval
         self.lgr.debug('myIPC recvmsg tid:%s' % exit_info.tid) 
         tid = exit_info.tid 
         comm = exit_info.comm 
