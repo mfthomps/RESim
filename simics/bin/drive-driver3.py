@@ -122,6 +122,7 @@ class Directive():
         self.header = None
         self.iface = None
         self.resim_token = None
+        self.program_file = None
         self.ssl = False
         self.file = []
         self.commands = []
@@ -161,6 +162,8 @@ class Directive():
                     self.iface = value
                 elif key == 'RESIM_TOKEN':
                     self.resim_token = value
+                elif key == 'PROGRAM_FILE':
+                    self.program_file = value
                 elif key == 'HANG':
                     if value.lower() in ['true', 'yes']:
                         self.hang = True
@@ -205,6 +208,7 @@ def main():
     PORT = 6459
     target = (host, PORT)
     client_cmd = None
+    client_path = None
     # NOTE client_cmd defaults to clientudpMult3, unless replay
     if directive.session is not None:
         if directive.session.lower() == 'servertcp':
@@ -214,6 +218,10 @@ def main():
         elif directive.session.lower() == 'ssl':
             client_cmd = 'clientTCP3'
             directive.ssl = True
+        elif directive.session.lower() == 'my_program':
+            client_cmd = directive.program_file
+            client_path = directive.program_file
+            
         elif directive.session.lower() == 'udp_json':
             if directive.src_ip is not None:
                 client_cmd = 'clientudpJsonScapy'
@@ -231,7 +239,7 @@ def main():
         if client_cmd is not None:
             if directive.client is not None:
                 client_path = directive.client
-            else:
+            elif client_path is None:
                 client_path = os.path.join(core_path, client_cmd)
             sendFiles([client_path], sock, target)
             cmd='/bin/chmod a+x /tmp/%s' % client_cmd
