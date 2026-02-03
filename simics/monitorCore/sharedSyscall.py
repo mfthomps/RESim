@@ -464,6 +464,7 @@ class SharedSyscall():
                 ''' byte_array is a tuple of bytes'''
                 if byte_array is not None:
                     s = resimUtils.getHexDump(byte_array[:nbytes])
+                    self.lgr.debug('sharedSyscall %s nbytes: %d len of s %d  len of byte_array %d' % (socket_callname, nbytes, len(s), len(byte_array)))
                     if self.traceFiles is not None:
                         self.traceFiles.write(tid, comm, exit_info.old_fd, byte_array)
                 else:
@@ -472,8 +473,8 @@ class SharedSyscall():
                 if exit_info.retval_addr is None:
                     self.lgr.error('sharedSyscall %s failed to get retval addr' % socket_callname)
                     return
-                trace_msg = trace_msg+('FD: %d, count: %d from 0x%x cycle: 0x%x eip: 0x%x data:\n%s\n' % (exit_info.old_fd, 
-                    eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
+                trace_msg = trace_msg+('FD: %d, len: %d count: %d from 0x%x cycle: 0x%x eip: 0x%x data:\n%s\n' % (exit_info.old_fd, 
+                    exit_info.count, eax, exit_info.retval_addr, self.cpu.cycles, eip, s))
             else:
                 trace_msg = err_trace_msg+('FD: %d, exception: %d\n' % (exit_info.old_fd, eax))
 
@@ -960,7 +961,8 @@ class SharedSyscall():
                             self.top.writeRegValue('syscall_ret', forced_fd, alone=True)
                             if self.cpu.architecture == 'ppc32':
                                 self.top.writeRegValue('cr', 0x40000002, alone=True)
-                            trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
+                            #trace_msg = trace_msg+('file: %s DMOD! forced return FD of %d \n' % (exit_info.fname, forced_fd))
+                            trace_msg = trace_msg+(' DMOD! forced return FD of %d \n' % (forced_fd))
                             self.top.runToSecondaryDmod(dmod)
                         exit_info.matched_param = None
             for call_param in exit_info.call_params:
@@ -1006,6 +1008,7 @@ class SharedSyscall():
                         if dmod.kind != 'open_replace':
                             continue
                         if dmod.primary is None:
+                            # means the dmod is the itself a primary
                             continue
                         has_fd_open = dmod.hasFDOpen(tid, exit_info.old_fd)
                         if has_fd_open:
@@ -1024,6 +1027,8 @@ class SharedSyscall():
                                     self.lgr.debug('sharedSyscall dmod open_replace read, look at call_param %s' % call_param.name)
                                     if self.checkStringMatch(call_param, exit_info, becomes, callname, tid):
                                         break
+                            else:
+                                self.top.writeRegValue('syscall_ret', 0, alone=True)
                             eax = length
                             trace_msg = trace_msg+('FD: %d forced return val to %d\n' % (exit_info.old_fd, length))
                             break
@@ -1097,6 +1102,9 @@ class SharedSyscall():
                 self.lgr.debug('sharedSyscall write failed, see if it is dmod')
                 for call_param in exit_info.call_params:
                     if call_param.match_param is not None and call_param.match_param.__class__.__name__ == 'Dmod': 
+                        if call_param.match_param.primary is None:
+                            # means the dmod is the itself a primary
+                            continue
                         has_fd_open = call_param.match_param.hasFDOpen(tid, exit_info.old_fd)
                         if has_fd_open:
                             dmod = call_param.match_param
@@ -1111,13 +1119,14 @@ class SharedSyscall():
                         s = resimUtils.getHexDump(byte_array[:max_str_len])
                         self.lgr.debug('sharedSyscall wanted to write: %s' % s)
                         forced_count = exit_info.count
-                        if s == 'none':
-                            self.top.writeRegValue('syscall_ret', 0, alone=True)
-                            self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0' % (s))
-                            forced_count = 0
-                        else:
-                            self.top.writeRegValue('syscall_ret', exit_info.count, alone=True)
-                            self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0x%x' % (s, exit_info.count))
+                        # TBD why care if s is none?
+                        #if False and s == 'none':
+                        #    self.top.writeRegValue('syscall_ret', 0, alone=True)
+                        #    self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0' % (s))
+                        #    forced_count = 0
+                        #else:
+                        self.top.writeRegValue('syscall_ret', exit_info.count, alone=True)
+                        self.lgr.debug('sharedSyscall wanted to write: %s set reg value to 0x%x' % (s, exit_info.count))
                         if self.cpu.architecture == 'ppc32':
                             self.top.writeRegValue('cr', 0x40000002, alone=True)
                         self.lgr.debug('sharedSyscall modified return value')
@@ -1866,7 +1875,9 @@ class SharedSyscall():
             #self.top.stopTrace(cell_name=self.cell_name, syscall=exit_info.syscall_instance)
             self.stopTrace()
             # note rmDmod simply notes it has been removed so we know if future snapshot loads
-            self.top.rmDmod(self.cell_name, dmod.getPath())
+
+            if dmod.getCount() == 0:
+                self.top.rmDmod(self.cell_name, dmod.getPath())
             #if not self.top.remainingCallTraces(exception='_llseek') and SIM_simics_is_running():
             if dmod.getBreak():
                 self.top.notRunning(quiet=True)
@@ -1906,7 +1917,6 @@ class SharedSyscall():
         return trace_msg
 
     def setMyIPC(self, myIPC):
-      
         self.myIPC = myIPC
 
     def checkSelectFixup(self, exit_info):
