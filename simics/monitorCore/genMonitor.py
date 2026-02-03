@@ -884,7 +884,7 @@ class GenMonitor():
                   self.context_manager[cell_name], self.traceProcs[cell_name], self.traceFiles[cell_name], 
                   self.soMap[cell_name], self.dataWatch[cell_name], self.traceMgr[cell_name], self.stupidClose[cell_name], self.lgr)
 
-            self.myIPC[cell_name] = myIPC.MyIPC(self, cpu, cell_name, self.lgr)
+            self.myIPC[cell_name] = myIPC.MyIPC(self, cpu, cell_name, self.mem_utils[cell_name], self.param[cell_name], self.lgr)
             self.syscallManager[cell_name] = syscallManager.SyscallManager(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name],
                                      self.context_manager[cell_name], self.traceProcs[cell_name], self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name], self.soMap[cell_name], 
                                      self.dataWatch[cell_name], self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name], self.myIPC[cell_name])
@@ -4194,6 +4194,9 @@ class GenMonitor():
         else:
             self.clearBookmarks(reuse_msg=reuse_msg)
 
+    def writeWord32(self, address, value, target_cpu=None):
+        self.writeWord(address, value, target_cpu=target_cpu, word_size=4)
+
     def writeWord(self, address, value, target_cpu=None, word_size=None):
         if self.no_reset is not None:
             SIM_break_simulation('no reset')
@@ -7272,7 +7275,11 @@ class GenMonitor():
         self.trace_malloc = traceMalloc.TraceMalloc(self, self.fun_mgr, self.context_manager[self.target], 
                self.mem_utils[self.target], self.task_utils[self.target], cpu, cell, self.dataWatch[self.target], self.lgr, comm=comm, callback=watch_malloc.allocCallback)
         watch_malloc.watch()
-        
+    
+    def showArmELR(self):    
+        cpu = self.cell_config.cpuFromCell(self.target)
+        pc = self.mem_utils[self.target].getKReturnAddr(cpu)
+        print('ELR is 0x%x' % pc)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
