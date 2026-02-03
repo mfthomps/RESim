@@ -26,7 +26,7 @@
     Manage Dmod FD allocation
 '''
 FD_MAX = 255
-FD_MIN = 230
+FD_MIN = 130
 class FDMgr():
     def __init__(self, lgr):
         self.lgr = lgr
