@@ -286,13 +286,15 @@ def isPrintable(thebytes, ignore_zero=False, lgr=None):
 def getHexDump(b):
     if len(b) == 0:
         return ""
+    # do not include trailing nulls.
     count = 0
-    for i in reversed(b):
-        if i is None or i > 0:
-            break
-        count = count + 1
-    end = len(b) - count
-    b = b[:end]
+    if len(b) > 16:
+        for i in reversed(b):
+            if i is None or i > 0:
+                break
+            count = count + 1
+        end = len(b) - count
+        b = b[:end]
     s2 = "".join([chr(i) if i is not None and 32 <= i <= 127 else "." for i in b])
     if not isPrintable(b):
         s1 = ''
