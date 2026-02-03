@@ -1037,13 +1037,13 @@ class SOMap():
                 self.lgr.debug('soMap isDynamic in_fname %s not found in prog_info' % in_fname)
         return retval
 
-    def getImageBase(self, in_fname):
+    def getImageBase(self, in_fname, is_so=False):
         prog = self.fullProg(in_fname)
         retval = None
         if prog in self.prog_info:
             tid_list = self.task_utils.getTidsForComm(in_fname)
-            if len(tid_list) == 0:
-                self.lgr.debug('soMap gteImageBase has prog %s in prog_info, but no program running.  Do not mislead' %prog)
+            if len(tid_list) == 0 and not is_so:
+                self.lgr.debug('soMap getImageBase has prog %s in prog_info, but no program running.  Do not mislead' %prog)
             else:
                 if self.prog_info[prog].text_start == 0:
                     retval = 0
