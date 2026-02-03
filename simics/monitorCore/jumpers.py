@@ -86,6 +86,8 @@ class Jumpers():
         self.prev_dest_eip = None
         # Program jumpers waiting to be set once the program is scheduled
         self.prog_jumpers =  {}
+        # Program jumpers waiting to be set once a program with the SO is scheduled
+        self.pending_so = {}
 
     def removeOneBreak(self, lib_addr, immediate=False):
         self.lgr.debug('Jumpers removeOneBreak %s' % lib_addr)
@@ -390,7 +392,7 @@ class Jumpers():
 
 
     def handleSO(self, jump_rec):
-        image_base = self.so_map.getImageBase(jump_rec.prog)
+        image_base = self.so_map.getImageBase(jump_rec.prog, is_so=True)
         if image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
             self.lgr.debug('jumper handleSO no process has image loaded, set SO watch callback for %s prog %s' % (jump_rec.lib_addr, jump_rec.prog))
@@ -415,18 +417,47 @@ class Jumpers():
             # can remove after all params include the page table info (mm_struct)
             tid = self.top.getTID(target=self.cell_name)
             tid = self.so_map.getSOTid(tid)
+            got_one = False
             for so_pid in loaded_pids:
                 if str(so_pid) == tid:
-                    use_pid = None
-                else:
-                    use_pid = str(so_pid)
-                load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=use_pid)
-                if load_addr is not None:
-                    self.lgr.debug('jumper handleSO pid:%s lib_addr %s load addr 0x%x, call getPhys' % (use_pid, jump_rec.lib_addr, load_addr))
-                    phys = self.getPhys(jump_rec, load_addr, use_pid)
-                    if phys is not None and phys != 0:
-                        self.setBreak(jump_rec, phys)
+                    self.lgr.debug('jumper handleSO tid:%s has prog %s mapped, set break and call it done' % (tid, jump_rec.prog))
+                    self.setProgJumpersIfMapped(jump_rec)
+                    got_one = True
+                    break
+            
+            if not got_one: 
+                self.lgr.debug('jumper handleSO current tid:%s does not have %s mapped, use contextManager to catch schedule of those that do.' % (tid, jump_rec.prog))
+                for so_pid in loaded_pids:
+                    so_tid = str(so_pid)
+                    if so_tid not in self.pending_so:
+                        self.pending_so[so_tid] = []
+                    self.lgr.debug('jumper handleSO add tid:%s to catchTid for prog %s addr: 0x%x' % (so_tid, jump_rec.prog, jump_rec.from_addr))
+                    self.pending_so[so_tid].append(jump_rec)
+                    self.context_manager.catchTid(so_tid, self.soScheduled)
         return True
+
+    def soScheduled(self, dumb=None):
+        '''
+        Called by contextManager because tid was scheduled.
+        Find all SO waiting on this tid and set jumpers on them
+        '''
+        cpu, comm, cur_tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('jumper soScheduled cur_tid:%s' % cur_tid)
+        if cur_tid in self.pending_so:
+            for jump_rec in self.pending_so[cur_tid]:
+                # upate prog_jumpers in case the address is not mapped
+                handle = '%s:0x%x' % (comm, jump_rec.from_addr)
+                self.prog_jumpers[handle] = jump_rec
+                self.setProgJumpersIfMapped(jump_rec)
+            # now find and remove all jump recs for other tids that refer to this so/address
+            for jump_rec in self.pending_so[cur_tid]:
+                for tid in self.pending_so:
+                    if tid == cur_tid:
+                        continue
+                    if jump_rec in self.pending_so[tid]:
+                        self.pending_so[tid].remove(jump_rec)
+                        self.lgr.debug('jumper soScheduled removed jump_rec for %s:0x%x tid:%s, already handled' % (jump_rec.prog, jump_rec.from_addr, tid))
+            self.pending_so[cur_tid] = []    
 
     def libLoadCallback(self, load_addr, lib_addr):
         # called when a jumpered library is loaded
@@ -464,23 +495,23 @@ class Jumpers():
             if phys is not None and phys != 0:
                 self.setBreak(self.pending_pages[name], phys)
 
-    def getPhys(self, jump_rec, load_addr, pid):
+    def getPhys(self, jump_rec, load_addr):
         if jump_rec.image_base is not None:
             offset = load_addr - jump_rec.image_base
         else:
             offset = 0
         linear = jump_rec.from_addr + offset
-        phys_addr = self.mem_utils.v2p(self.cpu, linear, use_pid=pid)
+        phys_addr = self.mem_utils.v2p(self.cpu, linear)
         if jump_rec.image_base is not None:
-            self.lgr.debug('jumper getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x pid:%s' % (load_addr, jump_rec.image_base, offset, linear, pid))
+            self.lgr.debug('jumper getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x' % (load_addr, jump_rec.image_base, offset, linear))
         else:
-            self.lgr.debug('jumper getPhys load_addr 0x%x no image base  offset 0x%x, linear 0x%x pid:%s' % (load_addr, offset, linear, pid))
+            self.lgr.debug('jumper getPhys load_addr 0x%x no image base  offset 0x%x, linear 0x%x' % (load_addr, offset, linear))
         #if phys_addr is not None:
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(jump_rec.prog, jump_rec.lib_addr)
         if phys_addr is None or phys_addr == 0:
             self.lgr.debug('jumper getPhys no phys for above, call pageCallback')
-            self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr, use_pid=pid)
+            self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr)
             self.pending_pages[jump_rec.lib_addr] = jump_rec
         return phys_addr
 
