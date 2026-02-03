@@ -3611,6 +3611,7 @@ class DataWatch():
                     if self.cpu.architecture.startswith('arm'): 
                        if self.armNumericStore(next_instruct):
                            self.move_ip = next_ip
+                           retval = True
                            break
                     elif next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPart(op2, our_reg):
                         if self.decode.isReg(op1):
