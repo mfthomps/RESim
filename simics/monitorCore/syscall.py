@@ -1603,7 +1603,8 @@ class Syscall():
                 dest_ss = net.SockStruct(self.cpu, dest_addr, self.mem_utils, fd=-1, lgr=self.lgr)
                 #frame_string = taskUtils.stringFromFrame(frame)
                 #print(frame_string)
-                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d dest: %s' % (callname, socket_callname, tid, comm, exit_info.retval_addr, exit_info.old_fd, dest_ss.getString())
+                ida_msg = '%s - %s tid:%s (%s) buf: 0x%x FD: %d len: %d dest: %s' % (callname, socket_callname, tid, comm, exit_info.retval_addr, 
+                          exit_info.old_fd, exit_info.count, dest_ss.getString())
                 #self.lgr.debug(ida_msg)
                 #if dest_ss.famName() == 'AF_CAN':
                 #    frame_string = taskUtils.stringFromFrame(frame)
