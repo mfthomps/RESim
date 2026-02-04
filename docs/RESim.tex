@@ -644,11 +644,13 @@ Other options:
 \item {\tt traceInject(iofile)} -- (DEPRECATED) See the {\tt trace\_all} options to injectIO and playAFL.
 
 \item{\tt traceMalloc} -- track calls to the malloc and free functions and includes those events in the list of watch marks. Use {\tt showMalloc} to 
-then list by pid, block address and size.
+then list by pid, block address and size.  And use {\tt saveMalloc} to save the open mallocs as a json, e.g., for use by {\tt watchMallocMem}.
 
 \item {\tt watchData} – run forward until a specified memory area is read.  Intended for use in finding references to data consumed via a read system call.  Data watch parameters are automatically set on a read during a debug session, allowing the analyst to simply invoke the watchData function to find references to the buffer.  List data watches using {\tt showDataWatch}.
 Note however, that data watches are based on the len field given in the read or recv, and thus data references are not necessarily to data actually read (e.g., a read of ten bytes
 that returns one byte would break on a reference to the fifth byte in the buffer.)
+\item {\tt watchMallocMem} – Reads malloc addresses from a file created by watchMallocMem and sets a watch on each block, reporting on reads.  Also highlights
+the reading of any word that is a code address, e.g., a function pointer.
 
 \end{itemize}
 
@@ -668,6 +670,7 @@ that returns one byte would break on a reference to the fifth byte in the buffer
 i.e., from a trackIO, these are deleted except for any that are equal to the current cycle.  The upshot of this is that if you want to modify memory
 and then rerun a trackIO, do so while at the first datamark.
 \item {\tt writeString} - Write a string to an addrss. Use double escapes, e.g., two backslashes and an n for a newline. (Note: deletes existing bookmarks.)
+\item {\tt writeBytesFromFile} – Write the bytes from a file into a given address.  Provide the {\tt watch=True} option to set a data watch on the buffer.
 
 \item {\tt runToDmod(dmod\_file)} – Run until a specified read or write system call is encountered, and modify system memory such
 that the result of the read or write is augmented by a named Dmod directive file.  See \ref{dmod}
@@ -1055,7 +1058,7 @@ Alternately you can connect the ethernet devices to the hub, e.g.,:
 ETH0_SWITCH=hub0
 \end{verbatim}
 
-Ethernet devices on the generic x86 platform default to the {\tt i82543gc} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
+Ethernet devices on the generic x86 platform default to the {\tt i82559} device defined by Simics.  Use of the {\tt \$eth\_dev=} 
 entry lets you pick one of the following alternate ethernet devices:
 \begin{verbatim}
 i82559
@@ -1554,7 +1557,13 @@ RESim starts and currently only works with VxWorks.  The replace option replaces
 with the value given as the destination.  For example replacing an instruction with an ARM nop would be:
    
 \begin{verbatim}
-    prog:addr 0xe1a00000 replace
+    prog:addr 0xe1a00000 replace  (for arm)
+    prog:addr 0xd503201f replace  (for arm64)
+\end{verbatim}
+\noindent Or, to set x0 to zero and return on arm64:
+\begin{verbatim}
+    prog:addr 0xD2800000 replace  
+    prog:addr+4 0xD65F03C0 replace  
 \end{verbatim}
 
 \subsection{Dynamic modifications to memory, registers, topology and control flow}
@@ -1889,7 +1898,7 @@ the client, which then sleeps for 1 second before sending the next entry.  If yo
 the {\tt web=True} option,
 provide that file name to genJson.py along with the {\tt --web} option to generate json entries per the delimeters inserted by RESim.
 
-\item The driver can run a TCP server by setting SESSION to {\tt TCP\_SERVER}.  In this case, the server will listen on the IP and port named in the directive.
+\item The driver can run a TCP server by setting SESSION to {\tt SERVERTCP}.  In this case, the server will listen on the IP and port named in the directive.
 When the server accepts a connection, it will send the IO file content and then preform a receive.  
 
 \item TCP replay of a PCAP file occurs by setting SESSION to REPLAY.
@@ -3821,12 +3830,12 @@ interacting directly with the driver.
 
 The driver device has 4 ethernet interfaces.  The mac addresses below are as defined in the ini file:
 \begin{itemize}
-\item ens11 -- mac: 00:e1:27:0f:ca:a8
+\item ens11f0 -- mac: 00:e1:27:0f:ca:a8
 \item ens25 -- mac: 00:19:a0:e1:1c:9f
-\item ens12 -- mac: 00:1a:a0:e1:1c:9f
+\item ens12f0 -- mac: 00:1a:a0:e1:1c:9f
 \item enp7s0:  mac: 00:1a:a0:e1:1c:a0 
 \end{itemize}
-Note that use of the ethernet 82559 device changes ethernet device names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
+Note that use of the ethernet i82543gc device changes ethernet device names, e.g., ens11f0 becomes ens11 and ens12f0 becomes ens12.
 
 Use {\tt ip addr} commands within the driver-script.sh to modify these addresses are required.
 
@@ -3839,7 +3848,7 @@ The mapping of RESim ethernet names to Linux device names in the driver is:
 \item eth3 - enp7s0
 \end{itemize}
 
-By default, the ETH directives in the ini file to connect different ethernet devices to the
+Use the ETH directives in the ini file to connect different ethernet devices to the
 different switches.  The defaults are ETH0-to-switch0, etc.
 
 The ini file maps multiple ethernet devices to switch0, which avoids the problem of
