@@ -68,8 +68,8 @@ class TrackThreads():
                     self.setExecveBreaks(arm64_app=False)
             else:
                 self.setExecveBreaks()
-
-        self.trackSO()
+        if not self.top.tracingAll(self.cell_name):
+            self.trackSO()
         #self.context_manager.watchTasks(restore_debug=False)
         #self.trackClone()
 
@@ -157,7 +157,7 @@ class TrackThreads():
         self.traceProcs.setName(tid, prog_string, None)
         param = (prog_string, tid)
         self.cur_comm = comm
-        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+        doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.context_manager, self.lgr)
         #self.addSO(prog_string, tid)
         RES_hap_delete_callback_id("Core_Breakpoint_Memop", self.finish_hap[tid])
         RES_delete_breakpoint(self.finish_break[tid])
@@ -165,11 +165,16 @@ class TrackThreads():
         del self.finish_break[tid]
 
     def addSO(self, param_tuple):
+        ''' callback from doInUser when new exec returns to user space '''
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('trackThreads, addSO, back from execve via doInUser callback.  comm now %s was %s' % (comm, self.cur_comm))
+        self.lgr.debug('trackThreads, addSO, tid:%s back from execve via doInUser callback.  comm now %s was %s' % (tid, comm, self.cur_comm))
+        if self.sharedSyscall.isPendingExecve(tid):
+            self.lgr.error('trackThreads, addSO, unexpected pending execve for tid:%s' % tid)
         if comm == self.cur_comm:
             self.lgr.debug('trackThreads, addSO, execve must have failed comm is still %s' % comm)
             return
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.top.recordStackBase(tid, sp)
         prog_name, tid = param_tuple
         full_path = self.targetFS.getFull(prog_name, self.lgr)
         # in case we want to ignore this comm
@@ -228,7 +233,7 @@ class TrackThreads():
             self.traceProcs.setName(tid, prog_string, None)
             param = (prog_string, tid)
             self.cur_comm = comm
-            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.lgr)
+            doInUser.DoInUser(self.top, self.cpu, self.addSO, param, self.task_utils, self.mem_utils, self.context_manager, self.lgr)
             #self.addSO(prog_string, tid)
 
 
@@ -236,7 +241,7 @@ class TrackThreads():
         if self.top.isWindows():
             call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateUserProcess', 'CreateFile', 'OpenSection']
         else:
-            call_list = ['open', 'mmap']
+            call_list = ['open', 'openat', 'mmap']
             if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
                 call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''

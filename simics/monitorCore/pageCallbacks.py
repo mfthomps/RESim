@@ -36,6 +36,8 @@ class PageCallbacks():
         self.callbacks = {}
         self.unmapped_addrs = []
         self.missing_pages = {}
+        # dictionary of page table entries keyed by table physical address, value is list of VAs 
+        # that may be mapped by updates to the table
         self.missing_page_bases = {}
         self.missing_tables = {}
         # ppc32 page entries, keyed by phys of pteg, values are lists of va that may map to the ptegs
@@ -46,6 +48,8 @@ class PageCallbacks():
         # list of address must be writable, i.e., to supress callbacks on RO copy-on-write pages
         # TBD potential collision on linear addresses?  Seems remote
         self.no_cows = []
+        # so we can delete breaks/haps for missing pages mapped between an initial page table hap and return to user space
+        self.missing_page_bases_break_nums = {}
 
     def setCallback(self, addr, callback, name=None, use_pid=None, writable=True):
         mapped = False
@@ -109,7 +113,7 @@ class PageCallbacks():
             if pt.phys_addr not in self.missing_pages:
                 self.missing_pages[pt.phys_addr] = []
                 break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.phys_addr, 1, 0)
-                self.lgr.debug('pageCallbacks setTableHaps no physical address for 0x%x, set break %d on phys_addr 0x%x' % (addr, break_num, pt.phys_addr))
+                self.lgr.debug('pageCallbacks setTableHaps on physical address for 0x%x, set break %d on phys_addr 0x%x' % (addr, break_num, pt.phys_addr))
                 self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                       None, break_num)
             self.missing_pages[pt.phys_addr].append(addr)
@@ -138,6 +142,7 @@ class PageCallbacks():
                 self.lgr.debug('pageCallbacks setTableHaps no physical address for 0x%x, set break %d on page_base_addr 0x%x' % (addr, break_num, pt.page_base_addr))
                 self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageBaseHap, 
                       None, break_num)
+                self.missing_page_bases_break_nums[pt.page_base_addr] = break_num
             self.missing_page_bases[pt.page_base_addr].append(addr)
             self.lgr.debug('pageCallbacks setTableHaps addr 0x%x added to missing page bases for page addr 0x%x' % (addr, pt.page_base_addr))
         elif pt.ptable_addr is not None:
@@ -214,7 +219,7 @@ class PageCallbacks():
         SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
 
     def rmTableHap(self, break_num):
-        self.lgr.debug('pageCalbacks rmTableHap rmTableHap break_num %d' % break_num)
+        self.lgr.debug('pageCallbacks rmTableHap rmTableHap break_num %d' % break_num)
         SIM_delete_breakpoint(break_num)
         hap = self.missing_haps[break_num]
         del self.missing_haps[break_num]
@@ -240,7 +245,7 @@ class PageCallbacks():
         length = memory.size
         type_name = SIM_get_mem_op_type_name(op_type)
         self.lgr.debug('pageCallbacks ptegHap tid:%s (%s) phys 0x%x len %d  type %s cycle: 0x%x' % (tid, comm, memory.physical_address, length, type_name, self.cpu.cycles))
-        ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all assocaited addresses are mapped. '''
+        ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all associated addresses are mapped. '''
         self.rmTableHap(break_num)
         if break_num in self.other_pteg_break:
             other_break = self.other_pteg_break[break_num]
@@ -317,12 +322,12 @@ class PageCallbacks():
         type_name = SIM_get_mem_op_type_name(op_type)
         physical = memory.physical_address
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-        self.lgr.debug('pageCalbacks pageBaseHap phys 0x%x len %d  type %s tid:%s (%s) cycle: 0x%x' % (physical, length, type_name, tid, comm, cpu.cycles))
+        self.lgr.debug('pageCa.lbacks pageBaseHap phys 0x%x len %d  type %s tid:%s (%s) cycle: 0x%x' % (physical, length, type_name, tid, comm, cpu.cycles))
         if op_type is Sim_Trans_Store:
-            ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all assocaited addresses are mapped. '''
+            ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all associated addresses are mapped. '''
             self.rmTableHap(break_num)
             ''' Set a mode hap so we recheck page entries after kernel finishes its mappings. '''
-            mem_trans = self.MyMemTrans(self.cpu, memory)
+            mem_trans = self.MyMemTrans(self.cpu, memory, tid)
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangedPageBase, mem_trans)
         else:
             self.lgr.error('pageCallbacks pageBaseHap op_type is not store')
@@ -336,37 +341,62 @@ class PageCallbacks():
         hap = self.mode_hap
         self.mode_hap = None
         SIM_run_alone(self.delModeAlone, hap)
-    
-    def pageBaseUpdated(self, mem_trans):
-            '''
-            Called when a page base is updated.  We've returned to the user since the hap was hit.
-            The hap was already removed.  Remove all assocaited entries and recreate those that need it.
-            '''
-            length = mem_trans.length
-            op_type = mem_trans.op_type
-            type_name = mem_trans.type_name
-            physical = mem_trans.physical
-            self.lgr.debug('pageBaseUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_page_bases[physical])))
-            #if length == 4 and self.cpu.architecture == 'arm':
-            if op_type is Sim_Trans_Store:
-                value = mem_trans.value
-                if value == 0:
-                    #self.lgr.debug('tableHap value is zero')
-                    return
-                redo_addrs = []
-                for addr in self.missing_page_bases[physical]:
-                    pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
-                    if pt.phys_addr is None or pt.phys_addr == 0:
-                        self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
-                        redo_addrs.append(addr)
-                        continue
-                    phys_addr = pt.phys_addr | (addr & 0x00000fff)
-                    #print('would do callback here')
-                    self.doCallback(addr)
+   
+    def doCallbacksForMapped(self, physical, value):
+        redo_addrs = []
+        got_one = False
+        for addr in self.missing_page_bases[physical]:
+            phys_addr = self.mem_utils.v2p(self.cpu, addr)
+            #pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
+            #if pt.phys_addr is None or pt.phys_addr == 0:
+            if phys_addr is None or phys_addr == 0:
+                #self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
+                self.lgr.debug('pageCallbacks pageBaseUpdated pt still not set for 0x%x' % (addr))
+                redo_addrs.append(addr)
+                continue
+            #phys_addr = pt.phys_addr | (addr & 0x00000fff)
+            self.lgr.debug('pageCallbacks doCallbacksForMapped thinks va 0x%x is mapped as phys 0x%x' % (addr, phys_addr))
+            #print('would do callback here')
+            self.doCallback(addr)
+            got_one = True
 
-                del self.missing_page_bases[physical]
-                for addr in redo_addrs:
-                    self.setTableHaps(addr)
+        if value is None and got_one:
+            # called for other than initially hit page table entry
+            # remove the hap
+            if physical in self.missing_page_bases_break_nums:
+                break_num = self.missing_page_bases_break_nums[physical]
+                self.rmTableHap(break_num)
+            else:
+                self.lgr.debug('pageCallbacks doCallbacksForMapped physical 0x%x not in missing_page_bases_break_nums' % physical)
+        if value is not None or got_one:
+            del self.missing_page_bases[physical]
+            for addr in redo_addrs:
+                self.setTableHaps(addr)
+
+    def pageBaseUpdated(self, mem_trans):
+        '''
+        Called when a page base is updated.  We've returned to the user since the hap was hit.
+        The hap was already removed.  Remove all associated entries and recreate those that need it.
+        '''
+        length = mem_trans.length
+        op_type = mem_trans.op_type
+        type_name = mem_trans.type_name
+        physical = mem_trans.physical
+        self.lgr.debug('pageBaseUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_page_bases[physical])))
+        #if length == 4 and self.cpu.architecture == 'arm':
+        if op_type is Sim_Trans_Store:
+            value = mem_trans.value
+            if value == 0:
+                #self.lgr.debug('tableHap value is zero')
+                return
+            self.doCallbacksForMapped(physical, value)
+        # Now look at all others that may have been mapped before we got to user space
+        phys_list = list(self.missing_page_bases.keys())
+        for other_physical in phys_list:
+            if other_physical == physical:
+                continue
+            self.lgr.debug('pageCallbacks pageBaseUpdated try other physical addr 0x%x' % other_physical)
+            self.doCallbacksForMapped(other_physical, None)
 
     def doCallback(self, addr):
             self.lgr.debug('pageCallbacks doCallback would do callback here')
@@ -430,9 +460,11 @@ class PageCallbacks():
                 self.value = None
 
     def enableBreaks(self):
+        self.lgr.debug('pageCallbacks enableBreaks')
         for break_num in self.missing_haps:
             SIM_enable_breakpoint(break_num)
 
     def disableBreaks(self):
+        self.lgr.debug('pageCallbacks disableBreaks')
         for break_num in self.missing_haps:
             SIM_disable_breakpoint(break_num)

@@ -15,6 +15,8 @@ for crash in sorted(clist):
     add_to_zero = None
     prior_to_origin = False
     from_kernel = ''
+    if os.path.getsize(full) == 0:
+        continue
     with open(full) as fh:
         seg_addr = None
         show_line = ''
@@ -47,6 +49,8 @@ for crash in sorted(clist):
                 show_line = line
             elif "follows kernel write" in line:
                 from_kernel = line
+            elif "Perhaps a hang" in line:
+                show_line = line
             
         if memcpy is not None:
             print('%s %s %s' % (crash, memcpy, from_kernel))

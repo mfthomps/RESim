@@ -1,0 +1,10 @@
+cat
+rm
+cp
+grep
+sh
+udevtrigger
+find
+date
+urandom_seed
+urngd

@@ -2131,7 +2131,7 @@ class WinSyscall():
         # use doInUser to ensure record is paged in
         comm = self.task_utils.getCommFromTid(tid) 
         self.lgr.debug('recordLoadAddr tid:%s (%s) do it in user space' % (tid, comm))
-        doInUser.DoInUser(self.top, self.cpu, self.doRecordLoadAddr, tid, self.task_utils, self.mem_utils, self.lgr, tid=tid)
+        doInUser.DoInUser(self.top, self.cpu, self.doRecordLoadAddr, tid, self.task_utils, self.mem_utils, self.context_manager, self.lgr, tid=tid)
 
     def doRecordLoadAddr(self, tid):
         # WARNING this is a contextManager callback on a reschedule.  The task info is not yet loaded

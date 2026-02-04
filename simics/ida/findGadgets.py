@@ -11,7 +11,7 @@ def getInstructs(block):
     ea = block.start_ea
     retval = []
     while ea < block.end_ea:
-        instruct = idc.generate_disasm_line(ea, 0)
+        instruct = idc.generate_disasm_line(ea, 0).lower()
         retval.append(instruct)
         idaapi.decode_insn(insn, ea)
         ea = ea + insn.size
@@ -40,7 +40,7 @@ def findGadgets(fname=None):
                 fc = idaapi.FlowChart(f)
                 for block in fc:
                     end = block.end_ea - 1
-                    instruct = idc.generate_disasm_line(end, 0)
+                    instruct = idc.generate_disasm_line(end, 0).lower()
                     #print('instruct %s' % instruct)
                     if instruct.startswith('ret'):
                         got_ret = True
@@ -51,7 +51,7 @@ def findGadgets(fname=None):
                         got_pred = False
                         for prev in preds:
                             prev_end = prev.end_ea - 1
-                            prev_instruct = idc.generate_disasm_line(prev_end, 0)
+                            prev_instruct = idc.generate_disasm_line(prev_end, 0).lower()
                             if not prev_instruct.startswith('j'):
                                 print('adding 0x%x to gadget 0x%x' % (prev.start_ea, end))
                                 add_list = getInstructs(prev)
@@ -77,6 +77,7 @@ def findGadgets(fname=None):
     s = json.dumps(gadget_dict)
     with open(fname+'.gadgets', 'w') as fh:
         fh.write(s) 
+    print('wrote %d gadgets to %s' % (len(gadget_dict), fname))
     print('done**************')
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ class Dmod():
             self.cmds = cmds        
 
 
-    def __init__(self, top, path, mem_utils, cell_name, comm, run_from_snap, fd_mgr, path_prefix, lgr):
+    def __init__(self, top, path, mem_utils, cell_name, comm, run_from_snap, fd_mgr, path_prefix, lgr, primary=None):
         self.top = top
         self.kind = None
         self.fiddle = None
@@ -71,6 +71,10 @@ class Dmod():
         self.break_on_dmod = False
         self.path_prefix = path_prefix
         self.length = None
+        self.primary = primary
+        if primary is not None:
+            self.lgr.debug('dmod path %s primary %s' % (path, str(primary)))
+        self.secondary_count = 0
 
         # used for callback when comm of the dmod is first scheduled
         self.op_set = None
@@ -78,6 +82,8 @@ class Dmod():
 
         self.open_replace_fh = {}
         self.open_replace_fname = {}
+  
+        self.bytes_file = None
 
         if os.path.isfile(path):
             with open(path) as fh:
@@ -117,6 +123,8 @@ class Dmod():
                                    self.break_on_dmod = True
                            elif key == 'length':
                                self.length = int(value)
+                           elif key == 'bytes_file':
+                               self.bytes_file = value
 
                self.lgr.debug('dmod %s of kind %s  cell is %s count is %d comm: %s' % (path, self.kind, self.cell_name, self.count, str(self.comm)))
                if self.kind == 'full_replace':
@@ -171,6 +179,7 @@ class Dmod():
                    #with open(becomes_file, 'rb') as bf_fh:
                    #    becomes = bf_fh.read()
                    self.fiddle = self.Fiddle(match, 'open_replace', becomes_file)
+                   self.lgr.debug('dmod init is open_replace %s' % path)
                elif self.kind == 'syscall':
                    match = nextLine(fh) 
                    self.fiddle = self.Fiddle(match, None, None)
@@ -435,42 +444,50 @@ class Dmod():
 
     def readOpenReplace(self, tid, fd, count):
         key = '%s:%d' % (tid, fd) 
-        if key not in self.open_replace_fh:
+        if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod readOpenReplace %s tid:%s fd: %d readOpenReplace key %s not in dictionary' % (self.path, tid, fd, key))
+            for bad_key in self.primary.open_replace_fh:
+                self.lgr.error('dmod readOpenReplace bad dmod key is %s' % key)
             return
-        retval = self.open_replace_fh[key].read(count)
+        retval = self.primary.open_replace_fh[key].read(count)
         self.lgr.debug('dmod readOpenReplace read %d bytes %s' % (len(retval), str(retval)))
         return retval
 
     def writeOpenReplace(self, tid, fd, the_bytes):
         key = '%s:%d' % (tid, fd) 
-        if key not in self.open_replace_fh:
+        if self.primary is None:
+            self.lgr.error('dmod writeOpenReplace %s tid:%s fd: %d readOpenReplace NO primary' % (self.path, tid, fd))
+            return
+        if key not in self.primary.open_replace_fh:
             self.lgr.error('dmod writeOpenReplace %s tid:%s fd: %d readOpenReplace not in dictionary' % (self.path, tid, fd))
             return
         if self.kind != 'open_replace':
             self.lgr.error('dmod writeOpenReplace dmod %s not a open_replace' % self.path)
             return 
         self.lgr.debug('dmod writeOpenReplace')
-        retval = self.open_replace_fh[key].write(bytes(the_bytes))
-        self.open_replace_fh[key].flush()
-        self.lgr.debug('dmod writeOpenReplace wrote %d bytes to %s retval %d' % (len(the_bytes), self.open_replace_fname[key], retval))
+        retval = self.primary.open_replace_fh[key].write(bytes(the_bytes))
+        self.primary.open_replace_fh[key].flush()
+        self.lgr.debug('dmod writeOpenReplace wrote %d bytes to %s retval %d' % (len(the_bytes), self.primary.open_replace_fname[key], retval))
         return retval
         
     def resetOpen(self, tid, fd):
-        self.lgr.debug('dmod resetOpen dmod %s' % self.path)
-        self.fd_mgr.close(tid, fd, self.path)
-        key = '%s:%d' % (tid, fd) 
-        if key in self.open_replace_fh: 
-            try:
-                self.open_replace_fh[key].close()
-                self.lgr.debug('dmod %s resetOpen did close on %s' % (self.path, self.open_replace_fname[key]))
-            except:
-                pass
-            del self.open_replace_fh[key]
-            del self.open_replace_fname[key]
-            self.lgr.debug('dmod %s resetOpen key %s removed' % (self.path, key))
+        if self.primary is not None:
+            self.primary.resetOpen(tid, fd)
         else:
-            self.lgr.debug('dmod %s resetOpen key %s not in dict' % (self.path, key))
+            self.lgr.debug('dmod resetOpen dmod %s' % self.path)
+            self.fd_mgr.close(tid, fd, self.path)
+            key = '%s:%d' % (tid, fd) 
+            if key in self.open_replace_fh: 
+                try:
+                    self.open_replace_fh[key].close()
+                    self.lgr.debug('dmod %s resetOpen did close on %s' % (self.path, self.open_replace_fname[key]))
+                except:
+                    pass
+                del self.open_replace_fh[key]
+                del self.open_replace_fname[key]
+                self.lgr.debug('dmod %s resetOpen key %s removed' % (self.path, key))
+            else:
+                self.lgr.debug('dmod %s resetOpen key %s not in dict' % (self.path, key))
 
     def getCellName(self):
         return self.cell_name
@@ -492,8 +509,10 @@ class Dmod():
             SIM_run_alone(self.scheduledAlone, tid)
 
     def scheduledAlone(self, tid):
-        self.lgr.debug('dmod %s scheduled tid %s' % (self.toString(), tid))
-        self.top.runTo(self.op_set, self.call_params, ignore_running=True, run=False)
+        operation = self.getOperation()
+        name = 'dmod-%s' % operation
+        self.lgr.debug('dmod %s scheduled tid %s name %s' % (self.toString(), tid, name))
+        self.top.runTo(self.op_set, self.call_params, ignore_running=True, run=False, name=name)
         self.op_set = None
 
     def rename(self, fname, fname2):
@@ -509,6 +528,26 @@ class Dmod():
 
     def hasFDOpen(self, tid, fd):
         return self.fd_mgr.hasFDOpen(tid, fd, self.path)
+
+    def dupFD(self, tid, old_fd, new_fd):
+        self.fd_mgr.dupFD(tid, old_fd, new_fd, self.path)
+
+    def getBytes(self):
+        retval = None
+        if self.bytes_file is not None:
+            if os.path.isfile(self.bytes_file):
+                with open(self.bytes_file, 'rb') as fh:
+                    retval = fh.read()
+            else:
+                self.lgr.error('dmod failed to find bytes file %s' % self.bytes_file)
+                self.top.quit()
+        return retval
+
+    def getSecondaryCount(self):
+        self.secondary_count = self.secondary_count + 1
+        retval = self.secondary_count
+        self.lgr.debug('dmod getSecondaryCount for %s is %d' % (self.path, retval))
+        return retval
 
 if __name__ == '__main__':
     print('begin')

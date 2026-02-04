@@ -68,7 +68,7 @@ class TraceFiles():
             tid = self.top.getTID(target=self.cell_name)
         else:
             tid = 'all'
-        fd_rec = self.getFDRec(tid, tid, comm)
+        fd_rec = self.getFDRec(tid, comm, fd)
         if fd_rec is not None:
             print('FD %d already being watched for tid %s' % (fd, tid))
             self.lgr.debug('traceFiles watchFD FD %d already being watched tid %s' % (fd, tid))
@@ -95,10 +95,11 @@ class TraceFiles():
                 pass
             with open(outfile+'-write', 'wb') as fh:
                 pass
-        self.lgr.debug('traceFiles watchFD %d num open files %d' % (fd, len(self.open_files)))
+        self.lgr.debug('traceFiles watchFD %d num open files %d raw: %r all: %r' % (fd, len(self.open_files), raw, all))
         if key not in self.tracing_fd:
-            self.tracing_fd[key] = []
-        self.tracing_fd[key].append(fd)
+            self.tracing_fd[key] = {}
+        fd_rec = self.getFDRec(tid, comm, fd)
+        self.tracing_fd[key][fd] = fd_rec
 
     def accept(self, tid, fd, new_fd):
         if tid in self.open_files and fd in self.open_files[tid]:

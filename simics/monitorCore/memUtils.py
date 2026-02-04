@@ -24,6 +24,7 @@
 '''
 
 import pageUtils
+import pageUtilsPPC32
 import json
 import sys
 import struct
@@ -32,7 +33,7 @@ from simics import *
 MACHINE_WORD_SIZE = 8
 class ValueError(Exception):
     pass
-def readPhysBytes(cpu, paddr, count):
+def readPhysBytes(cpu, paddr, count, lgr=None):
     tot_read = 0
     retval = ()
     cur_addr = paddr
@@ -46,7 +47,22 @@ def readPhysBytes(cpu, paddr, count):
             #bytes_read = SIM_read_phys_memory(cpu, cur_addr, remain)
             bytes_read = cpu.iface.processor_info_v2.get_physical_memory().iface.memory_space.read(cpu, cur_addr, remain, 1)
         except:
-            raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+            # Simics ARM64 in fvp base revc is broken
+            if lgr is not None:
+                lgr.debug('memUtils readPhysBytes cur_addr 0x%x failed, cpu architecture %s' % (cur_addr, cpu.architecture))
+            simics_broken_int = None
+            try:
+                simics_broken_int = SIM_read_phys_memory(cpu, cur_addr, remain)
+            except:
+                if lgr is not None:
+                    lgr.debug('memUtils readPhysBytes tried SIM_read_phys_memory cur_addr 0x%x failed, cpu architecture %s' % (paddr, cpu.architecture))
+                break
+            if simics_broken_int is None:
+                raise ValueError('failed to read %d bytes from 0x%x' % (remain, cur_addr))
+                break
+            else:
+                the_bytes = simics_broken_int.to_bytes(4, byteorder = 'little')
+                bytes_read = tuple(the_bytes)
         #retval = retval + tuple(bytes_read.to_bytes(4, 'little'))
         retval = retval + bytes_read
         tot_read = tot_read + remain
@@ -124,7 +140,15 @@ def testBit(int_value, bit):
 
 def clearBit(int_value, bit):
     mask = 1 << bit
-    return(int_value & ~mask)
+    retval = int_value & ~mask
+    retval = retval & 0xffffffff
+    return retval
+
+def setBit(int_value, bit):
+    mask = 1 << bit
+    retval = int_value | mask
+    retval = retval & 0xffffffff
+    return retval
 
 def bitRange(value, start, end):
     retval = None
@@ -589,17 +613,25 @@ class MemUtils():
         v = self.getUnsigned(v)
         if cpu.architecture == 'ppc32':
             cpl = getCPL(cpu)
-            #self.lgr.debug('memUtils ppc cpl %d' % cpl)
+            #self.lgr.debug('memUtils v2p ppc cpl %d' % cpl)
             #if cpl == 1 and v >= self.getUnsigned(self.param.kernel_base):
             if v >= self.getUnsigned(self.param.kernel_base):
                 retval = v - 0xc0000000
             else:
-                try:
-                    phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
-                    retval = phys_block.address
-                except:
-                    self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
-                    return None
+                pc = self.getRegValue(cpu, 'pc')
+                if pc < self.getUnsigned(self.param.kernel_base) and cpl == 0:
+                    pt = pageUtilsPPC32.findPageTable(cpu, v, self.lgr) 
+                    if pt.phys_addr is not None:
+                        retval = pt.phys_addr
+                    else:
+                        self.lgr.debug('memUtils v2p pc 0x%x cpl 0, no page table phys for 0x%xx' % (pc, v))
+                else:
+                    try:
+                        phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                        retval = phys_block.address
+                    except:
+                        self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
+                        return None
         else:
             cpl = getCPL(cpu)
             if do_log:
@@ -624,7 +656,13 @@ class MemUtils():
     def readString(self, cpu, vaddr, maxlen):
         retval = None
         ps = self.v2p(cpu, vaddr)
-        if ps is not None and ps != 0:
+        if ps is None:
+            #self.lgr.error('readString phys None for vaddr 0x%x' % vaddr)
+            pass
+        elif ps == 0:
+            #self.lgr.error('readString phys zero for vaddr 0x%x' % vaddr)
+            pass
+        else:
             #self.lgr.debug('readString vaddr 0x%x ps is 0x%x' % (vaddr, ps))
             remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
             if remain_in_page < maxlen:
@@ -655,9 +693,9 @@ class MemUtils():
     def readStringPhys(self, cpu, paddr, maxlen):
         s = ''
         try:
-            read_data = readPhysBytes(cpu, paddr, maxlen)
+            read_data = readPhysBytes(cpu, paddr, maxlen, lgr=self.lgr)
         except ValueError:
-            self.lgr.debug('readStringPhys, error reading paddr 0x%x' % paddr)
+            self.lgr.debug('readStringPhys, error reading paddr 0x%x maxlen 0x%x' % (paddr, maxlen))
             return None
         for v in read_data:
             if v == 0:
@@ -695,12 +733,13 @@ class MemUtils():
         start = vaddr
         retval = ()
         while remain > 0:
+            self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
             count = min(remain, 1024)
             ps = self.v2p(cpu, start)
             if ps is not None:
                 remain_in_page = pageUtils.pageLen(ps, pageUtils.PAGE_SIZE)
-                if remain_in_page < count:
-                    #self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
+                if remain_in_page <= count:
+                    self.lgr.debug('readBytes remain_in_page %d' % remain_in_page)
                     try:
                         first_read = readPhysBytes(cpu, ps, remain_in_page)
                     except ValueError:
@@ -728,7 +767,7 @@ class MemUtils():
                         retval = retval+readPhysBytes(cpu, ps, count)
                     except ValueError:
                         self.lgr.error('memUtils readBytes, second read %d bytes from  0x%x' % (count, ps))
-                    #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (retval, ps))
+                    #self.lgr.debug('readBytes normal read %s from phys 0x%x' % (str(retval), ps))
             #else:
             #    self.lgr.error('memUtils readBytes addr 0x%x not mapped?' % vaddr)
             #self.lgr.debug('readBytes got %d' % len(retval))
@@ -870,26 +909,10 @@ class MemUtils():
         else:
             return None
 
-    def getRegValue(self, cpu, reg):
-        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
-        reg_value = None
+    def getRegNum(self, cpu, reg):
         reg_num = None
-        mask = None
-        if reg.startswith('xmm'):
-            h_l = None
-            if reg.endswith('L'):
-                h_l = 0
-            elif reg.endswith('H'):
-                h_l = 1
-            if h_l is None:
-                index = int(reg[3:])
-                reg_value = cpu.xmm[index][0]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
-            else:
-                index = int(reg[3:-1])
-                reg_value = cpu.xmm[index][h_l]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
-        else:     
+        if reg is not None:             
+            reg = reg.lower()
             if cpu.architecture != 'arm64':
                 if reg in self.regs:
                     reg_num = cpu.iface.int_register.get_number(self.regs[reg])
@@ -905,7 +928,9 @@ class MemUtils():
                 if reg == 'sp':
                     reg = 'sp_el0'
                 #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
-                if not arm64_app and reg in self.arm_regs:
+                if reg == 'far_el1':
+                    reg_num = cpu.iface.int_register.get_number(reg)
+                elif not arm64_app and reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
                 elif arm64_app and reg in self.arm64_regs:
@@ -939,11 +964,36 @@ class MemUtils():
                     if arm64_app:
                         if reg == 'lr':
                             reg_num = cpu.iface.int_register.get_number('x30')
-                    else:
+                    elif reg.endswith('_usr'):
                         if reg == 'sp_usr':
                             reg_num = cpu.iface.int_register.get_number('x15')
                         elif reg == 'lr_usr':
                             reg_num = cpu.iface.int_register.get_number('x14')
+        else:
+            self.lgr.error('memUtils getRegNum with no reg')
+        return reg_num
+
+    def getRegValue(self, cpu, reg):
+        ''' we assume the reg is a user space register.  It may have a convenience name like "syscall_num" '''
+        reg_value = None
+        reg_num = None
+        mask = None
+        if reg.startswith('xmm'):
+            h_l = None
+            if reg.endswith('L'):
+                h_l = 0
+            elif reg.endswith('H'):
+                h_l = 1
+            if h_l is None:
+                index = int(reg[3:])
+                reg_value = cpu.xmm[index][0]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
+            else:
+                index = int(reg[3:-1])
+                reg_value = cpu.xmm[index][h_l]
+                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
+        else:     
+            reg_num = self.getRegNum(cpu, reg)
             if reg_num is not None:
                 reg_value = cpu.iface.int_register.read(reg_num)
             else:
@@ -987,13 +1037,12 @@ class MemUtils():
             return 'x86_32'
 
     def setRegValue(self, cpu, reg, value):
-        if reg in self.regs:
-            reg_num = cpu.iface.int_register.get_number(self.regs[reg])
-        elif reg in param_map[self.kernelArch(cpu)]:
-            reg_num = cpu.iface.int_register.get_number(param_map[self.kernelArch(cpu)][reg])
-        else:
-            reg_num = cpu.iface.int_register.get_number(reg)
-        reg_value = cpu.iface.int_register.write(reg_num, value)
+        #self.lgr.debug('setRegValue reg %s value 0x%x' % (reg, value))
+        reg_num = self.getRegNum(cpu, reg)
+        if reg_num is None:
+            self.lgr.error('memUtils setRegValue failed to get register number for %s' % reg)
+        else: 
+            cpu.iface.int_register.write(reg_num, value)
 
     def getESP(self):
         if self.WORD_SIZE == 4:
@@ -1048,6 +1097,8 @@ class MemUtils():
    
 
         delta = param_xs_base - new_xs_base
+        if delta == 0:
+            return
         self.lgr.debug('memUtils adjustParam word size %d delta 0x%x' % (self.WORD_SIZE, delta))
 
         ''' Adjust parameters for ASLR '''
@@ -1084,12 +1135,16 @@ class MemUtils():
             if self.param.iretd is not None:
                 self.param.iretd = self.param.iretd + delta
             self.param.page_fault = self.param.page_fault + delta
-            self.param.syscall_compute = self.param.syscall_compute + delta
-
-            ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
-            self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
+                self.lgr.debug('memUtils adjustParam adjusting entire code jump table')
+                for call in self.param.code_jump_table:
+                    self.param.code_jump_table[call] = self.param.code_jump_table[call] + delta
+            else:
+                self.param.syscall_compute = self.param.syscall_compute + delta
+                ''' This value seems to get adjusted the other way.  TBD why? '''
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
+                self.param.syscall_jump = self.param.syscall_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
         else:
             if self.param.iretd is not None:
                 self.param.iretd = self.param.iretd + delta
@@ -1099,10 +1154,15 @@ class MemUtils():
 
             self.param.syscall_compute = self.param.syscall_compute - delta
 
-            ''' This value seems to get adjusted the other way.  TBD why? '''
-            self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
-            self.param.syscall_jump = self.param.syscall_jump - delta
-            self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if self.param.syscall_jump is not None:
+                ''' This value seems to get adjusted the other way.  TBD why? '''
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall_jump)
+                self.param.syscall_jump = self.param.syscall_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall_jump adjusted to 0x%x' % self.param.syscall_jump)
+            if self.param.syscall64_jump is not None:
+                self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall64_jump)
+                self.param.syscall_jump = self.param.syscall64_jump - delta
+                self.lgr.debug('memUtils adjustParam syscall64_jump adjusted to 0x%x' % self.param.syscall64_jump)
 
         if self.param.sys_entry is not None and self.param.sys_entry != 0: 
             if self.WORD_SIZE==4:
@@ -1420,7 +1480,9 @@ class MemUtils():
 
     def writeString(self, cpu, address, string):
         #self.lgr.debug('writeString len %d adress: 0x%x %s' % (len(string), address, string))
-
+        if string is None:
+            self.lgr.error('writesString called with string of None')
+            return
         lcount = int(len(string)/4)
         carry = len(string) % 4
         if carry != 0:
@@ -1550,3 +1612,21 @@ class MemUtils():
             ret_reg = cpu.iface.int_register.get_number("elr_el1")
             retval = cpu.iface.int_register.read(ret_reg)
         return retval
+
+    def getStrLen(self, cpu, src, only_ascii=False):
+        addr = src
+        done = False
+        #self.lgr.debug('getStrLen from 0x%x' % src)
+        while not done:
+            v = self.readByte(cpu, addr)
+            #if v is not None:
+            #    self.lgr.debug('getStrLen got 0x%x from 0x%x' % (v, addr))
+            if v is None:
+                self.lgr.debug('getStrLen got NONE for 0x%x' % (addr))
+                done = True
+            elif v == 0:
+                done = True
+            elif only_ascii and v > 127:
+                done = True
+            addr += 1
+        return addr - src

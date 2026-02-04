@@ -29,12 +29,14 @@
     Uses the capstone engine.
 '''
 from simics import *
+import cli
 import sys
 import os
 sys.path.insert(0,'/usr/local/lib/python3.10/dist-packages')
 home=os.getenv('HOME')
-simdir=os.getenv('SIMDIR')
-if simdir is not None and simdir.endswith('simics-6.0.146'):
+parts = cli.quiet_run_command('version')
+version_string = parts[0][0][2]
+if version_string.startswith('6.0.146'):
     # special case for older simics needed for ppc32
     image_dir=os.getenv('RESIM_IMAGE')
     if image_dir is not None:

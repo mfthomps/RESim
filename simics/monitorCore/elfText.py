@@ -55,7 +55,7 @@ def getText(path, lgr):
         lgr.debug('elfText nothing at %s' % path)
         return None
     retval = None
-    cmd = 'readelf -a %s' % path
+    cmd = 'readelf -a --wide %s' % path
     #grep = 'grep " .text"'
     #grep = 'grep "-e .plt -e .text"'
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -80,6 +80,7 @@ def getText(path, lgr):
     line_iterator = iter(line_list) 
     for line in line_iterator:
         #lgr.debug(line)
+        line = line.strip()
         if line.startswith('ELF Header'):
             iself = True
             continue
@@ -87,41 +88,61 @@ def getText(path, lgr):
             is_dyn = True
             continue
         if line.strip().startswith('Machine:') and 'AArch64' in line:
+            lgr.debug('Is AArch64')
             is_aarch64 = True
             continue
         if line.strip().startswith('Entry point'):
+            if lgr is not None:
+                lgr.debug('is Entry point')
+            
             parts = line.strip().split()
             if is_dyn:
                 offset = int(parts[3], 16)
+                if lgr is not None:
+                    lgr.debug('Entry point, is dynamic setting offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
             continue
         if '[Requesting program interpreter' in line:
             parts = line.strip().split()
             interp = parts[-1][:-1] 
-        if 'LOAD' in line and not is_dyn and is_aarch64 and offset is None:
+        if line.startswith('LOAD') and not is_dyn and is_aarch64 and offset is None and ' E ' in line:
             parts = line.strip().split()
             offset = int(parts[2], 16)
+            size = int(parts[3], 16)
             if lgr is not None:
-                lgr.debug('readelf got LOAD offset 0x%x' % offset)
-            next_line = next(line_iterator)
-            parts = next_line.strip().split()
-            size = int(parts[0], 16)
-        elif 'LOAD' in line and is_dyn and is_aarch64:
+                lgr.debug('readelf not is_dyn got LOAD offset 0x%x' % offset)
+                lgr.debgu('from line %s' % line)
+        elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
+        #elif addr is None and line.startswith('LOAD') and is_dyn and is_aarch64: 
+            #print('using line %s' % line)
+            # not quite, but better
+            if size is None:
+                size = 0
+            parts = line.strip().split()
+            if offset is None:
+                offset = int(parts[2], 16)
+            size = int(parts[4], 16)
+            if lgr is not None:
+                lgr.debug('readelf got LOAD offset 0x%x size 0x%x' % (offset, size))
+                lgr.debug('from line %s' % line)
+            #lgr.debug('got size now 0x%x' % size)
+        elif line.startswith('LOAD') and is_dyn and not is_aarch64 and ' E ' in line:
+            lgr.debug('found load in line %s' % line)
             # not quite, but better
             if size is None:
                 size = 0
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
-            next_line = next(line_iterator)
-            #lgr.debug('got LOAD next line: %s' % next_line)
-            parts = next_line.strip().split()
-            mem_size = int(parts[1], 16)
+            mem_size = int(parts[3], 16)
             size = addr_start + mem_size
-            #lgr.debug('got size now 0x%x' % size)
+            lgr.debug('got size now 0x%x offset %s' % (size, str(offset)))
+            if offset is None or offset == 0:
+                offset = int(parts[2], 16)
+                lgr.debug('got offset 0x%x' % offset)
             
         ''' section numbering has whitespace '''
-        hack = line[7:]
+        hack = line[4:]
         #if lgr is not None:
         #    lgr.debug('readelf got %s from %s' % (hack, path))
         
@@ -131,6 +152,7 @@ def getText(path, lgr):
         else: 
             if parts[0].strip() == '.text':
                 addr = int(parts[2], 16)
+                #print('sees .text set addr to 0x%x' % addr)
                 offset = int(parts[3], 16)
                 size = int(parts[4], 16)
             elif parts[0].strip() == '.plt':

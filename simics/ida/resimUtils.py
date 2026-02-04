@@ -210,44 +210,54 @@ class ImportNames():
             print('Wrote functions to %s.imports' % fname)
 
     def armBlrXrefs(self, fname):
-        # ARM64 BLR and BR calls that first load offsets of imports that we should know.
+        '''
+         ARM64 BLR and BR calls that first load offsets of imports that we should know.
+        '''
         arm_blr = {}
         for ea in self.imports:
             fun = self.imports[ea]
             #print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
             for ref in refs:
-                print('\timports for fun %s entry 0x%x found ref 0x%x' % (fun, ea, ref))
+                print('\tarmBlrXrefs imports for fun %s entry 0x%x found ref 0x%x' % (fun, ea, ref))
                 fun_refs = idautils.DataRefsTo(ref)
                 for fr in fun_refs:
                     fr_instruct = idc.GetDisasm(fr)
+                    print('\t\tfun ref 0x%x %s' % (fr, fr_instruct))
                     if fr_instruct.startswith('LDR'):
-                        insn = idaapi.insn_t()
-                        instruct_len = idaapi.decode_insn(insn, fr)
-                        our_reg = insn.ops[0].reg            
-                        next_pc = fr
-                        print('\t\tfun ref 0x%x %s our_reg = %s' % (fr, fr_instruct, our_reg))
-                        for i in range(8):
-                            next_pc = next_pc + 4
-                            instruct = idc.GetDisasm(next_pc)
-                            if instruct.startswith('BLR') or instruct.startswith('BR'):
-                                next_insn = idaapi.insn_t()
-                                next_instruct_len = idaapi.decode_insn(next_insn, next_pc)
-                                if our_reg == next_insn.ops[0].reg:
-                                    print('\t\t\timports fun_ref 0x%x next instruct 0x%x %s' % (fr, next_pc, instruct))
-                                    if next_pc not in arm_blr:
-                                        arm_blr[next_pc] = fun
-                                    break
+                        self.checkArmBLR(fr, arm_blr, fun)
+                    elif fr_instruct.startswith('ADRP'):
+                        other_refs = idautils.DataRefsTo(fr)
+                        for other_fr in other_refs:
+                            self.checkArmBLR(other_fr, arm_blr, fun)
         with open(fname+'.arm_blr', "w") as fh:
             json.dump(arm_blr, fh)
+
+    def checkArmBLR(self, fr, arm_blr, fun):
+        insn = idaapi.insn_t()
+        instruct_len = idaapi.decode_insn(insn, fr)
+        our_reg = insn.ops[0].reg            
+        next_pc = fr
+        print('\t\tfun ref 0x%x our_reg = %s' % (fr, our_reg))
+        for i in range(8):
+            next_pc = next_pc + 4
+            instruct = idc.GetDisasm(next_pc)
+            if instruct.startswith('BLR') or instruct.startswith('BR'):
+                next_insn = idaapi.insn_t()
+                next_instruct_len = idaapi.decode_insn(next_insn, next_pc)
+                if our_reg == next_insn.ops[0].reg:
+                    print('\t\t\timports fun_ref 0x%x next instruct 0x%x %s' % (fr, next_pc, instruct))
+                    if next_pc not in arm_blr:
+                        arm_blr[next_pc] = fun
+                    break
 
     def x86RegCallXrefs(self, fname):
         # x86 mov eax, ds:some_xref
         x86_call_reg = {}
         for ea in self.imports:
             fun = self.imports[ea]
-            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             refs = idautils.DataRefsTo(ea)
+            print('do xrefs ea 0x%x fun %s' % (ea, fun))
             for ref in refs:
                 ref_instruct = idc.GetDisasm(ref)
                 print('\timports for 0x%x found ref 0x%x instruct %s' % (ea, ref, ref_instruct))
@@ -270,6 +280,12 @@ class ImportNames():
                             break
                         #instruct_len = ida_bytes.get_item_size(next_pc)
                         insn = idaapi.insn_t()
+
+                fun_refs = idautils.DataRefsTo(ref)
+                for fr in fun_refs:
+                    fr_instruct = idc.GetDisasm(fr)
+                    print('\t\tfun ref 0x%x %s' % (fr, fr_instruct))
+                    x86_call_reg[fr] = fun
 
         with open(fname+'.x86_call_reg', "w") as fh:
             json.dump(x86_call_reg, fh)

@@ -28,19 +28,24 @@ Call a function from user space, assuming we start in kernel space
 from simics import *
 import resimHaps
 import memUtils
+from resimHaps import *
 class DoInUser():
-    def __init__(self, top, cpu, callback, param, task_utils, mem_utils, lgr, tid=None):
+    def __init__(self, top, cpu, callback, param, task_utils, mem_utils, context_manager, lgr, tid=None):
         self.top = top
         self.cpu = cpu
         self.callback = callback
         self.param = param
         self.task_utils = task_utils
         self.mem_utils = mem_utils
+        self.context_manager = context_manager
         self.lgr = lgr
+        self.wrong_tid_count = 0
         if tid is None:
             dum_cpu, comm, self.tid = self.task_utils.curThread()
         else:
             self.tid = tid
+        self.setModeHap()
+    def setModeHap(self, dumb=None):
         self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, self.cpu)
         self.lgr.debug('doInUser mode hap set for tid:%s' % self.tid)
 
@@ -61,4 +66,21 @@ class DoInUser():
                 hap = self.mode_hap
                 SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
                 self.mode_hap = None
+            else:
+                self.wrong_tid_count += 1
+                if self.wrong_tid_count > 4:
+                    self.cpu = cpu
+                    self.cpu = cpu
+                    SIM_run_alone(self.suspend, None)
+                    self.context_manager.catchTid(self.tid, self.restart)
+
+    def suspend(self, dumb):
+        if self.mode_hap is not None:
+            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
+            self.lgr.debug('doInUser suspend deleted mode hap')
+            self.mode_hap = None
+
+    def restart(self, dumb):
+        self.lgr.debug('doInUser restart')
+        self.setModeHap()
 

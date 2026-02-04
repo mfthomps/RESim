@@ -44,6 +44,14 @@ class RecordEntry():
         self.recent_cycle = {}
         self.sysenter_hap = None
         self.sysenter64_hap = None
+        self.ppc32_super_enter = None
+        if self.cpu.architecture == 'ppc32':
+            # ppc super enter is like an interrupt handler that then calls into the kernel
+            # we want to record the cycle and call parameters from user space
+            if not hasattr(param, 'ppc32_super_enter'):
+                self.ppc32_super_enter = 0xc00
+            else:
+                self.ppc32_super_enter = param.ppc32_super_enter
         if snap_name is not None:
             self.loadPickle(snap_name)
 
@@ -88,7 +96,8 @@ class RecordEntry():
             elif self.cpu.architecture == ('ppc32'):
                 if self.param.ppc32_entry is not None:
                     self.lgr.debug('recordEntry watchSysenter set linear break at 0x%x' % (self.param.ppc32_entry))
-                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.ppc32_entry, 1, 0)
+                    #enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.ppc32_entry, 1, 0)
+                    enter_break1 = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.ppc32_super_enter, 1, 0)
                     self.sysenter_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sysenterHap, None, enter_break1, 'recordEntry sysenter')
             else:
                 if self.param.sysenter is not None and self.param.sys_entry is not None:
@@ -107,7 +116,8 @@ class RecordEntry():
 
     def sysenterHap(self, prec, the_object, the_break, memory):
         cur_cpu, comm, tid  = self.task_utils.curThread()
-        self.lgr.debug('recordEntry sysenterHap tid:%s cycle: 0x%x' % (tid, self.cpu.cycles))
+        pc = self.top.getEIP(self.cpu)
+        #self.lgr.debug('recordEntry sysenterHap tid:%s cycle: 0x%x pc: 0x%x' % (tid, self.cpu.cycles, pc))
         if tid is not None:
             if True:
                 cycles = self.cpu.cycles

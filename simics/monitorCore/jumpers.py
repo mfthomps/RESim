@@ -40,6 +40,13 @@ program name or the SO/DLL basename and the addr as the original address.
     prog:addr addr [comm] [break]
 You can see original addresses via the cgc.getSO(addr, show_orig=True)
 
+Also manage dynamic setting of a register value based on execution of a
+memory address.  This is controlled by a
+"regSet" file.  There should be no more than one such file
+per target.  The format of the file is:
+    comm addr reg value
+Where "comm" is the process comm name; addr is the address; reg is a
+register name and value is the value to load into the register.
 '''
 from simics import *
 import os
@@ -47,6 +54,14 @@ import ntpath
 import winProg
 import resimUtils
 
+def getKeyValue(item):
+    key = None
+    value = None
+    if '=' in item:
+        parts = item.split('=', 1)
+        key = parts[0].strip()
+        value = parts[1].strip()
+    return key, value
 class Jumpers():
     def __init__(self, top, context_manager, so_map, mem_utils, task_utils, cpu, lgr):
         self.top = top
@@ -71,6 +86,8 @@ class Jumpers():
         self.prev_dest_eip = None
         # Program jumpers waiting to be set once the program is scheduled
         self.prog_jumpers =  {}
+        # Program jumpers waiting to be set once a program with the SO is scheduled
+        self.pending_so = {}
 
     def removeOneBreak(self, lib_addr, immediate=False):
         self.lgr.debug('Jumpers removeOneBreak %s' % lib_addr)
@@ -87,7 +104,7 @@ class Jumpers():
         self.hap = {}
         self.breakpoints = {}
 
-    def loadJumpers(self, fname_in):
+    def loadJumpers(self, fname_in, is_reg_set=False):
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
         self.lgr.debug('jumpers loadJumpers fname_in: %s Current tid:%s (%s)' % (fname_in, tid, comm))
         if ';' in fname_in:
@@ -106,7 +123,11 @@ class Jumpers():
                             continue
                         if len(line.strip()) == 0:
                             continue
-                        if ':' in line:
+                        if is_reg_set:
+                            if not self.handleRegSetEntry(line, fname):
+                                self.lgr.error('Failed handling RegSet entry %s' % line)
+                                return
+                        elif ':' in line:
                             if not self.handleJumperEntry(line, fname):
                                 self.lgr.error('Failed handling jumper entry %s' % line)
                                 return
@@ -198,6 +219,69 @@ class Jumpers():
 
         return True
 
+    def handleRegSetEntry(self, line, fname):
+        retval = True
+        if line in self.did_lines:
+            return retval
+        self.did_lines.append(line)
+        self.lgr.debug('jumpers handleRegSetEntry %s %s' % (fname, line))
+        parts = line.strip().split()
+        if '=' not in line and len(parts) != 4:
+            self.lgr.error('RegSet: Could not make sense of %s' % line)
+            return
+        prog = parts[0].strip()
+        prog_addr = None
+        try:
+            prog_addr = int(parts[1], 16)
+        except:
+            self.lgr.error('RegSet: bad addr in %s' % line)
+            return
+        indirect = False
+        jmp = None
+        break_on_it = False
+        if '=' in parts[2]:
+            for item in parts[2:]:
+                key, value = getKeyValue(item)
+                if key == 'reg':
+                    reg = value
+                elif key == 'reg_indirect':
+                    indirect = True 
+                    reg = value
+                elif key == 'value':
+                    try:
+                        new_value = int(value, 16)
+                    except:
+                        self.lgr.error('RegSet: bad value in %s' % line)
+                        return
+                elif key == 'hexstring':
+                    new_value = value
+                elif key == 'jmp':
+                    jmp = value
+                    self.lgr.debug('RegSet: jmp is %s' % jmp)
+                elif key == 'break':
+                    if value.lower() == 'true': 
+                        break_on_it = True
+                    self.lgr.debug('RegSet: jmp is %s' % jmp)
+        else:
+            reg = parts[2]
+            try:
+                new_value = int(parts[3], 16)
+            except:
+                self.lgr.error('RegSet: bad value in %s' % line)
+                self.top.quit()
+        
+        reg_set_rec = self.JumperRec(prog, None, prog_addr, to_addr=jmp, break_at_dest=break_on_it, reg=reg, value=new_value, indirect=indirect)
+        #def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
+        if resimUtils.isSO(prog):
+            self.handleSO(reg_set_rec)
+        else:
+            prog_comm = self.task_utils.progComm(prog)
+            handle = '%s:0x%x' % (prog_comm, prog_addr)
+            self.prog_jumpers[handle] = reg_set_rec
+            self.handleProg(jump_rec=reg_set_rec)
+
+        return True
+
 
     def handleProg(self, jump_rec):
         ''' Handle program jumpers.  May be called via a callback once program is scheduled, which may pass a string we do not want '''
@@ -237,11 +321,11 @@ class Jumpers():
     def fixAddr(self, addr, prog): 
         retval = addr
         if self.cpu.architecture != 'ppc32':
-            load_addr = self.so_map.getLoadAddr(jump_rec.prog)
-            if load_addr is None:
-                self.lgr.error('jumpers fixAddr load_addr is none for prog %s' % prog)
+            load_offset = self.so_map.getLoadOffset(prog)
+            if load_offset is None:
+                self.lgr.error('jumpers fixAddr load_offset is none for prog %s' % prog)
                 return
-            retval = addr + load_addr
+            retval = addr + load_offset
         return retval
 
     def setProgJumpersIfMapped(self, jump_rec):
@@ -279,13 +363,13 @@ class Jumpers():
                 by_4 = int(less_8 / 4)
                 instruct = 0xea000000 + by_4
                 self.lgr.debug('jumper setProgJumpers delta %d by_4 %d addr 0x%x instruct 0x%x' % (delta, by_4, addr, instruct))
-                self.top.writeWord(addr, instruct, target_cpu=self.cpu)
+                self.top.writeWord32(addr, instruct, target_cpu=self.cpu)
                 print('patched address 0x%x with word 0x%x' % (addr, instruct))
                 self.lgr.debug('jumpers setProgJumper patched address 0x%x with word 0x%x' % (addr, instruct))
             elif self.cpu.architecture == 'ppc32':
                 delta = jump_rec.to_addr - jump_rec.from_addr
                 instruct = 0x48000000 + delta
-                self.top.writeWord(addr, instruct, target_cpu=self.cpu)
+                self.top.writeWord32(addr, instruct, target_cpu=self.cpu)
                 print('patched address 0x%x with word 0x%x' % (addr, instruct))
                 self.lgr.debug('jumper setProgJumper patched address 0x%x with word 0x%x' % (addr, instruct))
             else:
@@ -295,56 +379,85 @@ class Jumpers():
 
         elif jump_rec.replace:
             self.lgr.debug('jumper setProgJumpers replace instruct at 0x%x with 0x%x' % (addr, jump_rec.to_addr))
-            self.top.writeWord(addr, jump_rec.to_addr, target_cpu=self.cpu)
+            self.top.writeWord32(addr, jump_rec.to_addr, target_cpu=self.cpu)
             print('replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
             self.lgr.debug('jumper setProgJumper replaced address 0x%x with word 0x%x' % (addr, jump_rec.to_addr))
         else:
             phys = self.mem_utils.v2p(self.cpu, addr)
             if phys is not None and phys != 0:
-                self.lgr.debug('jumper setProgJumper call setBreak for %s on phys 0x%x' % (jump_rec.prog, phys))
+                self.lgr.debug('jumper setProgJumper call setBreak for %s on phys 0x%x addr was 0x%x' % (jump_rec.prog, phys, addr))
                 self.setBreak(jump_rec, phys)
             else:
                 self.lgr.error('jumper failed to get phys for addr 0x%x' % addr)
 
 
     def handleSO(self, jump_rec):
-        image_base = self.so_map.getImageBase(jump_rec.prog)
+        image_base = self.so_map.getImageBase(jump_rec.prog, is_so=True)
         if image_base is None:
             # No process has loaded this image.  Set a callback for each load of the library
-            self.lgr.debug('jumper handleJumperEntry no process has image loaded, set SO watch callback for %s prog %s' % (jump_rec.lib_addr, jump_rec.prog))
+            self.lgr.debug('jumper handleSO no process has image loaded, set SO watch callback for %s prog %s' % (jump_rec.lib_addr, jump_rec.prog))
             self.so_map.addSOWatch(jump_rec.prog, self.libLoadCallback, name=jump_rec.lib_addr)
             self.pending_libs[jump_rec.lib_addr] = jump_rec
         elif self.top.isVxDKM(cpu=self.cpu):
             jump_rec.image_base = image_base
             load_addr = self.so_map.getLoadAddr(jump_rec.prog)
             addr = jump_rec.from_addr + load_addr
-            self.lgr.debug('jumper handleJumperEntry vxworks set break on 0x%x' % addr)
+            self.lgr.debug('jumper handleSO vxworks set break on 0x%x' % addr)
             self.setBreak(jump_rec, addr)
         else:
             # Library loaded by someone.  Get list of pids
             jump_rec.image_base = image_base
             loaded_pids = self.so_map.getSOPidList(jump_rec.prog)
             if len(loaded_pids) == 0:
-                self.lgr.error('jumper handleJumperEntry not at least one pid for %s' % jump_rec.prog)
+                self.lgr.error('jumper handleSO not at least one pid for %s' % jump_rec.prog)
                 return
-            self.lgr.debug('jumper handleJumperEntry %d pids with lib loaded, image_base 0x%x' % (len(loaded_pids), image_base))
+            self.lgr.debug('jumper handleSO %d pids with lib loaded, image_base 0x%x' % (len(loaded_pids), image_base))
             phys = None
             # a bit of hackery to avoid looking up another process's page table if threads of same process.
             # can remove after all params include the page table info (mm_struct)
             tid = self.top.getTID(target=self.cell_name)
             tid = self.so_map.getSOTid(tid)
+            got_one = False
             for so_pid in loaded_pids:
                 if str(so_pid) == tid:
-                    use_pid = None
-                else:
-                    use_pid = str(so_pid)
-                load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=use_pid)
-                if load_addr is not None:
-                    self.lgr.debug('jumper handleJumperEntrys pid:%s lib_addr %s load addr 0x%x, call getPhys' % (use_pid, jump_rec.lib_addr, load_addr))
-                    phys = self.getPhys(jump_rec, load_addr, use_pid)
-                    if phys is not None and phys != 0:
-                        self.setBreak(jump_rec, phys)
+                    self.lgr.debug('jumper handleSO tid:%s has prog %s mapped, set break and call it done' % (tid, jump_rec.prog))
+                    self.setProgJumpersIfMapped(jump_rec)
+                    got_one = True
+                    break
+            
+            if not got_one: 
+                self.lgr.debug('jumper handleSO current tid:%s does not have %s mapped, use contextManager to catch schedule of those that do.' % (tid, jump_rec.prog))
+                for so_pid in loaded_pids:
+                    so_tid = str(so_pid)
+                    if so_tid not in self.pending_so:
+                        self.pending_so[so_tid] = []
+                    self.lgr.debug('jumper handleSO add tid:%s to catchTid for prog %s addr: 0x%x' % (so_tid, jump_rec.prog, jump_rec.from_addr))
+                    self.pending_so[so_tid].append(jump_rec)
+                    self.context_manager.catchTid(so_tid, self.soScheduled)
         return True
+
+    def soScheduled(self, dumb=None):
+        '''
+        Called by contextManager because tid was scheduled.
+        Find all SO waiting on this tid and set jumpers on them
+        '''
+        cpu, comm, cur_tid = self.top.curThread(target_cpu=self.cpu)
+        self.lgr.debug('jumper soScheduled cur_tid:%s' % cur_tid)
+        if cur_tid in self.pending_so:
+            for jump_rec in self.pending_so[cur_tid]:
+                # upate prog_jumpers in case the address is not mapped
+                handle = '%s:0x%x' % (comm, jump_rec.from_addr)
+                self.prog_jumpers[handle] = jump_rec
+                self.setProgJumpersIfMapped(jump_rec)
+            # now find and remove all jump recs for other tids that refer to this so/address
+            for jump_rec in self.pending_so[cur_tid]:
+                for tid in self.pending_so:
+                    if tid == cur_tid:
+                        continue
+                    if jump_rec in self.pending_so[tid]:
+                        self.pending_so[tid].remove(jump_rec)
+                        self.lgr.debug('jumper soScheduled removed jump_rec for %s:0x%x tid:%s, already handled' % (jump_rec.prog, jump_rec.from_addr, tid))
+            self.pending_so[cur_tid] = []    
 
     def libLoadCallback(self, load_addr, lib_addr):
         # called when a jumpered library is loaded
@@ -382,23 +495,23 @@ class Jumpers():
             if phys is not None and phys != 0:
                 self.setBreak(self.pending_pages[name], phys)
 
-    def getPhys(self, jump_rec, load_addr, pid):
+    def getPhys(self, jump_rec, load_addr):
         if jump_rec.image_base is not None:
             offset = load_addr - jump_rec.image_base
         else:
             offset = 0
         linear = jump_rec.from_addr + offset
-        phys_addr = self.mem_utils.v2p(self.cpu, linear, use_pid=pid)
+        phys_addr = self.mem_utils.v2p(self.cpu, linear)
         if jump_rec.image_base is not None:
-            self.lgr.debug('jumper getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x pid:%s' % (load_addr, jump_rec.image_base, offset, linear, pid))
+            self.lgr.debug('jumper getPhys load_addr 0x%x image_base 0x%x offset 0x%x, linear 0x%x' % (load_addr, jump_rec.image_base, offset, linear))
         else:
-            self.lgr.debug('jumper getPhys load_addr 0x%x no image base  offset 0x%x, linear 0x%x pid:%s' % (load_addr, offset, linear, pid))
+            self.lgr.debug('jumper getPhys load_addr 0x%x no image base  offset 0x%x, linear 0x%x' % (load_addr, offset, linear))
         #if phys_addr is not None:
         #    # Cancel callbacks
         #    self.so_map.cancelSOWatch(jump_rec.prog, jump_rec.lib_addr)
         if phys_addr is None or phys_addr == 0:
             self.lgr.debug('jumper getPhys no phys for above, call pageCallback')
-            self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr, use_pid=pid)
+            self.top.pageCallback(linear, self.pagedIn, name=jump_rec.lib_addr)
             self.pending_pages[jump_rec.lib_addr] = jump_rec
         return phys_addr
 
@@ -409,49 +522,80 @@ class Jumpers():
 
     def doJump(self, jump_rec, an_object, break_num, memory):
         #print('doJump')
-        eip = self.top.getReg('pc', self.cpu)
-        if eip == self.prev_dest_eip:
-            # break is hit a 2nd time?
-            return
-        self.lgr.debug('doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
-        ''' callback when jumper breakpoint is hit'''
-        #curr_addr = memory.logical_address 
-        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-        self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it affects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
-        if jump_rec.lib_addr not in self.hap:
-            self.lgr.debug('jumper doJump lib_addr %s not in haps' % jump_rec.lib_addr)
-            return
-        if jump_rec.comm is not None:
-            if comm != jump_rec.comm:
-                self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, jump_rec.comm))
-                return
-        if self.reverse_enabled is None:
-            self.reverse_enabled = self.top.reverseEnabled()
-            self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
-
-        load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=tid)
-        if load_addr is None:
-            # Likely a true shared dll (same phys addr) but this process has no so map
-            self.lgr.debug('jumper doJump failed to get load_addr for %s in tid:%s (%s)' % (jump_rec.prog, tid, comm))
-            # TBD always do this instead of getting load_addr? 
-            delta = jump_rec.to_addr - jump_rec.from_addr
-            source = eip
-            destination = eip + delta
+        if jump_rec.reg is not None:
+            self.doRegSet(jump_rec, memory)
         else:
-            destination = self.fixAddr(jump_rec.to_addr, jump_rec.prog)
-            source = self.fixAddr(jump_rec.from_addr, jump_rec.prog)
-            #offset = load_addr - jump_rec.image_base
-            #destination = jump_rec.to_addr + offset
-            #source = jump_rec.from_addr + offset
+            eip = self.top.getReg('pc', self.cpu)
+            if eip == self.prev_dest_eip:
+                # break is hit a 2nd time?
+                return
+            self.lgr.debug('jumper doJump phys memory 0x%x cycle: 0x%x' % (memory.physical_address, self.cpu.cycles))
+            ''' callback when jumper breakpoint is hit'''
+            #curr_addr = memory.logical_address 
+            cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+            self.lgr.debug('jumper doJump tid: %s lib_addr %s current_context (not that it affects this phys break) is %s cycle: 0x%x' % (tid, jump_rec.lib_addr, self.cpu.current_context, self.cpu.cycles))
+            if jump_rec.lib_addr not in self.hap:
+                self.lgr.debug('jumper doJump lib_addr %s not in haps' % jump_rec.lib_addr)
+                return
+            if jump_rec.comm is not None:
+                if comm != jump_rec.comm:
+                    self.lgr.debug('doJump comm %s does not match jumper comm of %s' % (comm, jump_rec.comm))
+                    return
+            if self.reverse_enabled is None:
+                self.reverse_enabled = self.top.reverseEnabled()
+                self.lgr.debug('jumpers doJump setting reverse_enabled to %r' % self.reverse_enabled)
+    
+            load_addr = self.so_map.getLoadAddr(jump_rec.prog, tid=tid)
+            if load_addr is None:
+                # Likely a true shared dll (same phys addr) but this process has no so map
+                self.lgr.debug('jumper doJump failed to get load_addr for %s in tid:%s (%s)' % (jump_rec.prog, tid, comm))
+                # TBD always do this instead of getting load_addr? 
+                delta = jump_rec.to_addr - jump_rec.from_addr
+                source = eip
+                destination = eip + delta
+            else:
+                destination = self.fixAddr(jump_rec.to_addr, jump_rec.prog)
+                source = self.fixAddr(jump_rec.from_addr, jump_rec.prog)
+                #offset = load_addr - jump_rec.image_base
+                #destination = jump_rec.to_addr + offset
+                #source = jump_rec.from_addr + offset
+    
+            self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
+            self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
+            self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
+            self.prev_dest_eip = self.top.getReg('pc', self.cpu)
+            if jump_rec.break_at_dest:
+                SIM_break_simulation('Jumper request')
+                self.lgr.debug('jumper doJump did break_simulation')
+            self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
 
-        self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
-        self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
-        self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
-        self.prev_dest_eip = self.top.getReg('pc', self.cpu)
-        if jump_rec.break_at_dest:
-            SIM_break_simulation('Jumper request')
-            self.lgr.debug('jumper doJump did break_simulation')
-        self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
+    def doRegSet(self, reg_set_rec, memory):
+        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        if True:
+            if reg_set_rec.indirect:
+                self.lgr.debug('jumper RegSet comm %s hit 0x%x will replace content of address in reg %s to %s' % (comm, memory.logical_address, reg_set_rec.reg, reg_set_rec.value)) 
+                addr = self.mem_utils.getRegValue(self.cpu, reg_set_rec.reg)
+                bstring = binascii.unhexlify(reg_set_rec.value.encode())
+                #self.top.writeString(addr, bstring, target_cpu=self.cpu)
+                self.top.writeBytes(self.cpu, addr, bstring)
+                self.lgr.debug('jumper RegSet indirect wrote %s to 0x%x' % (reg_set_rec.value, addr))
+            else:
+                self.lgr.debug('jumper RegSet comm %s hit 0x%x would update reg %s to 0x%x' % (comm, memory.logical_address, reg_set_rec.reg, reg_set_rec.value)) 
+                self.top.writeRegValue(reg_set_rec.reg, reg_set_rec.value, target_cpu=self.cpu)
+            if reg_set_rec.to_addr is not None:
+                if reg_set_rec.to_addr == 'lr':
+                    addr = self.mem_utils.getRegValue(self.cpu, 'lr')
+                    self.top.writeRegValue('pc', addr, target_cpu=self.cpu)
+                    self.lgr.debug('jumper RegSet jmp to lr 0x%x' % addr)
+                     
+                else:
+                    addr = int(reg_set_rec.to_addr, 16)
+                    self.top.writeRegValue('pc', addr, target_cpu=self.cpu)
+                    self.lgr.debug('jumper RegSet jmp to 0x%x' % addr)
+            if reg_set_rec.break_at_dest:
+                SIM_break_simulation('regset break on it')
+                self.lgr.debug('jumper RegSet break on it')
+           
 
     def disableBreaks(self):
         self.lgr.debug('Jumpers disableBreaks')
@@ -464,7 +608,7 @@ class Jumpers():
             SIM_enable_breakpoint(self.breakpoints[lib_addr])
  
     class JumperRec():
-        def __init__(self, prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace):
+        def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
             self.prog = prog
             self.from_addr = from_addr
             self.to_addr = to_addr
@@ -475,3 +619,7 @@ class Jumpers():
             self.replace = replace
             self.lib_addr = '%s:0x%x' % (prog, from_addr)
             self.image_base = None
+            self.reg = reg
+            # hex string
+            self.value = value
+            self.indirect = indirect

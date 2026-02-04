@@ -6,15 +6,15 @@ import sys
 import time
 import os
 import socket
+import ssl
 import logging
 import logging.handlers
 import argparse
 
-def sendTCP(host, port, infile_list, hang, lgr):
+def getSock(host, port, lgr):
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     server_addr = (host, port)
-    #server_addr = ('localhost', port)
     while True:
         try:
             sock.connect(server_addr)
@@ -23,7 +23,34 @@ def sendTCP(host, port, infile_list, hang, lgr):
         except(socket.error) as e:
             lgr.debug('connect fail %s' % e)
             time.sleep(1)
-            
+    return sock
+
+def getSSL(host, port, lgr):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    server_addr = (host, port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while True:
+        try:
+            sock.connect(server_addr)
+            lgr.debug('connect ok')
+            break
+        except(socket.error) as e:
+            lgr.debug('connect fail %s' % e)
+            time.sleep(1)
+    retval = context.wrap_socket(sock, server_hostname=host)
+    peer = retval.getpeername()
+    lgr.debug('Connected to %s' % peer)
+    return retval
+
+def sendTCP(host, port, infile_list, hang, ssl_requested, lgr):
+    if ssl_requested:
+        sock = getSSL(host, port, lgr)
+    else:
+        sock = getSock(host, port, lgr)        
     for infile in infile_list:    
         with open (infile, 'rb') as fh:
             s = fh.read()
@@ -41,6 +68,7 @@ def main():
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-f', '--file', action='store', help='File list.')
     parser.add_argument('-g', '--hang', action='store_true', help='Hang after last send to leave connection open.')
+    parser.add_argument('-s', '--ssl', action='store_true', help='Use ssl (no cert checking)')
     lgr = logging.getLogger('clientTCPlog')
     #lhStdout = lgr.handlers[0]
     lgr.setLevel(logging.DEBUG)
@@ -55,7 +83,7 @@ def main():
     print('begin')
     args = parser.parse_args()
     file_list = args.file.split()
-    sendTCP(args.ip, args.port, file_list, args.hang, lgr)
+    sendTCP(args.ip, args.port, file_list, args.hang, args.ssl, lgr)
 
 if __name__ == '__main__':
     sys.exit(main())

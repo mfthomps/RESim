@@ -40,6 +40,8 @@ class TrackResult():
         self.num_marks = num_marks
 
 def findTrackMark(f, addr, count, one, prog, quiet=False, lgr=None, no_cbr=False):
+    print('do for %s' % f)
+    print('addr is 0x%x' % addr)
     retval = None
     track_path = getTrack(f)
     queue_path = getQueue(f)
@@ -54,20 +56,22 @@ def findTrackMark(f, addr, count, one, prog, quiet=False, lgr=None, no_cbr=False
             print('failed to load json from %s' % track_path)
             return None, None
         somap = track['somap']
-        if prog is not None:
+        if addr > 0 and prog is not None:
             offset = resimUtils.getLoadOffsetFromSO(somap, prog, lgr=lgr)
             if offset != None:
                 addr = addr + offset
         mark_list = track['marks']
         sorted_marks = sorted(mark_list, key=lambda x: x['cycle'])
         #print('%d marks' % len(mark_list))
-        end = addr + count - 1
+        if addr > 0:
+            end = addr + count - 1
+        print('addr 0x%x' % addr)
         for mark in sorted_marks:
-            #print('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
+            #print('%d ip: 0x%x cycle: 0x%x type: %s' % (count, mark['ip'], mark['cycle'], mark['mark_type']))
             #lgr.debug('%d ip: 0x%x cycle: 0x%x' % (count, mark['ip'], mark['cycle']))
             if mark['mark_type'] == 'copy':
                 dest = mark['dest']
-                if dest >= addr and dest <= end:
+                if addr == 0 or (dest >= addr and dest <= end):
                     print('got mark copy %d bytes to 0x%x path %s' % (mark['length'], dest, track_path))
                     if one:
                         break
@@ -84,16 +88,22 @@ def main():
     parser.add_argument('count', action='store', help='Hex number of bytes in range.')
     parser.add_argument('prog', action='store', help='The program or library.')
     parser.add_argument('-o', '--one', action='store_true', help='stop after one.')
+    parser.add_argument('-f', '--file', action='store', help='The single track file to dump.')
     args = parser.parse_args()
 
     if args.target.endswith('/'):
         args.target = args.target[:-1]
-    afl_path = os.getenv('AFL_DATA')
-    unique_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
-    target_path = os.path.join(afl_path, 'output', args.target)
-    expaths = json.load(open(unique_path))
-    print('got %d paths' % len(expaths))
+    if args.file is None:
+        afl_path = os.getenv('AFL_DATA')
+        unique_path = os.path.join(afl_path, 'output', args.target, args.target+'.unique') 
+        target_path = os.path.join(afl_path, 'output', args.target)
+        expaths = json.load(open(unique_path))
+        print('got %d paths' % len(expaths))
+    else:
+        target_path = ''
+        expaths = [args.file]
     addr = int(args.addr, 16) 
+    print('wtf addr is 0x%x' % addr)
     count = int(args.count, 16) 
     
     for index in range(len(expaths)):

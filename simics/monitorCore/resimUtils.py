@@ -286,13 +286,15 @@ def isPrintable(thebytes, ignore_zero=False, lgr=None):
 def getHexDump(b):
     if len(b) == 0:
         return ""
+    # do not include trailing nulls.
     count = 0
-    for i in reversed(b):
-        if i is None or i > 0:
-            break
-        count = count + 1
-    end = len(b) - count
-    b = b[:end]
+    if len(b) > 16:
+        for i in reversed(b):
+            if i is None or i > 0:
+                break
+            count = count + 1
+        end = len(b) - count
+        b = b[:end]
     s2 = "".join([chr(i) if i is not None and 32 <= i <= 127 else "." for i in b])
     if not isPrintable(b):
         s1 = ''
@@ -544,6 +546,14 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
         if os.path.isfile(analysis_path):
             retval = analysis_path[:-5]
             lgr.debug('resimUtils getAnalysis got it %s' % retval)
+        else:
+            relative = fname[len(root_prefix)+1:]
+            lgr.debug('resimUtils getAnalysis try simlink relative %s' % relative)
+            analysis_path = os.path.join(top_dir, relative)+'.funs'
+            lgr.debug('resimUtils getAnalysis try path %s' % analysis_path)
+            if os.path.isfile(analysis_path):
+                retval = analysis_path[:-5]
+                lgr.debug('resimUtils getAnalysis symlink got it %s' % retval)
     else:
         if fname.startswith('/'):
             fname = fname[1:]
@@ -611,7 +621,7 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
 
     return retval
 
-clib_dep = {'libc': 0,  'libstdc': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 'msvcp': 0, 'kernel32': 0, 'ucrtbase': 0, 'mswsock.dll': 2, 
+clib_dep = {'libc': 0,  'libstdc': 0, 'ld-musl-i386': 0, 'kernelbase': 0, 'ws2_32': 0, 'msvcr': 0, 'msvcp': 0, 'kernel32': 0, 'ucrtbase': 0, 'mswsock.dll': 2, 
              'ws2_32.dll':2, 'qt5core': 5, 'qt5network':4}
 
 def getClibIndex(fname):
@@ -759,9 +769,12 @@ def getKeyValue(item):
     return key, value
 
 def yesNoTrueFalse(item):
-    item = item.lower()
-    if item in ['yes', 'true']:
-        return True
+    if item is not None:
+        item = item.lower()
+        if item in ['yes', 'true']:
+            return True
+        else:
+            return False 
     else:
         return False 
 
@@ -784,3 +797,105 @@ def isCall(cpu, instruct):
         return decodePPC32.isCall(cpu, instruct)
     else: 
         return decode.isCall(cpu, instruct)
+
+def parseScanfFormat(format_string):
+    """
+    Parses a sscanf-like format string and returns a list of inferred Python types.
+    This function handles common sscanf format specifiers like %d, %f, %s, %c, %x.
+    It does not handle width specifiers or more complex sscanf features.
+    """
+    type_list = ['d', 'i', 'u', 'f', 'e', 'g', 's','c', 'x', 'X']
+    retval = []
+    # Find all format specifiers (e.g., %d, %s, %f)
+    matches = re.findall(r'%(\w)', format_string)
+
+    for specifier in matches:
+        if specifier in type_list:
+            retval.append(specifier)
+        else:
+            # Handle unknown specifiers or provide a default (e.g., str)
+            retval.append('s') # Default to string for unknown specifiers
+    return retval
+
+def getListFromComponentFile(top, cell_name, env_name, lgr):
+    '''
+    With top being the genMonitor, get an ini component
+    variable value assumed to be a file name and return
+    file content as a list.
+    '''
+    the_file = top.getCompDict(cell_name, env_name)
+    retval = []
+    if the_file is not None:
+        if os.path.isfile(the_file):
+            with open(the_file) as fh:
+                for line in fh:
+                    if line.strip().startswith('#'):
+                        continue
+                    retval.append(line.strip())
+        else:
+            lgr.error('The ini file has no %s entry for component %s' % (env_name, cell_name))
+            retval = None
+    return retval
+
+def getPyPath(prog_path):
+    retval = None
+    if os.path.isfile(prog_path):
+        with open(prog_path) as fh:
+            for line in fh:
+                if line.startswith('#!/'):
+                    rest = line[2:].strip()
+                    parts = rest.split()
+                    if len(parts) == 1:
+                        retval = rest
+                break
+    return retval
+
+def getTokenValue(line, token):
+    retval = None
+    if line is not None:
+        if token in line:
+            parts = line.split(token, 1)
+            remain = parts[1].strip()
+            tparts = remain.split(' ')
+            retval = tparts[0].strip()
+    return retval
+# A bit array demo - written for Python 3.0
+# From demo on python.org
+import array
+def makeBitArray(bitSize, fill = 0):
+    intSize = bitSize >> 5                   # number of 32 bit integers
+    if (bitSize & 31):                      # if bitSize != (32 * n) add
+        intSize += 1                        #    a record for stragglers
+    if fill == 1:
+        fill = 4294967295                                 # all bits set
+    else:
+        fill = 0                                      # all bits cleared
+
+    bitArray = array.array('I')          # 'I' = unsigned 32-bit integer
+
+    bitArray.extend((fill,) * intSize)
+
+    return(bitArray)
+
+# testBit() returns a nonzero result, 2**offset, if the bit at 'bit_num' is set to 1.
+def testBit(array_name, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = 1 << offset
+    return(array_name[record] & mask)
+
+# setBit() returns an integer with the bit at 'bit_num' set to 1.
+def setBit(array_name, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = 1 << offset
+    array_name[record] |= mask
+    return(array_name[record])
+
+# clearBit() returns an integer with the bit at 'bit_num' cleared.
+def clearBit(array_name, bit_num):
+    record = bit_num >> 5
+    offset = bit_num & 31
+    mask = ~(1 << offset)
+    array_name[record] &= mask
+    return(array_name[record])

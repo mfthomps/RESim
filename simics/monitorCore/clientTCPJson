@@ -14,8 +14,12 @@ import logging
 import logging.handlers
 import argparse
 import json
+import ssl
 def getCookie(data, lgr):
-    offset = data.index(b'set-cookie:') + len('set-cookie:')
+    try:
+        offset = data.index(b'set-cookie:') + len('set-cookie:')
+    except:
+        offset = data.index(b'Set-Cookie:') + len('set-cookie:')
     rest = data[offset:]
     lgr.debug('rest is %s' % rest)
     auth = rest.split(b'=', 1)[1]
@@ -24,7 +28,48 @@ def getCookie(data, lgr):
     lgr.debug('data set cookie %s' % cookie)
     return cookie
 
-def sendTCP(lgr):
+def getToken(data, token, lgr):
+    offset = data.index(token) + len(token) 
+    rest = data[offset:]
+    lgr.debug('rest is %s' % rest)
+    if rest.endswith(','):
+        rest = rest[-1]
+    retval = rest.replace('"', '')
+    lgr.debug('getToken returning %s' % rest)
+    return retval
+
+def getSSL(host, port, lgr):
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    server_addr = (host, port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    while True:
+        try:
+            sock.connect(server_addr)
+            lgr.debug('connect ok')
+            break
+        except(socket.error) as e:
+            lgr.debug('connect fail %s' % e)
+            time.sleep(1)
+    retval = context.wrap_socket(sock, server_hostname=host)
+    peer = retval.getpeername()
+    lgr.debug('Connected to %s' % str(peer))
+    return retval
+
+def sockConnect(sock, server_addr, lgr):
+    while True:
+        try:
+            sock.connect(server_addr)
+            lgr.debug('connect ok')
+            break
+        except(socket.error) as e:
+            lgr.debug('connect fail %s' % e)
+            time.sleep(1)
+
+def sendTCP(ssl, resim_token, lgr):
     with open('/tmp/catchme.json', 'r') as fh:
         jdict = json.load(fh)
         if 'hang' in jdict:
@@ -34,21 +79,18 @@ def sendTCP(lgr):
         host = jdict['host']
         port = jdict['port']
         data = jdict['data'] 
-    
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
-        server_addr = (host, port)
-        while True:
-            try:
-                sock.connect(server_addr)
-                lgr.debug('connect ok')
-                break
-            except(socket.error) as e:
-                lgr.debug('connect fail %s' % e)
-                time.sleep(1)
+        if ssl:
+            lgr.debug('try ssl connect host %s port %d' % (host, port))
+            sock = getSSL(host, port, lgr)
+        else: 
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            server_addr = (host, port)
+            lgr.debug('try connect host %s port %d' % (host, port))
+            sockConnect(sock, server_addr, lgr)
         #TBD REMOVE/FIX
         delim = b"\r\n\r\n"
         cookie = None
+        token_value = None
         get_next = True
         data_iter = iter(data)
         #for item in data:
@@ -62,16 +104,38 @@ def sendTCP(lgr):
                 if item is None:
                     lgr.debug('Got none from data iterator, break')
                     break
-                item_hex = eval(item)
-                item_bytes = binascii.unhexlify(item_hex)
+                #item_hex = eval(item)
+                item_bytes = item.encode()
+                item_bytes = binascii.unhexlify(item_bytes)
             else:
                 get_next = True
+            lgr.debug('Next item to send %s' % item_bytes.decode(errors="ignore"))
+            if b'RESIM_TOKEN' in item_bytes:
+                lgr.debug('RESIM_TOKEN is in item bytes')
+                if token_value is not None:
+                    item_bytes = item_bytes.replace(b'RESIM_TOKEN', token_value.encode())
+                else:
+                    lgr.error('See RESIM_TOKEN, but have not token value')
+                    exit(1)
+            disconnect = False
+            if b'RESIM_DISCONNECT' in item_bytes:
+                disconnect = True
+                nothing = bytes(0)
+                item_bytes = item_bytes.replace(b'RESIM_DISCONNECT', nothing)
+            keep_reading = False
+            if b'RESIM_KEEP_READING' in item_bytes:
+                keep_reading = True
+                nothing = bytes(0)
+                item_bytes = item_bytes.replace(b'RESIM_KEEP_READING', nothing)
+                
             if cookie is not None: 
                 if b'Cookie:' in item_bytes:
                     lgr.debug('item has a cookie')
                     if b'RESIM_COOKIE' in item_bytes:
                         item_bytes = item_bytes.replace(b'RESIM_COOKIE', cookie)
                         lgr.debug('item is Cookie: and has a RESIM cookie, replaced with %s, item_bytes now %s' % (cookie, item_bytes))
+                    else:
+                        lgr.debug('item is Cookie: BUT DOES NOT HAVE a RESIM cookie, replaced with %s, item_bytes now %s' % (cookie, item_bytes))
                 else:
                     if b'RESIM_COOKIE' in item_bytes:
                         item_bytes = item_bytes.replace(b'RESIM_COOKIE', cookie)
@@ -85,11 +149,24 @@ def sendTCP(lgr):
                 lgr.debug('sent %d bytes' % len(item_bytes))
             done = False
             count = 0
+            #want = 'csrf_token'
             while not done:
                 got = sock.recv(1024)
-                lgr.debug('got len %d' % (len(got)))
-                if b'set-cookie:' in got:
+                lgr.debug('received len %d' % (len(got)))
+                got_str = got.decode(errors="ignore")
+                lgr.debug(got_str)
+                if 'set-cookie' in got_str.lower(): 
+                    lgr.debug('sees set-cookie')
                     cookie = getCookie(got, lgr)
+                if resim_token is not None and resim_token in got_str.lower():
+                    token_value = getToken(got_str, resim_token, lgr)
+                    lgr.debug('read resim_token %s, got token value %s' % (resim_token, token_value))
+                if keep_reading:
+                   if len(got) > 0:
+                        continue
+                   else:
+                        break
+
                 if len(got) == 1024:
                     # dangerous assumption
                     pass
@@ -101,6 +178,18 @@ def sendTCP(lgr):
                     count = count+1
                     if count > 10:
                         break
+            if disconnect:
+                lgr.debug('Saw disconnect, will reconnect after a close')
+                sock.close()
+                time.sleep(.5)
+                if ssl:
+                    lgr.debug('try ssl connect host %s port %d' % (host, port))
+                    sock = getSSL(host, port, lgr)
+                else: 
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    server_addr = (host, port)
+                    lgr.debug('try connect host %s port %d' % (host, port))
+                    sockConnect(sock, server_addr, lgr)
         if hang:
                 lgr.debug('hanging as directed')
                 time.sleep(1000000)
@@ -121,6 +210,7 @@ def createNewJson(host, port, infile, hang, lgr):
             jdict['data']=tcp_json
     with open('/tmp/catchme.json', 'w') as fh:
         fh.write(json.dumps(jdict))
+    lgr.debug('did createNewJson')
 
     
 def main():
@@ -129,6 +219,8 @@ def main():
     parser.add_argument('-p', '--port', action='store', type=int, help='Port number.')
     parser.add_argument('-f', '--file', action='store', help='Json file.')
     parser.add_argument('-g', '--hang', action='store_true', help='Hang after last send to leave connection open.')
+    parser.add_argument('-s', '--ssl', action='store_true', help='Use ssl (no cert checking)')
+    parser.add_argument('-r', '--resim_token', action='store', help='RESIM_TOKEN key field whose value will be replaced, similar to cookies.')
     lgr = logging.getLogger('clientTCPlog')
     #lhStdout = lgr.handlers[0]
     lgr.setLevel(logging.DEBUG)
@@ -140,10 +232,10 @@ def main():
     #lgr.addHandler(logging.handlers.DatagramHandler('172.20.107.155', 51010))
     #lgr.removeHandler(lhStdout)
     lgr.info('Start of log from clientTCP')
-    print('begin')
+    lgr.debug('begin')
     args = parser.parse_args()
     createNewJson(args.ip, args.port, args.file, args.hang, lgr)
-    sendTCP(lgr)
+    sendTCP(args.ssl, args.resim_token, lgr)
 
 if __name__ == '__main__':
     sys.exit(main())

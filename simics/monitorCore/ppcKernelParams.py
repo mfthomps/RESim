@@ -25,6 +25,8 @@
 '''
 Get PowerPC kernel parameters: kernel entry; kernel exit and current_task.
 Then calls back to getKernelParams for the rest.
+Kernel entry is not at point of mode change, so we crudely set breaks over kernel
+addresses.  Mode change is into ppc sc handler, which is not part of kernel.
 '''
 from simics import *
 from resimHaps import RES_delete_mode_hap, RES_delete_mem_hap, RES_delete_stop_hap
@@ -54,6 +56,7 @@ class PPCKernelParams():
         self.cur_task_breaks = []
         self.cur_task_haps = []
         self.task_hit_count = {}
+        self.super_enter = None
 
     def getParams(self):
         self.reverse_manager.enableReverse()
@@ -127,7 +130,12 @@ class PPCKernelParams():
         if instruct[1] == 'sc':
             if self.kernel_entry is None:
                 self.kernel_entry = kernel_enter_pc
-            SIM_continue(100)
+
+            SIM_continue(1)
+            super_pc = self.mem_utils.getRegValue(self.cpu, 'pc')
+            self.lgr.debug('super_pc is 0x%x' % super_pc)
+            self.super_enter = super_pc
+            SIM_continue(99)
             if self.compute_jump is None:
                 self.findCompute(here)
             r2 = self.mem_utils.getRegValue(self.cpu, 'r2')
@@ -351,7 +359,7 @@ class PPCKernelParams():
         if len(self.kernel_exit) < 2:
             print('kernel parameters failed to get 2 syscall exits for ppc')
         else:
-            self.top.ppcParams(self.kernel_entry, self.kernel_exit, self.current_task, self.current_phys_addr, self.compute_jump)
+            self.top.ppcParams(self.kernel_entry, self.kernel_exit, self.current_task, self.current_phys_addr, self.compute_jump, self.super_enter)
 
     def delExitStopHap(self):
         if self.stop_hap is not None:

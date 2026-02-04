@@ -84,7 +84,8 @@ class IDAFuns():
         return fun_path
             
     def add(self, path, offset):
-        if path is None or path in self.did_paths:
+        self.lgr.debug('idaFuns add path %s did_paths is %s' % (path, str(self.did_paths)))
+        if path is None or path in self.did_paths or path[:-5] in self.did_paths:
             return
         else:
             self.did_paths.append(path)
@@ -114,7 +115,8 @@ class IDAFuns():
                     fun_int = int(f)
                     fun = fun_int + offset
                     if fun in self.funs:
-                        self.lgr.error('idaFuns collision on function 0x%x fun_int 0x%x offset 0x%x file: %s' % (fun, fun_int, offset, funfile))
+                        self.lgr.error('idaFuns collision on function 0x%x (%s) fun_int 0x%x offset 0x%x file: %s' % (fun, newfuns[f]['name'], fun_int, offset, funfile))
+                        break
                     self.funs[fun] = {}
                     self.funs[fun]['start'] = fun
                     self.funs[fun]['end'] = newfuns[f]['end']+offset
@@ -294,8 +296,11 @@ class IDAFuns():
         retval = 0
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
+                #self.lgr.debug('idaFuns stackAdjust fun 0x%x matched %s' % (fun, fun_name))
                 if 'adjust_sp' in self.funs[fun]:
                     retval = self.funs[fun]['adjust_sp']
+                    if retval > 0:
+                        break
         return retval
 
     def haveFuns(self, fname):

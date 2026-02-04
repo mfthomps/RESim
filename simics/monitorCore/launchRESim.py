@@ -324,7 +324,14 @@ class LaunchRESim():
             if self.config.has_section('driver'):
                 cmd = '$machine_name="driver"' 
                 run_command (cmd)
-                run_command('$eth_dev=i82543gc')
+                cmd = '$host_name="driver"' 
+                run_command (cmd)
+                if not self.SIMICS_VER.startswith('7'):
+                    run_command('$eth_dev=i82543gc')
+                
+                if self.SIMICS_VER > '7.57.0':
+                    lgr.debug('Setting x86QSP3 for driver')
+                    run_command('$cpu_comp_class="x86QSP3"')
                 for name in self.comp_dict['driver']:
                     value = self.comp_dict['driver'][name]
                     if name.startswith('$'):
@@ -337,12 +344,12 @@ class LaunchRESim():
         
                 driver_script = self.getSimicsScript('driver',lgr)
                 if os.path.isfile('./driver-script.sh'):
-                    print('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
-                    lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                    print('Start the driver using %s' % (driver_script))
+                    lgr.debug('Start the driver using %s' % (driver_script))
                 else:
                     print('WARNING, starting driver but missing driver-script.sh script! *****************************')
                     lgr.debug('WARNING, starting driver but missing driver-script.sh script! *****************************')
-                lgr.debug('Start the %s using %s' % (self.config.get('driver', '$host_name'), driver_script))
+                lgr.debug('Start the driver using %s' % (driver_script))
                 run_command('run-command-file ./targets/%s' % driver_script)
                 run_command('start-agent-manager')
                 run_command('driver.mb.log-level 0 -r')
@@ -358,7 +365,7 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
-                while not done and not DRIVER_WAIT: 
+                while not done and not DRIVER_WAIT and not RESIM_TARGET.lower() == 'none':
                     #print('***RUN SOME **')
                     #run_command('c 50000000000')
                     run_command('c 500000000')
@@ -442,7 +449,10 @@ class LaunchRESim():
             #print('assign %s CLI variables' % section)
             ''' hack defaults, Simics CLI has no undefine operation '''
             if platform is None or not platform.startswith('arm'):
-                run_command('$eth_dev=i82543gc')
+                if not self.SIMICS_VER.startswith('7'):
+                    run_command('$eth_dev=i82543gc')
+                else:
+                    run_command('$eth_dev=i82559')
                 run_command('$mac_address_3=None')
             
             cmd = '$machine_name="%s"' % section
@@ -450,8 +460,8 @@ class LaunchRESim():
             params=''
             script = self.getSimicsScript(section,lgr)
             did_net_create = False
-            #if 'PLATFORM' in self.comp_dict[section] and self.comp_dict[section]['PLATFORM'].startswith('arm'):
-            #sim7_params = ['disk0_image'] 
+
+            # use section name as hostname, except for old arm and arm5.
             if platform in ['arm', 'arm5']:
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
@@ -463,16 +473,24 @@ class LaunchRESim():
                         cmd = '%s=%s' % (name[1:], value)
                         params = params + " "+cmd
             elif platform == 'ppc32':
-                params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
-                params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
+                params = params+' default_system_info=%s' % section
+                #params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
+                params = params+' board_name=%s' % section
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
                         cmd = '%s=%s' % (name, value)
                         run_command(cmd)
             else:
+                run_command('$host_name=%s' % section)
+                if self.SIMICS_VER > '7.57.0':
+                    lgr.debug('Setting x86QSP3 for %s' % section)
+                    run_command('$cpu_comp_class="x86QSP3"')
+                    
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
+                        if name == '$host_name':
+                            continue
                         value = self.comp_dict[section][name]
                         #if self.SIMICS_VER.startswith('7'):
                         #    if name[1:] in sim7_params:
@@ -483,10 +501,7 @@ class LaunchRESim():
                                 did_net_create = True
                                 cmd = 'create_network=TRUE eth_link=%s' % value
                             else:     
-                                if False and self.SIMICS_VER.startswith('7') and name[1:] == 'disk_image':
-                                    cmd = 'disk0_image=%s' % (value)
-                                else: 
-                                    cmd = '%s=%s' % (name[1:], value)
+                                cmd = '%s=%s' % (name[1:], value)
                             params = params + " "+cmd
                             if self.SIMICS_VER.startswith('4'):
                                run_command('$'+cmd)
@@ -494,7 +509,7 @@ class LaunchRESim():
                             cmd = '%s=%s' % (name, value)
                             run_command(cmd)
                             #print('cmd is %s' % cmd)
-                if 'genx86' in script and not did_net_create:
+                if 'x86' in script and not did_net_create:
                     params = params+" "+'create_network=FALSE'
 
             if did_net_create:

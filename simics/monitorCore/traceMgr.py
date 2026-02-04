@@ -8,6 +8,8 @@ class TraceMgr():
         self.lgr.debug('TraceMgr init')
 
     def write(self, msg):
+        msg = msg.replace('\n','')
+        msg = msg+'\n'
         if self.trace_fh is not None:
             cycle = '%010x--' % self.cpu.cycles
             self.trace_fh.write(cycle+msg)

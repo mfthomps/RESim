@@ -47,6 +47,8 @@ class DmodMgr():
         self.fd_mgr = fdMgr.FDMgr(self.lgr)
         # for maintaining parallel file system, e.g. for /sys and /var/run
         self.path_prefix = None
+        # optimization to prevent dmod checks until comm is scheduled
+        self.waiting_on_comm = {}
         self.setupFileSystem()
         self.handleDmods()
 
@@ -98,16 +100,6 @@ class DmodMgr():
                 else:
                     print('ReadReplace file %s is missing, cannot continue.' % read_replace)
                     self.top.quit()
-        if 'REG_SET' in self.comp_dict:
-            self.top.is_monitor_running.setRunning(False)
-            dlist = self.comp_dict['REG_SET'].split(';')
-            for reg_set in dlist:
-                reg_set = reg_set.strip()
-                if self.top.regSet(reg_set, cell_name=self.cell_name, snapshot=self.run_from_snap):
-                    print('RegSet %s set for cell %s' % (reg_set, self.cell_name))
-                else:
-                    print('RegSet file %s is missing, cannot continue.' % reg_set)
-                    self.top.quit()
        
     def pickleit(self, name): 
         self.lgr.debug('dmodMgr pickleIt')
@@ -130,21 +122,36 @@ class DmodMgr():
         for path in self.loaded_dmods:
             self.rmDmod(path)
 
-    def runToDmod(self, dfile, run=False, background=False, comm=None, break_simulation=False):
+    def runToSecondary(self, primary):
+        self.lgr.debug('dmodMgr runToSecondary %s' % primary.path)
+        self.runToDmod(primary.path, primary=primary)
+ 
+    def runToDmod(self, dfile, run=False, background=False, comm=None, break_simulation=False, primary=None):
         retval = True
         if not os.path.isfile(dfile):
             print('No file found at %s' % dfile)
             return False
-        mod = dmod.Dmod(self.top, dfile, self.mem_utils, self.cell_name, comm, self.run_from_snap, self.fd_mgr, self.path_prefix, self.lgr)
+        mod = dmod.Dmod(self.top, dfile, self.mem_utils, self.cell_name, comm, self.run_from_snap, self.fd_mgr, self.path_prefix, self.lgr, primary=primary)
         operation = mod.getOperation()
-        call_params = syscall.CallParams(dfile, operation, mod, break_simulation=break_simulation)        
-        self.lgr.debug('runToDmod %s file %s cellname %s operation: %s' % (mod.toString(), dfile, self.cell_name, operation))
+        if primary is None:
+            param_name = dfile
+        else:
+            secondary_count = primary.getSecondaryCount()
+            param_name = dfile+'_secondary'+'_%d' % secondary_count
+        call_params = syscall.CallParams(param_name, operation, mod, break_simulation=break_simulation)        
+        self.lgr.debug('dmodMgr runToDmod %s file %s cellname %s operation: %s param_name: %s' % (mod.toString(), dfile, self.cell_name, operation, param_name))
         name = 'dmod-%s' % operation
         if operation == 'open':
            # TBD stat64 (and other stats) should be optional, since program logic may expect file to first be missing?
            # Use a syscall dmod if you want to
-           op_set = ['open', 'read','write','close','lseek','_llseek']
-           self.lgr.debug('runToDmod file op_set now %s' % str(op_set))
+           if primary is None:
+               op_set = ['open', 'openat']
+           else:
+               op_set = ['read','write','close','lseek','_llseek']
+               if self.mem_utils.WORD_SIZE == 8:
+                   op_set.remove('_llseek')
+               name = name+'_secondary'+'_%d' % secondary_count
+           self.lgr.debug('dmodMgr runToDmod file op_set now %s name %s' % (str(op_set), name))
         else:
            op_set = [operation]
         comm_running = False
@@ -153,21 +160,33 @@ class DmodMgr():
         for mod_comm in comm_list:
             tids = self.task_utils.getTidsForComm(mod_comm)
             if len(tids) == 0:
-                self.lgr.debug('runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
+                self.lgr.debug('dmodMgr runToDmod, %s has comm %s that is not runing.' % (mod.path, mod_comm))
                 comms_not_running.append(mod_comm)
             else:
-                self.lgr.debug('runToDmod, has comm that is runing, no callback needed.')
+                self.lgr.debug('dmodMgr runToDmod, has comm that is runing, no callback needed.')
                 comm_running = True
                 break
         if comm_running or len(comm_list) == 0: 
-            self.lgr.debug('runToDmod, at least one comm running (or no comm specified), call runTo')
-            self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True)
+            self.lgr.debug('dmodMgr runToDmod, at least one comm running (or no comm specified), call runTo')
+            ignore_running = False
+            if primary is not None:
+                ignore_running = True
+            self.top.runTo(op_set, call_params, cell_name=self.cell_name, run=run, background=background, name=name, all_contexts=True, ignore_running=ignore_running)
         else:
-            self.lgr.debug('runToDmod, no comm is running, use comm callback for each comm')
+            self.lgr.debug('dmodMgr runToDmod, no comm is running, use comm callback for each comm')
             mod.setCommCallback(op_set, call_params)
             for mod_comm in comms_not_running:
-                self.context_manager.callWhenFirstScheduled(mod_comm, mod.scheduled)
+                if mod_comm not in self.waiting_on_comm:
+                    self.context_manager.callWhenFirstScheduled(mod_comm, self.commScheduled)
+                    self.waiting_on_comm[mod_comm] = [] 
+                self.waiting_on_comm[mod_comm].append(mod)
         return retval
+
+    def commScheduled(self, tid):
+        cpu, comm, cur_tid = self.task_utils.curThread() 
+        self.lgr.debug('dmodMgr commScheduled for tid:%s (%s)' % (tid, comm))
+        for dmod in self.waiting_on_comm[comm]:
+            dmod.scheduled(tid)
 
     def setupFileSystem(self):
         self.path_prefix = './dmod_files'

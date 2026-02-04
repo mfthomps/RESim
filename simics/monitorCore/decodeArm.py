@@ -3,7 +3,7 @@ import re
 import sys
 modsOp0 = ['ldr', 'ldu', 'mov', 'mvn', 'add', 'sub', 'mul', 'and', 'or', 'eor', 'bic', 'rsb', 'adc', 'sbc', 'rsc', 'mla', 'sxt']
 reglist = ['pc', 'lr', 'sp', 'r0', 'r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12']
-for i in range(1,31):
+for i in range(0,31):
     xreg = 'x%d' % i
     reglist.append(xreg)
     wreg = 'w%d' % i
@@ -15,8 +15,12 @@ def modifiesOp0(mn):
     return False
 
 def isReg(reg):
-    if reg in reglist:
-        return True
+    if reg is not None:
+        reg = reg.lower()
+        if reg in reglist:
+            return True
+        else:
+            return False 
     else:
         return False 
 
@@ -123,13 +127,16 @@ def getRegValue(cpu, reg, lgr=None):
         reg_value = reg_value & 0xffffffff
     return reg_value
 
-def getValue(item, cpu, lgr=None):
+def getValue(item, cpu, lgr=None, reg_values=[]):
     item = item.strip()
     value = None
     if lgr is not None:
         lgr.debug('getValue for <%s>' % item)
     if isReg(item):
-        value = getRegValue(cpu, item, lgr=lgr)
+        if item in reg_values:
+            value = reg_values[item]
+        else:
+            value = getRegValue(cpu, item, lgr=lgr)
         if lgr is not None:
             lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):
@@ -157,7 +164,7 @@ def getValue(item, cpu, lgr=None):
     return value 
         
 
-def getAddressFromOperand(cpu, op, lgr, after=False):
+def getAddressFromOperand(cpu, op, lgr, after=False, reg_values=[]):
     retval = None
     express = None
     remain = None
@@ -175,7 +182,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         value = 0
         parts = express.split(',')
         for p in parts:
-            v = getValue(p.strip(), cpu, lgr=None) 
+            v = getValue(p.strip(), cpu, lgr=None, reg_values=reg_values) 
             if v is not None:
                 #lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
@@ -184,7 +191,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
                 return None    
         if remain is not None and remain.startswith(','):
             remain = remain[1:]
-            adjust = getValue(remain, cpu, lgr=None)
+            adjust = getValue(remain, cpu, lgr=None, reg_values=reg_values)
             if adjust is not None:
                 if after:
                     value = value - adjust
@@ -198,7 +205,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         if op.endswith('!'):
             op = op[:-1]
         if isReg(op):
-            retval = getValue(op, cpu)
+            retval = getValue(op, cpu, reg_values=reg_values)
         else:
             lgr.debug('getAddressFromOperand nothing from %s' % op)
     return retval

@@ -81,6 +81,7 @@ class Kparams():
         self.ppc32_entry = None
         self.ppc32_ret = None
         self.ppc32_ret2 = None
+        self.ppc32_super_enter = None
         self.page_fault = None
         self.data_abort = None
         self.syscall_compute = None
@@ -99,6 +100,9 @@ class Kparams():
 
         # some linux don't use same registers for syscalls at sysenter as they do at the computed jump table
         self.x86_reg_swap = False
+
+        # New linux hardcoded jump table
+        self.code_jump_table = None
 
     def printParams(self):
         print('Kernel parameters:')

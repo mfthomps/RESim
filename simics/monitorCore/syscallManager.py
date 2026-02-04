@@ -150,7 +150,7 @@ class SyscallInstance():
 
 class SyscallManager():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type):
+                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type, myIPC):
         self.top = top
         self.param = param
         self.cpu = cpu
@@ -169,6 +169,7 @@ class SyscallManager():
         self.targetFS = targetFS
         self.compat32 = compat32
         self.os_type = os_type
+        self.myIPC = myIPC
 
         self.syscall_dict = {}
         self.trace_all = {}
@@ -176,6 +177,9 @@ class SyscallManager():
             self.sharedSyscall = vxKCallExit.VxKCallExit(top, cpu, cell_name, mem_utils, task_utils, soMap, self.traceMgr, self.dataWatch, self.context_manager, lgr)
         else:
             self.sharedSyscall = sharedSyscall
+
+        self.sharedSyscall.setMyIPC(self.myIPC)
+        self.myIPC.setSyscallManager(self)
 
     def watchAllSyscalls(self, context, name, linger=False, background=False, flist=None, callback=None, compat32=None, stop_on_call=False, 
                          trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[], no_gui=False):
@@ -203,7 +207,7 @@ class SyscallManager():
         else:
             retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, 
-                               self.lgr, self.traceMgr, call_list=None, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
+                               self.lgr, self.traceMgr, self.myIPC, call_list=None, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, 
                                stop_on_call=stop_on_call, trace=trace, binders=binders, connectors=connectors, soMap=self.soMap,
                                netInfo=netInfo, record_fd=record_fd, swapper_ok=swapper_ok)
@@ -233,6 +237,8 @@ class SyscallManager():
             # NOTE may return default context
             context = self.getDebugContextName()
             self.lgr.debug('syscallManager watchSyscall given context was none, now set to %s' % context)
+        else:
+            self.lgr.debug('syscallManager watchSyscall given context is %s' % context)
 
         cell = self.context_manager.getCellFromContext(context)
 
@@ -271,7 +277,7 @@ class SyscallManager():
                                  flist_in=flist, name=name, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                                   self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                                   self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.myIPC,
                                    call_list=call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, 
                                    background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, soMap=self.soMap, 
                                    stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
@@ -342,7 +348,7 @@ class SyscallManager():
                     self.lgr.debug('syscallManager deleted syscall instance for syscall name %s, will replace with %s.  The syscall_dict[context] now has %d items' % (call_instance.syscall.name, name, len(self.syscall_dict[context])))
 
                 ''' TBD what about flist and stop action?'''
-                self.lgr.debug('syscallManager did consolidate, new_call_list is %s old_call_params len %d' % (str(new_call_list), len(old_call_params)))
+                self.lgr.debug('syscallManager did consolidate, new_call_list is %s old_call_params len %d context %s' % (str(new_call_list), len(old_call_params), context))
                 if self.top.isWindows(self.cell_name):
                     retval = winSyscall.WinSyscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
                                self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr, self.dataWatch,
@@ -353,7 +359,7 @@ class SyscallManager():
                                  self.traceMgr, self.context_manager, self.lgr, call_list=new_call_list, call_params=call_params_list, name=name, flist_in=flist, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,self.myIPC,
                                call_list=new_call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
 
@@ -368,7 +374,7 @@ class SyscallManager():
                         self.lgr.debug('syscallManager watchSyscall old_call_param %s not in existing_param_call_list?' % param.name)
                    
                 self.syscall_dict[context][name] = new_call_instance
-                self.lgr.debug('syscallManager watchSyscall replaced old syscall, call_list and params for call instance %s syscall name %s' % (new_call_instance.name, 
+                self.lgr.debug('syscallManager watchSyscall replaced old syscall, context: %s call_list and params for call instance %s syscall name %s' % (context, new_call_instance.name, 
                    name))
  
         return retval
@@ -452,7 +458,7 @@ class SyscallManager():
                                  flist_in=flist, name=name, linger=linger)
                 else:
                     retval = syscall.Syscall(self.top, self.cell_name, cell, self.param, self.mem_utils, 
-                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,
+                               self.task_utils, self.context_manager, self.traceProcs, self.sharedSyscall, self.lgr, self.traceMgr,self.myIPC,
                                call_list=new_call_list, call_params=[], targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 self.lgr.debug('syscallManager rmSyscall created syscall with call list %s' % str(new_call_list))
@@ -509,7 +515,7 @@ class SyscallManager():
             rm_list[context] = []
             for instance_name in self.syscall_dict[context]:
                 rm_list[context].append(instance_name)
-                self.syscall_dict[context][instance_name].stopTrace()
+                self.syscall_dict[context][instance_name].stopTrace(immediate=True)
                 self.lgr.debug('syscallManager rmAllSyscalls remove %s' % instance_name)
                 retval = True
         for context in rm_list:
@@ -520,7 +526,7 @@ class SyscallManager():
         rm_context = []
         for context in self.trace_all:
             self.lgr.debug('syscallManager rmAllSyscalls remove trace_all for context %s' % context)
-            self.trace_all[context].stopTrace()
+            self.trace_all[context].stopTrace(immediate=True)
             rm_context.append(context)
             retval = True
         for context in rm_context:
@@ -539,7 +545,7 @@ class SyscallManager():
                 if params is not None:
                     for p in params:
                         retval.append(p)
-                    self.syscall_dict[context][instance_name].stopTrace()
+                    self.syscall_dict[context][instance_name].stopTrace(immediate=True)
                     self.lgr.debug('syscallManager rmSyscallByContext remove %s' % instance_name)
 
             for instance_name in rm_list:
@@ -548,7 +554,7 @@ class SyscallManager():
 
         if context in self.trace_all:
             self.lgr.debug('syscallManager mrSyscallByContext remove trace_all for context %s' % context)
-            self.trace_all[context].stopTrace()
+            self.trace_all[context].stopTrace(immediate=True)
             del self.trace_all[context]
         return retval
 
@@ -636,7 +642,7 @@ class SyscallManager():
                 call_parameters = self.syscall_dict[context][instance].syscall.getCallParams()
                 if len(call_parameters) == 0:
                     self.lgr.debug('syscallManager rmAllDmods, no more call_params, remove syscall')
-                    self.syscall_dict[context][instance].stopTrace()
+                    self.syscall_dict[context][instance].stopTrace(immediate=True)
                     del self.syscall_dict[context][instance]
 
     def showDmods(self):

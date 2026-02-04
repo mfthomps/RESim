@@ -15,16 +15,15 @@ mkdir -p /home/mike/.ssh
 chown -R mike:mike /home/mike/.ssh
 
 /usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
-nohup /tmp/driver-server.py &
 
-# NOTE: default driver image has 10.0.0.91 as IP, redefine that.
-ip addr del 10.0.0.91/24 dev ens25
 
 # The real network connection will be via ens25
 ip addr add 10.0.0.140/24 dev ens25
 # The connection to the windows box
 ip addr add 10.10.0.91/24 dev ens12f0
 ip link set ens12f0 up
+
+systemctl start start_driver_server
 
 # no longer sure if this junk is needed
 ln -s /var/log/syslog /var/log/messages

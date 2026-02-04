@@ -53,10 +53,10 @@ class reverseToAddr():
         else:
             self.lgr.error('reverseToAddr tried to go to umapped memory 0x%x' % address)
             return
-        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x' % (address, phys_block.address, extra_back, cpu.cycles))
+        self.lgr.debug('reverseToAddr init addr 0x%x (phys: 0x%x), extra_back=%d cycles: 0x%x break num %d' % (address, phys_block.address, extra_back, cpu.cycles, self.the_break))
        
         #self.one_stop_hap = None
-        #self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
+        self.context_manager.disableAll()
         self.lgr.debug('reverseToAddr now call reverse')
         self.reverse_mgr.reverse(callback=self.stopHap)
 
@@ -68,28 +68,21 @@ class reverseToAddr():
         if not self.top.skipToCycle(backone, cpu=self.cpu, disable=True):
             first = self.top.getFirstCycle()
             self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
-            hap = self.stop_hap
-            self.top.RES_delete_stop_hap_run_alone(hap)
-            self.stop_hap = None
             self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         else:
             self.reverse_mgr.reverse()
 
-    def rmStopHap(self, hap):
-        self.top.RES_delete_stop_hap(hap)
-
     def stopHap(self, cpu, one, exception, error_string):
-        #if self.stop_hap is None:
-        #    return
+        if self.the_break is None:
+           return
+        self.context_manager.enableAll()
         cpu, comm, tid  = self.task_utils.curThread()
         eip = self.top.getEIP()
         first = self.top.getFirstCycle()
         self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x first cycle: 0x%x' % (eip, cpu.cycles, first))
+        self.top.RES_delete_stop_hap_run_alone(None, your_stop=True)
         if cpu.cycles <= first:
             self.lgr.error('reverseToAddr stopHap eip: %x cycles: 0x%x at first cycle' % (eip, cpu.cycles))
-            #hap = self.stop_hap
-            #self.top.RES_delete_stop_hap_run_alone(hap)
-            #self.stop_hap = None 
             self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
             self.the_break = None
             return
@@ -99,9 +92,6 @@ class reverseToAddr():
                  self.tid, cpu.cycles, str(exception), str(error_string)))
             SIM_run_alone(self.goBackAlone, None)
             return
-        #hap = self.stop_hap
-        #self.top.RES_delete_stop_hap_run_alone(hap)
-        #self.stop_hap = None 
         self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         self.the_break = None
         origin = self.top.getFirstCycle()
@@ -130,10 +120,10 @@ class reverseToAddr():
         if self.one_stop_hap is None:
             self.lgr.error('backOneStopped invoked though hap is none')
             return
+        eip = self.top.getEIP()
+        self.lgr.debug('reverseToAddr backOneStopped eip: %x' % eip)
         hap = self.one_stop_hap
         self.top.RES_delete_stop_hap_run_alone(hap)
         self.one_stop_hap = None
-        eip = self.top.getEIP()
-        self.lgr.debug('reverseToAddr backOneStopped eip: %x' % eip)
         self.is_monitor_running.setRunning(False)
         self.top.skipAndMail()

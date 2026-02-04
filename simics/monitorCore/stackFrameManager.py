@@ -29,6 +29,7 @@ TBD remind me why stackTrace is per-call and not per target?
 from simics import *
 import stackTrace
 import elfText
+import resimUtils
 from resimHaps import *
 import os
 import pickle
@@ -51,6 +52,13 @@ class StackFrameManager():
         self.best_stack_base = {}
         if run_from_snap is not None:
             self.loadPickle(run_from_snap)
+        ignore_bp = self.top.getCompDict(cell_name, 'IGNORE_BP')
+        if resimUtils.yesNoTrueFalse(ignore_bp):
+            self.use_bp = False
+            self.lgr.debug('stackFrameManager will ignore bp')
+        else:
+            self.use_bp = True
+
 
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
         fun_mgr = self.top.getFunMgr()
@@ -62,7 +70,10 @@ class StackFrameManager():
             tid = in_tid
         else:
             tid = cur_tid
-        st = self.checkIpSpCache(tid)
+        if use_cache:
+            st = self.checkIpSpCache(tid)
+        else:
+            st = None
         if st is None:
             cycle = self.cpu.cycles
             if cycle in self.stack_cache and use_cache:
@@ -79,7 +90,7 @@ class StackFrameManager():
                
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                          self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib)
+                         reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib, use_bp=self.use_bp)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -120,7 +131,7 @@ class StackFrameManager():
                 reg_frame = self.task_utils.frameFromRegs()
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                         self.task_utils, stack_base, fun_mgr, self.targetFS, 
-                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
+                        reg_frame, self.disassembler, self.lgr, max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib, use_bp=self.use_bp)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
                 self.stack_cache[cycle] = st
@@ -168,14 +179,14 @@ class StackFrameManager():
         #rcx = self.mem_utils.getRegValue(self.cpu, 'rcx')
         #self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d rcx 0x%x' % (tid, want_tid, old, new, rcx))
         if tid != want_tid:
-            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted: %s old: %d new: %d bail' % (tid, want_tid, old, new))
+            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s wanted:%s old: %d new: %d bail' % (tid, want_tid, old, new))
             return 
         #if new != Sim_CPU_Mode_Supervisor:
         ''' catch entry into kernel so that we can read SP without breaking simulation '''
         if new == Sim_CPU_Mode_Supervisor:
             esp = self.mem_utils.getRegValue(self.cpu, 'sp')
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-            self.lgr.debug('stackFrameManager modeChangedForStack tid:%s , calling into kernel mode eip: 0x%x esp: 0x%x cycle: 0x%x' % (tid, eip, esp, self.cpu.cycles))
+            self.lgr.debug('stackFrameManager modeChangeForStack tid:%s , calling into kernel mode eip: 0x%x esp: 0x%x cycle: 0x%x' % (tid, eip, esp, self.cpu.cycles))
             self.setStackBase()
             RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
             self.mode_hap = None
@@ -187,9 +198,17 @@ class StackFrameManager():
             self.lgr.debug('stackFrameManager recordStackBase tid:%s 0x%x' % (tid, sp))
             self.stack_base[tid] = sp
 
-    def recordStackClone(self, tid, parent):
-        self.lgr.debug('stackFrameManager recordStackClone tid: %s parent: %s' % (tid, parent))
-        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
+    def recordStackClone(self, tid, parent, sp=None):
+        ''' Record stack base for a clone syscall. The SP is passed in when the stack value is null, indicating COW '''
+        if sp is not None:
+            self.stack_base[tid] = sp
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Use given stack base 0x%x' % (tid, parent, sp))
+        elif parent in self.stack_base:
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Using parent stack base of 0x%x' % (tid, parent, self.stack_base[parent]))
+            self.stack_base[tid] = self.stack_base[parent]
+        else:
+            self.lgr.debug('stackFrameManager recordStackClone tid:%s parent: %s Use mode hap to record stack base' % (tid, parent))
+            self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     def up(self):
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
@@ -225,14 +244,16 @@ class StackFrameManager():
                     self.lgr.debug('stackFrameManager fun_addr 0x%x %s' % (fun_addr, name))
                 else:
                     name = 'unknown'
-            print('%16x   %16x %s' % (ptr, value, name))
+            so = self.top.getSO(value, just_name=True)
+            print('%16x   %16x %s %s' % (ptr, value, name, so))
             if fh is not None:
-                fh.write('%16x   %16x %s\n' % (ptr, value, name))
+                fh.write('%16x   %16x %s %s\n' % (ptr, value, name, so))
             ptr = ptr + offset
         if fh is not None:
             fh.close()
 
     def recordMissingStackBase(self, tid, base):
+        self.lgr.debug('stackFrameManager recordMissingStackBase tid:%s' % tid)
         if tid not in self.best_stack_base:
             self.best_stack_base[tid] = {}
         if base not in self.best_stack_base[tid]:
@@ -241,12 +262,16 @@ class StackFrameManager():
             self.best_stack_base[tid][base] = self.best_stack_base[tid][base] + 1
         if self.best_stack_base[tid][base] >= 5:
             self.stack_base[tid] = base
-            self.lgr.debug('stackFrameManager recordStackBase decided base is 0x%x for tid:%s' % (base, tid))
+            self.lgr.debug('stackFrameManager recordMissingStackBase decided base is 0x%x for tid:%s' % (base, tid))
 
     def cacheKey(self):
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        key = '0x%x-0x%x' % (sp, ip)
+        if self.cpu.architecture in ['ppc32', 'arm', 'arm64']:
+            lr = self.mem_utils.getRegValue(self.cpu, 'lr')
+            key = '0x%x-0x%x-0x%x' % (sp, ip, lr)
+        else:
+            key = '0x%x-0x%x' % (sp, ip)
         return key
 
     def checkIpSpCache(self, tid):

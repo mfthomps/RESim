@@ -1,2 +1,4 @@
 SESSION=COMMAND
-COMMAND=$HOME/client.py
+FILE=client.py
+COMMAND=chmod a+x /tmp/client.py
+COMMAND=/tmp/client.py

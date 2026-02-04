@@ -731,6 +731,7 @@ class findKernelWrite():
             self.context_manager.setExitBreaks()
 
     def backOneAlone(self, offset):
+        ''' We think we hit a write to memory.  go back one cycle (unless ppc) and determine which register held the value written to memory '''
         current = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
@@ -752,7 +753,9 @@ class findKernelWrite():
         dumb, comm, tid = self.task_utils.curThread() 
         self.lgr.debug('findKernelWrite backOne user space tid: %s write of 0x%x to addr 0x%x cycle/eip after write is 0x%x  eip:0x%x offset: 0x%x ' % (tid, 
                value, self.addr, current, eip, offset))
-        if not self.forward:
+        if False and self.cpu.architecture == 'ppc32':
+            self.lgr.debug('backOneAlone is ppc, will not go back one.  TBD sort this out')
+        elif not self.forward:
             previous = current - 1
             if SIM_simics_is_running():
                 self.lgr.error('findKernelWrite backOneAlone, simics is still running, is this not part of a stop hap???')
@@ -790,7 +793,9 @@ class findKernelWrite():
         taint = True
         if self.prev_buffer:
             taint = False
-        if self.decode.modifiesOp0(mn):
+        if self.cpu.architecture == 'ppc32':
+            self.ppcMemWrite(instruct, taint)
+        elif self.decode.modifiesOp0(mn):
             self.lgr.debug('findKernelWrite backOneAlone get operands from %s' % instruct[1])
             op1, op0 = self.decode.getOperands(instruct[1])
             actual_addr = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
@@ -921,10 +926,33 @@ class findKernelWrite():
             self.forward_hap = None
                 
     def revWriteCallbackSim7(self, memory, dumb, dum1, dumb2):
-        self.lgr.debug('findKernelWrite revWriteCallbackSim7 memory 0x%x' % memory.logical_address)
-        SIM_run_alone(self.cleanup, False)
-        self.memory_transaction = memory
-        SIM_run_alone(self.context_manager.enableAll, None)
-        #self.vt_handler(memory)
-        self.stop_cycles = self.cpu.cycles
-        SIM_run_alone(self.thinkWeWrote, 0)
+        if type(memory) is int:
+            self.lgr.debug('findKernelWrite failed to find write')
+            print('failed to find write to address')
+        else:
+            self.lgr.debug('findKernelWrite revWriteCallbackSim7 memory 0x%x' % memory.logical_address)
+            SIM_run_alone(self.cleanup, False)
+            self.memory_transaction = memory
+            SIM_run_alone(self.context_manager.enableAll, None)
+            #self.vt_handler(memory)
+            self.stop_cycles = self.cpu.cycles
+            SIM_run_alone(self.thinkWeWrote, 0)
+
+    def ppcMemWrite(self, instruct, taint):
+        if instruct[1].startswith('st'):
+            op1, op0 = self.decode.getOperands(instruct[1])
+            actual_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+            if actual_addr is None:
+                self.lgr.error('findKernelWRite ppcMemWrite failed to get op1 address from %s' % instruct[1])
+                return
+            offset = self.addr - actual_addr
+            self.lgr.debug('findKernelWrite ppcMemWrite cycleRegisterMod op0: %s  op1: %s actual_addr 0x%x orig 0x%x address offset is %d' % (op0, op1, actual_addr, self.addr, offset))
+            if self.decode.isReg(op0):
+                value = self.mem_utils.getRegValue(self.cpu, op0)
+                self.lgr.debug('findKernelWrite ppcMemWrite %s is reg, find where value 0x%x was loaded.  Num bytes %d offset %d   Reversing  from cycle 0x%x' % (op0, value, self.num_bytes, offset, self.cpu.cycles))
+                self.rev_to_call.doRevToModReg(op0, taint=taint, offset=offset, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
+            else:
+                self.lgr.error('findKernelWRite ppcMemWrite %s not a register?' % op0)
+ 
+        else:
+           self.lgr.error('findKernelWrite ppcMemWrite failed to handle instruction %s' % instruct[1])

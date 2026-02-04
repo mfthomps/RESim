@@ -29,7 +29,7 @@ def doWeb(packet, pack_list, replace_cookie):
                 cookie = new_cookie 
             if cookie is not None:
                 item = item.replace(cookie, b'RESIM_COOKIE')
-        pack_list.append(str(binascii.hexlify(item)))
+        pack_list.append(binascii.hexlify(item).decode())
 
     print('num parts is %d' % len(parts))
 
@@ -50,7 +50,9 @@ def doJson(args):
                 doWeb(packet, pack_list, args.cookie)
             else:
                 #pack_list.append(bytes.decode(packet, encoding='unicode-escape'))
-                pack_list.append(str(binascii.hexlify(packet)))
+                the_bytes = binascii.hexlify(packet)
+                pack_part = the_bytes.decode()
+                pack_list.append(pack_part)
 
     if args.host is None:
         # JSON will only contain data, e.g., for use by drive driver

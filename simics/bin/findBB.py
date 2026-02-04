@@ -18,7 +18,7 @@ class FindBB():
         self.track_marks = {}
         self.hit_list = {}
 
-    def findBB(self, target, bb, quiet=False, get_all=False, lgr=None, auto=False):
+    def getBBList(self, target, bb, quiet=False, get_all=False, lgr=None, auto=False):
         '''
         Return a list of queue files that hit a given BB start address
         '''
@@ -26,14 +26,14 @@ class FindBB():
         if target not in self.cover_lists:
             self.cover_lists[target] = aflPath.getAFLCoverageList(target, get_all=get_all, auto=auto, lgr=lgr)
             if lgr is not None:
-                lgr.debug('findBB got %d cover files' % len(self.cover_lists[target]))
+                lgr.debug('findBB getBBList got %d cover files' % len(self.cover_lists[target]))
             for cover in self.cover_lists[target]:
                 with open(cover) as fh:
                     try:
                         self.hit_list[cover] = json.load(fh)
                     except:
                         if lgr is not None:
-                            lgr.debug('findBB Failed to open %s' % cover)
+                            lgr.debug('findBB getBBList Failed to open %s' % cover)
                         print('Failed to open %s' % cover)
                         continue
 
@@ -166,7 +166,8 @@ def main():
     if args.target.endswith('/'):
         args.target = args.target[:-1]
     my_bb = FindBB()
-    my_bb.findBB(args.target, int(args.bb, 16), get_all=args.all)
+    lgr = resimUtils.getLogger('findBB', '/tmp', level=None)
+    my_bb.getBBList(args.target, int(args.bb, 16), get_all=args.all, lgr=lgr)
 
 if __name__ == '__main__':
     sys.exit(main())

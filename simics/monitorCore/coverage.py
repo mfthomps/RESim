@@ -43,6 +43,10 @@ Does not use the Context Manager for breakpoints
 Tracks a single code file at a time, e.g., main or a single so file.  TBD expand to include multiple blocks_hit dictionaries?
 
 Output files of hits use addresses from code file, i.e., not runtime addresses.
+
+When physical addresses are used, we must set breaks on page table structures when a basic block is not mapped.  We assume those
+structures are the same for all iterations.  Breakpoints on basic blocks that get dynamically mapped will be deleted on each iteration
+because we assume the physical address of such basic blocks may change due to code path variations.
 '''
 class Coverage():
     def __init__(self, top, prog_path, analysis_path, hits_path, context_manager, cell_name, so_map, mem_utils, cpu, run_from_snap, lgr):
@@ -60,6 +64,7 @@ class Coverage():
         self.blocks = None
         self.block_total = 0
         self.funs_hit = []
+        # dict of unique bb addrs hit, value is record with cycle and packet number
         self.blocks_hit = OrderedDict()
         self.analysis_path = analysis_path
         self.prog_path = prog_path
@@ -75,6 +80,7 @@ class Coverage():
         self.trace_bits = None
         self.afl_map = {}
         self.proc_status = 0
+        # quantity of unique blocks hit
         self.hit_count = 0
         self.afl_del_breaks = []
         self.hit_255 = []
@@ -141,6 +147,9 @@ class Coverage():
 
         self.start_cycle = None
         self.report_coverage = False
+
+        self.hacked_phys_map = {}
+        self.alternate_callback = None
         
         self.lgr.debug('Coverage for cpu %s' % self.cpu.name)
      
@@ -205,7 +214,8 @@ class Coverage():
                 else:
                     bp = self.setPhysBreak(phys_addr)
                     self.addr_map[bp] = bb_rel
-                    #self.lgr.debug('coverage setBreak phys_addr 0x%x set to bp %d' % (phys_addr, bp))
+                    self.hacked_phys_map[bp] = phys_addr
+                    #self.lgr.debug('coverage setBreak bb_rel 0x%x phys_addr 0x%x set to bp %d' % (bb_rel, phys_addr, bp))
             else:
                 self.lgr.debug('coverage setBreak, skipping dead spot 0x%x' % phys_addr)
                 pass
@@ -292,8 +302,12 @@ class Coverage():
                     #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
                     #   int(fun), bb, self.offset, bp))
                     if prev_bp is not None and bp != (prev_bp+1):
-                        self.doHapRange(tmp_list)
-                        tmp_list = []
+                        self.lgr.debug('cover setBlockBreaks prev_bp is %s bp is %s' % (prev_bp, bp))
+                        if len(tmp_list) > 0:
+                            self.doHapRange(tmp_list)
+                            tmp_list = []
+                        else:
+                            self.lgr.error('coverage setBlockBreaks tmp_list is empty?')
                     tmp_list.append(bp) 
                     prev_bp = bp
 
@@ -318,6 +332,7 @@ class Coverage():
             #hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.bbHap, None, self.bp_list[0], self.bp_list[-1], name='coverage_hap')
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bp_list[0], bp_list[-1])
         else:
+            self.lgr.debug('cover doHapRange bp_list[0] 0x%x, bp_list[-1] 0x%x len of bp_list %d' % (bp_list[0], bp_list[-1], len(bp_list)))
             hap = SIM_hap_add_callback_range("Core_Breakpoint_Memop", self.bbHap, None, bp_list[0], bp_list[-1])
         #self.lgr.debug('coverage cover add hap %d  bp %d-%d' % (hap, bp_list[0], bp_list[-1]))
         self.bb_hap.append(hap)
@@ -331,7 +346,7 @@ class Coverage():
                 if pt.phys_addr not in self.missing_pages:
                     self.missing_pages[pt.phys_addr] = []
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.phys_addr, 1, 0)
-                    self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys_addr 0x%x' % (bb_rel, break_num, pt.phys_addr))
+                    #self.lgr.debug('coverage no physical address for 0x%x, set break %d on phys_addr 0x%x' % (bb_rel, break_num, pt.phys_addr))
                     self.missing_breaks[pt.ptable_addr] = break_num
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.pageHap, 
                           None, break_num)
@@ -344,11 +359,11 @@ class Coverage():
                     # set haps for pteg1 and pteg2
                     # 8 entries of 8 bytes each
                     break_num = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.pteg1, 64, 0)
-                    self.lgr.debug('coverage tid:%s no physical address for 0x%x, set break %d on pteg1 0x%x' % (tid, bb_rel, break_num, pt.pteg1))
+                    #self.lgr.debug('coverage tid:%s no physical address for 0x%x, set break %d on pteg1 0x%x' % (tid, bb_rel, break_num, pt.pteg1))
                     self.missing_haps[break_num] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.ptegHap, 
                           tid, break_num)
                     break_num2 = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, pt.pteg2, 64, 0)
-                    self.lgr.debug('coverage tid:%s no physical address for 0x%x, set break %d on pteg2 0x%x' % (tid, bb_rel, break_num2, pt.pteg2))
+                    #self.lgr.debug('coverage tid:%s no physical address for 0x%x, set break %d on pteg2 0x%x' % (tid, bb_rel, break_num2, pt.pteg2))
                     self.missing_haps[break_num2] = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.ptegHap, 
                           tid, break_num2)
                     self.other_pteg_break[break_num] = break_num2
@@ -402,6 +417,7 @@ class Coverage():
     def recordHang(self, cycles):
         self.proc_status = 2
         self.lgr.debug('coverage recordhang of program under test cycle 0x%x' % cycles)
+        print('Hang ')
         SIM_break_simulation('did hang')
 
     def watchExits(self, tid=None, callback=None, suspend_callback=None):
@@ -507,7 +523,7 @@ class Coverage():
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
                         self.begin_tmp_hap = len(self.bb_hap)
-                        print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
+                        print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
                         #self.lgr.debug('coverage tableHap setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
                     prev_bp = None
                     got_one = False
@@ -604,7 +620,7 @@ class Coverage():
                     if self.begin_tmp_bp is None:
                         self.begin_tmp_bp = bb_index
                         self.begin_tmp_hap = len(self.bb_hap)
-                        print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
+                        print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
                         self.lgr.debug('coverage pageBaseUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
                     prev_bp = None
                     got_one = False
@@ -684,7 +700,10 @@ class Coverage():
         ''' HAP when a bb is hit '''
         if self.halt_coverage:
             return
-
+        if self.alternate_callback is not None:
+            logical = self.addr_map[break_num] 
+            self.alternate_callback(logical)
+            return
         # TBD convoluted determination of phys vs linear
         if self.linear:
             addr = memory.logical_address
@@ -706,7 +725,7 @@ class Coverage():
             if not self.report_coverage:
                 # User wants to identify breakpoints hit by other threads so they can later be masked 
                 tid = self.top.getTID(target=self.cell_name)
-                self.lgr.debug('wtf create dead zone not report cover tid %s' % tid)
+                self.lgr.debug('coverage create dead zone not report cover tid %s' % tid)
                 if tid != self.tid:
                     self.lgr.debug('converage bbHap, not my tid, got %s I am %s  num spots %d' % (tid, self.tid, len(self.dead_list)))
                     dead_set = True
@@ -732,9 +751,24 @@ class Coverage():
                 addr = memory.physical_address
                 if addr == 0:
                     #self.top.brokenAFL()
-                    self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d deleted.  Simics broken?' % (memory.physical_address, break_num))
-                    SIM_run_alone(SIM_delete_breakpoint, break_num)
-                    #SIM_disable_breakpoint(break_num) 
+                    tid = self.top.getTID(target=self.cell_name)
+                    if tid != self.tid:
+                        self.lgr.debug('bbHap,  address is zero? phys: 0x%x break_num %d .  Simics broken? tid:%s cycles:0x%x' % (memory.physical_address, 
+                              break_num, tid, self.cpu.cycles))
+                        phys_addr = self.hacked_phys_map[break_num]
+                        SIM_delete_breakpoint(break_num)
+                        bb_rel = self.addr_map[break_num]     
+                        new_bp = self.setPhysBreak(phys_addr)
+                        self.addr_map[new_bp] = bb_rel
+                        bp_index = self.bp_list.index(break_num)
+                        self.bp_list[bp_index] = new_bp
+                        self.hacked_phys_map[new_bp] = phys_addr
+                        SIM_run_alone(self.addHapAlone, [new_bp])
+                  
+                      
+                    else:
+                        self.lgr.error('bbHap,  address is zero? phys: 0x%x break_num %d .  Simics broken?' % (memory.physical_address, break_num))
+                        self.top.quit() 
                     return
             else:
                 return
@@ -783,8 +817,8 @@ class Coverage():
                 prejump_addr = this_addr
             if self.record_hits:
                 #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
-                if this_addr not in self.blocks_hit:
-                    adjusted_addr = this_addr - self.offset
+                adjusted_addr = this_addr - self.offset
+                if adjusted_addr not in self.blocks_hit:
                     self.blocks_hit[adjusted_addr] = self.getHitRec()
                     self.latest_hit = adjusted_addr
                     #addr_str = '%d' % (this_addr - self.offset)
@@ -872,13 +906,16 @@ class Coverage():
         return self.trace_bits
 
     def getHitCount(self):
+        ''' return the number of unique blocks hit '''
         if self.afl:
+            #self.lgr.debug('coverage getHitCount is afl, return hit_count %d' % self.hit_count)
             return self.hit_count;
         else:
+            #self.lgr.debug('coverage getHitCount not afl, return len of blocks_hit %d' % len(self.blocks_hit))
             return len(self.blocks_hit)
 
     def saveHits(self, fname):
-        ''' save blocks_hit to named file '''
+        ''' save blocks_hit to named file. This is a coverage file '''
         if fname.startswith(os.sep):
             save_name = fname
         else:
@@ -1067,7 +1104,7 @@ class Coverage():
 
         if self.afl:
             self.trace_bits.__init__(self.map_size)
-            #self.lgr.debug('coverage trace_bits array size %d' % self.map_size)
+            #self.lgr.debug('coverage trace_bits array size %d clearing self.hit_count' % self.map_size)
             self.prev_loc = 0
             self.proc_status = 0
             self.hit_count = 0
@@ -1125,6 +1162,9 @@ class Coverage():
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
             self.analysis_path = self.top.getAnalysisPath(fname)
+            if self.analysis_path is None:
+                self.lgr.error('coverage enableCoverage no analysis for %s' % fname)
+                self.top.quit()
             self.hits_path = self.top.getIdaData(fname, target=self.cell_name)
             self.lgr.debug('Coverage enableCoverage hits_path set to %s from fname %s' % (self.hits_path, fname))
             if self.analysis_path is None:
@@ -1167,10 +1207,25 @@ class Coverage():
             self.lgr.debug('coverage enableCoverage dead file would be %s' % dead_file)
             if os.path.isfile(dead_file):
                 with open(dead_file) as fh:
-                    self.dead_list = json.load(fh)
-                    self.lgr.debug('coverage enableCoverage, loaded %d from dead file from %s' % (len(self.dead_list), dead_file))
+                    try:
+                        self.dead_list = json.load(fh)
+                        self.lgr.debug('coverage enableCoverage, loaded %d from dead file from %s' % (len(self.dead_list), dead_file))
+                    except:
+                        fh.close()
+                        fh = open(dead_file)
+                        self.lgr.debug('coverage enableCoverage, dead file not a json, try reading lines.')
+                        for line in fh:
+                            line = line.strip()
+                            self.lgr.debug('coverage enableCoverage line %s' % line)
+                            if line.startswith('#'):
+                                continue
+                            value = int(line, 16)
+                            self.lgr.debug('coverage enableCoverage dead_file entry 0x%x' % value)
+                            self.dead_list.append(value)
                     #for addr in self.dead_list:
                     #    self.lgr.debug('dead spot: 0x%x' % addr)
+            elif dead_file is not None:
+                self.lgr.debug('coverage no dead_file %s' % dead_file)
 
     def disableCoverage(self):
         self.lgr.debug('coverage disableCoverage')
@@ -1209,25 +1264,25 @@ class Coverage():
         return retval 
 
     def getBlocksHit(self):
+        ''' return dictionary keyed by unique bb address hit with value record containing first cycle at which hit '''
         return self.blocks_hit
 
     def clearHits(self):
         #self.restoreBreaks()
         self.funs_hit = []
         self.blocks_hit = OrderedDict()
-        if True:
-            self.lgr.debug('coverage clearHits had %d breaks' % len(self.bp_list))
-            if self.begin_tmp_bp is not None:
-                for bp in self.bp_list[self.begin_tmp_bp:]:
-                    #self.lgr.debug('try to delete bp %d' % bp)
-                    RES_delete_breakpoint(bp)
-                for hap in self.bb_hap[self.begin_tmp_hap:]:
-                    #self.lgr.debug('coverage clearHits delete tmp_bp hap %d' % hap)
-                    SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
-                
-                self.bp_list = self.bp_list[:self.begin_tmp_bp]
-                self.bb_hap = self.bb_hap[:self.begin_tmp_hap]
-                #self.lgr.debug('coverage clearHits now have %d breaks' % len(self.bp_list))
+        self.lgr.debug('coverage clearHits had %d breaks' % len(self.bp_list))
+        if self.begin_tmp_bp is not None:
+            for bp in self.bp_list[self.begin_tmp_bp:]:
+                #self.lgr.debug('try to delete bp %d' % bp)
+                RES_delete_breakpoint(bp)
+            for hap in self.bb_hap[self.begin_tmp_hap:]:
+                #self.lgr.debug('coverage clearHits delete tmp_bp hap %d' % hap)
+                SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
+            
+            self.bp_list = self.bp_list[:self.begin_tmp_bp]
+            self.bb_hap = self.bb_hap[:self.begin_tmp_hap]
+            #self.lgr.debug('coverage clearHits now have %d breaks' % len(self.bp_list))
 
     def getHitsPath(self):
         return self.hits_path
@@ -1295,29 +1350,29 @@ class Coverage():
             SIM_enable_breakpoint(bp) 
         for addr in self.missing_breaks:
             SIM_enable_breakpoint(self.missing_breaks[addr])
-        self.lgr.debug('coverage enableAll enabled %d bb breaks and %d missing breaks' % (len(self.bp_list), len(self.missing_breaks)))
+        #self.lgr.debug('coverage enableAll enabled %d bb breaks and %d missing breaks' % (len(self.bp_list), len(self.missing_breaks)))
 
     def resetCoverage(self):
         self.funs_hit = []
+        #self.lgr.debug('coverge resetCoverage %d in did_missing_break, clearing %d records from blocks_hit' % (len(self.did_missing_break), len(self.blocks_hit)))
         self.blocks_hit = OrderedDict()
-        self.lgr.debug('coverge resetCoverage %d in did_missing_break' % len(self.did_missing_break))
 
         # bp and haps added to bp_list as a result of paging
         for bp in self.did_missing_break:
-            self.lgr.debug('coverge resetCoverage delete missing bp 0x%x' % bp)
+            #self.lgr.debug('coverge resetCoverage delete missing bp 0x%x' % bp)
             SIM_delete_breakpoint(bp)
         for hap in self.did_missing_hap:
             SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
 
-        self.lgr.debug('resetCoverage, were %d breaks in bp_list and %d in original list and %d in did_missing' % (len(self.bp_list), len(self.orig_bp_list), len(self.did_missing)))
+        #self.lgr.debug('resetCoverage, were %d breaks in bp_list and %d in original list and %d in did_missing' % (len(self.bp_list), len(self.orig_bp_list), len(self.did_missing)))
         self.did_missing = []
         self.did_missing_break = []
         self.did_missing_hap = []
 
         self.bp_list = list(self.orig_bp_list)
         self.bb_hap = list(self.orig_bb_hap)
-        self.lgr.debug('resetCoverage %d missing_breaks %d missing_pages %d missing tables %d missing page bases' % (len(self.missing_breaks), len(self.missing_pages), len(self.missing_tables),
-               len(self.missing_page_bases)))
+        #self.lgr.debug('resetCoverage %d missing_breaks %d missing_pages %d missing tables %d missing page bases' % (len(self.missing_breaks), len(self.missing_pages), len(self.missing_tables),
+        #       len(self.missing_page_bases)))
         '''
         for addr in self.missing_breaks:
             bp = self.missing_breaks[addr]
@@ -1340,6 +1395,11 @@ class Coverage():
 
         #self.handleUnmapped() 
 
+        if self.afl:
+            #self.lgr.debug('resetCoverage resetting trace_bits')
+            #self.trace_bits.__init__(self.map_size)
+            self.trace_bits = bytearray(self.map_size)
+        self.hit_count = 0
         self.enableAll() 
 
     def haltCoverage(self):
@@ -1447,7 +1507,7 @@ class Coverage():
 
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
         if tid != want_tid:
-            self.lgr.debug('coverage ptegHap tid:%s expected:%s, bail' % (tid, want_tid))
+            #self.lgr.debug('coverage ptegHap tid:%s expected:%s, bail' % (tid, want_tid))
             return
         length = memory.size
         type_name = SIM_get_mem_op_type_name(op_type)
@@ -1499,8 +1559,9 @@ class Coverage():
         if self.begin_tmp_bp is None:
             self.begin_tmp_bp = bb_index
             self.begin_tmp_hap = len(self.bb_hap)
-            print('Warning, not all basic blocks in memory.  Will dynmaically add/remove breakpoints per page table accesses')
-            self.lgr.debug('coverage ptegUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
+            if not self.afl:
+                print('Warning, not all basic blocks in memory.  Will dynamically add/remove breakpoints per page table accesses')
+                self.lgr.debug('coverage ptegUpdated setting begin_tmp_bp to %d and begin_tmp_hap to %d' % (self.begin_tmp_bp, self.begin_tmp_hap))
         prev_bp = None
         got_one = False
         got_missing = False
@@ -1526,26 +1587,43 @@ class Coverage():
             if adjusted_addr not in self.dead_list:
                 got_one = True
                 bp = self.setPhysBreak(addr)
-                self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
+                #self.lgr.debug('coverage ptegUpdated bb: 0x%x added break %d at phys addr 0x%x %s' % (bb, bp, addr, pt.valueString()))
                 self.addr_map[bp] = bb
                 if prev_bp is not None and bp != (prev_bp+1):
-                    self.lgr.debug('coverage tableHap broken sequence set hap and update index')
+                    #self.lgr.debug('coverage tableHap broken sequence set hap and update index')
                     SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
                     bb_index = len(self.bp_list)
                 self.bp_list.append(bp)                 
                 prev_bp = bp
                 self.did_missing.append(bb)
                 self.did_missing_break.append(bp)
-                self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
+                #self.lgr.debug('coverage ptegUpdated add bp 0x%x to did_missing' % bp)
             else:
                 #self.lgr.debug('tableHap addr 0x%x in dead map, skip' % addr)
                 pass
         if not got_one and not got_missing:
-            self.lgr.error('ptegUpdated no pt for any bb address 0x%x' % bb)
+            self.lgr.debug('ptegUpdated no bb unmapped for any ptgeg physical address 0x%x' % physical)
         if got_one:
             SIM_run_alone(self.addHapAlone, self.bp_list[bb_index:])
 
         #del self.missing_ptegs[missing_entry]
         # for addr in redo_addrs:
         #     self.setTableHaps(addr)
-        
+       
+    def setAlternateCallback(self, callback):
+        self.alternate_callback = callback
+        self.lgr.debug('coverage setAltnerateCallback to %s' % str(callback)) 
+
+    def getBlocks(self):
+        return self.blocks
+
+    def enableForBB(self, bb):
+        self.lgr.debug('coverage enableForBB for bb 0x%x' % bb)
+        for bp in self.addr_map:
+            if self.addr_map[bp] == bb:
+                self.lgr.debug('coverage enableForBB will enable for bp %d' % bp)
+                SIM_enable_breakpoint(bp) 
+                break
+
+                
+      

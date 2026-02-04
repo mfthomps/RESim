@@ -37,7 +37,7 @@ import resimUtils
 import aflPath
 import findTrack
 class InjectToWM():
-    def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=False, ws=None):
+    def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=None, ws=None):
         unfiltered = '/tmp/wm.io'
         filtered = '/tmp/wm_filtered.io'
         self.top = top
@@ -132,15 +132,15 @@ class InjectToWM():
                     best_result_marks = None
                     best_result_size = None
                     retval = result
-                    if self.no_reset and without_resets is None and num_resets == 0:
+                    if self.no_reset is not None and without_resets is None and num_resets == 0:
                         without_resets = result
                 elif result.mark['packet'] == least_packet:
-                    if self.no_reset and without_resets is None and num_resets == 0:
+                    if self.no_reset is not None and without_resets is None and num_resets == 0:
                         without_resets = result
-                    if result.num_marks < least_marks and (not self.no_reset or num_resets == 0 or without_resets is None):
+                    if result.num_marks < least_marks and (self.no_reset is None or num_resets == 0 or without_resets is None):
                         least_marks = result.num_marks
                         best_result_marks = result
-                    if result.size < least_size and (not self.no_reset or num_resets == 0 or without_resets is None):
+                    if result.size < least_size and (self.no_reset is None or num_resets == 0 or without_resets is None):
                         least_size = result.size
                         best_result_size = result
                 else:
@@ -183,7 +183,7 @@ class InjectToWM():
             elif best_result_marks is not None:
                self.lgr.debug('findOneTrack best auto results %s' % best_result_marks.path)
 
-        if self.no_reset and without_resets is None:
+        if self.no_reset is not None and without_resets is None:
             print('Failed to find watchmark prior to origin reset')
             self.lgr.debug('Failed to find watchmark prior to origin reset')
             retval = None

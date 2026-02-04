@@ -40,12 +40,13 @@ import defaultConfig
 class InjectIO():
     def __init__(self, top, cpu, cell_name, backstop, dfile, dataWatch, bookmarks, mem_utils, context_manager, so_map,
            lgr, snap_name, stay=False, keep_size=False, callback=None, packet_count=1, stop_on_read=False, 
-           coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=False,
+           coverage=False, target_cell=None, target_prog=None, targetFD=None, trace_all=False, save_json=None, no_track=False, no_reset=None,
            limit_one=False, no_rop=False, instruct_trace=False, break_on=None, mark_logs=False, no_iterators=False, only_thread=False,
-           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, trace_fd=None, fname=None):
+           count=1, no_page_faults=False, no_trace_dbg=False, run=True, reset_debug=True, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None):
+        self.lgr = None
         if target_prog is not None and targetFD is None and not (trace_all or instruct_trace):
-            lgr.error('injectIO called with target_prog but not targetFD')
-            return
+            lgr.debug('injectIO called with target_prog but not targetFD')
+            #return
         self.dfile = dfile
         self.stay = stay
         self.cpu = cpu
@@ -173,9 +174,20 @@ class InjectIO():
         self.no_page_faults = no_page_faults
         self.no_trace_dbg = no_trace_dbg
         self.run = run
+        # TBD use of reset_debug.  kills dmods, leading to potential confusing divergence
+        # Need analysis of effects of dmods on injectIO since they cause origin resets
         self.reset_debug = reset_debug
         self.src_addr = src_addr
         self.malloc = malloc
+        if track_malloc:
+            self.lgr.debug('injectIO track malloc')
+            self.malloc = True
+            self.dataWatch.trackMalloc()
+        if self.target_fname is None:
+            self.manual_watch = self.top.getCompDict(self.cell_name, 'MANUAL_WATCH')
+            if self.manual_watch is not None and not os.path.isfile(self.manual_watch):
+                self.lgr.error('dataWatch manual_watch file %s not found.' % self.manual_watch)
+                self.manual_watch = None
 
     def breakCleanup(self, dumb):
         if self.break_on_hap is not None:
@@ -203,6 +215,8 @@ class InjectIO():
             Assumes we are stopped.  
             If "stay", then just inject and don't run.
         '''
+        if self.lgr is None:
+            self.top.quit() 
         self.lgr.debug('injectIO go')
         if self.addr is None:
             return
@@ -271,8 +285,8 @@ class InjectIO():
                     return 
             if self.reset_debug:
                 self.top.stopDebug()
-                self.lgr.debug('injectIO call debugTidGroup')
-                self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
+            self.lgr.debug('injectIO call debugTidGroup')
+            self.top.debugTidGroup(self.tid, to_user=False, track_threads=False) 
 
             clib_ok = self.so_map.checkClibAnalysis(self.tid)
             if not clib_ok:
@@ -317,7 +331,7 @@ class InjectIO():
             use_data_watch = None
         else:
             use_data_watch = self.dataWatch
-        if self.no_reset:
+        if self.no_reset is not None:
             write_callback = self.callback
             self.dataWatch.noReset()
         else:
@@ -365,13 +379,13 @@ class InjectIO():
                 self.top.traceWrite(trace_msg)
                 if self.trace_fd is not None:
                     self.lgr.debug('injectIO target_prog none, traceFD 0x%x' % self.trace_fd)
-                    self.top.traceFD(self.trace_fd)
+                    self.top.traceFD(self.trace_fd, raw=True)
 
             self.commonGo()
             if not self.stay:
                 #if not self.trace_all and not self.instruct_trace and not self.no_track:
                 if not self.trace_all and not self.instruct_trace: 
-                    self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
+                    #self.lgr.debug('injectIO not traceall, about to reset origin, eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
                     self.top.resetOrigin(cpu=self.cpu)
                     did_origin_reset = True
                     self.lgr.debug('injectIO back from resetOrigin eip: 0x%x  cycles: 0x%x' % (eip, self.cpu.cycles))
@@ -395,6 +409,8 @@ class InjectIO():
                                 if self.dataWatch is not None:
                                     self.lgr.debug('injectIO set range for ioctl wrote len in_data %d to 0x%x' % (len(self.in_data), self.addr_of_count))
                                     self.dataWatch.setRange(self.addr_of_count, 4, msg="ioctl return value")
+                        if self.manual_watch is not None:
+                            self.manualWatch()
                 use_backstop=True
                 if self.stop_on_read:
                     use_backstop = False
@@ -413,7 +429,7 @@ class InjectIO():
                         self.top.traceAll()
                         if self.trace_fd is not None:
                             self.lgr.debug('injectIO traceFD 0x%x' % self.trace_fd)
-                            self.top.traceFD(self.trace_fd)
+                            self.top.traceFD(self.trace_fd, raw=True)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('retracking IO callback: %s' % str(self.callback)) 
                     self.top.retrack(clear=self.clear_retrack, callback=self.callback, use_backstop=use_backstop, run=self.run)    
@@ -432,7 +448,7 @@ class InjectIO():
                         self.lgr.debug('injectIO call traceAll for mark_logs')
                         self.top.traceAll()
                         if self.trace_fd is not None:
-                            self.top.traceFD(self.trace_fd)
+                            self.top.traceFD(self.trace_fd, raw=True)
                         self.top.traceBufferMarks(target=self.cell_name)
                     self.lgr.debug('injectIO call to runToIO')
                     if not did_origin_reset:
@@ -509,17 +525,22 @@ class InjectIO():
         if self.malloc:
             self.top.traceMalloc()
         if self.mark_logs:
-            self.lgr.debug('injectIO call traceAll for mark_logs')
+            self.lgr.debug('injectIO injectCallback call traceAll for mark_logs')
             self.top.traceAll()
             if self.trace_fd is not None:
-                self.top.traceFD(self.trace_fd)
+                self.top.traceFD(self.trace_fd, raw=True)
             self.top.traceBufferMarks(target=self.cell_name)
         if not self.coverage and not self.trace_all:
             if self.save_json is not None:
                 self.top.trackIO(self.targetFD, callback=self.saveJson, quiet=True, count=self.count, mark_logs=self.mark_logs)
             elif self.targetFD is not None:
-                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs)
+                self.manual_watch = self.top.getCompDict(self.target_cell, 'MANUAL_WATCH')
+                if self.manual_watch is not None and not os.path.isfile(self.manual_watch):
+                    self.lgr.error('dataWatch manual_watch file %s not found.' % self.manual_watch)
+                    self.manual_watch = None
+                self.top.trackIO(self.targetFD, quiet=True, count=self.count, mark_logs=self.mark_logs, callback=self.callback)
             else:
+                self.lgr.debug('injectIO injectCallback not targetFD...')
                 # just want to debug the target
                 pass
 
@@ -534,7 +555,7 @@ class InjectIO():
 
     def resetReverseAlone(self, count):
         ''' called when the writeData callHap is hit.  packet number already incremented, so reduce by 1 '''
-        if self.no_reset:
+        if self.no_reset is not None:
             self.lgr.debug('resetReverseAlone no reset, so stop.')
         else:
             if count != 0:
@@ -642,7 +663,8 @@ class InjectIO():
             self.dataWatch.saveJson(self.save_json, packet=packet)
         elif save_file is not None:
             self.dataWatch.saveJson(save_file, packet=packet)
-        self.top.stopTrackIOAlone()
+        #self.top.stopTrackIOAlone()
+        self.top.stopTrackIO()
         if from_quit:
             self.callback = None
         self.lgr.debug('injectIO saveJson back from call to stopTrackIO from_quit was %r callback is %s' % (from_quit, self.callback))
@@ -699,3 +721,26 @@ class InjectIO():
                 self.lgr.debug('injectIO checkBreakOn adjusted break_on to be 0x%x' % self.break_on)
         self.lgr.debug('injectIO checkBreakOn done, break_on is now 0x%x' % self.break_on)
         return retval
+
+    def manualWatch(self):
+        with open(self.manual_watch) as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith('#'):
+                    continue
+                try:
+                    prog, start_string, length_string = line.split()
+                except:
+                    self.lgr.error('dataWatch manualWatch bad line %s' % line)
+                    return
+                if self.target_fname is None:
+                    tid = self.top.getTID()
+                    target_prog = self.so_map.getProg(tid)
+                else:
+                    target_prog = self.target_fname
+                if target_prog.endswith(prog):
+                    self.lgr.debug('dataWatch manualWatch load watches for %s' % prog)
+                    start = int(start_string, 16) 
+                    length = int(length_string, 16) 
+                    self.dataWatch.setRange(start, length, 'manualWatch', backstop=False)
+                    
