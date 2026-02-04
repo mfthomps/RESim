@@ -92,10 +92,14 @@ def getText(path, lgr):
             is_aarch64 = True
             continue
         if line.strip().startswith('Entry point'):
+            if lgr is not None:
+                lgr.debug('is Entry point')
+            
             parts = line.strip().split()
             if is_dyn:
                 offset = int(parts[3], 16)
-                lgr.debug('Entry point, setting offset to 0x%x' % offset)
+                if lgr is not None:
+                    lgr.debug('Entry point, is dynamic setting offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
             continue
@@ -107,18 +111,21 @@ def getText(path, lgr):
             offset = int(parts[2], 16)
             size = int(parts[3], 16)
             if lgr is not None:
-                lgr.debug('readelf got LOAD offset 0x%x' % offset)
-        #elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
-        elif addr is None and line.startswith('LOAD') and is_dyn and is_aarch64: 
+                lgr.debug('readelf not is_dyn got LOAD offset 0x%x' % offset)
+                lgr.debgu('from line %s' % line)
+        elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
+        #elif addr is None and line.startswith('LOAD') and is_dyn and is_aarch64: 
             #print('using line %s' % line)
             # not quite, but better
             if size is None:
                 size = 0
             parts = line.strip().split()
-            offset = int(parts[2], 16)
-            addr_start = int(parts[3], 16)
+            if offset is None:
+                offset = int(parts[2], 16)
             size = int(parts[4], 16)
-            #print('offset 0x%x addr_start 0x%x size 0x%x' % (offset, addr_start, size))
+            if lgr is not None:
+                lgr.debug('readelf got LOAD offset 0x%x size 0x%x' % (offset, size))
+                lgr.debug('from line %s' % line)
             #lgr.debug('got size now 0x%x' % size)
         elif line.startswith('LOAD') and is_dyn and not is_aarch64 and ' E ' in line:
             lgr.debug('found load in line %s' % line)
