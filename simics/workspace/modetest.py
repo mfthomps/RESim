@@ -48,7 +48,7 @@ class ModeTest():
 
     def rmBreak(self):
         if self.break_hap is not None:
-            SIM_hap_delete_callback_id("Core_Simulation_Stopped", self.break_hap)
+            SIM_hap_delete_callback_id("Core_Breakpoint_Memop", self.break_hap)
             SIM_delete_breakpoint(self.bp)
             self.bp = None
             self.break_hap = None
