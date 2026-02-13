@@ -283,6 +283,7 @@ class MemUtils():
         self.hacked_v2p_offset = None
         # cr3 value used by the kernel
         self.kernel_saved_cr3 = None
+        self.os_type = top.getTargetEnv('OS_TYPE', target=cell_name)
         # physical address at which kernel saves its cr3 value
         self.phys_cr3 = None
         self.ia32_regs = ["eax", "ebx", "ecx", "edx", "ebp", "edi", "esi", "eip", "esp", "eflags"]
@@ -413,11 +414,11 @@ class MemUtils():
 
     def v2pKaddr(self, cpu, v, use_pid=None):
         retval = None
+        cpl = getCPL(cpu)
         if cpu.architecture == 'arm':
             phys_addr = v - (self.param.kernel_base - self.param.ram_base)
             retval = self.getUnsigned(phys_addr)
         elif cpu.architecture == 'arm64':
-            cpl = getCPL(cpu)
             if cpl > 0:
                 #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, kernel=True)
@@ -434,7 +435,8 @@ class MemUtils():
                     self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
-            #self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
+            #if self.kernel_saved_cr3 is not None:
+            #    self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
             # a mode of 3 is 32 bit mode
             mode = cpu.iface.x86_reg_access.get_exec_mode()
             exec_mode_word_size = self.wordSize(cpu)
@@ -463,6 +465,8 @@ class MemUtils():
                             self.lgr.debug('memUtils v2pKaddr self.kernel_saved_cr3 is None')
                         else:
                             self.lgr.debug('the current cr3 is 0x%x, forced page tables to use cr3 of 0x%x' % (current_cr3, self.kernel_saved_cr3))
+                elif self.os_type == 'WINXP':
+                    pass 
                 else:
                     retval = v & ~self.param.kernel_base 
                      #self.lgr.debug('memUtils v2pKaddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
@@ -593,10 +597,10 @@ class MemUtils():
                             if do_log:
                                 self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
                             if ptable_info is not None:
-                                self.lgr.debug('memUtils *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None' % (v, ptable_info.valueString()))
+                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None' % (v, ptable_info.valueString()))
                                 retval = None
                             else:
-                                self.lgr.debug('memUtils *********** no idea if mapped in just a v & kernel_base. no ptable info v 0x%x' % v) 
+                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. no ptable info v 0x%x' % v) 
  
     
         return retval
@@ -636,6 +640,7 @@ class MemUtils():
             cpl = getCPL(cpu)
             if do_log:
                 self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
+            #self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             if v < self.getUnsigned(self.param.kernel_base):
                 retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
             else:
@@ -857,11 +862,11 @@ class MemUtils():
             self.lgr.error('readPhysPtr fails on address 0x%x' % addr)
             return None
 
-    def readPtr(self, cpu, vaddr):
+    def readPtr(self, cpu, vaddr, do_log=False):
         size = self.WORD_SIZE
         #if vaddr < self.param.kernel_base:
         #    size = min(size, 6)
-        phys = self.v2p(cpu, vaddr)
+        phys = self.v2p(cpu, vaddr, do_log=do_log)
         if phys is not None:
             try:
                 return self.getUnsigned(SIM_read_phys_memory(cpu, phys, size))
@@ -1173,7 +1178,14 @@ class MemUtils():
                 self.lgr.debug('memUtils adjustParam sys_entry was to 0x%x' % self.param.sys_entry)
                 self.param.sys_entry = self.param.sys_entry + delta
                 self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
-        
+
+
+    def getXPCurThread(self, cpu):
+        something = self.readWord(cpu, self.param.current_task)
+        the_offset = self.param.current_thread_offset 
+        cur_thread = something + the_offset
+        cur_thread_addr = self.readWord(cpu, cur_thread)
+        return cur_thread_addr
 
     def getCurrentTask(self, cpu):
         # TBD distinction between this and function provided by taskUtils
@@ -1187,16 +1199,23 @@ class MemUtils():
         elif cpu.architecture == 'ppc32':
             retval = self.getCurrentTaskPPC32(cpu)
         else:
-            if self.WORD_SIZE == 4:
+            param_xs_base = None
+            if self.os_type == 'WINXP':
+                retval = self.getXPCurThread(cpu)
+                cpl = getCPL(cpu)
+                self.lgr.debug('memUtils getCurrentTask read from current task 0x%x thread_offset 0x%x cpl %d' % (self.param.current_task, self.param.current_thread_offset, cpl))
+                self.lgr.debug('memUtils getCurrentTask got 0x%x' % retval)
+            elif self.WORD_SIZE == 4:
                 param_xs_base = self.param.fs_base
                 new_xs_base = cpu.ia32_fs_base
             else:
                 param_xs_base = self.param.gs_base
                 new_xs_base = cpu.ia32_gs_base
                 self.lgr.debug('memUtils getCurrentTask current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
-            if param_xs_base is None:
-                cur_ptr = self.getCurrentTaskX86(cpu)
-                retval = cur_ptr
+            if param_xs_base is None: 
+                if retval is None:
+                    cur_ptr = self.getCurrentTaskX86(cpu)
+                    retval = cur_ptr
             else:
                 ''' TBD generalize this, will it always be such? '''
                 if new_xs_base != 0 and new_xs_base != 0x10000:

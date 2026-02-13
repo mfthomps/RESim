@@ -433,6 +433,30 @@ def isDirectMove(instruct):
             except:
                 pass
     return retval
+
+def getDirectHardMove(instruct):
+    retval = None
+    if getMn(instruct).startswith('mov'): 
+        op2, op1 = getOperands(instruct)
+        if op2.startswith('[') and op2.endswith (']'):
+            content =  op2.split('[', 1)[1].split(']')[0]
+            try:
+                val = int(content, 16)
+                retval = val
+            except:
+                pass
+    return retval
+
+def getRegRelative(instruct, reg):
+    retval = None
+    if getMn(instruct).startswith('mov'): 
+        op2, op1 = getOperands(instruct)
+        if op2.startswith('[') and op2.endswith (']'):
+            content =  op2.split('[', 1)[1].split(']')[0]
+            if (reg+'+') in content:
+                offset_string = content.split('+')[1]
+                retval = int(offset_string, 16) 
+    return retval
         
 def isLDRB(cpu, instruct):
     return False

@@ -24,6 +24,8 @@
 '''
 '''
 Windows task information, e.g., task lists.
+WARNING: terms are very confusing due to need to match Linux taskUtils function names.
+The term "task" may refer to a thread (ETHREAD) or a process (EPROCESS) record.
 '''
 from simics import *
 import os
@@ -64,7 +66,7 @@ class WinTaskUtils():
     ACTIVE_THREADS = 0x328
     THREAD_STATE = 0x164
     PEB_ADDR = 0x338
-    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, lgr, root_prefix=None):
+    def __init__(self, cpu, cell_name, param, mem_utils, run_from_snap, os_type, lgr, root_prefix=None):
         self.cpu = cpu
         self.cell_name = cell_name
         self.lgr = lgr
@@ -75,6 +77,13 @@ class WinTaskUtils():
         # physical address of where to find the cr3 value
         self.phys_saved_cr3 = None
 
+        if os_type == 'WINXP':
+            self.THREAD_HEAD = param.thread_offset_in_prec
+            # TBD was broke in win7 version, next was prev...
+            self.THREAD_NEXT = param.thread_prev 
+            self.ACTIVE_THREADS = param.count_offset
+            self.THREAD_ID_OFFSET = param.thread_id_offset
+
         self.program_map = {}
         self.exit_cycles = 0
         self.exit_tid = None
@@ -84,32 +93,49 @@ class WinTaskUtils():
         resim_dir = os.getenv('RESIM_DIR')
         self.call_map = {}
         self.call_num_map = {}
-        w7mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
-        if os.path.isfile(w7mapfile):
-            cm = json.load(open(w7mapfile))     
+        self.os_type = os_type
+        if self.os_type == 'WIN7':
+            mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
+        elif self.os_type == 'WINXP':
+            mapfile = os.path.join(resim_dir, 'windows', 'winxp.json')
+        else:
+            self.lgr.error('winTaskUtsil unknown os type %s' % self.os_type)
+            return
+        if os.path.isfile(mapfile):
+            cm = json.load(open(mapfile))     
             for call in cm:
                 self.call_map[int(call)] = cm[call] 
                 ''' drop Nt prefix'''
                 self.call_num_map[cm[call][2:]] = int(call)
         else:
-            self.lgr.error('WinTaskUtils cannot open %s' % w7mapfile)
+            self.lgr.error('WinTaskUtils cannot open %s' % mapfile)
             return
         self.comm_map = commMap.CommMap(root_prefix, lgr) 
         self.gui_call_map = {}
         self.gui_call_num_map = {}
-        w7GUImapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
-        if os.path.isfile(w7GUImapfile):
-            cm = json.load(open(w7GUImapfile))     
+        if self.os_type == 'WIN7':
+            guimapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
+        elif self.os_type == 'WINXP':
+            guimapfile = os.path.join(resim_dir, 'windows', 'winxpGUI.json')
+        else:
+            return
+        if os.path.isfile(guimapfile):
+            cm = json.load(open(guimapfile))     
             for call in cm:
                 self.gui_call_map[int(call)] = cm[call] 
                 ''' drop Nt prefix'''
                 self.gui_call_num_map[cm[call][2:]] = int(call)
         else:
-            self.lgr.error('WinTaskUtils cannot open %s' % w7GUImapfile)
+            self.lgr.error('WinTaskUtils cannot open %s' % guimapfile)
             return
 
         if run_from_snap is None:
-            va = cpu.ia32_gs_base + self.param.current_task
+            if self.os_type == 'WINXP':
+                something = self.mem_utils.readWord(self.cpu, self.param.current_task)
+                the_offset = self.param.current_thread_offset 
+                va = something + the_offset
+            else:
+                va = cpu.ia32_gs_base + self.param.current_task
             phys = self.mem_utils.v2p(self.cpu, va)
             self.lgr.debug('winTaskUtils cell %s current task 0x%x, phys 0x%x now save cr3' % (self.cell_name, va, phys))
             self.mem_utils.saveKernelCR3(self.cpu)
@@ -234,7 +260,7 @@ class WinTaskUtils():
         ''' return the thread identifier from the ETHREAD record (either current or given) '''
         if rec == None:
             rec = self.getCurThreadRec()
-        ptr = rec + self.THREAD_ID_OFFSET
+        ptr = rec + self.getThreadIDOffset()
         retval = self.mem_utils.readWord32(self.cpu, ptr)
         return retval
 
@@ -248,6 +274,7 @@ class WinTaskUtils():
             if self.phys_current_task is None:
                 self.lgr.error('winTaskUtils getCurProcRec, no self.phys_current_task is None, bail')
                 return None
+
             cur_thread = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
             cur_thread = self.mem_utils.getUnsigned(cur_thread)
         else:
@@ -264,6 +291,7 @@ class WinTaskUtils():
             ptr_phys = self.mem_utils.v2p(self.cpu, ptr, do_log=False)
             #self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys 0x%x reading ptr 0x%x (cur_thread + 0x%x' % (ptr_phys, ptr, self.param.proc_ptr))
             if ptr_phys is None:
+               self.lgr.debug('winTaskUtils getCurProcRec got ptr_phys is none for ptr 0x%x' % ptr)
                if ptr > self.param.kernel_base: 
                     try:
                         phys_block = self.cpu.iface.processor_info.logical_to_physical(ptr, Sim_Access_Read)
@@ -272,6 +300,8 @@ class WinTaskUtils():
                         self.lgr.debug('memUtils v2p logical_to_physical failed on 0x%x' % v)
             if ptr_phys is not None:
                 retval = SIM_read_phys_memory(self.cpu, ptr_phys, self.mem_utils.WORD_SIZE)
+                #self.lgr.debug('winTaskUtils getCurProcRec ptr_phys is 0x%x for ptr 0x%x' % (ptr_phys, ptr))
+                #self.lgr.debug('winTaskUtils getCurProcRec retval is 0x%x cycles: 0x%x' % (retval, self.cpu.cycles))
             else:
                 self.lgr.error('winTaskUtils getCurProcRec failed getting phys address for ptr 0x%x  cur_thread: 0x%x  phys_current_task: 0x%x' % (ptr, cur_thread, self.phys_current_task))
                 if cur_thread_in is not None:
@@ -326,19 +356,49 @@ class WinTaskUtils():
         #                                          ....    call r10
         # syscall_jump is the r10 value.  TBD, this may change based on different call tables, e.g., 
         # windows has separate gui calls?  
-        val = callnum * 4 + self.param.syscall_jump
-        val = self.mem_utils.getUnsigned(val)
-        #self.lgr.debug('winTaskUtils getSyscallEntry syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
-        entry = self.mem_utils.readPtr(self.cpu, val)
-        if entry is None:
-            self.lgr.error('winTaskUtils getSyscallEntry entry is None reading from 0x%x' % val)
-            SIM_break_simulation('remove this')
-            return None
-        entry = entry & 0xffffffff
-        entry_shifted = entry >> 4
-        computed = self.param.syscall_jump + entry_shifted
+        if self.os_type != 'WINXP':
+            val = callnum * 4 + self.param.syscall_jump
+            val = self.mem_utils.getUnsigned(val)
+            #self.lgr.debug('winTaskUtils getSyscallEntry syscall_jump 0x%x  val 0x%x  callnum %d' % (self.param.syscall_jump, val, callnum))
+            entry = self.mem_utils.readPtr(self.cpu, val)
+            if entry is None:
+                self.lgr.error('winTaskUtils getSyscallEntry entry is None reading from 0x%x' % val)
+                SIM_break_simulation('remove this')
+                return None
+            entry = entry & 0xffffffff
+            entry_shifted = entry >> 4
+            computed = self.param.syscall_jump + entry_shifted
+        else:
+            computed = self.xpCompute(callnum)
         #self.lgr.debug('winTaskUtils getSyscallEntry call 0x%x val 0x%x entry 0x%x entry_shifted 0x%x computed 0x%x' % (callnum, val, entry, entry_shifted, computed))
         return computed
+
+    def xpCompute(self, call_num):
+        self.lgr.debug('xpCompute call_num 0x%x' % call_num)
+        #esi_value = self.cur_thread_addr
+        #esi_adjusted = esi_value + 0xe0
+        #self.lgr.debug('xpCompute esi_adjusted 0x%x' % esi_adjusted)
+        #edi_adjust = self.readWord(esi_adjusted)
+        edi_adjust = SIM_read_phys_memory(self.cpu, self.phys_current_task, self.mem_utils.WORD_SIZE)
+        self.lgr.debug('xpCompute edi_adjust 0x%x' % edi_adjust)
+        #self.lgr.debug('call_num 0x%x' % call_num)
+        #shifted = call_num >> 8 
+        #self.lgr.debug('shifted 0x%x' % shifted)
+        #anded = shifted & 0x30
+        #self.lgr.debug('anded 0x%x' % anded)
+        #edi_start = ((call_num >> 8) & 0x30) 
+        edi_start = 0x10
+        self.lgr.debug('xpCompute edi_start 0x%x' % edi_start)
+        edi = edi_start + edi_adjust
+        self.lgr.debug('xpCompute edi now 0x%x' % edi)
+        val_in_edi = self.mem_utils.readWord(self.cpu, edi)
+        self.lgr.debug('xpCompute val_in_edi 0x%x' % val_in_edi)
+        eax_now = call_num & 0xfff
+        call_to_addr = val_in_edi + 4*eax_now
+        self.lgr.debug('xpCompute call_to_addr 0x%x' % call_to_addr)
+        call_to = self.mem_utils.readWord(self.cpu, call_to_addr)
+        self.lgr.debug('xpCompute call_to 0x%x' % call_to)
+        return call_to
 
     def curPID(self):
         cur_task_rec = self.getThreadId()
@@ -362,6 +422,8 @@ class WinTaskUtils():
         #self.lgr.debug('winTaskUtils curThread')
         cur_proc_rec = self.getCurProcRec()
         #self.lgr.debug('winTaskUtils curThread cur_proc_rec 0x%x' % cur_proc_rec)
+        if cur_proc_rec == -1:
+            return None, None, -1
         if cur_proc_rec is None:
             return None, None, None
         #self.lgr.debug('winTaskUtils curThread get comm')
@@ -377,7 +439,6 @@ class WinTaskUtils():
         if pid is None or thread is None:
             self.lgr.debug('winTaskUtils curThread pid %s thread %s cur_proc_rec 0x%x' % (pid, thread, cur_proc_rec))
             return None, None, None
-        comm = self.mem_utils.readString(self.cpu, cur_proc_rec + self.param.ts_comm, 16)
         pid_thread = '%d-%d' % (pid, thread)
         #self.lgr.debug('winTaskUtils curThread pid %s' % str(pid))
         #phys = self.mem_utils.v2p(self.cpu, cur_proc_rec)
@@ -449,6 +510,18 @@ class WinTaskUtils():
         #r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
         return frame
 
+
+    def frameForXPEnter(self):
+        frame = {}
+        stack_ptr = self.mem_utils.getRegValue(self.cpu, 'edx')
+        frame['sp'] = stack_ptr
+        stack_ptr = stack_ptr + 8
+        for i in range (1, 9):
+            param = 'param%d' % i
+            frame[param] = self.mem_utils.readWord(self.cpu, stack_ptr)
+            stack_ptr = stack_ptr + 4
+        return frame 
+
     def pickleit(self, fname):
         phys_current_task_file = os.path.join('./', fname, self.cell_name, 'phys_current_task.pickle')
         try:
@@ -492,7 +565,7 @@ class WinTaskUtils():
         #self.lgr.debug('winTaskUtils getTaskListPtr rec_start 0x%x  look_for 0x%x' % (rec_start, look_for))
         got = []
         for i in range(250):
-            thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
+            thread_id_ptr = rec_start + self.getThreadIDOffset()
             thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
             if thread_id is not None:
                 next_thread_addr = rec_start + self.THREAD_NEXT
@@ -510,7 +583,8 @@ class WinTaskUtils():
         return retval        
 
     def getProcListPtr(self, rec=None):
-        ''' return address of the task list "next" entry that points to the current process, or the given process record '''
+        ''' return address of the process (EPROCESS) list "next" entry that points to the current process, or the given process record '''
+        # Not currently used.  should be part of context manager exit watch.  Currently watching ETHREAD pointers from getTaskListPtr
         retval = None
         if rec is None:
             task_rec_addr = self.getCurProcRec()
@@ -521,10 +595,10 @@ class WinTaskUtils():
         task_structs = self.getTaskStructs()
         look_for = task_rec_addr + self.param.ts_next - self.mem_utils.WORD_SIZE
         for t in task_structs:
-            #self.lgr.debug('winTaskUtils getTaskListPtr compre 0x%x to 0x%x' % (task_structs[t].next, look_for))
+            #self.lgr.debug('winTaskUtils getProcListPtr compre 0x%x to 0x%x' % (task_structs[t].next, look_for))
             if task_structs[t].next == look_for:
                 retval = t + self.param.ts_next
-                #self.lgr.debug('winTaskUtils getTaskListPtr got rec pointing to 0x%x, it is 0x%x returning 0x%x' % (task_rec_addr, t, retval))
+                #self.lgr.debug('winTaskUtils getProcListPtr got rec pointing to 0x%x, it is 0x%x returning 0x%x' % (task_rec_addr, t, retval))
                 break
         return retval 
  
@@ -534,6 +608,7 @@ class WinTaskUtils():
         return tid
 
     def walk(self, task_ptr_in, offset):
+        ''' Walk EPROCESS recs '''
         done = False
         got = []
         task_ptr = task_ptr_in
@@ -572,27 +647,29 @@ class WinTaskUtils():
         ''' get a list of processes (EPROCESS)'''
         got = []
         done = False
-        self.lgr.debug('getTaskList ')
+        self.lgr.debug('winTaskUtils getTaskList ')
         if self.system_proc_rec is not None:
             task_ptr = self.system_proc_rec
-            self.lgr.debug('getTaskList using system_proc_rec 0x%x' % task_ptr)
+            self.lgr.debug('winTaskUtils getTaskList using system_proc_rec 0x%x' % task_ptr)
         else:
             dum, dum1, pid = self.curThread()
             if dum is None:
+                self.lgr.debug('winTaskUtils getTaskList curThread returned None')
                 return got
             if pid != 0:
                 task_ptr = self.getCurProcRec()
             else:
                 self.lgr.error('Current process is the IDLE, unable to walk proc list from there.')
                 return got
-            self.lgr.debug('getTaskList using results of curThread??? 0x%x' % task_ptr)
-        self.lgr.debug('getTaskList task_ptr 0x%x' % task_ptr)
+            self.lgr.debug('winTaskUtils getTaskList using results of getCurProcRec 0x%x' % task_ptr)
+        self.lgr.debug('winTaskUtils getTaskList task_ptr 0x%x' % task_ptr)
         got = self.walk(task_ptr, self.param.ts_next)
-        #self.lgr.debug('getTaskList returning %d tasks' % len(got))
+        #self.lgr.debug('winTaskUtils getTaskList returning %d tasks' % len(got))
         return got
 
     def getPidList(self):
         retval = []
+        # get list of all EPROCESS records
         task_list = self.getTaskList()
         for task in task_list:
             pid = self.mem_utils.readWord32(self.cpu, task + self.param.ts_pid)
@@ -600,8 +677,10 @@ class WinTaskUtils():
         return retval
     
     def getTaskStructs(self):
+        ''' Returns list of EPROCESS records'''
         retval = {}
-        self.lgr.debug('getTaskStructs call getTaskList')
+        self.lgr.debug('winTaskUtils getTaskStructs call getTaskList')
+        # get list of all EPROCESS records
         task_list = self.getTaskList()
         for task in task_list:
             comm = self.mem_utils.readString(self.cpu, task + self.param.ts_comm, self.commSize())
@@ -768,7 +847,7 @@ class WinTaskUtils():
         retval = None
         got = []
         for i in range(250):
-            thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
+            thread_id_ptr = rec_start + self.getThreadIDOffset()
             thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
             if thread_id is not None:
                 #self.lgr.debug('winTaskUtils getThreadRecForThreadId %d thread_id_in: %d' % (thread_id, thread_id_in))
@@ -811,19 +890,22 @@ class WinTaskUtils():
             #self.lgr.debug('thread list head is 0x%x' % thread_list_head)
 
             next_thread = self.mem_utils.readPtr(self.cpu, thread_list_head+8)
-            got = []
-            got.append(next_thread)
-            for i in range(250):
-          
-                next_thread = self.mem_utils.readPtr(self.cpu, next_thread+8)
-                if next_thread is None or next_thread in got:
-                    break
+            if next_thread is not None:
+                got = []
                 got.append(next_thread)
-                ''' TBD compute this delta by looping each next_thread we find and computing the smallest delta from the cur_thread values'''
-                rec_start = next_thread - self.THREAD_NEXT
-                thread_id_ptr = rec_start + self.THREAD_ID_OFFSET
-                thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
-                thread_id_dict[thread_id] = rec_start
+                for i in range(250):
+          
+                    next_thread = self.mem_utils.readPtr(self.cpu, next_thread+8)
+                    if next_thread is None or next_thread in got:
+                        break
+                    got.append(next_thread)
+                    ''' TBD compute this delta by looping each next_thread we find and computing the smallest delta from the cur_thread values'''
+                    rec_start = next_thread - self.THREAD_NEXT
+                    thread_id_ptr = rec_start + self.getThreadIDOffset()
+                    thread_id = self.mem_utils.readWord32(self.cpu, thread_id_ptr)
+                    thread_id_dict[thread_id] = rec_start
+            else:
+                self.lgr.debug('winTaskUtils findThreads failed to find next_thread from thread_list_head (0x%x) +8' % thread_list_head)
 
         return thread_id_dict
 
@@ -887,9 +969,10 @@ class WinTaskUtils():
         return tid, comm
 
     def getTidList(self):
+        # list of EPROCESS
         task_list = self.getTaskStructs()
         tid_list = []
-        self.lgr.debug('winTaskUtils getTidList')
+        self.lgr.debug('winTaskUtils getTidList %d items in task_list' % len(task_list))
         for t in task_list:
             pid = task_list[t].pid
             if pid is None: 
@@ -931,7 +1014,7 @@ class WinTaskUtils():
 
     def getSystemProcRec(self):
         retval = None
-        self.lgr.debug('getSystemProcRec call getTaskStructs')
+        self.lgr.debug('winTaskUtils getSystemProcRec call getTaskStructs')
         ts_list = self.getTaskStructs()
         for ts in ts_list:
            if ts_list[ts].pid == 4:
@@ -963,3 +1046,7 @@ class WinTaskUtils():
 
     def commMatch(self, comm1, comm2):
         return self.comm_map.commMatch(comm1, comm2)
+
+    def getThreadIDOffset(self):
+        retval = self.THREAD_ID_OFFSET 
+        return retval

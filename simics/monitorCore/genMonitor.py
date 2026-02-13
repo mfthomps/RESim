@@ -531,7 +531,7 @@ class GenMonitor():
             word_size = 4
             if 'OS_TYPE' in comp_dict[cell_name]:
                 self.os_type[cell_name] = comp_dict[cell_name]['OS_TYPE']
-                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN'):
+                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN7'):
                     word_size = 8
                 self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 
@@ -974,7 +974,8 @@ class GenMonitor():
                         self.unistd[cell_name], unistd32, self.run_from_snap, self.lgr, root_prefix=root_prefix)
                     self.task_utils[cell_name] = task_utils
                 elif self.isWindows(target=cell_name):
-                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                    os_type = self.comp_dict[cell_name]['OS_TYPE']
+                    self.task_utils[cell_name] = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
                 elif self.isVxDKM(target=cell_name):
                     self.task_utils[cell_name] = vxKTaskUtils.VxKTaskUtils(cpu, cell_name, self.mem_utils[cell_name], self.comp_dict[cell_name], self.run_from_snap, self.lgr) 
                 else:
@@ -1077,7 +1078,8 @@ class GenMonitor():
                         continue
                     if True:
                         if self.isWindows(cell_name):
-                            task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, self.lgr) 
+                            os_type = self.comp_dict[cell_name]['OS_TYPE']
+                            task_utils = winTaskUtils.WinTaskUtils(cpu, cell_name, self.param[cell_name],self.mem_utils[cell_name], self.run_from_snap, os_type, self.lgr) 
                             swapper = task_utils.getSystemProcRec()
                         else: 
                             unistd32 = None
@@ -1129,8 +1131,13 @@ class GenMonitor():
                 cmd = 'c %s cycles' % run_cycles
                 #dumb, ret = cli.quiet_run_command(cmd)
                 SIM_continue(run_cycles)
-                self.lgr.debug('back from continue dumb %s ret %s' % (dumb, ret))
+                self.lgr.debug('back from continue dumb %s ret %s hack_count %d' % (dumb, ret, hack_count))
                 run_cycles = self.getBootCycleChunk()
+                hack_count = hack_count + 1
+                cpl = memUtils.getCPL(cpu)
+                #if hack_count > 30 and cpl == 0:
+                #   print('FAILED')
+                #   return
             else: 
                 self.lgr.debug('doInit done, call runScripts')
         self.runScripts()
@@ -6334,10 +6341,12 @@ class GenMonitor():
             platform = self.comp_dict[self.target]['PLATFORM']
         return platform
 
-    def getTargetEnv(self, name):
+    def getTargetEnv(self, name, target=None):
         retval = None
-        if name in self.comp_dict[self.target]:
-            retval = self.comp_dict[self.target][name]
+        if target is None:
+            target = self.target
+        if name in self.comp_dict[target]:
+            retval = self.comp_dict[target][name]
         return retval
 
     def getReadAddr(self):

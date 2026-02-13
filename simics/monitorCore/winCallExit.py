@@ -64,19 +64,21 @@ class WinCallExit():
         self.track_so = True
         self.all_write = False
         self.allWrite = allWrite.AllWrite()
-        ''' used for origin reset'''
+        # used for origin reset'''
         self.stop_hap = None
-        ''' used by writeData to make application think fd has no more data '''
+        # used by writeData to make application think fd has no more data '''
         self.fool_select = None
-        ''' piggyback datawatch kernel returns '''
+        # piggyback datawatch kernel returns '''
         self.callback = None
         self.callback_param = None
    
-        ''' Adjust read return counts using writeData '''
+        # Adjust read return counts using writeData '''
         self.read_fixup_callback = None
 
-        ''' track socket types (tcp/udp) for tids and their handles'''
+        # track socket types (tcp/udp) for tids and their handles'''
         self.tid_sockets = {}
+
+        self.os_type = top.getTargetEnv('OS_TYPE', target=cell_name)
 
     def watchData(self, exit_info):
         if exit_info.matched_param is not None and (exit_info.matched_param.break_simulation or exit_info.syscall_instance.linger) and self.dataWatch is not None:
@@ -233,7 +235,11 @@ class WinCallExit():
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
             if fd is not None:
-                section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
+                if self.os_type == 'WINXP':
+                    section_handle_addr = exit_info.frame['param6']
+                    section_handle = self.mem_utils.readWord(self.cpu, section_handle_addr)
+                else:
+                    section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
                 self.soMap.createSection(fd, section_handle, tid)
                 trace_msg = trace_msg+' Handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
             else:
@@ -323,12 +329,18 @@ class WinCallExit():
 
         elif callname in ['FindAtom', 'AddAtom']: 
             atom_hex = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
-            trace_msg = trace_msg+' atom hex: 0x%x' % atom_hex
+            if atom_hex is not None:
+                trace_msg = trace_msg+' atom hex: 0x%x' % atom_hex
+            else:
+                trace_msg = trace_msg+' atom bad value'
 
         elif callname == 'Close': 
             if exit_info.matched_param is not None and self.dataWatch is not None:
                    self.dataWatch.close(exit_info.old_fd)
 
+        elif callname == 'CreateDirectoryObject': 
+            handle = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
+            trace_msg = trace_msg + ' returned handle: 0x%x'
         elif callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
             trace_msg = trace_msg + ' ' + exit_info.socket_callname
 

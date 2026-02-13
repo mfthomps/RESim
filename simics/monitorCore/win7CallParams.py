@@ -32,13 +32,12 @@ import memUtils
 import taskUtils
 import winSocket
 import paramRefTracker
+import paramRefTrackerXP
 from resimHaps import *
 '''
 Functions for experimenting with Win7 
 to determine how parameters are passed to the kernel.
 These assume a param has been built containing the pid offset.
-And it assumes the param includes the syscall_jump value
-reflecting jump table values for syscalls.
 The physical address of the current task record is passed in,
 e.g., from getKernelParam.  A real system would compute that from
 the param, using gs_base and logic to account for aslr.
@@ -57,7 +56,8 @@ class Win7CallParams():
         self.current_task_phys = current_task_phys
         self.entry = param.sysenter
         #self.entry = 0xfffff80003622bc0
-        self.lgr.debug('Win7CallParams current task phys 0x%x sysenter 0x%x syscall_jump: 0x%x track_params: %r' % (self.current_task_phys, self.entry, param.syscall_jump, track_params))
+        #self.lgr.debug('Win7CallParams current task phys 0x%x sysenter 0x%x syscall_jump: 0x%x track_params: %r' % (self.current_task_phys, self.entry, param.syscall_jump, track_params))
+        self.lgr.debug('Win7CallParams current task phys 0x%x sysenter 0x%x track_params: %r' % (self.current_task_phys, self.entry, track_params))
         self.entry_break = None
         self.entry_hap = None
         self.exit_break = None
@@ -66,7 +66,8 @@ class Win7CallParams():
         self.only_call_num = None
         self.only_proc = only_proc
         self.track_params = track_params
-       
+
+        self.os_type = top.getTargetEnv('OS_TYPE', target=cell_name)
         self.user_break = None
         self.user_hap = None
         self.user_write_break = None
@@ -119,7 +120,9 @@ class Win7CallParams():
         self.one_entry = None
         if only is not None:
             call_num = self.task_utils.syscallNumber(only)
+            self.lgr.debug('only is %s' % only)
             if call_num is not None:
+                self.lgr.debug('only call_num 0x%x' % call_num)
                 if not self.top.tracingAll(self.cell_name):
                     self.one_entry = self.task_utils.getSyscallEntry(call_num)
                 self.only_call_num = call_num
@@ -145,7 +148,7 @@ class Win7CallParams():
             self.lgr.debug('win7CallParams will log param tracking to %s' % track_log_file)
         else:
             self.track_log = None
-
+        self.lgr.debug('win7CallParams call doBreaks')
         self.doBreaks()
 
     def doBreaks(self):
@@ -153,6 +156,7 @@ class Win7CallParams():
         if self.one_entry is not None:
             self.entry_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.one_entry, 1, 0)
             self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.oneCallHap, None, self.entry_break)
+            self.lgr.debug('win7CallParams doBreaks on one_entry 0x%x' % self.one_entry)
         else:
             #self.entry_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
             #self.entry_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.syscallHap, None, self.entry_break)
@@ -161,7 +165,10 @@ class Win7CallParams():
             if self.track_params:
                 #self.exit_break = SIM_breakpoint(self.default_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
                 #self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break)
-                self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
+                if self.os_type == 'WINXP':
+                    self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+                else:
+                    self.exit_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.param.sysret64, 1, 0)
                 self.exit_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.exitHap, None, self.exit_break, 'win7CallParams_exit')
                 self.lgr.debug('win7CallParams tracking params, exit set along with sysenter haps')
             else:
@@ -212,6 +219,24 @@ class Win7CallParams():
         self.param_ref_tracker = paramRefTracker.ParamRefTracker(rsp, rcx, rdx, r8, r9, self.mem_utils, self.task_utils, self.cpu, call_name, ignore_sp, self.lgr)
         #SIM_break_simulation('oneCallHap')
 
+    def doParamTrackXP(self, call_name):
+        self.lgr.debug('win7CallParams doParamTrackXP cycles: 0x%x' % self.cpu.cycles)
+        if self.do_context_switch:
+            self.cpu.current_context = self.resim_context
+        tid = self.task_utils.curTID()
+        self.exit_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysexit, 1, 0)
+        self.exit_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.exitTrackHap, tid, self.exit_break)
+
+        self.user_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Read, 0, (self.param.kernel_base-1),  0)
+        self.user_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userReadHap, tid, self.user_break)
+
+        self.user_write_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Write, 0, (self.param.kernel_base-1),  0)
+        self.user_write_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.userWriteHap, tid, self.user_write_break)
+        self.lgr.debug('win7CallParams doParamTrackXP exit and user breaks set, get a param tracker')
+        #SIM_break_simulation('oneCallHap')
+        esp = self.mem_utils.getRegValue(self.cpu, 'edx')
+        self.param_ref_tracker = paramRefTrackerXP.ParamRefTrackerXP(esp, self.mem_utils, self.task_utils, self.cpu, call_name, self.lgr)
+
     def reverseToSyscall(self):
         debugging_tid, dumb = self.context_manager.getDebugTid()
         if debugging_tid is None:
@@ -252,9 +277,15 @@ class Win7CallParams():
         call_name = self.task_utils.syscallName(call_num)
         if call_name == 'DeviceIoControlFile':
             if computed:
-                frame = self.task_utils.frameFromRegsComputed()
+                if self.os_type == 'WINXP':
+                    frame = self.task_utils.frameForXPEnter()
+                else:
+                    frame = self.task_utils.frameFromRegsComputed()
             else:
-                frame = self.task_utils.frameFromRegs()
+                if self.os_type == 'WINXP':
+                    frame = self.task_utils.frameForXPEnter()
+                else:
+                    frame = self.task_utils.frameFromRegs()
             operation = frame['param6']
             ioctl_op_map = winSocket.getOpMap()
             op_cmd = None
@@ -308,23 +339,27 @@ class Win7CallParams():
             call_name = self.getCallName(rax)
 
         self.lgr.debug('trackFromSysEntry')
-        if call_name in ignore_sp_for_calls:
-            ignore_sp = True
+        if self.os_type != 'WINXP':
+            if call_name in ignore_sp_for_calls:
+                ignore_sp = True
+            else:
+                ignore_sp = False
+            rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
+            rcx = self.mem_utils.getRegValue(self.cpu, 'r10')
+            rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
+            r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
+            r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
+            if self.one_entry is not None:
+                self.doParamTrack(rcx, rdx, r8, r9, rsp, call_name, ignore_sp)
+                status = SIM_simics_is_running()
+                if not status:
+                    self.lgr.debug('trackFromSysEntry Simics not running, go')
+                    SIM_continue(0)
+            else:
+                self.doParamTrackAll(rcx, rdx, r8, r9, rsp, call_name, ignore_sp)
         else:
-            ignore_sp = False
-        rsp = self.mem_utils.getRegValue(self.cpu, 'rsp')
-        rcx = self.mem_utils.getRegValue(self.cpu, 'r10')
-        rdx = self.mem_utils.getRegValue(self.cpu, 'rdx')
-        r8 = self.mem_utils.getRegValue(self.cpu, 'r8')
-        r9 = self.mem_utils.getRegValue(self.cpu, 'r9')
-        if self.one_entry is not None:
-            self.doParamTrack(rcx, rdx, r8, r9, rsp, call_name, ignore_sp)
-            status = SIM_simics_is_running()
-            if not status:
-                self.lgr.debug('trackFromSysEntry Simics not running, go')
-                SIM_continue(0)
-        else:
-            self.doParamTrackAll(rcx, rdx, r8, r9, rsp, call_name, ignore_sp)
+            self.doParamTrackXP(call_name)
+    
 
     def syscallHap(self, dumb, third, forth, memory):
         ''' hit when kernel is entered due to sysenter '''
@@ -357,7 +392,7 @@ class Win7CallParams():
                     self.lgr.debug('win7CallParams syscallHap got RaiseException, just return')
                     return
 
-                computed = self.task_utils.getSyscallEntry(rax)
+                #computed = self.task_utils.getSyscallEntry(rax)
                 #if computed is not None:
                 #    self.lgr.debug('win7CallParams syscallHap tid:%s (%s) call %s computed is 0x%x' % (tid, comm, call_name, computed))
                 #else:
@@ -473,7 +508,10 @@ class Win7CallParams():
             self.lgr.error('exitTrackHap got tid of None')
             SIM_break_simulation('fix this')
         self.lgr.debug(params)
-        exit_frame = self.task_utils.frameFromRegs()
+        if self.os_type == 'WINXP':
+            exit_frame = self.task_utils.frameForXPEnter()
+        else:
+            exit_frame = self.task_utils.frameFromRegs()
         #frame_string = taskUtils.stringFromFrame(exit_frame)
         rax = self.mem_utils.getRegValue(self.cpu, 'rax')
         #print(frame_string)
@@ -557,6 +595,7 @@ class Win7CallParams():
         if self.user_hap is None:
             return
         dumb, comm, tid = self.task_utils.curThread()
+        self.lgr.debug('win7CallParams userReadHap tid:%s tid_in: %s' % (tid, tid_in))
         if tid != tid_in:
             pid = tid.split('-')[0]    
             if self.only == 'CreateUserProcess' and pid not in self.starting_pid_list:
@@ -594,8 +633,8 @@ class Win7CallParams():
             hexstring = binascii.hexlify(value)
             rip = self.mem_utils.getRegValue(self.cpu, 'rip')
             ref_count = self.param_ref_tracker.numRefs()
-            #self.lgr.debug('\tuserReadHap tid:%s (%s) read value 0x%s from 0x%x, cycles:0x%x rip: 0x%x ref_count %d' % (tid, comm, hexstring, 
-            #      memory.logical_address, self.cpu.cycles, rip, ref_count))
+            self.lgr.debug('\tuserReadHap tid:%s (%s) read value 0x%s from 0x%x, cycles:0x%x rip: 0x%x ref_count %d' % (tid, comm, hexstring, 
+                  memory.logical_address, self.cpu.cycles, rip, ref_count))
             ok = self.param_ref_tracker.addRef(memory.logical_address, orig_value, hexstring, memory.size, other_ptr)
             if not ok:
                 self.lgr.debug('userReadHap addRef says it is got a reference on the moon, bail')
