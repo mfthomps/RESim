@@ -7,6 +7,7 @@ fi
 rm /tmp/tri.*
 ini=$1
 cp $2 /tmp/tri.io
+rm -f logs/sys*txt
 resim $1 -c $RESIM_DIR/simics/simicsScripts/msc/wm-inject.simics
 resim $1 -c $RESIM_DIR/simics/simicsScripts/msc/trace-inject.simics
 cp logs/sys*txt /tmp/tri.trace || exit
