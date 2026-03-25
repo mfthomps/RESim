@@ -1567,6 +1567,10 @@ with the value given as the destination.  For example replacing an instruction w
     prog:addr 0xD2800000 replace  
     prog:addr+4 0xD65F03C0 replace  
 \end{verbatim}
+\noindent For x86 (32 bit), set eax to zero:
+\begin{verbatim}
+    prog:addr 0x31c0 replace  
+\end{verbatim}
 
 \subsection{Dynamic modifications to memory, registers, topology and control flow}
 \label{dmod}
@@ -4661,6 +4665,14 @@ Adjust edi based on esi value
 [board.mb.cpu0.core[0][0]] cs:0x000000008053d636 p:0x00053d636  call ebx
 
 \end{verbatim}
+
+A different XP use fs:[0xbaba] for current task:
+\begin{verbatim}
+[board.mb.cpu0.core[0][0]] cs:0x0000000080540544 p:0x000540544  mov ebx,dword ptr fs:[0x1c]
+[board.mb.cpu0.core[0][0]] cs:0x000000008054054b p:0x00054054b  push 59
+[board.mb.cpu0.core[0][0]] cs:0x000000008054054d p:0x00054054d  mov esi,dword ptr [ebx+0x124]
+\end{verbatim}
+
 
 Windows XP has no drivers for the x86 platfrom motherboard ethernet.  It has drivers
 for the others, but they windows reports error 10, unable to use the device.
