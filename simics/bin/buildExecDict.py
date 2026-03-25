@@ -72,15 +72,15 @@ def buildList(root_dir, exec_list_file):
         here = os.getcwd()
         os.chdir(root_dir)
         here = os.getcwd()
-        print('dir is %s' % here)
+        print('root_dir is %s' % here)
         parent = os.path.dirname(exec_list_file)
         cmd = 'mkdir -p %s' % parent
         os.system(cmd)
-        cmd = 'find ./ -name *.exe -type f | grep -v "/winsxs/" >%s ' % (exec_list_file)
+        cmd = 'find ./ -name "*.exe" -type f | grep -v "/winsxs/" >%s ' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)
         #cmd = 'find . -name *.dll | grep -vi windows | grep -vi microsoft | grep -v -i temp >>%s' % (exec_list_file)
-        cmd = 'find . -name *.dll | grep -v -i temp | grep -v "winsxs/" >>%s' % (exec_list_file)
+        cmd = 'find . -name "*.dll" | grep -v -i temp | grep -v "winsxs/" >>%s' % (exec_list_file)
         print('cmd is %s' % cmd)
         os.system(cmd)
     else:
