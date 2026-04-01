@@ -969,7 +969,7 @@ class ReverseMgr():
 
     def SIM_breakpoint(self, the_object, the_type, the_mode, the_addr, the_count, the_flags):
         bp = SIM_breakpoint(the_object, the_type, the_mode, the_addr, the_count, the_flags)
-        self.lgr.debug('reverseMgr set SIM_breakpoint %d' % bp)
+        #self.lgr.debug('reverseMgr set SIM_breakpoint %d' % bp)
         if bp is not None:
             self.sim_breakpoints.append(bp)
         return bp
@@ -979,9 +979,9 @@ class ReverseMgr():
         if bp is not None:
             if bp in self.sim_breakpoints:
                 self.sim_breakpoints.remove(bp)
-                self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_breakpoints' % bp)
+                #self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_breakpoints' % bp)
                 if bp in self.bp_list:
-                    self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from bp_list' % bp)
+                    #self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from bp_list' % bp)
                     self.bp_list.remove(bp)
             else:
                 self.lgr.error('reverseMgr SIM_delete_breakpoint %d not in sim_breakpoints')
