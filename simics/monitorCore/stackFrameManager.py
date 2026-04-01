@@ -88,6 +88,7 @@ class StackFrameManager():
                 else:
                     reg_frame, cycles = self.top.rev_to_call[self.cell_name].getRecentCycleFrame(tid)
                
+                self.lgr.debug('stackFrameManager tid:%s cur_tid: %s reg_frame %s' % (tid, cur_tid, reg_frame))
                 st = stackTrace.StackTrace(self.top, cpu, tid, self.soMap, self.mem_utils, 
                          self.task_utils, stack_base, fun_mgr, self.targetFS, 
                          reg_frame, self.disassembler, self.lgr, stop_after_clib=stop_after_clib, use_bp=self.use_bp)
