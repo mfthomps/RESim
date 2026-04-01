@@ -748,6 +748,7 @@ class GenMonitor():
             SIM_run_alone(self.stopHapAlone, stop_action)
 
     def stopHapAlone(self, stop_action):
+        ''' Were reversing for some reason, and stopped.  May be revToText or other from reverseToCall '''
         if stop_action is None or stop_action.hap_clean is None:
             print('stopHap error, stop_action None?')
             self.lgr.error('stopHapAlone error, stop_action None?')
@@ -758,7 +759,8 @@ class GenMonitor():
         ''' note, curThread may fail, best effort for debugging why it failed.'''
         cpu = self.cell_config.cpuFromCell(self.target)
         wrong_tid = False
-        if stop_action.tid is not None and tid != stop_action.tid:
+        if stop_action.wrongTid(tid):
+        #if stop_action.tid is not None and tid != stop_action.tid:
             ''' likely some other tid in our group '''
             wrong_tid = True
         eip = self.getEIP(cpu)
@@ -788,8 +790,9 @@ class GenMonitor():
         self.is_monitor_running.setRunning(False)
         self.lgr.debug('stopAlone back from stop_action.run')
 
-        if stop_action.tid is not None and tid != stop_action.tid:
-            self.lgr.debug('stopHap wrong tid:%s expected %d reverse til we find tid ' % (tid, stop_action.tid))
+        if stop_action.wrongTid(tid):
+        #if stop_action.tid is not None and tid != stop_action.tid:
+            self.lgr.debug('stopHap wrong tid:%s expected %s reverse til we find tid ' % (tid, str(stop_action.tid)))
             ''' set up for revToTid, set function to the wrong_tid_action '''
             hap_clean = hapCleaner.HapCleaner(cpu)
             f1 = stopFunction.StopFunction(stop_action.wrong_tid_action, [], nest=False, match_tid=True)
@@ -3395,7 +3398,7 @@ class GenMonitor():
         if self.target in self.page_callbacks:
             self.page_callbacks[self.target].disableBreaks()
 
-    def revToText(self):
+    def revToText(self, any_thread=False):
         self.is_monitor_running.setRunning(True)
         #start, end = self.context_manager[self.target].getText()
         load_info = self.soMap[self.target].getLoadInfo()
@@ -3415,7 +3418,11 @@ class GenMonitor():
         flist = [f1, f2]
         hap_clean = hapCleaner.HapCleaner(cpu)
         ''' if we land in the wrong tid, rev to the right tid and then revToText again...'''
-        stop_action = hapCleaner.StopAction(hap_clean, flist=flist, tid=tid, wrong_tid_action=self.revToText)
+        if any_thread:
+            tid_group = self.getGroupTids(tid, quiet=True)
+        else:
+            tid_group = [tid]
+        stop_action = hapCleaner.StopAction(hap_clean, flist=flist, tid=tid_group, wrong_tid_action=self.revToText)
         self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('hap set, now reverse')
         SIM_run_command('rev')
@@ -3477,6 +3484,7 @@ class GenMonitor():
             tid, cpu = self.context_manager[self.target].getDebugTid() 
         if load_info is None:
             print('No text load info for current process?')
+            self.lgr.debug('runToText No text load info for current process?')
             return
         loader_load_info = None
         if load_info.interp is not None:
@@ -3493,8 +3501,8 @@ class GenMonitor():
                 # assume dynamic load.  Set break on zero to start of loader
                 start = 0
                 count = loader_load_info.addr 
-                print('remove this')
-                count = loader_load_info.addr - 0x1abc0
+                #print('remove this')
+                #count = loader_load_info.addr - 0x1abc0
                 self.lgr.error('runToText dynamic load break on range 0x%x 0x%x tid:%s lingering debug ???' % (start, count, tid))
             else:
                 self.lgr.error('runToText dynamic load but no load info for the loader itself')
