@@ -17,7 +17,7 @@ class HapCleaner():
         self.hlist.append(ht)
 
 class StopAction():
-    ''' hap_clearer is a list of haps to delete
+    ''' hap_cleaner is a list of haps to delete
         breakpoints is a list to be deleted
         flist is list of functions to be executed of type stopFunction'''
     def __init__(self, hap_cleaner, breakpoints=[], flist=None, break_addrs = [], tid=None, prelude=None, wrong_tid_action=None):
@@ -78,4 +78,17 @@ class StopAction():
         retval = ''
         for f in self.flist:
             retval = retval + str(f.getFun()) + ' '
+        return retval
+
+    def wrongTid(self, tid):
+        retval = False
+        if self.tid is not None:
+            if type(self.tid) is str:
+                if self.tid != tid:
+                    retval = True
+            elif type(self.tid) is list:
+                if tid not in self.tid:
+                    retval = True
+            else:
+                print('hapCleaner wrongTid CONFUSED about tid')
         return retval
