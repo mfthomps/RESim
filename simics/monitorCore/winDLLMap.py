@@ -1013,3 +1013,10 @@ class WinDLLMap():
         else:
            self.lgr.debug('winDLL getFnameForSectionHandle tid %s not in sections' % tid)
         return retval
+
+    def isDynamic(self, in_fname):
+        if self.top.osType(self.cell_name) == 'WINXP':
+            return False
+        else:
+            return False
+            self.lgr.error('winDLLMap does not yet handle isDynamic for Win7+')
