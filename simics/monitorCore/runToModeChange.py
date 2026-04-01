@@ -46,7 +46,7 @@ class RunToModeChange():
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
             dumb, comm, tid = self.task_utils.curThread() 
-            self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
+            self.lgr.debug('runToModeChange run2Kernel in user space (%d), set hap' % cpl)
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, [tid])
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
@@ -54,7 +54,7 @@ class RunToModeChange():
             self.top.RES_add_stop_callback(self.top.stopHap, stop_action, your_stop=True)
             SIM_continue(0)
         else:
-            self.lgr.debug('run2Kernel, already in kernel')
+            self.lgr.debug('runToModeChange run2Kernel, already in kernel')
             if flist is not None: 
                 #if len(flist) == 1:
                 for fun_item in flist:
@@ -73,19 +73,19 @@ class RunToModeChange():
                 ''' use debug process if defined, otherwise default to current process '''
                 if want_tid is not None:
                     want_tid = str(want_tid)
-                    self.lgr.debug('run2User has want_tid of %s' % want_tid)
+                    self.lgr.debug('runToModeChange run2User has want_tid of %s' % want_tid)
                     self.tid_list = [want_tid]
                 else:
                     self.tid_list = self.context_manager.getThreadTids()
                     if len(self.tid_list) == 0:
                         self.tid_list.append(tid)
-                        self.lgr.debug('run2User tidlist from context_manager empty, add self %s' % tid)
+                        self.lgr.debug('runToModeChange run2User tidlist from context_manager empty, add self %s' % tid)
                     else:
                         self.lgr.debug('run2User tidlist from context_manager is %s' % self.tid_list)
            
                     
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, self.tid_list)
-            self.lgr.debug('run2User tid %s in kernel space (%d), set mode hap %d' % (str(self.tid_list), cpl, self.mode_hap))
+            self.lgr.debug('runToModeChange run2User tid %s in kernel space (%d), set mode hap %d' % (str(self.tid_list), cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
@@ -99,9 +99,9 @@ class RunToModeChange():
                 SIM_run_alone(self.top.continueForward, None)
                
             else:
-                self.lgr.debug('run2User would continue, but already running?')
+                self.lgr.debug('runToModeChange run2User would continue, but already running?')
         else:
-            self.lgr.debug('run2User, already in user')
+            self.lgr.debug('runToModeChange run2User, already in user')
             if flist is not None: 
                 #if len(flist) == 1:
                 for fun_item in flist:
