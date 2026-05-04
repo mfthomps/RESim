@@ -20,6 +20,11 @@
 # * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # * POSSIBILITY OF SUCH DAMAGE.
+"""
+decl {
+    param span : int = 0x1000000
+}
+"""
 '''
 Implement a subset of the deprecated Simics reverse execution functions. 
 The reversing functions are at least those used by RESim.
@@ -206,7 +211,56 @@ class BPEnabler():
             if bp_values.enabled:
                 cmd = 'bp.enable %d' % bp_values.bp_num                
                 cli.quiet_run_command(cmd)
-               
+
+class Performance():
+    def __init__(self, cpu, sample_rate, do_log, lgr, top=None):
+        self.sample_rate = sample_rate
+        self.lgr = lgr
+        self.do_log = do_log
+        self.cpu = cpu
+        self.time_stamps = {}
+        self.lgr.debug('Performance begin, sample_rate %d do_log %r' % (sample_rate, do_log))
+
+    def spanHit(self, cycle):
+        if self.sample_rate == 1 or self.test_cycles > self.sample_rate:
+            self.time_stamps[cycle] = time.perf_counter_ns()
+            if self.do_log:
+                size = self.snapSize()
+                self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x snapshot size %s' % (self.cpu.cycles, f"{size:,}"))
+            self.test_cycles = 0
+        self.test_cycles = self.test_cycles + 1
+
+    def snapSize(self):
+        '''
+        Retun the total number of bytes consumed by snapshots
+        '''
+        retval = 0
+        size_list = VT_snapshot_size_used()
+        for item in size_list:
+            #self.lgr.debug('size item %s' % str(item)) 
+            retval = retval + item
+        return retval
+
+    def getSizeChanges(self):
+        size_list = VT_snapshot_size_used()
+        prev_size = None
+        retval = {}
+        index = 0
+        for this_size in size_list:
+            if prev_size is None:
+                retval[index] = this_size
+            else:
+                if this_size != prev_size:
+                    if abs(this_size - prev_size) > 32000:
+                        retval[index] = this_size
+            prev_size = this_size 
+            index += 1
+        return retval
+
+    def showSizeChanges(self):
+        size_changes = self.getSizeChanges()
+        for index in size_changes:
+            print('%d 0x%x' % (index, size_changes[index]))
 
 class ReverseMgr():
     '''
@@ -219,7 +273,7 @@ class ReverseMgr():
     Parameter span: Optional span value.  Default is 0x100000
              
     '''
-    def __init__(self, conf, cpu, lgr, top=None, span=None):
+    def __init__(self, conf, cpu, lgr, top=None, span=None, force_new=False, report_performance=False):
         self.conf = conf
         self.cpu = cpu
         self.lgr = lgr
@@ -254,7 +308,10 @@ class ReverseMgr():
         self.reset()
         # breakpoints set via SIM_breakpoint
         self.sim_breakpoints = []
-
+     
+        self.performance = Performance(cpu, 1, True, self.lgr, None)
+        self.force_new = force_new
+        self.report_performance = report_performance
 
     def reset(self):
         # The current_span is the range of cycles over which we will run forward
@@ -278,8 +335,6 @@ class ReverseMgr():
         self.continuation_hap = None
         self.recording_end_event_set = False
         self.reverse_to =  None
-        # for debugging storage/performance
-        self.test_cycles = 0
         # hack for catching attempts to restore snapshots not net recorded due to runAlone
         self.snapshot_names = []
         self.was_at_reverse_point = False
@@ -290,7 +345,7 @@ class ReverseMgr():
         Cancel the event used to record execution of cycle_span cycles during recording
         '''
         if self.cycle_event is not None:
-            self.lgr.debug('reverseMgr cancelSpanCycle')
+            #self.lgr.debug('reverseMgr cancelSpanCycle')
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.recording = False
 
@@ -306,7 +361,7 @@ class ReverseMgr():
         Register a cycle event to take a snapshot on reaching the next span during recording
         '''
         self.recording = True
-        self.lgr.debug('reverseMgr setNextCycle') 
+        #self.lgr.debug('reverseMgr setNextCycle') 
         if self.cycle_event is None:
             self.cycle_event = SIM_register_event("reverse cycle event", SIM_get_class("sim"), Sim_EC_Notsaved, self.cycle_handler, None, None, None, None)
             masked = self.getMasked(self.origin_cycle)
@@ -344,7 +399,7 @@ class ReverseMgr():
         Entered when the next span is reached during recording.
         '''
         self.latest_span_end = self.cpu.cycles
-        if self.top is not None:
+        if self.report_performance and self.top is not None:
             eip = self.top.getEIP()
             self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
         SIM_run_alone(self.cycleHandlerAlone, cycles)
@@ -361,7 +416,7 @@ class ReverseMgr():
         else:
             SIM_take_snapshot(name)
         self.snapshot_names.append(name)
-        self.lgr.debug('reverseMgr took snapshot %s' % name)
+        #self.lgr.debug('reverseMgr took snapshot %s' % name)
 
     def getPreviousName(self, name):
         retval = None
@@ -453,27 +508,9 @@ class ReverseMgr():
             self.lgr.error('reverseMgr cycleHandlerAlone drifted cycles now 0x%x expected 0x%x' % (self.cpu.cycles, self.latest_span_end))
         cycle_mark = 'cycle_%x' % self.latest_span_end 
         self.takeSnapshot(cycle_mark)
-        if self.top is not None and self.test_cycles > 100:
-            eip = self.top.getEIP()
-            size = self.snapSize()
-            self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x at handler were 0x%x eip now 0x%x snapshot size %s' % (self.cpu.cycles, self.latest_span_end, eip, f"{size:,}"))
-            self.test_cycles = 0
-        self.test_cycles = self.test_cycles + 1
+        if self.report_performance:
+            self.performance.spanHit(cycles)
         self.setNextCycle()
-
-    def snapSize(self):
-        '''
-        Retun the number of bytes consumed by snapshots
-        '''
-        retval = 0
-        if self.oldSimics():
-            pass
-        else:
-            size_list = VT_snapshot_size_used()
-            for item in size_list:
-                #self.lgr.debug('size item %s' % str(item)) 
-                retval = retval + item
-        return retval
 
     def enableReverse(self, two_step=False):
         '''
@@ -481,14 +518,14 @@ class ReverseMgr():
         '''
         self.lgr.debug('reversMgr enableReverse')
         if self.nativeReverse():
+            self.lgr.debug('enableReverse, use native')
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
         elif not self.reverseEnabled():
             self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
             self.takeSnapshot('origin')
-            size = self.snapSize()
-            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
+            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x' % (self.origin_cycle))
             # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
             #self.restoreSnapshot('origin')
             if two_step:
@@ -1182,7 +1219,7 @@ class ReverseMgr():
 
     def cancelRecordingEndCycle(self, dumb):
         SIM_event_cancel_time(self.cpu, self.recording_end_cycle_event, self.cpu, None, None)
-        self.lgr.debug('reverseMgr cancelRecordingEndCycle')
+        #self.lgr.debug('reverseMgr cancelRecordingEndCycle')
         self.recording_end_event_set = False
 
     def setRecordingEndCycle(self):
@@ -1271,7 +1308,7 @@ class ReverseMgr():
         ''' Does Simics itself support reversing? '''
         #TBD remove this
         #return False
-        if not self.version().startswith('7'):
+        if not self.version().startswith('7') and not self.force_new:
            if self.oldSimics():
                return False
                #return True
@@ -1320,6 +1357,10 @@ class ReverseMgr():
             self.lgr.debug('rmCovertedBreaks removing break %d' % bp)
             SIM_delete_breakpoint(bp)
 
+    def showSizeChanges(self):
+    
+        self.performance.showSizeChanges()
+
                 
 #Everything below is for use running directly from the Simics command prompt, e.g., for testing.
 #Typically this module would be instantiated from some other Python module.
@@ -1363,10 +1404,15 @@ def getCPU(conf):
 if __name__ == '__main__':
     lgr = getLogger('reverseMgr', '/tmp/')
     cpu = getCPU(conf)
-    rev = ReverseMgr(conf, cpu, lgr)
+    spanenv = os.getenv('REVERSE_SPAN')
+    if spanenv is not None:
+        span = int(spanenv, 16)
+    else:
+        span = 0x1000000
+    rev = ReverseMgr(conf, cpu, lgr, force_new=True, span=span, report_performance=True)
     print('Usage: @rev.enableReverse() to enable reverse execution.')
     print('       @rev.reverse() to reverse to a breakpoint that you have separately set.')
     print('       @rev.skipToCycle(cycle) to skip to a cycle.')
     print('       @rev.disableReverse() disable reverse execution.')
     print('Logging to  /tmp/reverseMgr.log')
-    print('Recording snapshots cycles on cpu %s' % cpu.name)
+    print('Recording snapshots cycles on cpu %s every 0x%x cycles' % (cpu.name, span))
