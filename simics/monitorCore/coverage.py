@@ -1161,7 +1161,10 @@ class Coverage():
         self.report_coverage = report_coverage
         #self.lgr.debug('Coverage enableCoverage') 
         if fname is not None:
-            self.analysis_path = self.top.getAnalysisPath(fname)
+            if os.path.isfile(fname) and 'analysis' in fname:
+                self.analysis_path = fname
+            else:
+                self.analysis_path = self.top.getAnalysisPath(fname)
             if self.analysis_path is None:
                 self.lgr.error('coverage enableCoverage no analysis for %s' % fname)
                 self.top.quit()

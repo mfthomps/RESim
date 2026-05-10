@@ -1270,9 +1270,10 @@ class Syscall():
         if tid in self.comm_cache:
             comm = self.comm_cache[tid]
         ida_msg = None
+        word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         self.lgr.debug('socketParse callname %s exit_info.retval_addr %s' % (callname, exit_info.retval_addr))
         if callname == 'socketcall':        
-            ''' must be 32-bit get params from struct '''
+            # must be 32-bit get params from struct 
             socket_callnum = frame['param1']
             if socket_callnum < len(net.callname):
                 socket_callname = net.callname[socket_callnum].lower()
@@ -1293,6 +1294,7 @@ class Syscall():
                     if call_param is not None and call_param.subcall is not None:
                         self.lgr.debug('syscall socketParse check subcall %s in call_param %s against %s' % (call_param.subcall, call_param.name, socket_callname.lower()))
                         if call_param.subcall.lower() == socket_callname.lower():
+                            self.lgr.debug('syscall socketParse subcall match************')
                             got_good = True
                         else:
                             got_bad = True
@@ -1479,15 +1481,20 @@ class Syscall():
              
             if exit_info.old_fd is not None:
                 for call_param in self.call_params:
-                    self.lgr.debug('syscall accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
+                    self.lgr.debug('syscall socketParse accept subcall %s call_param.match_param is %s fd is %d' % (call_param.subcall, str(call_param.match_param), exit_info.old_fd))
                     if type(call_param.match_param) is int:
                         if (call_param.subcall == 'accept' or self.name=='runToIO') and (call_param.match_param < 0 or call_param.match_param == exit_info.old_fd):
                              if call_param.nth is not None:
-                                 #self.lgr.debug('socketParse accept has call_param.nth is %s' % str(call_param.nth))
+                                 self.lgr.debug('syscall socketParse accept has call_param.nth is %s' % str(call_param.nth))
                                  call_param.count = call_param.count + 1
                                  if call_param.count >= call_param.nth:
                                      addParam(exit_info, call_param)
-                                     self.lgr.debug('did accept match on nth %d' % call_param.nth)
+                                     self.lgr.debug('syscall socketParse did accept match on nth %d' % call_param.nth)
+                                 else:
+                                     # assumes we are not tracking socket activity if an nth parameter was provided and was not reached.
+                                     if tid in self.tid_sockets:
+                                         self.lgr.debug('syscall socketParse removed tid:%s from did_sockets' % tid)
+                                         del self.tid_sockets[tid] 
                              else:
                                  self.lgr.debug('did accept match')
                                  addParam(exit_info, call_param)
@@ -3061,14 +3068,15 @@ class Syscall():
             #     callnum, self.stop_on_call))
             exit_info = self.syscallParse(callnum, callname, frame, cpu, tid, comm, self.syscall_info)
             if exit_info is not None:
-                self.lgr.debug('syscall exit_info not none callname %s my name %s' % (callname, self.name))
+                self.lgr.debug('syscall exit_info not none callname %s my name %s has %d exit_info.call_params' % (callname, self.name, len(exit_info.call_params)))
                 if comm != 'tar':
                         ''' watch syscall exit unless call_params narrowed a search failed to find a match '''
                         tracing_all = False 
                         if self.top is not None:
                             tracing_all = self.top.tracingAll(self.cell_name, tid)
                         if self.callback is None:
-                            if not hasParamMatchRequest(self.call_params) or len(exit_info.call_params)>0 or tracing_all or tid in self.tid_sockets:
+                            has_match_request = hasParamMatchRequest(self.call_params)
+                            if not has_match_request or len(exit_info.call_params)>0 or tracing_all or tid in self.tid_sockets:
                                 self.lgr.debug('syscall first if')
                                 if self.stop_on_call:
                                     cp = CallParams('stop_on_call', None, None, break_simulation=True)
@@ -3649,3 +3657,4 @@ class Syscall():
                 self.traceMgr.write(msg+'\n')
         else:
             self.traceMgr.write(msg+'\n')
+

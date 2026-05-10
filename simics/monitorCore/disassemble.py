@@ -81,25 +81,27 @@ class Disassemble():
 
     def getPrevInstruction(self, addr, fun_addr):
         ''' Find the instruction that preceeds the given address. Inputs are load values '''
+        #self.lgr.debug('disassemble getPrevInstruction') 
         retval = None
         if self.so_map.wordSize() == 4:
             #self.lgr.debug('disassemble getPrevInstruction word size 4')
             md = self.md32
+            max_instructs = (addr - fun_addr)
         else:
             #self.lgr.debug('disassemble getPrevInstruction word size 8')
             md = self.md64
-        max_instructs = int((addr - fun_addr) / 2)
+            max_instructs = int((addr - fun_addr) / 2)
         if md is None:
             self.lgr.error('disassemble getPrevInstruction but md is None')
             return None
         fname, load_addr, end = self.getProgBytes(addr)
         if fname is None:
-            #self.lgr.debug('disassemble getPrevInstruction not fname for addr 0x%x' % addr)
+            #self.lgr.debug('disassemble getPrevInstruction no fname for addr 0x%x' % addr)
             return None
         fun_addr_orig = fun_addr - load_addr 
         # for windows
         # 0x400 is the file pointer for the text section.  0x1000 is the address of text.
-        if self.top.isWindows():
+        if self.top.isWindows() and self.top.osType() != 'WINXP':
             fun_addr_orig = fun_addr_orig + 0x400 - 0x1000
         prev = fun_addr
         prev_mnemonic = None
@@ -138,7 +140,8 @@ class Disassemble():
             else:
                 self.lgr.error('disassemble getProgBytes failed to get fname for addr 0x%x is fname %s' % (addr))
         else:
-            self.lgr.debug('disassemble getProgBytes got no fname for addr 0x%x' % addr)
+            #self.lgr.debug('disassemble getProgBytes got no fname for addr 0x%x' % addr)
+            pass
         return fname, load_addr, end 
 
     def getDisassemble(self, addr, force=False):

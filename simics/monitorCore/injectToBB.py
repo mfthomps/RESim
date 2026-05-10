@@ -32,7 +32,7 @@ import findBB
 import applyFilter
 import resimUtils
 class InjectToBB():
-    def __init__(self, top, bb, lgr, target_prog=None, targetFD=None, fname=None):
+    def __init__(self, top, bb, lgr, target_prog=None, targetFD=None, fname=None, ws=None):
         unfiltered = '/tmp/bb.io'
         filtered = '/tmp/bb_filtered.io'
         self.bb = bb
@@ -41,8 +41,11 @@ class InjectToBB():
         if target_prog is not None and targetFD is None:
             self.lgr.error('injectToBB called with target_prog, but no target FD')
             return
-        here = os.getcwd()
-        afl_target = os.path.basename(here)
+        if ws is None:
+            here = os.getcwd()
+            afl_target = os.path.basename(here)
+        else:
+            afl_target = ws
         #print('afl_target is %s' % afl_target)
         os_type = top.getTargetEnv('OS_TYPE')
         root_prefix = top.getTargetEnv('RESIM_ROOT_PREFIX')

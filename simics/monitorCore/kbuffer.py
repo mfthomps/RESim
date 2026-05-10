@@ -294,9 +294,9 @@ class Kbuffer():
 
     def writeHap(self, Dumb, the_object, break_num, memory):
         ''' callback when user space buffer address is written'''
-        self.lgr.debug('Kbuffer writeHap') 
         if self.write_hap is None:
             return
+        self.lgr.debug('Kbuffer writeHap') 
         value = memUtils.memoryValue(self.cpu, memory)
         '''
         if self.data_watch is not None and self.data_watch.commence_with is not None:
@@ -429,26 +429,37 @@ class Kbuffer():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         op2, op1 = decode.getOperands(instruct[1])
         self.lgr.debug('Kbuffer findWinBuf skipped back one, intruct: %s op1 is %s op2: %s' % (instruct[1], op1, op2))
-        our_reg = op2
-        limit = 20
-        gotit = False
-        for i in range(limit):
-            prev = self.cpu.cycles - 1 
-            self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
-            eip = self.top.getEIP()
-            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            self.lgr.debug('Kbuffer findWinBuf prev instruct %s  cycles: 0x%x' % (instruct[1], self.cpu.cycles))
-            op2, op1 = decode.getOperands(instruct[1])
-            if instruct[1].startswith('mov') and op1 == our_reg:
-                src = decode.getAddressFromOperand(self.cpu, op2, self.lgr)
-                self.lgr.debug('Kbuffer findWinBuf got it, src: 0x%x cycle: 0x%x' % (src, self.cpu.cycles))
-                self.updateBuffers(src)
-                self.context_manager.clearReverseContext() 
-                gotit = True
-                if self.kernel_cycle_of_write is None:
-                    self.kernel_cycle_of_write = self.cpu.cycles - 1
-                SIM_continue(0) 
-                break
+
+        if instruct[1].startswith('rep mov'):
+            src = self.mem_utils.getRegValue(self.cpu, op1)
+            self.lgr.debug('Kbuffer findWinBuf got it from rep mov, src: 0x%x cycle: 0x%x' % (src, self.cpu.cycles))
+            self.updateBuffers(src)
+            self.context_manager.clearReverseContext() 
+            if self.kernel_cycle_of_write is None:
+                self.kernel_cycle_of_write = self.cpu.cycles - 1
+            gotit = True
+            SIM_continue(0) 
+        else: 
+             our_reg = op2
+             limit = 20
+             gotit = False
+             for i in range(limit):
+                 prev = self.cpu.cycles - 1 
+                 self.top.skipToCycle(prev, cpu=self.cpu, disable=True)
+                 eip = self.top.getEIP()
+                 instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+                 self.lgr.debug('Kbuffer findWinBuf prev instruct %s  cycles: 0x%x' % (instruct[1], self.cpu.cycles))
+                 op2, op1 = decode.getOperands(instruct[1])
+                 if instruct[1].startswith('mov') and op1 == our_reg:
+                     src = decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                     self.lgr.debug('Kbuffer findWinBuf got it, src: 0x%x cycle: 0x%x' % (src, self.cpu.cycles))
+                     self.updateBuffers(src)
+                     self.context_manager.clearReverseContext() 
+                     gotit = True
+                     if self.kernel_cycle_of_write is None:
+                         self.kernel_cycle_of_write = self.cpu.cycles - 1
+                     SIM_continue(0) 
+                     break
         if not gotit:
             self.lgr.error('Kbuffer findWinBufAlone failed to find buffer')
           

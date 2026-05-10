@@ -1498,7 +1498,7 @@ check that path to see if the fuction, block, imports artifacts were already cre
 
 \item Organize the RESim windows
 as desired, e.g., by dragging them to other tabbed windows.  If RESim windows do no appear, try going to the menu
-{\tt Window} / {\tt Debugger} and select the missing windows.  RESim windows have the icons that look like a spinning top.
+{\tt Window} / {\tt Debugger} and select the missing windows.  RESim windows have the icons that look like a spinning top or a bomb when Ghidra is sick..
 
 \item Use the RESim / Configure menu options to set the path to your customized gdb; the path to
 the file system root of the target binary, the host:port of your Simics host, and to set the ARM architecture if needed.
@@ -1513,7 +1513,7 @@ the file system root of the target binary, the host:port of your Simics host, an
 the source of a memory location, put the cursor over the operand and right click...
 
 %Ghidra provdes logs, typically at \$HOME/.config/ghidra/ghidra\_11xx/application.log
-\item Ghidra provdes logs, typically at \$HOME/.ghidra/.ghidra\_11xx\_PUBLIC/application.log
+\item Ghidra provides logs, typically at \$HOME/.ghidra/.ghidra\_11xx\_PUBLIC/application.log
 Or, if a dev build of Ghidra the logs may be in HOME/.config/ghidra...
 
 \item Ghidra stores its analysis in "project" directories, typically in home.
@@ -1560,16 +1560,17 @@ Use comm to only activate the jumper when a given comm program is scheduled.  Us
 simulation at the jumper.  The patch and replace options can only be used alone.  The former
 replaces the instruction at the from address with a branch to the destination.  It does this when
 RESim starts and currently only works with VxWorks.  The replace option replaces the instruction
-with the value given as the destination.  For example replacing an instruction with an ARM nop would be:
+with the value given as the destination, which must be a hex string with or without a leading 0x.  
+For example replacing an instruction with an ARM nop would be:
    
 \begin{verbatim}
-    prog:addr 0xe1a00000 replace  (for arm)
-    prog:addr 0xd503201f replace  (for arm64)
+    prog:addr e1a00000 replace  (for arm)
+    prog:addr d503201f replace  (for arm64)
 \end{verbatim}
 \noindent Or, to set x0 to zero and return on arm64:
 \begin{verbatim}
-    prog:addr 0xD2800000 replace  
-    prog:addr+4 0xD65F03C0 replace  
+    prog:addr D2800000 replace  
+    prog:addr+4 D65F03C0 replace  
 \end{verbatim}
 
 \subsection{Dynamic modifications to memory, registers, topology and control flow}
@@ -2431,8 +2432,9 @@ The {\tt findBNT.py} utility displays BNTs resulting from fuzzing sessions.  It 
 at the Simics command prompt.  It also assumes you've run {\tt dedupeCoverage.py}.  The resulting list of BNTs can be explored using the {\tt injectToBB}
 RESim command.  This will find a fuzzing input that reaches the given BB, play it and break at that BB.  If the {\tt runTrack} command was run to generate watch mark
 artifacts, then use the {\tt -d} option to the {\tt findBNT.py} command to view watch marks that occur in basic blocks leading to BNTs.  You can then use the
-{\tt injectToWM} RESim command to find an corresponding session and run to that watch mark.  This option can be useful when there are a large number
-of BNTs and you want to prioritize those with a higher likelihood of being affected by inputs.
+{\tt injectToWM} RESim command to find an corresponding session and run to that watch mark.  This function can be useful when there are a large number
+of BNTs and you want to prioritize those with a higher likelihood of being affected by inputs. Use the optional {\tt ws} option to name the AFL workspace if it differs
+from your current Simics workspace name. 
 
 An example workflow for this might be:
 

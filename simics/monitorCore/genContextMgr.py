@@ -712,10 +712,11 @@ class GenContextMgr():
             proc_addr = self.mem_utils.readPhysPtr(self.cpu, phys_block.address)
             #self.lgr.debug('contextManager changedThread proc_addr 0x%x' % proc_addr)
             if proc_addr is None:
-                self.lgr.debug('contextManager changedThread proc_addr is None reading from ptr 0x%x' % ptr)
+                self.lgr.debug('contextManager changedThread proc_addr is None reading from ptr 0x%x cycle: 0x%x' % (ptr, self.cpu.cycles))
                 return
             if proc_addr == 0:
-                self.lgr.debug('contextManager changedThread proc_addr is zero reading from ptr 0x%x' % ptr)
+                self.lgr.debug('contextManager changedThread proc_addr is zero reading from ptr 0x%x cycle: 0x%x' % (ptr, self.cpu.cycles))
+                self.task_utils.switchedToUnknown()
                 return
             pid = self.mem_utils.readWord32(cpu, proc_addr + self.param.ts_pid)
             if pid is None:

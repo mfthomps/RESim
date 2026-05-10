@@ -310,8 +310,13 @@ class PageFaultGen():
 
         cpu, comm, tid = self.task_utils.curThread() 
         sp = self.mem_utils.getRegValue(cpu, 'sp')
-
+        if sp == 0:
+            self.lgr.error('pageFaultGen pageFaultHap sp is 0, arm regs confusion?')
+            #SIM_break_simulation('remove this')
+            #self.top.quit()
+            return
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
+        #self.lgr.debug('pageFaultGen pageFaultHap user_ip_addr is 0x%x' % user_ip_addr)
         self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
         if self.user_eip is None:
             #SIM_break_simulation('remove this')
@@ -984,4 +989,5 @@ class PageFaultGen():
         self.pending_faults = {}
         self.pending_sigill = {}
         self.pending_double_faults.clear()
+        self.faulted_pages.clear()
 

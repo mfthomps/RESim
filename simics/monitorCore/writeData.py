@@ -275,7 +275,7 @@ class WriteData():
             if self.top.isWindows() and self.dataWatch is not None:
                 #self.lgr.debug('writeData writeKdata, use winDelay to set data watch ''')
                 dum, comm, tid = self.top.getCurrentProc(target_cpu=self.cpu)
-                exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None)
+                exit_info = syscall.ExitInfo(None, self.cpu, tid, None, None, None, None, None)
                 exit_info.retval_addr = self.user_space_addr
                 exit_info.count_addr = self.addr_of_count
                 exit_info.delay_count_addr = self.addr_of_count
@@ -285,8 +285,6 @@ class WriteData():
                 asynch_handler.setDataWatch(self.dataWatch, True)
                 asynch_handler.toUserAlone(None)
 
-          
-    
     def write(self, record=False):
         ''' Write data into an application buffer or the kernel buffer, depending on information 
             recorded during the prepInject '''
@@ -617,7 +615,7 @@ class WriteData():
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
             callname = self.top.syscallName(callnum)
-            self.lgr.debug('writeData callHap call %s' % callname)
+            #self.lgr.debug('writeData callHap call %s' % callname)
             if callname == 'DeviceIoControlFile':
                 frame = self.top.frameFromRegs()
                 operation = frame['param6'] & 0xffffffff
@@ -678,7 +676,7 @@ class WriteData():
                     else:
                         self.bad_read_bytes = self.total_read
 
-                self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
+                #self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
             #self.lgr.debug('writeData callHap, callname  %s fd %s' % (callname, fd))
             if callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
                 skip_it = True
@@ -887,7 +885,7 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None, addr_of_count=None, peek=0):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s' % (fd, self.fd, self.total_read, self.read_limit, peek))
+        #self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s' % (fd, self.fd, self.total_read, self.read_limit, peek))
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
@@ -918,7 +916,7 @@ class WriteData():
 
         if peek == 0:
             self.total_read = self.total_read + eax
-            self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
         else:
             self.lgr.debug('writeData doRetFixup WAS PEEK read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
@@ -1028,7 +1026,7 @@ class WriteData():
         if tid != self.tid:
             #self.lgr.debug('writeData retHap wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
-        self.lgr.debug('writeData retHap pending_callname %s cycle 0x%x' % (self.pending_callname, self.cpu.cycles))
+        #self.lgr.debug('writeData retHap pending_callname %s cycle 0x%x' % (self.pending_callname, self.cpu.cycles))
         if self.pending_callname is None and self.pending_select is None:
             return
         elif self.pending_callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
@@ -1050,7 +1048,7 @@ class WriteData():
         elif self.pending_callname == 'ioctl' and self.watch_ioctl:
             self.doRetIOCtl(self.fd)
         elif self.pending_callname in ['recv', 'recvfrom', 'read']:
-            self.lgr.debug('writeData retHap call doRetFixup')
+            #self.lgr.debug('writeData retHap call doRetFixup')
             self.doRetFixup(self.fd)
         self.pending_callname = None
         

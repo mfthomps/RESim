@@ -560,8 +560,8 @@ class WinxpParams():
                 self.fs_base = self.cpu.ia32_fs_base
                 self.param.current_task_fs  = True
                 self.param.fs_base = self.fs_base
-                self.lgr.debug('findFS fs_base: 0x%x addr is 0x%x ' % (self.fs_base, addr))
                 self.ptr_to_current_thread = self.fs_base + addr
+                self.lgr.debug('findFS fs_base: 0x%x addr is 0x%x ptr_to_current_thread 0x%x' % (self.fs_base, addr, self.ptr_to_current_thread))
                 op2, op1 = decode.getOperands(instruct[1])
                 our_reg = op1
                 break

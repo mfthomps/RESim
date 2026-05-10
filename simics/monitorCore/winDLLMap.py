@@ -129,7 +129,7 @@ class WinDLLMap():
                 self.sections = so_pickle['sections']
                 if 'section_list' in so_pickle:
                     section_list = so_pickle['section_list']
-                    self.lgr.debug('windDLL compatability %d sections %d section_list' % (len(self.sections), len(section_list)))
+                    #self.lgr.debug('windDLL compatability %d sections %d section_list' % (len(self.sections), len(section_list)))
                     for section in section_list:
                         if section.pid not in self.section_map:
                             self.section_map[section.pid] = {}
@@ -176,7 +176,7 @@ class WinDLLMap():
                 self.lgr.debug('windDLL loadPickle no text in pickle')
 
         for pid in self.sections:
-            self.lgr.debug('windDLL loadPickle check pid:%s' % pid)
+            #self.lgr.debug('windDLL loadPickle check pid:%s' % pid)
             if pid not in self.text:
                 prog = self.top.getProgName(pid)
                 if prog is not None:
@@ -192,8 +192,8 @@ class WinDLLMap():
                 else:
                     self.lgr.warning('winDLL loadPickle no prog for pid:%s' % pid)
         self.lgr.debug('winDLL loadPickle, have %d texts and %d section list pids' % (len(self.text), len(self.section_map)))
-        for pid in self.text:
-            self.lgr.debug('winDLL loadPickle have text for pid:%s' % pid)
+        #for pid in self.text:
+        #    self.lgr.debug('winDLL loadPickle have text for pid:%s' % pid)
 
     def pidFromTID(self, tid):
         if tid is None:

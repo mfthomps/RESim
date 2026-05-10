@@ -4552,6 +4552,9 @@ class GenMonitor():
         if debug_tid is not None:
             debug_info['tid'] = debug_tid
             debug_info['cpu'] = debug_cpu.name
+            debug_comm = self.task_utils[self.target].getCommFromTid(debug_tid)
+            if debug_comm is not None:
+                debug_info['comm'] = debug_comm
             self.lgr.debug('writeConfig debug_tid:%s cpu %s' % (debug_tid, debug_cpu.name))
         elif self.debug_info is not None:
             debug_info = self.debug_info
@@ -5114,10 +5117,14 @@ class GenMonitor():
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=None, count=1, no_page_faults=False, 
             trace_all=False, run=True, reset_debug=False, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
-            e.g., created by prepInject or prepInjectWatch.  '''
-        ''' Use go=False and then go yourself if you are getting the instance for your own use, otherwise
+            e.g., created by prepInject or prepInjectWatch.  
+            Use go=False and then go yourself if you are getting the instance for your own use, otherwise
             the instance is not defined until it is done.
-            use no_reset True to stop the tracking if RESim would need to reset the origin.'''
+            use no_reset True to stop the tracking if RESim would need to reset the origin.
+            Use target if the program whose input processing is to be tracked differs from the snapshot, this may include an optional component name.  You must
+            inlcude a targetFD with target.
+            
+        '''
         self.track_started = True
         self.lgr.debug('injectIO dfile: %s max_marks %s target: %s targetFD: %s' % (dfile, max_marks, target, targetFD))
         if 'coverage/id' in dfile or 'trackio/id' in dfile:
@@ -5174,7 +5181,7 @@ class GenMonitor():
             self.traceFiles[self.target].markLogs(self.dataWatch[target_cell])
         self.rmDebugWarnHap()
         self.checkOnlyIgnore()
-        self.lgr.debug('genMonitor injectIO create instance')
+        self.lgr.debug('genMonitor injectIO create instance, run_from_snap is %s' % self.run_from_snap)
         if no_backstop:
             backstop = None
         else:
@@ -6131,11 +6138,11 @@ class GenMonitor():
     def log(self, string):
         rprint(string)
 
-    def injectToBB(self, bb, target=None, targetFD=None, fname=None):
-        ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target, targetFD=targetFD, fname=fname)
+    def injectToBB(self, bb, target_prog=None, targetFD=None, fname=None):
+        ibb = injectToBB.InjectToBB(self, bb, self.lgr, target_prog=target_prog, targetFD=targetFD, fname=fname, ws=None)
 
-    def injectToWM(self, addr, target=None, targetFD=None, max_marks=None, no_reset=None, ws=None):
-        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, target_prog=target, targetFD=targetFD, max_marks=max_marks, no_reset=no_reset, ws=ws)
+    def injectToWM(self, addr, target_prog=None, targetFD=None, max_marks=None, no_reset=None, ws=None):
+        iwm = injectToWM.InjectToWM(self, addr, self.dataWatch[self.target], self.lgr, target_prog=target_prog, targetFD=targetFD, max_marks=max_marks, no_reset=no_reset, ws=ws)
 
     def getParam(self):
         return self.param[self.target]
@@ -7368,7 +7375,9 @@ class GenMonitor():
         pc = self.mem_utils[self.target].getKReturnAddr(cpu)
         print('ELR is 0x%x' % pc)
 
-    def osType(self, target):
+    def osType(self, target=None):
+        if target is None:
+            target = self.target
         return self.os_type[target]
 
     def mftx(self):

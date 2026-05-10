@@ -8,6 +8,7 @@ import shutil
 import argparse
 import findBB
 import findTrack
+import genHitsFile
 resim_dir = os.getenv('RESIM_DIR')
 sys.path.append(os.path.join(resim_dir, 'simics', 'monitorCore'))
 import resimUtils
@@ -152,24 +153,27 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
 
     hits = []
     if target is not None:
-        user = os.getenv('USER')
-        os.system('genHitsFile.py %s' % target)
-        outfile = '/tmp/%s/%s.hits' % (user, target)
-        if os.path.isfile(outfile):
-            with open(outfile) as fh:
-                hits = json.load(fh)
+        hits = genHitsFile.genHits(target)
+        #user = os.getenv('USER')
+        #os.system('genHitsFile.py %s %s' % (ini, target))
+        #outfile = '/tmp/%s/%s.hits' % (user, target)
+        #if os.path.isfile(outfile):
+        #    with open(outfile) as fh:
+        #        hits = json.load(fh)
+        print("loaded %d hits found in AFL target %s" % (len(hits), target))
 
     ida_path = resimUtils.getIdaDataFromIni(prog, ini, lgr=lgr)
     lgr.debug('prog: %s  ida_path is %s' % (prog, ida_path))
     bnt_list = []
     if target is None:
         fname = '%s.hits' % ida_path
+        print('Using hits file %s' % fname)
+        lgr.debug('Target none, using hits file %s prog: %s' % (fname, prog))
     else:
         fname = '%s.%s.hits' % (ida_path, target)
+        print('Would append hits from file %s if it exists' % fname)
 
-    print('Using hits file %s' % fname)
-    lgr.debug('Using hits file %s prog: %s' % (fname, prog))
-    ''' hits are now just flat lists without functions '''
+    # hits are now just flat lists without functions 
     if not os.path.isfile(fname):
         if len(hits) == 0:
             print('No file at %s.  Did you forget to specific the --target?' % fname)
@@ -235,8 +239,8 @@ def findBNT(prog, ini, target, read_marks, fun_name=None, no_print=False, quiet=
 def main():
     parser = argparse.ArgumentParser(prog='findBNT', description='Show branches not taken for a given program.')
     parser.add_argument('ini', action='store', help='The ini file')
-    parser.add_argument('prog', action='store', help='The target program. Provide the path relative to the root prefix')
-    parser.add_argument('-t', '--target', action='store', help='The target name, e.g., name of the workspace.  Use this option unless you have renamed the hits file to the program name')
+    parser.add_argument('prog', action='store', help='The target program. Provide the path relative to the root prefix, or the basename.')
+    parser.add_argument('-t', '--target', action='store', help='The target name, e.g., name of the workspace from which runAFL was executed.  Use this option unless you have renamed the hits file to the program name')
     parser.add_argument('-f', '--function', action='store', help='Optional function name')
     parser.add_argument('-d', '--datamarks', action='store_true', help='Look for read watch marks in the BB')
     parser.add_argument('-q', '--quiet', action='store_true', help='Do not report missing trackio files')

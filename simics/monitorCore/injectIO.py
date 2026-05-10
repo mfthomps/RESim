@@ -76,7 +76,7 @@ class InjectIO():
             if not self.checkBreakOn(self.target_fname, break_on):
                 self.lgr.error('injectIO unable to break on given block.')
                 return
-        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s callback %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname, self.callback))
+        self.lgr.debug('injectIO backstop_cycles %d  hang: %d target_prog %s  fname %s callback %s snap_name %s cell_name %s' % (self.backstop_cycles, hang_cycles, target_prog, self.target_fname, self.callback, snap_name, cell_name))
         if self.backstop is not None:
             self.backstop.setHangCallback(hang_callback, hang_cycles, now=False)
         if not self.top.hasAFL() and self.backstop is not None:
@@ -102,7 +102,6 @@ class InjectIO():
         self.addr_of_count = None
         
         # Loading pickle below. init those variable above
-
         self.loadPickle(snap_name)
         if self.addr is None: 
             self.addr, self.max_len = self.dataWatch.firstBufferAddress()

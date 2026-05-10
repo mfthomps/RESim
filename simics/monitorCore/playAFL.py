@@ -97,13 +97,8 @@ class PlayAFL():
         self.exit_eip = None
         self.commence_params = commence_params
         self.stop_hap_cycle = None
-        self.back_stop_cycle = None
         self.run = run
         self.hang_cycles = defaultConfig.hangCycles()
-        #self.hang_cycles = 90000000
-        #hang = os.getenv('HANG_CYCLES')
-        #if hang is not None:
-        #    self.hang_cycles = int(hang)
         self.addr_of_count = None
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
@@ -195,22 +190,12 @@ class PlayAFL():
         self.call_break = None
         self.addr = None
         self.in_data = None
-        #self.backstop_cycles =   100000
         if self.afl_mode:
-            #if os.getenv('AFL_BACK_STOP_CYCLES') is not None:
-            #    self.backstop_cycles =   int(os.getenv('AFL_BACK_STOP_CYCLES'))
-            #    self.lgr.debug('afl AFL_BACK_STOP_CYCLES is %d' % self.backstop_cycles)
-            #else:
-            #    self.lgr.warning('no AFL_BACK_STOP_CYCLES defined, using default of 100000')
-            #    self.backstop_cycles =   1000000
             self.backstop_cycles = defaultConfig.aflBackstopCycles('AFL_BACK_STOP_CYCLES')
         else:
-            #self.backstop_cycles =   900000
-            #bsc = os.getenv('BACK_STOP_CYCLES')
-            #if bsc is not None:
-            #    self.backstop_cycles = int(bsc)
             self.backstop_cycles = defaultConfig.backstopCycles()
-        
+       
+        self.lgr.debug('playAFL backstop_cycles is %d (0x%x).  hang_cycles %d (0x%x)' % (self.backstop_cycles, self.backstop_cycles, self.hang_cycles, self.hang_cycles))
         if os.getenv('BACK_STOP_DELAY') is not None:
             self.backstop_delay =   int(os.getenv('BACK_STOP_DELAY'))
             self.lgr.debug('BACK_STOP_DELAY is %d' % self.backstop_delay)
@@ -250,6 +235,7 @@ class PlayAFL():
         
         self.snap_name = snap_name
         self.no_page_faults = no_page_faults
+        self.prog_path = None
         if not self.loadPickle(snap_name):
             print('No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
             self.lgr.error('playAFL No AFL data stored for cell %s in checkpoint %s, cannot play AFL.' % (self.cell_name, snap_name))
@@ -283,10 +269,11 @@ class PlayAFL():
         self.version_string = parts[0][0][2]
         self.did_exit = False
 
-    def restoreOrigin():
-        self.backstop.clearHang()
-        self.top.resetOrigin()
-        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
+    #def restoreOrigin():
+    #    self.backstop.clearHang()
+    #    self.top.resetOrigin()
+    #    self.lgr.debug('playAFL restoreOrigin call backsthop setHangCallback')
+    #    self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)
 
     def ranToIO(self, dumb):
         self.commence_coverage = self.target_cpu.cycles - self.initial_cycle
@@ -420,27 +407,37 @@ class PlayAFL():
         if self.coverage is not None:
             full_path = None
             analysis_path = None
-            prog_path = None
             if self.fname is None:
                 if self.target_proc is not None:
                     analysis_path = self.top.getAnalysisPath(self.target_proc)
                     if '/' not in self.target_proc:
-                        prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
+                        self.prog_path = self.top.getProgPath(self.target_proc, target=self.target_cell)
                     else:
-                        prog_path = self.target_proc
-                    self.lgr.debug('playAFL finishInit fname is None, prog_path got %s' % prog_path)
+                        self.prog_path = self.target_proc
+                    self.lgr.debug('playAFL finishInit fname is None, self.prog_path got %s' % self.prog_path)
+                else:
+                    full_path = self.top.getFullPath()
+                    analysis_path = self.top.getAnalysisPath(full_path)
+    
             else:
                 analysis_path = self.top.getAnalysisPath(self.fname)
                 if '/' not in self.fname:
-                    prog_path = self.top.getProgPath(self.fname)
-                    print('Relative path given, guessing you mean %s' % prog_path)
-                    self.lgr.debug('playAFL Relative path given, guessing you mean %s' % prog_path)
+                    self.prog_path = self.top.getProgPath(self.fname)
+                    if self.prog_path is None:
+                        root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+                        self.prog_path = resimUtils.getProgPathFromAnalysis(analysis_path, None, lgr=self.lgr, root_prefix=root_prefix) 
+                    print('Relative path given, guessing you mean %s' % self.prog_path)
+                    self.lgr.debug('playAFL Relative path given, guessing you mean %s' % self.prog_path)
                 else:
-                    prog_path = self.fname
-            self.lgr.debug('playAFL call enableCoverage analysis_path is %s prog_path = %s fname %s cycle: 0x%x' % (analysis_path, prog_path, self.fname, self.cpu.cycles))
+                    self.prog_path = self.fname
+            self.lgr.debug('playAFL call enableCoverage analysis_path is %s self.prog_path = %s fname %s cycle: 0x%x' % (analysis_path, self.prog_path, self.fname, self.cpu.cycles))
+            if analysis_path is None:
+                self.lgr.error('playAFL no analysis path.  Something is very wrong')
+                self.top.quit()
+                return
             self.coverage.enableCoverage(self.target_tid, backstop=self.backstop, backstop_cycles=self.backstop_cycles, 
                afl=self.afl_mode, linear=self.linear, create_dead_zone=self.create_dead_zone, only_thread=self.only_thread, 
-               fname=analysis_path, prog_path=prog_path, diag_hits=self.diag_hits)
+               fname=analysis_path, prog_path=self.prog_path, diag_hits=self.diag_hits)
             self.lgr.debug('playAFL backfrom enableCoverage')
             if self.linear:
                 self.lgr.debug('playAFL, linear use context manager to watch tasks')
@@ -656,6 +653,7 @@ class PlayAFL():
                 self.lgr.debug('playAFL goAlone is onePlay and not repeat, not called resetOrigin cycles:  0x%x' % self.cpu.cycles)
 
             if self.search_list is not None and self.backstop_cycles is not None and self.backstop_cycles > 0:
+                self.lgr.debug('playAFL goAlone call setFutreCycle')
                 self.backstop.setFutureCycle(self.backstop_cycles, now=False)
 
             if self.exit_syscall is not None:
@@ -891,24 +889,20 @@ class PlayAFL():
         self.reportNewHits()
 
     def reportNewHits(self):
-            prog_path = self.top.getProgName(self.target_tid, target=self.target_cell)
-            if prog_path is not None:
-                hits_path = self.top.getIdaData(prog_path, target=self.cell_name)
-                self.lgr.debug('playAFL recordHits prog_path %s hits path from getIdaData %s' % (prog_path, hits_path))
-
-                all_prev_hits_path = '%s.hits' % hits_path
-                if os.path.isfile(all_prev_hits_path):
-                    all_prev_hits = json.load(open(all_prev_hits_path))
-                    count = 0
-                    for hit in self.all_hits:
-                        if hit not in all_prev_hits:
-                            if self.show_new_hits:
-                                print('New hit found at 0x%x' % hit)
-                            count = count+1
-                    if count == 0:
-                        print('No new hits.')
-                    else:
-                        print('Found %d new hits that were not in %s' % (count, all_prev_hits_path))
+        if self.prog_path is not None:
+            full_path = self.top.getFullPath(self.prog_path)
+            root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
+            old_hits = resimUtils.getAllHits(full_path, root_prefix)
+            count = 0
+            for hit in self.all_hits:
+                if hit not in old_hits:
+                    if self.show_new_hits:
+                        print('New hit found at 0x%x' % hit)
+                    count = count+1
+            if count == 0:
+                print('No new hits that were not already in RESIM_IDA_DATA.')
+            else:
+                print('Found %d new hits that were not in RESIM_IDA_DATA' % (count))
 
     def recordExits(self, path):
         ''' exits will go in a "exits" directory along side queue, etc. '''
@@ -1128,3 +1122,4 @@ class PlayAFL():
                     VT_restore_snapshot('origin')
             else:
                 SIM_restore_snapshot('origin')
+        self.backstop.setHangCallback(self.hangCallback, self.hang_cycles)

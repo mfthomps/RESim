@@ -349,6 +349,9 @@ class RunTo():
         ''' intended for use when process is already running '''
         self.debug_group = debug_group
         cpu, comm, tid  = self.task_utils.curThread()
+        if cpu is None:
+            self.lgr.debug('runTo toRunningProc failed to get cpu, bail')
+            return
         ''' if already in proc, just attach debugger '''
         if want_tid_list is not None:
             self.lgr.debug('runTo toRunningProc, proc: %s run to tid_list %s, current tid:%s <%s>' % (proc, str(want_tid_list), tid, comm))

@@ -6,6 +6,7 @@ import subprocess
 import elfText
 import json
 import re
+import glob
 import fnmatch
 import winProg
 import ntpath
@@ -80,10 +81,14 @@ def getIdaDataFromIni(prog, ini, lgr=None):
                 print('ERROR no path found for prog %s' % prog)
                 return retval
             prog_relative = full_prog[len(root_fs)+1:]
+            if lgr is not None:
+                lgr.debug('getIdaDataFromIni prog_relative is %s' % prog_relative)
         base = os.path.basename(root_fs)
         root_parent = os.path.basename(os.path.dirname(root_fs))
         #retval = os.path.join(resim_ida_data, base, prog, prog)
         retval = os.path.join(resim_ida_data, root_parent, base, prog_relative)
+        if lgr is not None:
+            lgr.debug('getIdaDataFromIni retval is %s' % retval)
     return retval
 
 def getIdaData(full_path, root_prefix, lgr=None):
@@ -916,3 +921,43 @@ def hexInt(string):
     except:
         pass
     return retval
+
+def getSnapPathFromIni(ini):
+    retval = None
+    config = ConfigParser.ConfigParser()
+    config.optionxform = str
+    if not ini.endswith('.ini'):
+        ini_file = '%s.ini' % ini
+    else:
+        ini_file = ini
+    if not os.path.isfile(ini_file):
+        print('File not found: %s' % ini_file)
+        exit(1)
+    config.read(ini_file)
+    for name, value in config.items('ENV'):
+        if name == 'RUN_FROM_SNAP':
+            retval = value
+            break
+    return retval
+
+def getAllHits(full_path, root_prefix):
+    retval = []
+    ida_data = getIdaData(full_path, root_prefix)
+    #print('ida_data is %s' % ida_data)
+    base = os.path.basename(ida_data) 
+    parent = os.path.dirname(ida_data)
+    search = '*%s*.hits' % (base)
+    full_search = os.path.join(parent, search)
+    #print('search string %s' % full_search)
+    hit_files = glob.glob(full_search)
+    for fname in hit_files:
+        #print('fname %s' % fname)
+        full = os.path.join(parent, fname)
+        #print('found hits at %s' % full)
+        with open(full) as fh:
+            these_hits = json.load(fh)
+            for h in these_hits:
+                if h not in retval:
+                    retval.append(h)
+    #print('found %d total hits' % len(retval))
+    return retval 

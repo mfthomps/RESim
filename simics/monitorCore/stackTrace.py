@@ -975,7 +975,10 @@ class StackTrace():
             fun_name = self.fun_mgr.getFunName(call_to)
             self.lgr.debug('stackTrace getCallTo bctrl count reg 0x%x fun name %s' % (call_to, fun_name))
         else:
-            call_to_s = instruct.split()[1]
+            try:
+                call_to_s = instruct.split()[1]
+            except:
+                return None, None
             #self.lgr.debug('stackTrace getCallTo check call to %s' % call_to_s)
             try:
                 call_to = int(call_to_s, 16)

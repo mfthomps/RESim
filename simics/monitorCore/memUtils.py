@@ -624,7 +624,7 @@ class MemUtils():
                             if do_log:
                                 self.lgr.debug('memUtils v2pUserAddr  cpl %d  exec_mode_word_size %d  kernel addr base 0x%x  v 0x%x  phys 0x%x' % (cpl, exec_mode_word_size, self.param.kernel_base, v, retval))
                             if ptable_info is not None:
-                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None' % (v, ptable_info.valueString()))
+                                self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. v: 0x%x  page table %s return None cycle: 0x%x' % (v, ptable_info.valueString(), cpu.cycles))
                                 retval = None
                             else:
                                 self.lgr.debug('memUtils v2pUserAddr *********** no idea if mapped in just a v & kernel_base. no ptable info v 0x%x' % v) 
@@ -765,7 +765,7 @@ class MemUtils():
         start = vaddr
         retval = ()
         while remain > 0:
-            self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
+            #self.lgr.debug('memUtils readBytes top loop remain %d, len retval %d' % (remain, len(retval)))
             count = min(remain, 1024)
             ps = self.v2p(cpu, start)
             if ps is not None:
@@ -959,13 +959,12 @@ class MemUtils():
                     mask = 0xffffffff
                
                 cpl = getCPL(cpu)
-                if reg == 'sp' and arm64_app:
-                    #reg = 'sp_el0'
-                    if cpl == 0 | arm64_app:
+                if reg == 'sp': 
+                    if cpl == 0 or arm64_app:
                         reg = 'sp_el0'
                     else:
                         reg = 'sp'
-                #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s' % (arm64_app, reg))
+                #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s cpl was %d' % (arm64_app, reg, cpl))
                 if reg == 'far_el1':
                     reg_num = cpu.iface.int_register.get_number(reg)
                 #elif reg in self.arm_regs or reg in self.arm64_regs:
