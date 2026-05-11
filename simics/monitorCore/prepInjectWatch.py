@@ -137,7 +137,7 @@ class PrepInjectWatch():
             next_mark = watch_mark+1
             read_count_addr_maybe = self.dataWatch.getMarkFromIndex(next_mark)
             if read_count_addr_maybe is not None:
-                self.lgr.debug('prepInjectWatch doInject read_count_addr_maybe %s' % read_count_addr_maybe.mark.getMsg())
+                self.lgr.debug('prepInjectWatch doInject read_count_addr_maybe next_mark %d, mark: %s' % (next_mark, read_count_addr_maybe.mark.getMsg()))
                 if read_count_addr_maybe is not None and read_count_addr_maybe.mark.getMsg().startswith('read count'):
                    self.read_count_addr = read_count_addr_maybe.mark.recv_addr 
                    self.lgr.debug('prepInjectWatch doInject read_count_addr found 0x%x' % self.read_count_addr)
