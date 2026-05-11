@@ -942,6 +942,7 @@ class GenContextMgr():
             return
         if rec is None:
             rec = self.task_utils.getRecAddrForTid(tid)
+            self.lgr.debug('contextManager, addTask input rec was none, for tid %s got %s' % (tid, str(rec)))
         if rec not in self.watch_rec_list:
             if rec is None:
                 self.lgr.debug('contextManager, addTask got rec of None for tid %s, pending cycle: 0x%x' % (tid, self.cpu.cycles))
