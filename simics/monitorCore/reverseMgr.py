@@ -20,14 +20,10 @@
 # * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
 # * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # * POSSIBILITY OF SUCH DAMAGE.
-"""
-decl {
-    param span : int = 0x1000000
-}
-"""
 '''
 Implement a subset of the deprecated Simics reverse execution functions. 
-The reversing functions are at least those used by RESim.
+The reversing functions are at least those used by RESim, along with
+several CLI commands, e.g., enable-reverse-execution
 
 Supported functions include:
     skipToCycle -- skip to any cycle within the recording span.
@@ -38,12 +34,8 @@ in Simics 6.  As with Simics 6, reliable reversing requires adherence to some
 constraints.  For the reverseMgr, these include:
     -- No Haps should be set while reversing.  See setCallback to simulate a Core_Simulation_Stopped hap
     -- Real networks and other external events should not be present.  
-    -- Breakpoints set prior to reverse execution via the SIM_breakpoint API
+    -- Breakpoints set prior to reverse execution via the Simics SIM_breakpoint API
        must be altered to use the reverseMgr's SIM_breakpoint API.  
-       Do not use both SIM_breakpoint and bp.manager to set breakpoints.  Their
-       returned values are not exclusive, so use one or the other.
-    -- Breakpoints set prior to reverse execution are all enabled following a reverse,
-       regardless of their state at the start of the reverse.  (This can be fixed with a bit of work.)
 
 The stratgey is simple.  When reverse is enabled, we take in-memory snapshots
 periodically (every cycle_span cycles, ensuring each snapshot falls on multiple of the span).
@@ -59,7 +51,7 @@ Do not enable reversing on multiple instances.
 As a convenience to support compatibility between Simics 6 and 7, some of the ReverseMgr functions will 
 invoke native Simics reversing functions if running on Simics 6.
 
-The reverseMgr can provide reversing functions on Simics 6 (instead of using native reverseing).
+The reverseMgr can provide reversing functions on Simics 6 (instead of using native reversing).
 This requires some additional logic because memory snapshots in the future are deleted as an effect
 of restore-snapshot.
  
@@ -92,9 +84,6 @@ def getObject(line):
     rest = line.split('Object :')[1]
     retval = rest.split()[0]
     return retval
-
-def breakCallback(param, the_obj, the_break, memory):
-    print('in breakCallback')
 
 def isPhys(line):
     if ': phys-' in line:
@@ -129,6 +118,20 @@ def genBreakFromNewStyle(bp_values, lgr=None):
     #    lgr.debug('genBreakFromNewStyle %s' % bp_values.toString())
     return SIM_breakpoint(bp_values.obj, bp_values.type, bp_values.access, bp_values.addr, bp_values.length, 0)
 
+def transType(op_type):
+    retval = 'unknown'
+    if op_type == Sim_Trans_Load:
+        retval = 'r'
+    elif op_type == Sim_Trans_Store:
+        retval = 'w'
+    elif op_type == Sim_Trans_Instr_Fetch:
+        retval = 'x'
+    elif op_type == Sim_Trans_Pefetch:
+        retval = 'x'
+    elif op_type == Sim_Trans_Cache:
+        retval = 'x'
+    return retval
+
 class NewStyleBPValues():
     '''
     Record the values of a breakpoint created with bp.memory.break for use with SIM_breakpoint
@@ -143,6 +146,7 @@ class NewStyleBPValues():
         access = getTokenValue(line, 'access=')
         obj = getObject(line)
         phys = isPhys(line)
+        self.converted_bp_num = None
         self.addr = None
         try:
             self.addr = int(addr, 16)
@@ -176,7 +180,18 @@ class NewStyleBPValues():
         retval = 'object %s addr 0x%x len %d access %s type: %d' % (self.obj, self.addr, self.length, self.access, self.type)
         return retval
 
+    def toDisplayString(self, break_info):
+        # like: [ubuntu.cell_context] Breakpoint 1: ubuntu.cell_context 'x' access to v:0x80485cf len=4
+        v_p = 'v'
+        if self.type == Sim_Break_Physical:
+            v_p = 'p'
+        retval = "Breakpoint %d: %s '%s' access to %s:0x%x len=%d" % (self.bp_num, self.obj, transType(op_type), v_p, self.addr, length)
+        return retval
+
 class BPEnabler():
+    '''
+    Manage disabling and enabling breakpoints so we can skip without hitting them.
+    '''
     def __init__(self, sim_bp_list, lgr):
         self.sim_bp_list = sim_bp_list
         self.sim_did_disable = []
@@ -339,6 +354,7 @@ class ReverseMgr():
         self.snapshot_names = []
         self.was_at_reverse_point = False
         self.was_at_origin = False
+        self.rev_done_msg = ''
 
     def cancelSpanCycle(self):
         '''
@@ -746,12 +762,22 @@ class ReverseMgr():
             SIM_continue(0)
             #SIM_continue(delta)
             self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
+            SIM_run_command('disassemble')
             #self.enableAll()
             bp_enabler.enableAll()
             self.setNextCycle()
         if self.oldSimics() and self.latest_span_end is not None and self.latest_span_end > use_cpu.cycles:
             self.latest_span_end =  self.getMasked(use_cpu.cycles)
             self.lgr.debug('reverseMgr runToCycle reverted latest_span_end to 0x%x' % self.latest_span_end)
+
+    def rev(self, count):
+        self.lgr.debug('rev count is %d' % count)
+        if count == 0:
+            self.reverse()
+        else:
+            current = self.cpu.cycles
+            reverse_to = current - count
+            self.reverse(reverse_to=reverse_to)
 
     def reverse(self, dumb=None, reverse_to=None, callback=None):
         '''
@@ -783,13 +809,15 @@ class ReverseMgr():
             self.break_cycles = {}
             self.reverse_from = self.cpu.cycles
             self.lgr.debug('reverseMgr reverse from 0x%x' % self.reverse_from)
+            if self.reverse_to is not None:
+                self.lgr.debug('reverseMgr reverse will reverse to 0x%x' % self.reverse_to)
             newstyle_list = getBPList()            
             self.lgr.debug('reverseMgr reverse bp.memory.break breaks is %s' % str(newstyle_list))
             for bp in newstyle_list:
                 bp_values = NewStyleBPValues(bp)
                 self.bp_values_from_cli.append(bp_values)
             
-            if len(self.sim_breakpoints) == 0 and len(newstyle_list) == 0:
+            if len(self.sim_breakpoints) == 0 and len(newstyle_list) == 0 and self.reverse_to is None:
                 print('Warning reversing without any breakpoints, will hit origin')
                 self.skipToOrigin()
                 self.lgr.debug('reverseMgr reverse without any breakpoints, just restore origin')
@@ -877,7 +905,7 @@ class ReverseMgr():
 
             self.lgr.debug('reverseMgr skipBackAndRunForward reverse_to of 0x%x greater than current span start 0x%x, run forward 0x%x cycles' % (self.reverse_to, 
                            self.current_span_start, delta))
-            self.reverse_to = None
+            #self.reverse_to = None
             self.rmContinuationHap()
             bp_enabler = BPEnabler(self.sim_breakpoints, self.lgr)
             bp_enabler.disableAll()
@@ -954,16 +982,28 @@ class ReverseMgr():
                     self.callback = None
                     self.lgr.debug('reverseMgr stopHap failed to find break, called callback')
                 else:
-                    self.lgr.debug('reverseMgr stopHap failed to find break, no callback')
-                    print('reverseMgr stopHap failed to find break, no callback')
+                    if self.reverse_to is not None:
+                        SIM_run_alone(self.skipToCycle, self.reverse_to)
+                        self.lgr.debug('reverseMgr stopHap failed to find break, no callback, did skip to cycle 0x%x' % self.reverse_to)
+                    else:
+                        SIM_run_alone(self.skipToOrigin, False)
+                        print('Stopped reversing at origin')
+                        self.lgr.debug('reverseMgr stopHap failed to find break, no callback, skipped to origin')
                  
         else:
             cycle_list = list(self.break_cycles.keys())
             sorted_list = sorted(cycle_list)
             latest_cycle = sorted_list[-1]
-            latest_bp = self.break_cycles[latest_cycle].bp
-            self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_bp))
+            latest_break = self.break_cycles[latest_cycle]
+            self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_break.bp))
 
+            self.rev_done_msg = latest_break.toDisplayString()
+            #for converted in self.bp_values_from_cli:
+            #    self.lgr.debug('reverseMgr stopHap check converted bp_num %d against %d' % (converted.converted_bp_num, latest_break.bp))
+            #    if converted.converted_bp_num == latest_break.bp:
+            #        self.rev_done_msg = converted.toDisplayString(latest_break)
+            #        self.lgr.debug('reverseMgr stopHap st rev_done_msg to %s' % self.rev_done_msg)
+            #        break
             SIM_run_alone(self.skipAndCallback, latest_cycle)
         self.was_at_reverse_point = False
 
@@ -987,6 +1027,7 @@ class ReverseMgr():
         self.rmIfOneShot(latest_bp)
         if self.callback is None:
             print('Reversing hit breakpoint %d at cycle 0x%x' % (latest_bp, skip_to_cycle))
+            print(self.rev_done_msg)
             SIM_run_command('disassemble')
         else:
             memory = self.break_cycles[skip_to_cycle]
@@ -1039,7 +1080,7 @@ class ReverseMgr():
     def spanHandleAlone(self, dumb):
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, None)
         self.lgr.debug('reverseMgr spanHandleAlone cycle: 0x%x set stop hap and stop simulation to assess if we hit breakpoints' % self.cpu.cycles)
-        SIM_break_simulation('span cycle handler')
+        SIM_break_simulation('')
 
     def setBreakHaps(self):
         '''
@@ -1053,6 +1094,7 @@ class ReverseMgr():
         for new_style in self.bp_values_from_cli: 
             if new_style.enabled:
                 the_break = genBreakFromNewStyle(new_style, self.lgr)
+                new_style.converted_bp_num = the_break
                 self.converted_breaks.append(the_break)
                 the_hap = SIM_hap_add_callback_index('Core_Breakpoint_Memop', self.breakCallback, None, the_break)
                 self.lgr.debug('reverseMgr setBreakHaps did set hap on bp %d from new style bp %d' % (the_break, new_style.bp_num))
@@ -1071,7 +1113,17 @@ class ReverseMgr():
             self.logical_address = memory.logical_address
             self.physical_address = memory.physical_address
             self.size = memory.size
+            self.op_type = SIM_get_mem_op_type(memory)
             self.object_cycles = object_cycles
+        def toDisplayString(self):
+            if self.physical_address is not None and self.physical_address != 0:
+                v_p = 'p'
+                addr = self.physical_address
+            else:
+                v_p = 'v'
+                addr = self.logical_address
+            retval = "Breakpoint %d: %s '%s' access to %s:0x%x len=%d" % (self.bp, self.the_object.name, transType(self.op_type), v_p, addr, self.size)
+            return retval
 
     def breakCallback(self, param, the_obj, the_break, memory):
         '''
@@ -1115,7 +1167,7 @@ class ReverseMgr():
         else:
             cpu_cycles = self.cpu.cycles
         self.break_cycles[cpu_cycles] = self.BreakInfo(the_obj, the_break, memory, object_cycles=object_cycles)
-        self.lgr.debug('reverseMgr breakCallback added break_cycles entry for cycle 0x%x' % cpu_cycles)
+        self.lgr.debug('reverseMgr breakCallback added break_cycles entry for cycle 0x%x op_type %d' % (cpu_cycles, op_type))
         #if the_break in self.bp_cli_list:
         #    self.lgr.debug('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
         #    print('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
@@ -1172,7 +1224,8 @@ class ReverseMgr():
 
     def deltaHandleAlone(self, dumb):
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.deltaStopHap, None)
-        SIM_break_simulation('Cycle now 0x%x' % self.cpu.cycles)
+        #SIM_break_simulation('Cycle now 0x%x' % self.cpu.cycles)
+        SIM_break_simulation('Done')
 
     def deltaStopHap(self, param, one, exception, error_string):
         self.lgr.debug('reverseMgr deltaStopHap')
@@ -1182,6 +1235,7 @@ class ReverseMgr():
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap)
         self.stop_hap = None
+        
         #self.enableAll()
 
     def SIM_breakpoint(self, the_object, the_type, the_mode, the_addr, the_count, the_flags):
@@ -1410,9 +1464,46 @@ if __name__ == '__main__':
     else:
         span = 0x1000000
     rev = ReverseMgr(conf, cpu, lgr, force_new=True, span=span, report_performance=True)
-    print('Usage: @rev.enableReverse() to enable reverse execution.')
-    print('       @rev.reverse() to reverse to a breakpoint that you have separately set.')
-    print('       @rev.skipToCycle(cycle) to skip to a cycle.')
-    print('       @rev.disableReverse() disable reverse execution.')
+    print('ReverseMgr module loaded.  You may now use reversing commands including:')
+    print('\tenable-reverse-execution')
+    print('\tdisable-reverse-execution')
+    print('\trev [n] -- where n is cycles to reverse, default is to just reverse.')
+    print('\tskip-to-cycle cycle')
     print('Logging to  /tmp/reverseMgr.log')
     print('Recording snapshots cycles on cpu %s every 0x%x cycles' % (cpu.name, span))
+    cli.new_command(
+        "enable-reverse-execution",
+        rev.enableReverse,
+        [],
+        short="Enable reverse execution",
+        doc="""
+       Enable reverse execution.
+    """
+    )
+    cli.new_command(
+        "disable-reverse-execution",
+        rev.disableReverse,
+        [],
+        short="Disable reverse execution",
+        doc="""
+       Disable reverse execution.
+    """
+    )
+    cli.new_command(
+        "rev",
+        rev.rev,
+        [arg(int_t, 'steps', "?", 0)],
+        short="Reverse [N] steps",
+        doc="""
+       Reverse.  If the optional N is provided, it will reverse that number of steps.
+    """
+    )
+    cli.new_command(
+        "skip-to-cycle",
+        rev.skipToCycle,
+        [arg(int_t, 'cycle', "1")],
+        short="Skip to the given cycle",
+        doc="""
+       Skip to the given cycle value.  The reverse manager conflates cycles and steps, assuming 1 cycle per instruction.
+    """
+    )
