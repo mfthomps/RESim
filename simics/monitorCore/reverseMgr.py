@@ -104,7 +104,7 @@ def getBPList():
             retval.append(id_val) 
     return retval
 
-def isEnabled(bp):
+def isEnabled(conf, bp):
     retval = False
     index = 0 
     for item in conf.sim.breakpoints:
@@ -192,12 +192,13 @@ class BPEnabler():
     '''
     Manage disabling and enabling breakpoints so we can skip without hitting them.
     '''
-    def __init__(self, sim_bp_list, lgr):
+    def __init__(self, conf, sim_bp_list, lgr):
         self.sim_bp_list = sim_bp_list
         self.sim_did_disable = []
         self.newstyle_list = getBPList()            
         self.newstyle_values = []
         self.lgr = lgr
+        self.conf = conf
         
         for bp in self.newstyle_list:
             bp_values = NewStyleBPValues(bp)
@@ -206,11 +207,11 @@ class BPEnabler():
     def disableAll(self):
         self.lgr.debug('BPEnabler disableAll')
         for bp in self.sim_bp_list:
-            if bp in self.new_style_list:
+            if bp in self.newstyle_list:
                # Name overload  TBD 
                print('TBD bp name overload')
             else:
-                if isEnabled(bp):
+                if isEnabled(self.conf, bp):
                     SIM_disable_breakpoint(bp)
                     self.sim_did_disable.append(bp)
         for bp_values in self.newstyle_values:
@@ -450,9 +451,10 @@ class ReverseMgr():
             return True
         else:
             return False
+
     def restoreSnapshot(self, name, force=False):
         self.lgr.debug('reverseMgr restoreSnapshot %s' % name)
-        bp_enabler = BPEnabler(self.sim_breakpoints, self.lgr)
+        bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
         bp_enabler.disableAll()
         #self.disableSimBreaks()
         if name == 'origin':
@@ -749,7 +751,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr runToCycle already at cycle 0x%x' % cycle)
             print('Already at cycle 0x%x' % cycle)
         else:
-            bp_enabler = BPEnabler(self.sim_breakpoints, self.lgr)
+            bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
             bp_enabler.disableAll()
             #self.disableAll()
             self.setDeltaCycle(use_cpu, cycle)
@@ -907,7 +909,7 @@ class ReverseMgr():
                            self.current_span_start, delta))
             #self.reverse_to = None
             self.rmContinuationHap()
-            bp_enabler = BPEnabler(self.sim_breakpoints, self.lgr)
+            bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
             bp_enabler.disableAll()
             #self.disableSimBreaks()
             expect = self.cpu.cycles + delta
