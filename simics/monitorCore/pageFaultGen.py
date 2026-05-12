@@ -311,7 +311,7 @@ class PageFaultGen():
         cpu, comm, tid = self.task_utils.curThread() 
         sp = self.mem_utils.getRegValue(cpu, 'sp')
         if sp == 0:
-            self.lgr.error('pageFaultGen pageFaultHap sp is 0, arm regs confusion?')
+            self.lgr.debug('pageFaultGen pageFaultHap sp is 0, arm regs confusion?')
             #SIM_break_simulation('remove this')
             #self.top.quit()
             return
@@ -940,7 +940,7 @@ class PageFaultGen():
         return retval
 
     def getPendingFault(self, tid):
-        self.lgr.debug('pageFaultGen getPendingFault tid:%s' % tid)
+        #self.lgr.debug('pageFaultGen getPendingFault tid:%s' % tid)
         if tid in self.pending_faults:
             return self.pending_faults[tid]
         else:
