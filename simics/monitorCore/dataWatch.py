@@ -3378,7 +3378,7 @@ class DataWatch():
         if self.stopped:
             self.lgr.debug('dataWatch memstuffStopHap, dataWatch is stopped, return')
             return
-        self.lgr.debug('memstuffStopHap, reverse to call fun %s at ip 0x%x' % (self.mem_something.fun, self.mem_something.called_from_ip))
+        self.lgr.debug('dataWatch memstuffStopHap, reverse to call fun %s at ip 0x%x' % (self.mem_something.fun, self.mem_something.called_from_ip))
         SIM_run_alone(self.revAlone, alternate_callback)
 
 
