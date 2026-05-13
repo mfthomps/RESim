@@ -169,12 +169,11 @@ class Prec():
         self.who = who
         self.debugging = False
 
-
 class GenMonitor():
     ''' Top level RESim class '''
     SIMICS_BUG=False
     PAGE_SIZE = 4096
-    def __init__(self, comp_dict, link_dict, cfg_file, conf=None):
+    def __init__(self, comp_dict, link_dict, cfg_file, conf=None, arg=None, int_t=None, output_modes=None):
         self.comp_dict = comp_dict
         self.link_dict = link_dict
         # The param structure is shared by many modules.  It may be altered by the memUtils to account for ASLR
@@ -277,6 +276,9 @@ class GenMonitor():
 
         self.one_done_module = None
         self.conf = conf
+        self.arg = arg
+        self.int_t = int_t
+        self.output_modes = output_modes
         self.lgr = resimUtils.getLogger('resim', os.path.join(self.log_dir, 'monitors'))
         one_done_script = os.getenv('ONE_DONE_SCRIPT')
         if one_done_script is not None:
@@ -861,7 +863,7 @@ class GenMonitor():
             if span is not None:
                 span = int(span, 16)
                 self.lgr.debug('Using reverse span of 0x%x' % span)
-            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.lgr, top=self, span=span)
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.arg, self.int_t, self.output_modes, self.lgr, top=self, span=span)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
                  self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)

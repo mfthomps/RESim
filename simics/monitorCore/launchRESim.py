@@ -430,11 +430,11 @@ class LaunchRESim():
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-                    gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP)
+                    gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP, arg, int_t, output_modes)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
                     lgr.debug('genMonitor for target %s' % RESIM_TARGET)
-                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf)
+                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf, arg=arg, output_modes=output_modes, int_t=int_t)
                     cgc.doInit()
     
     def getSimicsScript(self, section, lgr):    

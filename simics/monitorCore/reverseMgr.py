@@ -58,6 +58,8 @@ of restore-snapshot.
 '''
 from simics import *
 import os
+import re
+import traceback
 import cli
 import logging
 NOUTILS = False
@@ -103,6 +105,26 @@ def getBPList():
             id_val = int(id_string[1:-1])
             retval.append(id_val) 
     return retval
+# helpers
+def bp_type_to_str(t):
+    return {
+        0: "phys",
+        1: "virt",
+        2: "linear",
+        3: "io"
+    }.get(int(t), str(t))
+
+def access_to_str(a):
+    a = int(a)
+    flags = []
+    if a & 1:
+        flags.append("R")
+    if a & 2:
+        flags.append("W")
+    if a & 4:
+        flags.append("X")
+    return "".join(flags) if flags else "-"
+
 
 def isEnabled(conf, bp):
     retval = False
@@ -131,6 +153,7 @@ def transType(op_type):
     elif op_type == Sim_Trans_Cache:
         retval = 'x'
     return retval
+
 
 class NewStyleBPValues():
     '''
@@ -217,12 +240,14 @@ class BPEnabler():
         for bp_values in self.newstyle_values:
             if bp_values.enabled:
                 cmd = 'bp.disable %d' % bp_values.bp_num                
+                self.lgr.debug('BPEnabler disable did bp %d' % bp)
                 cli.quiet_run_command(cmd)
 
     def enableAll(self):
         self.lgr.debug('BPEnabler enable')
         for bp in self.sim_did_disable:
             SIM_enable_breakpoint(bp)
+            self.lgr.debug('BPEnabler enable did bp %d' % bp)
         for bp_values in self.newstyle_values:
             if bp_values.enabled:
                 cmd = 'bp.enable %d' % bp_values.bp_num                
@@ -289,7 +314,7 @@ class ReverseMgr():
     Parameter span: Optional span value.  Default is 0x100000
              
     '''
-    def __init__(self, conf, cpu, lgr, top=None, span=None, force_new=False, report_performance=False):
+    def __init__(self, conf, cpu, arg, int_t, output_modes, lgr, top=None, span=None, force_new=False, report_performance=False):
         self.conf = conf
         self.cpu = cpu
         self.lgr = lgr
@@ -328,6 +353,8 @@ class ReverseMgr():
         self.performance = Performance(cpu, 1, True, self.lgr, None)
         self.force_new = force_new
         self.report_performance = report_performance
+        self.output_modes = output_modes
+        self.defineCommands(arg, int_t)
 
     def reset(self):
         # The current_span is the range of cycles over which we will run forward
@@ -629,6 +656,7 @@ class ReverseMgr():
         will restore the span prior to our_cycles and then run forward to the object_cycles on the use_cell.
         NOTE: TBD not fully implemented for case where object_cycles is less than the previous span cycle.
         '''
+        self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x' % (our_cycles, self.cpu.cycles))
         if self.top is not None:
              eip = self.top.getEIP()
              self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cell: %s' % (our_cycles, self.cpu.cycles, eip, use_cell))
@@ -932,7 +960,7 @@ class ReverseMgr():
                 too_far = self.cpu.cycles - expect
                 self.lgr.error('reverseMgr skipBackAndRunForrward ran past the delta by 0x%x cycles, now at 0x%x?' % (too_far, self.cpu.cycles))
                 return
-            bp_enabler.disableAll()
+            bp_enabler.enableAll()
             #self.enableSimBreaks()
             self.lgr.debug('reverseMgr skipBackAndRunForward ran forward to the reverse_to point so we can set breaks and run from there.  cycles now 0x%x' % self.cpu.cycles)
             self.was_at_reverse_point = True
@@ -944,6 +972,8 @@ class ReverseMgr():
             self.setBreakHaps()
             self.setSpanEndCycle()
             self.lgr.debug('reverseMgr skipBackAndRunForward now continue')
+            #print('remove this')
+            #return
             self.rmContinuationHap()
             SIM_continue(0)
             self.setContinuationHap()
@@ -1414,9 +1444,135 @@ class ReverseMgr():
             SIM_delete_breakpoint(bp)
 
     def showSizeChanges(self):
-    
         self.performance.showSizeChanges()
 
+    def defineCommands(self, arg, int_t):
+        cli.new_command(
+            "enable-reverse-execution",
+            self.enableReverse,
+            [],
+            short="Enable reverse execution",
+            doc="""
+           Enable reverse execution.
+        """
+        )
+        cli.new_command(
+            "disable-reverse-execution",
+            self.disableReverse,
+            [],
+            short="Disable reverse execution",
+            doc="""
+           Disable reverse execution.
+        """
+        )
+        cli.new_command(
+            "rev",
+            self.rev,
+            [arg(int_t, 'steps', "?", 0)],
+            short="Reverse [N] steps",
+            doc="""
+           Reverse.  If the optional N is provided, it will reverse that number of steps.
+        """
+        )
+        cli.new_command(
+            "skip-to-cycle",
+            self.skipToCycle,
+            [arg(int_t, 'cycle', "1")],
+            short="Skip to the given cycle",
+            doc="""
+           Skip to the given cycle value.  The reverse manager conflates cycles and steps, assuming 1 cycle per instruction.
+        """
+        )
+        cli.new_command(
+            "list-all-breakpoints",
+            self.listSimBreakpoints,
+            [],
+            short="List all breakpoints made via SIM_breakpoint calls",
+            doc="""
+               List all breakpoints made via SIM_breakpoint calls.
+        """
+        )
+    def listSimBreakpoints(self):
+            # Thanks Nick!
+            # Parse bp.list   
+            mem_addrs = set()
+            #print('why am i here?')    
+            #traceback.print_stack()
+            try:
+                result = cli.quiet_run_command( "bp.list", self.output_modes.formatted_text )
+        
+                # result = ([ids], formatted_string)
+                txt = result[1] if isinstance(result, tuple) else str(result)
+        
+                # Extract ALL addr occurrences 
+                for m in re.finditer(r"addr=0x([0-9a-fA-F]+)", txt):
+                    mem_addrs.add(int(m.group(1), 16))
+        
+            except Exception as e:
+                print("WARNING: bp.list parsing failed:", e)
+        
+            # iterate internal breakpoint table
+            bps = self.conf.sim.breakpoints
+            if len(bps) > 0: 
+                print(
+                    f"{'TYPE':<7} {'ACC':<4} {'ACT':<4} "
+                    f"{'START':<18} {'END':<18} {'SIZE':<10} {'KIND':<6} "
+                    f"{'ORIGIN':<18} {'OBJECT':<30} {'HANDLE'}"
+                )
+                print("-" * 150)
+        
+            # main loop
+            for bp in bps:
+                try:
+                    bp_type = int(bp[1])
+                    access  = int(bp[2])
+                    active  = int(bp[5])
+        
+                    obj_field = bp[11]
+                    handles   = bp[12]
+        
+                    # object resolution (string or object)
+                    if isinstance(obj_field, str):
+                        obj = getattr(self.conf, obj_field)
+                        obj_name = obj_field
+                    else:
+                        obj = obj_field
+                        obj_name = obj.name
+        
+                except Exception:
+                    continue
+        
+                for h in handles:
+                    try:
+                        h_val = int(h)
+        
+                        bpx = obj.iface.breakpoint.get_breakpoint(h_val)
+        
+                        start = int(bpx.start)
+                        end   = int(bpx.end)
+        
+                        size = end - start + 1
+        
+                        kind = "single" if start == end else "range"
+        
+                        origin = "bp.memory.break" if start in mem_addrs else "Other"
+        
+                        print(
+                            f"{bp_type_to_str(bp_type):<7} "
+                            f"{access_to_str(access):<4} "
+                            f"{active:<4} "
+                            f"{f'0x{start:016x}':<18} "
+                            f"{f'0x{end:016x}':<18} "
+                            f"{f'0x{size:x}':<10} "
+                            f"{kind:<6} "
+                            f"{origin:<18} "
+                            f"{obj_name:<30} "
+                            f"{h_val}"
+                        )
+        
+                    except Exception:
+        
+                        continue
                 
 #Everything below is for use running directly from the Simics command prompt, e.g., for testing.
 #Typically this module would be instantiated from some other Python module.
@@ -1465,47 +1621,11 @@ if __name__ == '__main__':
         span = int(spanenv, 16)
     else:
         span = 0x1000000
-    rev = ReverseMgr(conf, cpu, lgr, force_new=True, span=span, report_performance=True)
+    rev = ReverseMgr(conf, cpu, arg, int_t, output_modes, lgr, force_new=True, span=span, report_performance=True)
     print('ReverseMgr module loaded.  You may now use reversing commands including:')
-    print('\tenable-reverse-execution')
+    print('\tenable-reverse-execution, will result in Recording snapshots cycles on cpu %s every 0x%x cycles' % (cpu.name, span))
     print('\tdisable-reverse-execution')
     print('\trev [n] -- where n is cycles to reverse, default is to just reverse.')
     print('\tskip-to-cycle cycle')
     print('Logging to  /tmp/reverseMgr.log')
-    print('Recording snapshots cycles on cpu %s every 0x%x cycles' % (cpu.name, span))
-    cli.new_command(
-        "enable-reverse-execution",
-        rev.enableReverse,
-        [],
-        short="Enable reverse execution",
-        doc="""
-       Enable reverse execution.
-    """
-    )
-    cli.new_command(
-        "disable-reverse-execution",
-        rev.disableReverse,
-        [],
-        short="Disable reverse execution",
-        doc="""
-       Disable reverse execution.
-    """
-    )
-    cli.new_command(
-        "rev",
-        rev.rev,
-        [arg(int_t, 'steps', "?", 0)],
-        short="Reverse [N] steps",
-        doc="""
-       Reverse.  If the optional N is provided, it will reverse that number of steps.
-    """
-    )
-    cli.new_command(
-        "skip-to-cycle",
-        rev.skipToCycle,
-        [arg(int_t, 'cycle', "1")],
-        short="Skip to the given cycle",
-        doc="""
-       Skip to the given cycle value.  The reverse manager conflates cycles and steps, assuming 1 cycle per instruction.
-    """
-    )
+
