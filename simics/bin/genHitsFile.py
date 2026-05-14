@@ -27,7 +27,7 @@ def genHits(target, get_all=False):
     return hits
 
 def main():
-    parser = argparse.ArgumentParser(prog='genHitsFile', description='Genereate a hits file for a target and store output below IDA_DATA with afl_ prefix.')
+    parser = argparse.ArgumentParser(prog='genHitsFile', description='Genereate a hits file for a target and store output below IDA_DATA with _afl suffix.')
     parser.add_argument('ini', action='store', help='Ini file')
     parser.add_argument('target', action='store', help='The AFL target, the name of the workspace used when afl was run.')
     parser.add_argument('-a', '--all', action='store_true', help='Look at all queue files, not just unique files.')
@@ -57,7 +57,7 @@ def main():
     except:
         pass
     base = os.path.basename(ida_data)
-    hit_name = 'afl_%s.hits' % base
+    hit_name = '%s_afl.hits' % base
     ofile = os.path.join(parent, hit_name)
     print('id_data is %s' % ida_data)
 
