@@ -1730,5 +1730,6 @@ class MemUtils():
                 done = True
             elif only_ascii and v > 127:
                 done = True
-            addr += 1
+            else:
+                addr += 1
         return addr - src
