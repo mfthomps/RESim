@@ -2068,6 +2068,15 @@ class GenMonitor():
         if len(tid_list) == 0:
             self.lgr.error('debugTidGroup tid:%s not on current target?' % tid)
         else: 
+            if self.isWindows() and '-' in tid:
+                pid_part = tid.split('-')[0]
+                cpu, comm, cur_tid = self.curThread()
+                cur_pid_part = cur_tid.split('-')[0]
+                if pid_part == cur_pid_part and cur_tid.endswith('-0'):
+                    # go through the motions so other functions get called as needed.
+                    # don't know we are done until deeper in with layered stop had functions.
+                    self.lgr.debug('debugTidGroup, current tid is %s, special case, add it to tid_list' % cur_tid)
+                    tid_list.append(cur_tid)
             self.debugTidList(tid_list, self.debugGroup, final_fun=final_fun, to_user=to_user)
 
     def debugTidList(self, tid_list, debug_function, final_fun=None, to_user=True):
