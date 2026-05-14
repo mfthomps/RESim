@@ -1767,7 +1767,7 @@ class DataWatch():
                 self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
                 self.setBreakRange()
         elif self.mem_something.fun == 'replace_iterator':
-            
+            pass 
         elif self.mem_something.fun.startswith('replace'):
             # TBD this assumes compiler uses indirection for dest.  Some do not, e.g., win xp
             if self.mem_something.src is not None:
