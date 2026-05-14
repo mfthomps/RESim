@@ -481,7 +481,7 @@ class GenContextMgr():
         for rec in self.watch_rec_list:
             tid = self.watch_rec_list[rec]
             if tid != '0': 
-                self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
+                #self.lgr.debug('contextManager getThreadTids append %s to returned thread tid list' % (tid))
                 retval.append(tid)
         return retval
 
@@ -724,7 +724,7 @@ class GenContextMgr():
             thread_id = self.task_utils.getThreadId(rec=new_addr)
             if thread_id is None:
                 self.lgr.debug('contextManager changedThread proc_addr bad thread_id read for proc addr 0x%x' % proc_addr)
-            if pid is not None and thread_id is not None:
+            if pid is not None and thread_id is not None and thread_id != 0:
                 tid = '%d-%d' % (pid, thread_id)
             else:
                 self.lgr.debug('contextManager bad pid %s or thread_id %s' % (pid, thread_id))
@@ -942,7 +942,10 @@ class GenContextMgr():
             return
         if rec is None:
             rec = self.task_utils.getRecAddrForTid(tid)
-            self.lgr.debug('contextManager, addTask input rec was none, for tid %s got %s' % (tid, str(rec)))
+            if rec is not None:
+                self.lgr.debug('contextManager, addTask input rec was none, for tid %s got 0x%x' % (tid, rec))
+            else:
+                self.lgr.debug('contextManager, addTask input rec was none, for tid %s got None from getRecAddrForTid' % (tid))
         if rec not in self.watch_rec_list:
             if rec is None:
                 self.lgr.debug('contextManager, addTask got rec of None for tid %s, pending cycle: 0x%x' % (tid, self.cpu.cycles))
@@ -955,7 +958,7 @@ class GenContextMgr():
             if tid not in self.tid_cache:
                 self.tid_cache.append(tid)
         else:
-            #self.lgr.debug('addTask, already has rec 0x%x for tid:%s' % (rec, tid))
+            self.lgr.debug('addTask, given tid:%s already has rec 0x%x as %s' % (tid, rec, self.watch_rec_list[rec]))
             pass
 
     def watchingThis(self):
@@ -1190,7 +1193,10 @@ class GenContextMgr():
             self.setDebugTid(force=True)
         if comm is not None and comm not in self.debugging_comm:
             self.debugging_comm.append(comm)
-        if self.watchExit(tid=tid):
+        if tid.endswith('-0'):
+            # Windows xp
+            pass
+        elif self.watchExit(tid=tid):
             #self.pageFaultGen.recordPageFaults()
             ctask = self.task_utils.getRecAddrForTid(tid)
             if ctask in self.watch_rec_list:
@@ -1200,7 +1206,7 @@ class GenContextMgr():
             self.watch_rec_list[ctask] = tid
         else:
             self.lgr.warning('watchTasks, call to watchExit failed tid %s' % tid)
-        if tid not in self.tid_cache:
+        if tid not in self.tid_cache and not tid.endswith('-0'):
             self.tid_cache.append(tid)
         group_leader = self.task_utils.getGroupLeaderTid(tid)
         if group_leader != self.group_leader:
@@ -1437,8 +1443,8 @@ class GenContextMgr():
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
             self.task_rec_bp[tid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, list_addr_phys, self.mem_utils.WORD_SIZE, 0)
-            self.lgr.debug('genContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
-                   watch_comm, tid, list_addr, list_addr_phys, cell))
+            #self.lgr.debug('genContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
+            #       watch_comm, tid, list_addr, list_addr_phys, cell))
             if immediate:
                 self.watchTaskHapAlone(tid)
             else:
@@ -1459,7 +1465,7 @@ class GenContextMgr():
     def watchTaskHapAlone(self, tid):
         if tid in self.task_rec_bp and tid and self.task_rec_bp[tid] is not None:
             if tid not in self.task_rec_hap or self.task_rec_hap[tid] is None:
-                self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
+                #self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x' % (tid, self.task_rec_bp[tid]))
                 self.task_rec_hap[tid] = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.taskRecHap, tid, self.task_rec_bp[tid])
             else:
                 self.lgr.debug('contextManager watchTaskHapAlone tid:%s breakpoint 0x%x ALREADY has hap' % (tid, self.task_rec_bp[tid]))
