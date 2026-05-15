@@ -38,8 +38,14 @@ import aflPath
 import findTrack
 class InjectToWM():
     def __init__(self, top, addr, dataWatch, lgr, target_prog=None, targetFD=None, max_marks=None, no_reset=None, ws=None):
-        unfiltered = '/tmp/wm.io'
-        filtered = '/tmp/wm_filtered.io'
+        user = os.getenv('USER')
+        user_tmp = os.path.join('/tmp', user)
+        try: 
+            os.mkdir(user_tmp)
+        except:
+            pass
+        unfiltered = os.path.join(user_tmp, 'wm.io')
+        filtered = os.path.join(user_tmp, 'wm_filtered.io')
         self.top = top
         self.dataWatch = dataWatch
         self.addr = addr
