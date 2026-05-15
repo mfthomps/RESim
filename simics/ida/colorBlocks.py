@@ -168,7 +168,7 @@ def colorBlocks():
             fname = os.path.join(resim_ida_data, less_ida_data, base)
             latest_hits_file = fname+'.hits' 
             if not os.path.isfile(latest_hits_file):
-                afl_hits = 'afl_%s' % base
+                afl_hits = '%s_afl' % base
                 afl_fname = os.path.join(resim_ida_data, less_ida_data, afl_hits)
                 latest_hits_file = afl_fname+'.hits' 
             if os.path.isfile(latest_hits_file):
