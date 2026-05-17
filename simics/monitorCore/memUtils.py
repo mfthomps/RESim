@@ -1062,7 +1062,6 @@ class MemUtils():
             else:
                 #self.lgr.debug('arm64App in kernel but not via a syscall? esr_el1 is 0x%x  assume page fault on arm64 app' % esr_el1_shifted)
                 #traceback.print_stack()
-                #SIM_break_simulation('remove this')
                 arm64_app = True
         else:
             # in user space, rely on in_aarch64

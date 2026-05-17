@@ -382,13 +382,14 @@ class Msghdr():
             for i in range(limit):
                 base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=self.word_size)
                 length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.word_size, size=self.word_size)
-                limit = min(length, 1024)
-                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
-                s = resimUtils.getHexDump(byte_tuple[:1024])
-                self.lgr.debug('net msghdr base 0x%x length %d str: %s' % (base, length, s))
-                retval = retval + s
-                iov_addr = iov_addr+iov_size
+                if length is not None:
+                    limit = min(length, 1024)
+                    #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
+                    byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
+                    s = resimUtils.getHexDump(byte_tuple[:1024])
+                    self.lgr.debug('net msghdr base 0x%x length %d str: %s' % (base, length, s))
+                    retval = retval + s
+                    iov_addr = iov_addr+iov_size
         return retval
 
     def getByteArray(self):
@@ -404,15 +405,16 @@ class Msghdr():
             for i in range(limit):
                 base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=self.word_size)
                 length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.word_size, size=self.word_size)
-                limit = min(length, 1024)
-                #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
-                if None not in byte_tuple:
-                    retval = retval + bytearray(byte_tuple)
-                else:
-                    self.lgr.debug('net getByteArray failed on retval %s byte_tuple %s' % (str(retval), str(byte_tuple)))
-                iov_addr = iov_addr+iov_size
-                self.lgr.debug('len of byte tuple %d, current len of retval %d' % (len(byte_tuple), len(retval)))
+                if length is not None:
+                    limit = min(length, 1024)
+                    #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
+                    byte_tuple = self.mem_utils.getBytes(self.cpu, limit, base)
+                    if None not in byte_tuple:
+                        retval = retval + bytearray(byte_tuple)
+                    else:
+                        self.lgr.debug('net getByteArray failed on retval %s byte_tuple %s' % (str(retval), str(byte_tuple)))
+                    iov_addr = iov_addr+iov_size
+                    self.lgr.debug('len of byte tuple %d, current len of retval %d' % (len(byte_tuple), len(retval)))
         return retval
 
     def setByteArray(self, the_bytes):
@@ -429,12 +431,13 @@ class Msghdr():
                 base = self.mem_utils.readAppPtr(self.cpu, iov_addr, size=self.word_size)
                 length = self.mem_utils.readAppPtr(self.cpu, iov_addr+self.word_size, size=self.word_size)
                 #byte_string, dumb = self.mem_utils.getBytes(cpu, limit, exit_info.retval_addr)
-                end = index + length 
-                if end > len(the_bytes):
-                    end = len(the_bytes)
-                self.mem_utils.writeBytes(self.cpu, base, the_bytes[index:end])
-                iov_addr = iov_addr+iov_size
-                index = end
-                if index >= len(the_bytes):
-                    break
+                if length is not None:
+                    end = index + length 
+                    if end > len(the_bytes):
+                        end = len(the_bytes)
+                    self.mem_utils.writeBytes(self.cpu, base, the_bytes[index:end])
+                    iov_addr = iov_addr+iov_size
+                    index = end
+                    if index >= len(the_bytes):
+                        break
 
