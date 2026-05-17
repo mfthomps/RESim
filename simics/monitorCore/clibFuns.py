@@ -69,6 +69,8 @@ def adjustFunName(fun_name, fun_mgr, lgr):
                     elif fun == 'replace': 
                         if 'char' in param1:
                             fun = 'replace_chr'
+                        elif 'iterator' in param1:
+                            fun = 'replace_iterator'
                         else:
                             fun = 'replace_std'
                     elif fun == 'append': 
@@ -99,6 +101,7 @@ def adjustFunName(fun_name, fun_mgr, lgr):
                 if '(' in fun:
                     pre_paren, in_paren = fun.split('(', 1)
                     fun = pre_paren.split('::')[-1]
+                    lgr.debug('clibFuns windows fun after pre_paren split %s' % fun)
                     if fun.startswith('allocator'):
                         lgr.debug('clibFuns windows fun %s looks like allocator pre_paren %s in_paran %s' % (fun, pre_paren, in_paren))
                         #if in_paren.startswith('char'):
@@ -108,6 +111,10 @@ def adjustFunName(fun_name, fun_mgr, lgr):
                                 fun = 'stringbuf_win_basic_char' 
                             else:
                                 fun = 'string_win_basic_char' 
+                    elif 'char' in pre_paren:
+                        fun = 'string_chr_%s' % fun
+                    else:
+                        fun = 'string_%s' % fun
                 else:
                     lgr.debug('clibFuns expected parens.  TBD QTCore?')
             elif fun.startswith('basic_streambuf'):

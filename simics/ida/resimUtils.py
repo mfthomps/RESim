@@ -314,6 +314,15 @@ class ImportNames():
                             break
                         #instruct_len = ida_bytes.get_item_size(next_pc)
                         insn = idaapi.insn_t()
+                elif ref_instruct.startswith('call'): 
+                    if ';' in ref_instruct:
+                        fun = ref_instruct.split(';')[1].strip()
+                        x86_call_reg[ref] = fun
+                        print('\timports is call, think demangle is %s' % fun)
+                    else:
+                        fun = ref_instruct[4].strip()
+                        x86_call_reg[ref] = fun
+                        print('\timports is call, no demangle is %s' % fun)
 
                 fun_refs = idautils.DataRefsTo(ref)
                 for fr in fun_refs:

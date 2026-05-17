@@ -655,17 +655,23 @@ class MscMark():
         return self.msg
 
 class CharAppendMark():
-    def __init__(self, fun, this, addr):
+    def __init__(self, fun, this, our_start, addr):
+        # TBD remove end_addr (and addr) 
         self.fun = fun
         self.this = this
         self.addr = addr
         self.end_addr = addr
+        self.our_start = our_start
+        self.our_end = our_start
     def getMsg(self):
-        msg = 'char append %s 0x%08x - 0x%08x' % (self.fun, self.addr, self.end_addr)
+        #msg = 'char append %s 0x%08x - 0x%08x' % (self.fun, self.addr, self.end_addr)
+        msg = 'char append %s 0x%08x - 0x%08x' % (self.fun, self.this, self.our_end)
         return msg
     def extend(self):
         self.end_addr = self.end_addr + 1
+        self.our_end = self.our_end + 1
     def switchTo(self, addr):
+        # TBD remove?
         old_delta = self.end_addr - self.addr
         self.addr = addr
         self.end_addr = addr+old_delta+1
@@ -882,12 +888,12 @@ class WatchMarks():
                 #if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
                 
                 if pm is not None and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                    self.lgr.debug('watchMarks previous ad_hoc had end addr one greather than addr')
+                    self.lgr.debug('watchMarks previous ad_hoc had end addr one greater than addr')
                     skip_this = False
                     if dest is not None:
                         cur_len = pm.mark.getSize()
                         # TBD track down this off by one error
-                        if trans_size != 16:
+                        if trans_size != 16 and trans_size != 1:
                             ok_dest = pm.mark.dest + cur_len + 1
                         else:
                             ok_dest = pm.mark.dest + cur_len 
@@ -968,6 +974,9 @@ class WatchMarks():
                         prev_mark.mark.extendByteCompare(addr, mark_compare.compare_instruction, trans_size)
                     else:
                         self.lgr.debug('watchMarks but previous mark is a %s, not a DataMark' % type(prev_mark))
+                        value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
+                        dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False))
+                        wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
                 else:
                     # not an iteration after all.  treat as regular data mark
                     value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
@@ -1425,9 +1434,9 @@ class WatchMarks():
                 return mark
         return None
 
-    def charAppendMark(self, fun, this, addr):
+    def charAppendMark(self, fun, this, our_start, addr):
         # for functions that append a character to the end of a buffer
-        cm = CharAppendMark(fun, this, addr)
+        cm = CharAppendMark(fun, this, our_start, addr)
         wm = self.addWatchMark(cm)
         return wm
 

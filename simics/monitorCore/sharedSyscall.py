@@ -545,7 +545,6 @@ class SharedSyscall():
                     src_ss = net.SockStruct(self.cpu, exit_info.src_addr, self.mem_utils, fd=-1)
                     src = 'from: %s' % src_ss.getString()
                 if exit_info.old_fd is None:
-                    # TBD remove this block?  reachable?
                     self.lgr.error('sharedSyscall exit_info old_fd is None for recv call')
                     exit_info.matched_param = None
                     trace_msg = trace_msg+('\treturn from socketcall %s tid:%s  FD: None' % (socket_callname, tid))
@@ -603,7 +602,7 @@ class SharedSyscall():
                 msghdr = exit_info.msghdr
                 self.lgr.debug('sharedSyscall %s call msghdr.getIovec' % socket_callname)
                 iovec = msghdr.getIovec()
-                if len(iovec) > 0:
+                if len(iovec) > 0 and iovec[0].base is not None:
                     self.lgr.debug('sharedSyscall %s call getByteArray' % socket_callname)
                     byte_array = msghdr.getByteArray()
                     self.lgr.debug('sharedSyscall %s back from call getByteArray' % socket_callname)
@@ -716,7 +715,6 @@ class SharedSyscall():
             if srr0 > self.param.kernel_base:
                 pc = self.mem_utils.getRegValue(self.cpu, 'pc')
                 self.lgr.debug('sharedSyscall exitHap tid:%s (%s) srr0 0x%x, is rfi from another mother, bail pc 0x%x' % (tid, comm, srr0, pc))
-                #SIM_break_simulation('remove this')
                 return
         #self.lgr.debug('sharedSyscall exitHap tid:%s (%s) context: %s  break_num: %s cycle: 0x%x reverse context? %r' % (tid, comm, str(context), str(break_num), self.cpu.cycles, self.context_manager.isReverseContext()))
         #if tid == '1' and self.hack_exit_tid != '1':
@@ -936,7 +934,6 @@ class SharedSyscall():
                 exit_info.fname = self.mem_utils.readString(exit_info.cpu, exit_info.fname_addr, 256)
                 if exit_info.fname is None:
                     exit_info.fname = 'unknown'
-                SIM_break_simulation('remove this '+exit_info.fname)
             trace_msg = trace_msg+('FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x\n' % (eax, 
                    exit_info.fname, exit_info.flags, exit_info.mode, eax))
             #self.lgr.debug('sharedSyscall exitHap return from open tid:%s (%s) FD: %d file: %s flags: 0%o mode: 0x%x eax: 0x%x' % (tid, comm, 
@@ -1310,7 +1307,7 @@ class SharedSyscall():
                         trace_msg = err_trace_msg+('DMOD!, FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
                         got_msg = True
                         call_param.match_param.resetOpen(tid, exit_info.old_fd)
-                        self.lgr.debug('sharedSyscall close for open_replace, remove this secondary dmod')
+                        self.lgr.debug('sharedSyscall close for open_replace, remove the secondary dmod')
                         SIM_run_alone(self.rmDmod, (call_param, exit_info))
                 if not got_msg:
                     trace_msg = err_trace_msg+('FD: %d  eax: 0x%x\n' % (exit_info.old_fd, eax))
