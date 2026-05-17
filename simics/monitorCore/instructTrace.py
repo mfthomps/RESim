@@ -2,7 +2,7 @@ from simics import *
 import cli
 import resimSimicsUtils
 class InstructTrace():
-    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False):
+    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False, all_cores=False):
         self.top = top
         self.lgr = lgr
         if just_tid is None:
@@ -19,7 +19,11 @@ class InstructTrace():
         if self.version.startswith('7'):
             tracer_name = 'my_tracer'
             file = '/tmp/'+fname
-            cmd = 'new-tracer-tool name=%s file=%s processors=%s' % (tracer_name, file, cpu.name)
+            if all_cores:
+                parent_name = self.top.getTopComponentName(cpu)
+                cmd = 'new-tracer-tool name=%s file=%s parent=%s' % (tracer_name, file, parent_name)
+            else:
+                cmd = 'new-tracer-tool name=%s file=%s processors=%s' % (tracer_name, file, cpu.name)
             SIM_run_command(cmd)
         else:
             SIM_run_command('load-module trace')

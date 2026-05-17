@@ -418,11 +418,6 @@ class GenMonitor():
                         self.lgr.debug('genInit link cmd is %s' % cmd)
                         SIM_run_command(cmd)
 
-            ''' TBD compatability, remove this '''
-            stack_base_file = os.path.join('./', self.run_from_snap, 'stack_base.pickle')
-            if os.path.isfile(stack_base_file):
-                self.stack_base = pickle.load( open(stack_base_file, 'rb') )
-
             debug_info_file = os.path.join('./', self.run_from_snap, 'debug_info.pickle')
             if os.path.isfile(debug_info_file):
                 self.debug_info = pickle.load( open(debug_info_file, 'rb') )
@@ -1078,7 +1073,8 @@ class GenMonitor():
                 if cur_task_rec == 0xdeadbeef:
                     self.lgr.debug('doInit cell hack count %d' % hack_count)
                     if hack_count > 10:
-                        SIM_break_simulation('remove this')
+                        self.lgr.error('doInit cell hack count > 10???')
+                        self.quit()
                         done = True
                     else:
                         hack_count = hack_count+1
@@ -1089,7 +1085,7 @@ class GenMonitor():
                     done = False
                 elif cur_task_rec == -1:
                     self.lgr.error('debugging')
-                    SIM_break_simulation('remove this') 
+                    self.quit()
                 else:
                     tid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if tid is None:
@@ -1117,8 +1113,6 @@ class GenMonitor():
                         if swapper is None:
                             self.lgr.debug('doInit cell %s taskUtils failed to get swapper, hack harder' % cell_name)
                             done = False
-                            #SIM_break_simulation('remove this')
-                            #done = True
                         else: 
                             tasks = task_utils.getTaskStructs()
                             if len(tasks) == 1:
@@ -2966,7 +2960,6 @@ class GenMonitor():
         self.syscallManager[self.target].rmAllSyscalls()
 
     def rmCallTrace(self, cell_name, callname):
-        #TBD remove this?
         ''' remove a call trace and all of its aliases '''
         #self.lgr.debug('genMonitor rmCallTrace %s' % callname)
         if callname in self.call_traces[cell_name]:
@@ -3222,7 +3215,6 @@ class GenMonitor():
         cpu, comm, tid = self.task_utils[self.target].curThread() 
         if cpu != prec.cpu or tid not in prec.tid:
             self.lgr.debug('%s hap, wrong something tid:%s prec tid list %s' % (prec.who, tid, str(prec.tid)))
-            #SIM_break_simulation('remove this')
             return
 
         eip = self.getEIP(cpu)
@@ -3524,7 +3516,6 @@ class GenMonitor():
                 # assume dynamic load.  Set break on zero to start of loader
                 start = 0
                 count = loader_load_info.addr 
-                print('remove this')
                 count = loader_load_info.addr - 0x1abc0
                 self.lgr.error('runToText dynamic load break on range 0x%x 0x%x tid:%s lingering debug ???' % (start, count, tid))
             else:
@@ -5657,19 +5648,6 @@ class GenMonitor():
             # keep gdb 9123 port free
             self.gdb_port = 9124
             #self.debugTidGroup(tid, to_user=False)
-        '''
-        TBD remove this?
-        full_path = None
-        if fname is not None and target is None:
-            self.lgr.debug('afl get full for %s' % fname)
-            full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
-            self.lgr.debug('afl back from get full for %s' % fname)
-            if full_path is None:
-                self.lgr.error('unable to get full path from %s' % fname)
-                return
-        else: 
-            full_path=fname
-        '''
         full_path=fname
         # set value to prevent reverse execution and such while afl initializing
         self.afl_instance = 'placeholder'
@@ -5995,9 +5973,9 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname, all_proc=False, kernel=False, just_kernel=False, watch_threads=False, just_tid=None):
+    def instructTrace(self, fname, all_proc=False, kernel=False, just_kernel=False, watch_threads=False, just_tid=None, all_cores=False):
         self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel, 
-                        just_kernel=just_kernel, watch_threads=watch_threads, just_tid=just_tid)
+                        just_kernel=just_kernel, watch_threads=watch_threads, just_tid=just_tid, all_cores=all_cores)
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
         if cpl != 0 or kernel:
