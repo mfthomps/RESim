@@ -1174,10 +1174,10 @@ non-interactive return so they are picked up by ssh):
 \item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
-\item RESIM\_IMAGES Path to directory containing disk images.  This is a convenience for canned example ini files,
-\item IDA\_ANALYSIS Path to where IDA (or Ghidra) will store analysis artifacts, and where RESim will look for them.
-you may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
+\item RESIM\_IMAGE Path to directory containing root file systems.  It may also contain disk images as a convenience for canned example ini files,
+You may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
 wish to download and place in this directory.
+\item IDA\_ANALYSIS Path to where IDA (or Ghidra) will store analysis artifacts, and where RESim will look for them.
 \end{itemize}
 \item Add \$RESIM\_DIR/simics/bin and fuzz\_bin to your path, e.g. by adding to your .profile,
 \begin{verbatim}
@@ -1185,7 +1185,7 @@ wish to download and place in this directory.
    export PATH=$RESIM_DIR/simics/bin:$RESIM_DIR/simics/fuzz_bin:$PATH
 \end{verbatim}
 
-\item For analysis of Windows applications, install the pev package to get the readpe function for reading coff headers.
+\item For analysis of Windows applications, install the \textit{pev} package to get the readpe function for reading coff headers.
 \item Install the Capstone disassembler engine and python bindings to handle cases where RESim needs to analyze instructions that have not yet
 been paged in.   For Ubuntu 22:
 \begin{verbatim}
@@ -1313,8 +1313,20 @@ Files containing binaries of programs to analzye will exist in two or three loca
 \item Beneath the RESIM\_IMAGE directory (defined in your .resimrc file) will be a subdirectory whose path is named in the
 RESim ini file as {\tt RESIM\_ROOT\_PREFIX}, and the binaries will be beneath that, typically as a copy of the root file system.
 \item If your IDA or GHIDRA computer is other than the one that runs Simics, they you must also have a RESIM\_IMAGE directory on that
-computer, with a copy of the binaries for IDA or Ghidra to access.
+computer, with a copy of the binaries for IDA or Ghidra to access (or an NSF mount of the files shared with the Simics host.)
 \end{enumerate}
+
+The directory structure under the RESIM\_IMAGE directory should look like:
+\begin{verbatim}
+    RESIM__IMAGE
+        project name 1
+            root_fs   (named in RESIM_ROOT_PREFIX)
+               etc bin ...
+        project name 2
+            root_fs_xyz   (named in RESIM_ROOT_PREFIX)
+               etc bin ...
+\end{verbatim}
+
 
 \subsection{Tracing processes}
 RESim provides a range of tracing functions.  A typical starting point is to trace all system calls made by all of the processes executing on a target.
@@ -1522,6 +1534,10 @@ Or, if a dev build of Ghidra the logs may be in HOME/.config/ghidra...
 
 \item The RESim plugin for Ghidra includes \textit{Memory reference Operand Hover}, which displays addresses
 and their content when hovering over an operand.
+
+\item Make sure the Dynamic window is set to "Track Program Counter (by Register)"
+
+\item Use Modules / red-bidirectional-arrow to ensure the listing matches the Dynamic.
 
 %TBD: Automatic copy of RESIM\_IDA\_DATA from RESim host to Ghidra host.  If host configured as localhost, look
 %at the tunnel (or do copy as part of creating tunnel?.  
