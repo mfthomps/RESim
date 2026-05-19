@@ -6,10 +6,10 @@ if [[ -z "$RESIM_DIR" ]]; then
     echo "RESIM_DIR not defined."
     exit
 fi
-if [[ -z "$SIMDIR" ]]; then
-    echo "SIMDIR not defined."
-    exit
-fi
+#if [[ -z "$SIMDIR" ]]; then
+#    echo "SIMDIR not defined."
+#    exit
+#fi
 #  Define path to the local RESim repo
 # compatibility...
 export RESIM=$RESIM_DIR
@@ -21,18 +21,18 @@ if [ "$#" -lt 1 ] || [[ "$#" -eq 1 && "$1" = "-h" ]]; then
     echo "   Use -c to provide Simics with a command file (use quotes)."
     exit
 fi
-S4='simics-4.8'
-S5='simics-5'
-S6='simics-6'
-if [[ "$SIMDIR" == *"$S4"* ]];then
-    export SIMICS_VER=4.8
-elif [[ "$SIMDIR" == *"$S5"* ]];then
-    export SIMICS_VER=5.0
-elif [[ "$SIMDIR" == *"$S6"* ]];then
-    export SIMICS_VER=6.0
-else
-    echo "Unable to get simics version (SIMICS_VER) from $SIMDIR"
-fi
+#S4='simics-4.8'
+#S5='simics-5'
+#S6='simics-6'
+#if [[ "$SIMDIR" == *"$S4"* ]];then
+#    export SIMICS_VER=4.8
+#elif [[ "$SIMDIR" == *"$S5"* ]];then
+#    export SIMICS_VER=5.0
+#elif [[ "$SIMDIR" == *"$S6"* ]];then
+#    export SIMICS_VER=6.0
+#else
+#    echo "Unable to get simics version (SIMICS_VER) from $SIMDIR"
+#fi
 export RESIM_INI=$1
 export RESIM_TARGET=$1
 export SIMICS_WORKSPACE=`pwd`
