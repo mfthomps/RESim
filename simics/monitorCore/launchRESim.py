@@ -241,10 +241,10 @@ class LaunchRESim():
         except Exception as e:
             print(e)
             run_command('quit')
-        SIMICS_BASE = os.getenv('SIMICS')
-        parent = os.path.dirname(SIMICS_BASE)
-        print('SIMICS dir is %s' % parent) 
-        lgr.debug('SIMICS dir is %s' % parent) 
+        #SIMICS_BASE = os.getenv('SIMICS')
+        #parent = os.path.dirname(SIMICS_BASE)
+        #print('SIMICS dir is %s' % parent) 
+        #lgr.debug('SIMICS dir is %s' % parent) 
         #run_command('add-directory -prepend %s/simics-qsp-arm-6.02' % parent)        
         #run_command('add-directory -prepend %s/simics-x86-x58-ich10-6.0.30/targets/x58-ich10/images' % parent)        
         #this does not work.  simics broken?
