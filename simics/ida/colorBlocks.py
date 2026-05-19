@@ -148,6 +148,7 @@ def colorBlocks():
     if resim_ida_data is None:
         print('RESIM_IDA_DATA not defined.')
     else:
+        # the runIda will have taken us to the ida data directory containing the idb
         here = os.getcwd()
         print('here is %s' % here)
         print('resim_ida_data is %s' % resim_ida_data)

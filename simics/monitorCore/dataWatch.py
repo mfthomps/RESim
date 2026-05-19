@@ -61,7 +61,7 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'fwrite', 'IO_do_write', 'getpwnam', 'getspnam', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'inet_pton', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
-            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string_chr_append',
+            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string_chr_append', 'string_chr_push_back',
             'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace_iterator', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 
             'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
@@ -70,7 +70,7 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'String6toUtf8', 'String3mid', 'String3arg', 'String4left', 'Stringa', 'StringS1_eq','Stringeq', 'ByteArray5toInt', 'g_array_append_vals',
             'xxJsonObject5value', 'xxJsonObjectix', 'xxJsonValueRefa']
 # Functions whose data must be hit, i.e., hitting function entry point will not work 
-funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY', 'string_chr_append']
+funs_need_addr = ['ostream_insert', 'charLookup', 'charLookupX', 'charLookupY', 'string_chr_append', 'string_chr_push_back']
 
 # Functions whose destination is returned in a register or otherwise does not require that we
 # reverse to the call to gather parameters.
@@ -1664,7 +1664,7 @@ class DataWatch():
                 self.setBreakRange()
                 #self.watchStackObject(obj_ptr)
 
-        elif self.mem_something.fun == 'string_chr_append':
+        elif self.mem_something.fun in ['string_chr_append', 'string_chr_push_back']:
             self.lgr.debug('dataWatch returnHap, return from %s the_chr %s dst: 0x%x count: %d ' % (self.mem_something.fun, self.mem_something.the_chr, self.mem_something.dest,
                self.mem_something.length))
             recent_mark = self.watchMarks.getRecentMark()
@@ -1767,7 +1767,16 @@ class DataWatch():
                 self.setRange(self.mem_something.dest, self.mem_something.length, None, watch_mark=mark) 
                 self.setBreakRange()
         elif self.mem_something.fun == 'replace_iterator':
-            pass 
+            dest = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            # winxp this struct
+            dest = dest + 4
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x ' % (self.mem_something.fun, self.mem_something.src, dest))
+            length = self.mem_utils.getStrLen(self.cpu, dest)
+            self.lgr.debug('dataWatch returnHap, return from %s src: 0x%x dst: 0x%x length: %d ' % (self.mem_something.fun, self.mem_something.src, dest, length))
+            mark = self.watchMarks.replaceMark(self.mem_something.fun, self.mem_something.src, dest, 0, length, None)
+            if length > 0:
+                self.setRange(dest, length, None, watch_mark=mark) 
+                self.setBreakRange()
         elif self.mem_something.fun.startswith('replace'):
             # TBD this assumes compiler uses indirection for dest.  Some do not, e.g., win xp
             if self.mem_something.src is not None:
@@ -2255,6 +2264,20 @@ class DataWatch():
 
         SIM_run_alone(self.getMemParams, False)
 
+
+    def getThisAnd3Params(self, sp):
+        retval1 = None
+        retval2 = None
+        retval3 = None
+        retval4 = None
+        if self.cpu.architecture.startswith('x86'):
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
+            retval2 = self.mem_utils.readAppPtr(self.cpu, sp)
+            retval3 = self.mem_utils.readAppPtr(self.cpu, sp+self.mem_utils.wordSize(self.cpu))
+            retval4 = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.wordSize(self.cpu))
+        else:
+            self.lgr.error('dataWatch getThisAnd3Params not done for other than x86')
+        return retval1, retval2, retval3, retval4
 
     def get4CallParams(self, sp):
         retval1 = None
@@ -2874,9 +2897,18 @@ class DataWatch():
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s src(r1) is 0x%x, this: 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, this))
 
         elif self.mem_something.fun == 'string_chr_append':
-            self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'this')
+            this = self.mem_utils.getRegValue(self.cpu, 'this')
+            self.mem_something.dest = this + 4
             self.mem_something.length, self.mem_something.the_chr, dumb = self.getCallParams(sp, word_size)
             self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s count %d chr %s dest string 0x%x' % (eip, self.mem_something.fun, self.mem_something.length, 
+                  self.mem_something.the_chr, self.mem_something.dest))
+
+        elif self.mem_something.fun == 'string_chr_push_back':
+            this = self.mem_utils.getRegValue(self.cpu, 'this')
+            # winxp
+            self.mem_something.dest = this + 4
+            self.mem_something.the_chr, dumb, dumb2 = self.getCallParams(sp, word_size)
+            self.lgr.debug('dataWatch getMemParms  eip: 0x%x %s chr %s dest string 0x%x' % (eip, self.mem_something.fun, 
                   self.mem_something.the_chr, self.mem_something.dest))
 
         elif self.mem_something.fun == 'str':
@@ -2958,7 +2990,13 @@ class DataWatch():
                 self.mem_something.length = self.mem_utils.getStrLen(self.cpu, self.mem_something.src)        
             self.lgr.debug('dataWatch getMemParms 0x%x %s src(r3) is 0x%x len %d, this: 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, self.mem_something.length, self.mem_something.ret_addr_addr))
         elif self.mem_something.fun == 'replace_iterator':
-            self.mem_something.ret_addr_addr, dumb1, dumb2, self.mem_something.src = self.getThisAnd3Params(sp)
+            #dest will be returned in eax
+            self.mem_something.ret_addr_addr, dumb1, dumb2, source = self.getThisAnd3Params(sp)
+            if self.top.osType() == 'WINXP':
+                self.mem_something.src = source + 4
+            else: 
+                # TBD likely not right
+                self.mem_something.src = source 
             self.lgr.debug('dataWatch getMemParms 0x%x %s src 0x%x this: 0x%x' % (eip, self.mem_something.fun, self.mem_something.src, self.mem_something.ret_addr_addr))
 
         elif self.mem_something.fun == 'replace_safe':
