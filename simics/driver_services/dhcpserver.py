@@ -40,17 +40,19 @@ def handle_dhcp_packet(packet):
                 yiaddr=dhcp_config["offer_ip"],
                 siaddr=dhcp_config["server_ip"],
                 chaddr=client_mac,
+                sname = "dhcp_service_node.sn",
                 xid=transaction_id
             ) /
             DHCP(options=[
                 ("message-type", "offer"),
-                ("subnet_mask", dhcp_config["subnet_mask"]),
-                ("router", dhcp_config["server_ip"]),
-                ("name_server", "8.8.8.8"),
                 ("lease_time", 172800), # 2 days
+                (54, b"10.10.0.1"), 
+                ("router", dhcp_config["server_ip"]),
+                ("subnet_mask", dhcp_config["subnet_mask"]),
+                (15, b"network.sim"), 
+                ("name_server", "10.10.0.1"),
                 ("sname", "dhcp_driver.sn"),
                 ("hostname", "dhcp0"), 
-                ("domainname", "network.sim"), 
                 "end"
             ])
         )
