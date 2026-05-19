@@ -22,45 +22,53 @@
 # * POSSIBILITY OF SUCH DAMAGE.
 '''
 Implement a subset of the deprecated Simics reverse execution functions. 
-The reversing functions are at least those used by RESim.
+The reversing functions are at least those used by RESim, along with
+several CLI commands, e.g., enable-reverse-execution
 
-Supported functions include:
-    skipToCycle -- skip to any cycle within the recording span.
-    reverse -- reverse execution and break per whatever breakpoints are set.
+Supported CLI functions include:
+    enable-reverse-execution, will result in recording snapshots cycles for use in reverse and skip to functions
+    disable-reverse-execution'
+    rev [n] -- where n is cycles to reverse, default is to just reverse.
+    skip-to-cycle cycle'
 
 These functions behave in a manner similar to reversing functions available
 in Simics 6.  As with Simics 6, reliable reversing requires adherence to some
 constraints.  For the reverseMgr, these include:
     -- No Haps should be set while reversing.  See setCallback to simulate a Core_Simulation_Stopped hap
     -- Real networks and other external events should not be present.  
-    -- Breakpoints set prior to reverse execution via the SIM_breakpoint API
+    -- Breakpoints set prior to reverse execution via the Simics SIM_breakpoint API
        must be altered to use the reverseMgr's SIM_breakpoint API.  
-       Do not use both SIM_breakpoint and bp.manager to set breakpoints.  Their
-       returned values are not exclusive, so use one or the other.
-    -- Breakpoints set prior to reverse execution are all enabled following a reverse,
-       regardless of their state at the start of the reverse.  (This can be fixed with a bit of work.)
 
 The stratgey is simple.  When reverse is enabled, we take in-memory snapshots
 periodically (every cycle_span cycles, ensuring each snapshot falls on multiple of the span).
 To reverse or skip, we restore snapshots and run forward to hit either
-breakpoints or the requested number of cycles.
+breakpoints or the requested number of cycles.  The choice of the cycle_span
+value can have dramatic effects on performance, and should depend on your simulation.
 
 The reverseMgr module could be instantiated for each target CPU (cell), however, only
-one should be enabled at any time via enableReverse.   Breakpoints on any cell will be caught during reverse,
-and the simulation will stop at the appropriate breakpoint.
-The choice of active CPU may not matter much, it is used to record the passing of cycles.  
-Do not enable reversing on multiple instances.
+one should be enabled at any time via enableReverse.   Each instance has a reference
+cpu, whose cycles are associated with snapshots.  Breakpoints on any cell will be caught during reverse,
+and the simulation will stop at the appropriate breakpoint.  Do not enable reversing on multiple instances.
+A single reference cpu is employed to track time (its cycles).
 
 As a convenience to support compatibility between Simics 6 and 7, some of the ReverseMgr functions will 
 invoke native Simics reversing functions if running on Simics 6.
 
-The reverseMgr can provide reversing functions on Simics 6 (instead of using native reverseing).
+The reverseMgr can provide reversing functions on Simics 6 (instead of using native reversing).
 This requires some additional logic because memory snapshots in the future are deleted as an effect
 of restore-snapshot.
- 
+
+VMP will be disabled when reversing is enabled.
+
+As with old Simics, a reverse that hits a read/write breakpoint will stop following execution of the instruction.
+While one that hits an execute breakpoint will stop at the instruction (before execution).
+
+The reverseMgr assumes on cycle per instruction.
 '''
 from simics import *
 import os
+import re
+import traceback
 import cli
 import logging
 NOUTILS = False
@@ -68,6 +76,254 @@ try:
     import resimSimicsUtils
 except:
     NOUTILS = True
+def getTokenValue(line, token):
+    retval = None
+    if token in line:
+        rest = line.split(token)[1]
+        #print('rest is %s' % rest)
+        if ',' in rest:
+            retval = rest.split(',', 1)[0]
+        elif ')' in rest:
+            retval = rest.split(')')[0]
+        else:
+            print('failed to get token value for %s from %s' % (token, line))
+    else:
+        print('token %s not in line %s' % (token, line))
+    return retval
+
+def getObject(line):
+    rest = line.split('Object :')[1]
+    retval = rest.split()[0]
+    return retval
+
+def isPhys(line):
+    if ': phys-' in line:
+        return True
+    else:
+        return False
+
+def getBPList():
+    ''' return a list of bp.memory breakpoints and pray the do not include SIM_breakpoint items.'''
+    cmd = 'bp.list'
+    dumb, result = cli.quiet_run_command(cmd)
+    retval = []
+    for line in result.splitlines():
+        #print('line %s' % line)
+        if 'bp.memory' in line:
+            id_string = line.split('bp.memory')[0]
+            id_val = int(id_string[1:-1])
+            retval.append(id_val) 
+    return retval
+# helpers
+def bp_type_to_str(t):
+    return {
+        0: "phys",
+        1: "virt",
+        2: "linear",
+        3: "io"
+    }.get(int(t), str(t))
+
+def access_to_str(a):
+    a = int(a)
+    flags = []
+    if a & 1:
+        flags.append("R")
+    if a & 2:
+        flags.append("W")
+    if a & 4:
+        flags.append("X")
+    return "".join(flags) if flags else "-"
+
+
+def isEnabled(conf, bp):
+    retval = False
+    index = 0 
+    for item in conf.sim.breakpoints:
+        if item[0] == bp:
+            if item[5]:
+                retval = True
+    return retval
+
+def genBreakFromNewStyle(bp_values, lgr=None):
+    #if lgr is not None:
+    #    lgr.debug('genBreakFromNewStyle %s' % bp_values.toString())
+    retval = SIM_breakpoint(bp_values.obj, bp_values.type, bp_values.access, bp_values.addr, bp_values.length, 0)
+    if lgr is not None:
+        lgr.debug('genBreakFromNewStyle got break num %d from %s' % (retval, bp_values.toString()))
+    return retval
+
+def transType(op_type):
+    retval = 'unknown'
+    if op_type == Sim_Trans_Load:
+        retval = 'r'
+    elif op_type == Sim_Trans_Store:
+        retval = 'w'
+    elif op_type == Sim_Trans_Instr_Fetch:
+        retval = 'x'
+    elif op_type == Sim_Trans_Pefetch:
+        retval = 'x'
+    elif op_type == Sim_Trans_Cache:
+        retval = 'x'
+    return retval
+
+def getPselect():
+    cpu, dumb = cli.quiet_run_command('pselect')
+    retval = SIM_get_object(cpu) 
+    return retval
+
+def getRegValue(reg, cpu):
+    reg_num = cpu.iface.int_register.get_number(reg)
+    retval = cpu.iface.int_register.read(reg_num)
+    return retval
+
+class NewStyleBPValues():
+    '''
+    Record the values of a breakpoint created with bp.memory.break for use with SIM_breakpoint
+    '''
+    #def __init__(self, addr, length, access, obj, phys):
+    def __init__(self, break_num):
+        self.bp_num = break_num
+        cmd = 'bp.show(%d)' % break_num
+        line = cli.quiet_run_command(cmd)[1]
+        addr = getTokenValue(line, 'addr=')
+        length = getTokenValue(line, 'len=')
+        access = getTokenValue(line, 'access=')
+        obj = getObject(line)
+        phys = isPhys(line)
+        self.converted_bp_num = None
+        self.addr = None
+        try:
+            self.addr = int(addr, 16)
+        except:
+            print('Failed to get addr from %s' % addr)
+        self.length = int(length)
+        self.access = 0
+        if 'r' in access: 
+            self.access = self.access | Sim_Access_Read
+        if 'w' in access: 
+            self.access = self.access | Sim_Access_Write
+        if 'e' in access: 
+            self.access = self.access | Sim_Access_Execute
+
+        self.obj = SIM_get_object(obj)
+        if phys:
+            self.type = Sim_Break_Physical
+        else:
+            self.type = Sim_Break_Linear
+        if "Enabled : True" in line:
+            self.enabled = True
+        else:
+            self.enabled = False
+        if "Oneshot : True" in line:
+            self.oneshot = True
+        else:
+            self.oneshot = False
+
+    def toString(self):
+        #print('object %s addr 0x%x len %d access %s type: %d' % (self.obj, self.addr, self.length, self.access, self.type))
+        retval = 'object %s addr 0x%x len %d access %s type: %d oneshot %r enabled: %r bp_num %d converted num %s' % (self.obj, self.addr, self.length, self.access, self.type, self.oneshot, self.enabled, self.bp_num, self.converted_bp_num)
+        return retval
+
+    def toDisplayString(self, break_info):
+        # like: [ubuntu.cell_context] Breakpoint 1: ubuntu.cell_context 'x' access to v:0x80485cf len=4
+        v_p = 'v'
+        if self.type == Sim_Break_Physical:
+            v_p = 'p'
+        retval = "Breakpoint %d: %s '%s' access to %s:0x%x len=%d" % (self.bp_num, self.obj, transType(op_type), v_p, self.addr, length)
+        return retval
+
+class BPEnabler():
+    '''
+    Manage disabling and enabling breakpoints so we can skip without hitting them.
+    '''
+    def __init__(self, conf, sim_bp_list, lgr):
+        self.sim_bp_list = sim_bp_list
+        self.sim_did_disable = []
+        self.newstyle_list = getBPList()            
+        self.newstyle_values = []
+        self.lgr = lgr
+        self.conf = conf
+        
+        for bp in self.newstyle_list:
+            bp_values = NewStyleBPValues(bp)
+            self.newstyle_values.append(bp_values)
+ 
+    def disableAll(self):
+        self.lgr.debug('BPEnabler disableAll')
+        for bp in self.sim_bp_list:
+            if bp in self.newstyle_list:
+               # Name overload  TBD 
+               print('TBD bp name overload')
+            else:
+                if isEnabled(self.conf, bp):
+                    SIM_disable_breakpoint(bp)
+                    self.sim_did_disable.append(bp)
+        for bp_values in self.newstyle_values:
+            if bp_values.enabled:
+                cmd = 'bp.disable %d' % bp_values.bp_num                
+                self.lgr.debug('BPEnabler disable did bp %d' % bp_values.bp_num)
+                cli.quiet_run_command(cmd)
+
+    def enableAll(self):
+        self.lgr.debug('BPEnabler enable')
+        for bp in self.sim_did_disable:
+            SIM_enable_breakpoint(bp)
+            self.lgr.debug('BPEnabler enable did bp %d' % bp)
+        for bp_values in self.newstyle_values:
+            if bp_values.enabled:
+                cmd = 'bp.enable %d' % bp_values.bp_num                
+                cli.quiet_run_command(cmd)
+
+class Performance():
+    def __init__(self, cpu, sample_rate, do_log, lgr, top=None):
+        self.sample_rate = sample_rate
+        self.lgr = lgr
+        self.do_log = do_log
+        self.cpu = cpu
+        self.time_stamps = {}
+        self.lgr.debug('Performance begin, sample_rate %d do_log %r' % (sample_rate, do_log))
+
+    def spanHit(self, cycle):
+        if self.sample_rate == 1 or self.test_cycles > self.sample_rate:
+            self.time_stamps[cycle] = time.perf_counter_ns()
+            if self.do_log:
+                size = self.snapSize()
+                self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x snapshot size %s' % (self.cpu.cycles, f"{size:,}"))
+            self.test_cycles = 0
+        self.test_cycles = self.test_cycles + 1
+
+    def snapSize(self):
+        '''
+        Retun the total number of bytes consumed by snapshots
+        '''
+        retval = 0
+        size_list = VT_snapshot_size_used()
+        for item in size_list:
+            #self.lgr.debug('size item %s' % str(item)) 
+            retval = retval + item
+        return retval
+
+    def getSizeChanges(self):
+        size_list = VT_snapshot_size_used()
+        prev_size = None
+        retval = {}
+        index = 0
+        for this_size in size_list:
+            if prev_size is None:
+                retval[index] = this_size
+            else:
+                if this_size != prev_size:
+                    if abs(this_size - prev_size) > 32000:
+                        retval[index] = this_size
+            prev_size = this_size 
+            index += 1
+        return retval
+
+    def showSizeChanges(self):
+        size_changes = self.getSizeChanges()
+        for index in size_changes:
+            print('%d 0x%x' % (index, size_changes[index]))
+
 class ReverseMgr():
     '''
     Initialize the ReverseMgr.
@@ -79,7 +335,7 @@ class ReverseMgr():
     Parameter span: Optional span value.  Default is 0x100000
              
     '''
-    def __init__(self, conf, cpu, lgr, top=None, span=None):
+    def __init__(self, conf, cpu, arg, int_t, output_modes, lgr, top=None, span=None, force_new=False, report_performance=False):
         self.conf = conf
         self.cpu = cpu
         self.lgr = lgr
@@ -100,8 +356,9 @@ class ReverseMgr():
 
         # map cell names to cpu's for use if reverse finds break on some other cell
         self.our_cell = cpu.name.split('.')[0]
-        self.cpu_map = {}
-        self.mapCPUsToCell()
+        #self.cpu_map = {}
+        #self.mapCPUsToCell()
+        self.cpu_list = self.getTheCPUs()
         # The event handler that takes a snapshot 
         self.cycle_event = None
         # what hapens when we reach the end of the current_span
@@ -114,7 +371,13 @@ class ReverseMgr():
         self.reset()
         # breakpoints set via SIM_breakpoint
         self.sim_breakpoints = []
-
+     
+        self.performance = Performance(cpu, 1, True, self.lgr, None)
+        self.force_new = force_new
+        self.report_performance = report_performance
+        self.output_modes = output_modes
+        if not self.nativeReverse():
+            self.defineCommands(arg, int_t)
 
     def reset(self):
         # The current_span is the range of cycles over which we will run forward
@@ -123,14 +386,15 @@ class ReverseMgr():
         self.current_span_end = None
         # The latest_span_end is latest recorded snapshot
         self.latest_span_end = None
+        self.span_record = {}
         self.callback = None
         # catch passing of cycle_span cycles
         self.origin_cycle = None
         self.recording = False
-        # list of breakpoints at the start of a reverse
-        self.bp_list = []
-        # list of breakpoints at the start of a reverse that were created with the bp.memory.break
-        self.bp_cli_list = []
+        # list of breakpoint values at the start of a reverse that were created with the bp.memory.break
+        self.bp_values_from_cli = []
+        self.disabled_new_style_breaks = []
+        self.converted_breaks = []
         self.reverse_from = None
         self.break_haps = []
         self.break_cycles = {}
@@ -138,19 +402,26 @@ class ReverseMgr():
         self.continuation_hap = None
         self.recording_end_event_set = False
         self.reverse_to =  None
-        # for debugging storage/performance
-        self.test_cycles = 0
         # hack for catching attempts to restore snapshots not net recorded due to runAlone
         self.snapshot_names = []
         self.was_at_reverse_point = False
         self.was_at_origin = False
+        self.rev_done_msg = ''
+        self.break_index = 0
+        self.when_done_skip_index = None
+        self.vmp_was_enabled = None
 
+    def getBreakIndex(self):
+        retval = self.break_index
+        self.break_index += 1
+        return retval
+        
     def cancelSpanCycle(self):
         '''
         Cancel the event used to record execution of cycle_span cycles during recording
         '''
         if self.cycle_event is not None:
-            self.lgr.debug('reverseMgr cancelSpanCycle')
+            #self.lgr.debug('reverseMgr cancelSpanCycle')
             SIM_event_cancel_time(self.cpu, self.cycle_event, self.cpu, None, None)
         self.recording = False
 
@@ -204,7 +475,7 @@ class ReverseMgr():
         Entered when the next span is reached during recording.
         '''
         self.latest_span_end = self.cpu.cycles
-        if self.top is not None:
+        if self.report_performance and self.top is not None:
             eip = self.top.getEIP()
             self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
         SIM_run_alone(self.cycleHandlerAlone, cycles)
@@ -221,7 +492,7 @@ class ReverseMgr():
         else:
             SIM_take_snapshot(name)
         self.snapshot_names.append(name)
-        self.lgr.debug('reverseMgr took snapshot %s' % name)
+        #self.lgr.debug('reverseMgr took snapshot %s' % name)
 
     def getPreviousName(self, name):
         retval = None
@@ -239,14 +510,23 @@ class ReverseMgr():
             return True
         else:
             return False
+
     def restoreSnapshot(self, name, force=False):
         self.lgr.debug('reverseMgr restoreSnapshot %s' % name)
-        self.disableSimBreaks()
+        bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
+        bp_enabler.disableAll()
+        #self.disableSimBreaks()
+        
         if name == 'origin':
             self.was_at_origin = True
             if self.cpu.cycles == self.origin_cycle and not force:
                 self.lgr.debug('reverseMgr restoreSnapshot to origin, already there')
                 return
+        elif name.startswith('cycle_'):
+            want_cycle = int(name[6:], 16)
+            if want_cycle == self.origin_cycle:
+                self.lgr.debug('reverseMgr restoreSnapshot %s was origin, rename it' % name)
+                name = 'origin'
         if not self.version().startswith('7'):
             if self.oldSimics():
                 go_forward = False
@@ -256,7 +536,7 @@ class ReverseMgr():
                         go_forward = True
                 if go_forward:
                     self.lgr.debug('reverseMgr restoreSnapshot %s, is forward, old simics, run there' % name)
-                    self.runToCycle(want_cycle)
+                    self.runToCycle(self.cpu, want_cycle)
                 else:
                     #self.lgr.debug('reverseMgr 6.0.146 restore %s' % name)
                     cmd = 'restore-snapshot %s' % name
@@ -302,7 +582,8 @@ class ReverseMgr():
             #cli.quiet_run_command('disable-vmp')
             SIM_restore_snapshot(name)
             #cli.quiet_run_command('enable-vmp')
-        self.enableSimBreaks()
+        #self.enableSimBreaks()
+        bp_enabler.enableAll()
         self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
     def cycleHandlerAlone(self, cycles):
@@ -310,27 +591,60 @@ class ReverseMgr():
             self.lgr.error('reverseMgr cycleHandlerAlone drifted cycles now 0x%x expected 0x%x' % (self.cpu.cycles, self.latest_span_end))
         cycle_mark = 'cycle_%x' % self.latest_span_end 
         self.takeSnapshot(cycle_mark)
-        if self.top is not None and self.test_cycles > 100:
-            eip = self.top.getEIP()
-            size = self.snapSize()
-            self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x at handler were 0x%x eip now 0x%x snapshot size %s' % (self.cpu.cycles, self.latest_span_end, eip, f"{size:,}"))
-            self.test_cycles = 0
-        self.test_cycles = self.test_cycles + 1
+        self.span_record[self.latest_span_end] = {}
+        for cpu in self.cpu_list:
+            self.span_record[self.latest_span_end][cpu] = cpu.cycles
+        if self.report_performance:
+            self.performance.spanHit(cycles)
         self.setNextCycle()
 
-    def snapSize(self):
-        '''
-        Retun the number of bytes consumed by snapshots
-        '''
-        retval = 0
-        if self.oldSimics():
-            pass
+    def findCycleSpan(self, cpu, cycles):
+        ''' Find the span cycles occuring before the given cycles for the given cpu '''
+        retval = None
+        recorded = self.getMasked(cycles)
+        self.lgr.debug('findCycleSpan for cpu %s cycles 0x%x recorded is 0x%x' % (cpu.name, cycles, recorded))
+        if recorded < self.origin_cycle:
+            # Are there any recorded cycles for this cpu that are less than the given cycles?
+            for loop_cycle in self.span_record:
+                self.lgr.debug('findCycleSpan recorded less than origin.  loop_cycle 0x%x, cpu cycles is 0x%x' % (loop_cycle, self.span_record[loop_cycle][cpu]))
+                if self.span_record[loop_cycle][cpu] < cycles:
+                    retval = loop_cycle
+            if retval is None:
+                self.lgr.debug('findCycleSpan recorded less than origin and no %s cycles less than cycles.' % cpu.name)
+            else:
+                self.lgr.debug('findCycleSpan recorded less than origin loop cycle 0x%x has 0x%x cycles for %s and that is less than given cycle' % (loop_cycle, 
+                      self.span_record[loop_cycle][cpu], cpu.name))
+        elif self.latest_span_end is None:
+            # No recorded cycles, just use origin
+            self.lgr.debug('findCycleSpan no recorded cycles, just use origin')
+            retval = self.origin_cycle 
+        elif self.span_record[recorded][cpu] == cycles:
+                retval = recorded
+        elif self.span_record[recorded][cpu] > cycles:
+            # loop backwards to find a cpu cycle less than given
+            loop_cycles = recorded
+            while self.span_record[loop_cycles][cpu] > cycles and loop_cycles >= self.origin_cycle:
+                loop_cycles = loop_cycles - self.cycle_span
+                retval = loop_cycles
+            if retval is None:
+                self.lgr.debug('findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did not find any less than given.')
+            else:
+                self.lgr.debug('findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
+                   self.span_record[retval][cpu]))
         else:
-            size_list = VT_snapshot_size_used()
-            for item in size_list:
-                #self.lgr.debug('size item %s' % str(item)) 
-                retval = retval + item
+            # loop forward to find the greatest cpu cycle less than the given
+            loop_cycles = recorded
+            retval = recorded
+            while self.span_record[loop_cycles][cpu] < cycles and loop_cycles != self.latest_span_end:
+                retval = loop_cycles
+                loop_cycles = loop_cycles + self.cycle_span
+            if retval is None:
+                self.lgr.error('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did not find any less than given.')
+            else:
+                self.lgr.debug('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
+                   self.span_record[retval][cpu]))
         return retval
+                
 
     def enableReverse(self, two_step=False):
         '''
@@ -338,16 +652,25 @@ class ReverseMgr():
         '''
         self.lgr.debug('reversMgr enableReverse')
         if self.nativeReverse():
+            self.lgr.debug('enableReverse, use native')
             cmd = 'enable-reverse-execution'
             SIM_run_command(cmd)
         elif not self.reverseEnabled():
             self.setContinuationHap()
             self.origin_cycle = self.cpu.cycles
             self.takeSnapshot('origin')
-            size = self.snapSize()
-            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x snapshot memory size 0x%x' % (self.origin_cycle, size))
+            self.span_record[self.origin_cycle] = {}
+            for cpu in self.cpu_list:
+                self.span_record[self.origin_cycle][cpu] = cpu.cycles
+            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x' % (self.origin_cycle))
             # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
             #self.restoreSnapshot('origin')
+            dumb, status = cli.quiet_run_command('disable-vmp')
+            if status == 'VMP already disabled.':
+                self.vmp_was_enabled = False
+            else:
+                self.vmp_was_enabled = True
+
             if two_step:
                 # Simics gets confused when restoring memory snapshots.  Doing an immediate restore often avoids
                 # that confusion, however it can interere with real networks. Set two_step when calling due to real world cut. 
@@ -408,6 +731,7 @@ class ReverseMgr():
                     SIM_delete_snapshot(snap)
             self.lgr.debug('reverseMgr disableReverse deleted %d snapshots' % len(snap_list))
             self.rmContinuationHap()
+            self.checkVMP()
             self.reset()
 
     def reverseEnabled(self):
@@ -419,156 +743,90 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr reverseEnabled False')
             return False
 
-    def skipToCycle(self, our_cycles, use_cell=None, object_cycles=None):
+    def skipToCycleFromCli(self, cycle):
+        cpu = getPselect()
+        self.lgr.debug('reverseMgr skipToCycleFromCli cycle 0x%x cpu from pselect is %s' % (cycle, cpu.name))
+        self.skipToCycle(cycle, cpu=cpu)
+
+    def skipToCycle(self, cycle, cpu=None):
         '''  
         Skip to a given cycle.   
-        Parameter our_cycles: cycle on this cpu to skip to, unless use_cell is set as per below.
-        Parameter use_cell: Not intended for external use.  Names a sell other than the cell of this cpu.
-        Parameter object_cycles: The cycles on the use_cell cpu to be skipped to.
-
-        The use_cell / object_cycles are intended for use internal to the module for skipping to the cycle
-        of the most recent breakpoint when that breakpoint is not on our cell.  In such a case, the ReverseMgr
-        will restore the span prior to our_cycles and then run forward to the object_cycles on the use_cell.
-        NOTE: TBD not fully implemented for case where object_cycles is less than the previous span cycle.
+        Parameter cpu: The cpu.
+        Parameter cycle: The cycle to skip to on the cpu
         '''
-        if self.top is not None:
-             eip = self.top.getEIP()
-             self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cell: %s' % (our_cycles, self.cpu.cycles, eip, use_cell))
+        if cpu is None:
+            self.lgr.debug('reverseMgr skipToCycle cpu was None, using self')
+            cpu = self.cpu
+        self.lgr.debug('reverseMgr skipToCycle cpu %s cycle 0x%x' % (cpu.name, cycle))
+        #if self.top is not None:
+        #     eip = self.top.getEIP()
+        #     self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cpu: %s' % (our_cycles, self.cpu.cycles, eip, use_cpu.name))
         if self.origin_cycle is None:
             print('Reverse was not enabled')
             self.lgr.debug('reverseMgr skipToCycle Reverse was not enabled')
             return False
-        if our_cycles < self.origin_cycle:
-            print('At oldest recorded cycle')
-            self.lgr.debug('reverseMgr At oldest recorded cycle')
-            return False
-        current_cycle = self.cpu.cycles
-        if use_cell is None:
-            if current_cycle == our_cycles:
-                print('Already at cycle 0x%x' % current_cycle)
-                self.lgr.debug('reverseMgr skipToCycle Already at cycle 0x%x' % current_cycle)
-                return True
-            object_cycles = our_cycles
+        cycle_span = self.findCycleSpan(cpu, cycle)
+        if cycle_span is None:
+            # cycle prior to origin
+            self.lgr.debug('skipToCycle, the cycle span is less than origin')
+            self.when_done_skip_index = None
+        elif self.span_record[cycle_span][cpu] == cycle:
+            self.lgr.debug('skipToCycle, already at the requested cycle')
+            self.when_done_skip_index = None
         else:
-            current_cycle == self.cpu_map[use_cell].cycles
-            if object_cycles == current_cycle:
-                print('Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
-                self.lgr.debug('reverseMgr skipToCycle Already at cycle 0x%x on cell %s' % (current_cycle, use_cell))
-                return True
-
-        self.cancelSpanCycle()
-
-        if self.latest_span_end is None:
-            #self.lgr.error('reverseMgr skipToCycle, have not yet hit a single span.  Consider reducing the cycle span in reverseMgr.py.')
-            self.skipToOrigin()
-            if use_cell is None:
-                self.lgr.debug('reverseMgr skipToCycle no latest cycle, restored origin 0x%x, now run to 0x%x' % (self.cpu.cycles, object_cycles))
-            else:
-                self.lgr.debug('reverseMgr skipToCycle no latest cycle, restored origin 0x%x on our cell, which is 0x%x on different cell %s, now run to 0x%x' % (self.cpu.cycles, 
-                     current_cycle, use_cell,  object_cycles))
-            self.runToCycle(object_cycles, use_cell=use_cell)
-        else:
-            if self.oldSimics() and our_cycles > current_cycle:
-                self.lgr.debug('reverseMgr skipToCycle old simics, want cycle in future, just run to it')
-                self.runToCycle(object_cycles, use_cell=use_cell)
-            elif our_cycles > self.latest_span_end:
-                #print('Cycle 0x%x is after last recorded cycle of 0x%x, will just run ahead' % (cycle, self.latest_span_end))
-                self.lgr.debug('reverseMgr skipToCycle Cycle 0x%x is after last recorded cycle of 0x%x, will skip there and then run ahead' % (our_cycles, self.latest_span_end))
-
-                missing_snapshots = False
-                if not self.hasSnapFor(self.latest_span_end):
-                    missing_snapshots = True
-                    latest = self.getLatestSnapCycle()
-                    if latest is not None:
-                        cycle_mark = 'cycle_%x' % self.getLatestSnapCycle() 
-                        self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle mark %s' % cycle_mark)
-                    else:
-                        self.lgr.debug('reverseMgr skipToCycle was missing, latest cycle was none, set to latest_span_end 0x%x' % self.latest_span_end)
-                        cycle_mark = 'cycle_%x' % self.latest_span_end
-                else:
-                    cycle_mark = 'cycle_%x' % self.latest_span_end
-
-                self.restoreSnapshot(cycle_mark)
-                self.lgr.debug('reverseMgr after restore %s cycle now 0x%x' % (cycle_mark, self.cpu.cycles))
-                if not missing_snapshots and self.cpu.cycles != self.latest_span_end:
-                    self.lgr.error('reverseMgr skipToCycle did restore to %s, but now at 0x%x' % (cycle_mark, self.cpu.cycles))
-                    return False
-                if use_cell is not None:
-                    current_cycle = self.cpu_map[use_cell].cycles
-                    self.lgr.debug('ReverseMgr skipToCycle different cell is %s, and his cycles are now 0x%x' % (use_cell, current_cycle))
-                    if current_cycle >= object_cycles:
-                        self.lgr.error('ReverseMgr skipToCycle different cell is %s, and his cycles are now 0x%x, which is beyond our goal of 0x%x' % (use_cell, current_cycle, object_cycles))
-                self.runToCycle(object_cycles, use_cell=use_cell)
-            else:
-                recorded = self.getMasked(our_cycles)
-                self.lgr.debug('reverseMgr skipToCycle recorded (after mask of want cycle) is 0x%x cpu.cycles is 0x%x origin was 0x%x' % (recorded, self.cpu.cycles, self.origin_cycle))
-                if recorded < self.origin_cycle:
-                    self.lgr.debug('reverseMgr skipToCycle masked value less than origin, skip to origin')
-                    self.skipToOrigin()
-                    if use_cell is None:
-                        if self.top is not None:
-                            eip = self.top.getEIP()
-                            self.lgr.debug('reverseMgr skipToCycle did restore origin.  Now run forward to cycle 0x%x  cycle (origin) now 0x%x eip 0x%x' % (object_cycles, self.cpu.cycles, eip))
-                    else:
-                        current_cycle = self.cpu_map[use_cell].cycles
-                        self.lgr.debug('reverseMgr skipToCycle did restore origin Now run forward to cycle 0x%x  cycle now 0x%x on our cell, different cell %s cycle 0x%x' % (object_cycles, self.cpu.cycles, current_cycles, use_cell))
-                    self.runToCycle(object_cycles, use_cell=use_cell)
-                elif recorded == self.cpu.cycles and use_cell is None:
-                    self.runToCycle(object_cycles, use_cell=use_cell)
-                    self.lgr.debug('reverseMgr skipToCycle recorded 0x%x same as current, just run forward to 0x%x' % (recorded, object_cycles))
-                else:
-                    cycle_mark = 'cycle_%x' % recorded
-                    self.restoreSnapshot(cycle_mark)
-                    if use_cell is None:
-                        if self.top is not None:
-                            eip = self.top.getEIP()
-                            self.lgr.debug('reverseMgr skipToCycle restored 0x%x cycles now 0x%x eip 0x%x' % (recorded, self.cpu.cycles, eip))
-                    else:
-                        current_cycle = self.cpu_map[use_cell].cycles
-                        self.lgr.debug('reverseMgr skipToCycle restored 0x%x cycles now 0x%x on our cpu and 0x%x on different cell %s' % (recorded, self.cpu.cycles, current_cyle, use_cell))
-                    if recorded != current_cycle:
-                        if self.cpu.cycles != object_cycles or use_cell is not None:
-                            self.lgr.debug('reverseMgr skipToCycle run to 0x%x' % object_cycles)
-                            self.runToCycle(object_cycles, use_cell=use_cell)
-                        else:
-                            self.setNextCycle()
+            # will need to skip to cycle_span and then run forward
+            self.cancelSpanCycle()
+            cycle_mark = 'cycle_%x' % cycle_span
+            self.restoreSnapshot(cycle_mark)
+            self.runToCycle(cpu, cycle)
         return True
             
           
-    def runToCycle(self, cycle, use_cell=None):
+    def runToCycle(self, cpu, cycle):
         '''
         Run forward to the given cycle.  Internal only, will disable breakpoints before running forward.  Uses a event hap.
         '''
-        if use_cell is None:
-            use_cpu = self.cpu
-        else:
-            use_cpu = self.cpu_map[use_cell]
-        if cycle < use_cpu.cycles:
-            if use_cell is None:
-                self.lgr.error('reverseMgr runToCycle 0x%x less than current 0x%x' % (cycle, use_cpu.cycles))
-            else:
-                self.lgr.error('reverseMgr runToCycle ON OTHER CELL %s 0x%x less than current 0x%x.  Maybe fix this by going back one more span?' % (use_cell, cycle, use_cpu.cycles))
+        if cycle < cpu.cycles:
+            self.lgr.error('reverseMgr runToCycle 0x%x less than current 0x%x' % (cycle, cpu.cycles))
             return
-        elif cycle == use_cpu.cycles:
+        elif cycle == cpu.cycles:
             self.lgr.debug('reverseMgr runToCycle already at cycle 0x%x' % cycle)
             print('Already at cycle 0x%x' % cycle)
         else:
-            self.disableAll()
-            self.setDeltaCycle(use_cpu, cycle)
-            delta = cycle - use_cpu.cycles
-            self.lgr.debug('reverseMgr runToCycle  0x%x. Now continue from cpu cycles 0x%x delta 0x%x' % (cycle, use_cpu.cycles, delta))
-            if use_cell is not None:
-                cmd = 'pselect %s' % use_cpu.name
-                cli.quiet_run_command(cmd)
+            bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
+            bp_enabler.disableAll()
+            #self.disableAll()
+            self.setDeltaCycle(cpu, cycle)
+            delta = cycle - cpu.cycles
+            self.lgr.debug('reverseMgr runToCycle  0x%x. Now continue from cpu cycles 0x%x delta 0x%x' % (cycle, cpu.cycles, delta))
                 
             SIM_continue(0)
             #SIM_continue(delta)
-            self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, use_cpu.cycles))
-            self.enableAll()
+            self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, cpu.cycles))
+
+            cmd = 'pselect %s' % cpu.name
+            cli.quiet_run_command(cmd)
+            if self.rev_done_msg is not None:
+                print(self.rev_done_msg)
+            SIM_run_command('disassemble')
+            #self.enableAll()
+            bp_enabler.enableAll()
             self.setNextCycle()
-        if self.oldSimics() and self.latest_span_end is not None and self.latest_span_end > use_cpu.cycles:
-            self.latest_span_end =  self.getMasked(use_cpu.cycles)
+            self.whenDone()
+            self.lgr.debug('reverseMgr runToCycle back from whenDone')
+        if self.oldSimics() and self.latest_span_end is not None and self.latest_span_end > cpu.cycles:
+            # TBD should be self.cpu?  matter for old simics?
+            self.latest_span_end =  self.getMasked(cpu.cycles)
             self.lgr.debug('reverseMgr runToCycle reverted latest_span_end to 0x%x' % self.latest_span_end)
+
+    def rev(self, count):
+        self.lgr.debug('rev count is %d' % count)
+        if count == 0:
+            self.reverse()
+        else:
+            current = self.cpu.cycles
+            reverse_to = current - count
+            self.reverse(reverse_to=reverse_to)
 
     def reverse(self, dumb=None, reverse_to=None, callback=None):
         '''
@@ -576,6 +834,8 @@ class ReverseMgr():
         is set at the most recent.
         Will return the stop hap if native reversing
         '''
+        self.bp_values_from_cli = []
+        self.lgr.debug('reverseMgr reverse')
         self.reverse_to =  reverse_to
         self.was_at_origin = False
         # stop hap if native reverse and callback given
@@ -591,28 +851,31 @@ class ReverseMgr():
             else:
                 SIM_run_command('reverse')
         else:
+            if self.origin_cycle is None:
+                self.lgr.error('reverseMgr reverse called but reverse is not enabled.')
+                return
             if callback is not None:
                 self.setCallback(callback)
             self.cancelSpanCycle()
             self.break_cycles = {}
             self.reverse_from = self.cpu.cycles
             self.lgr.debug('reverseMgr reverse from 0x%x' % self.reverse_from)
-            cmd = 'bp.list'
-            self.bp_list = SIM_run_command(cmd)
-            self.bp_cli_list = list(self.bp_list)
-            if len(self.bp_list) > 0 and len(self.sim_breakpoints) > 0:
-                self.lgr.error('reverseMgr reverse.  Do not set breakpoints with both SIM_breakpoint and bp.manager.  Fatal')
-                self.top.quit()
-                return
-            if len(self.bp_list) == 0:
-                self.bp_list = self.sim_breakpoints
-            if len(self.bp_list) == 0:
+            if self.reverse_to is not None:
+                self.lgr.debug('reverseMgr reverse will reverse to 0x%x' % self.reverse_to)
+            newstyle_list = getBPList()            
+            self.lgr.debug('reverseMgr reverse bp.memory.break breaks is %s' % str(newstyle_list))
+            for bp in newstyle_list:
+                self.lgr.debug('reverseMgr reverse get new style values for bp %d' % bp)
+                bp_values = NewStyleBPValues(bp)
+                self.bp_values_from_cli.append(bp_values)
+            
+            if len(self.sim_breakpoints) == 0 and len(newstyle_list) == 0 and self.reverse_to is None:
                 print('Warning reversing without any breakpoints, will hit origin')
                 self.skipToOrigin()
                 self.lgr.debug('reverseMgr reverse without any breakpoints, just restore origin')
                 return
             else:
-                self.lgr.debug('reverseMgr reverse, bp list %s' % self.bp_list)
+                self.lgr.debug('reverseMgr reverse, SIM bp list %s' % str(self.sim_breakpoints))
                 self.skipBackAndRunForward(True)
         return retval
 
@@ -694,12 +957,12 @@ class ReverseMgr():
 
             self.lgr.debug('reverseMgr skipBackAndRunForward reverse_to of 0x%x greater than current span start 0x%x, run forward 0x%x cycles' % (self.reverse_to, 
                            self.current_span_start, delta))
-            self.reverse_to = None
+            #self.reverse_to = None
             self.rmContinuationHap()
-            self.disableSimBreaks()
+            bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
+            bp_enabler.disableAll()
+            #self.disableSimBreaks()
             expect = self.cpu.cycles + delta
-            #print('would run forward 0x%x cycles. remove this' % delta)
-            #return
             # TBD running steps vs cycles creates problems.  Where else does SIM_continue fail?
             cmd = 'r 0x%x cycles' % delta
             SIM_run_command(cmd)
@@ -710,7 +973,9 @@ class ReverseMgr():
                 eip = self.top.getEIP()
                 self.lgr.error('reverseMgr skipBackAndRunForward expected 0x%x but got 0x%x after running forward delta eip 0x%x' % (expect, self.cpu.cycles, eip))
                 new_delta = expect - self.cpu.cycles
-                SIM_continue(new_delta)
+                #SIM_continue(new_delta)
+                cmd = 'run-cycles 0x%x' % new_delta
+                SIM_run_command(cmd)
                 count = count + 1
                 if count > 5:
                     self.lgr.error('reverseMgr skipBackAndRunForward too much, bail')
@@ -719,17 +984,20 @@ class ReverseMgr():
                 too_far = self.cpu.cycles - expect
                 self.lgr.error('reverseMgr skipBackAndRunForrward ran past the delta by 0x%x cycles, now at 0x%x?' % (too_far, self.cpu.cycles))
                 return
-            self.enableSimBreaks()
+            bp_enabler.enableAll()
+            #self.enableSimBreaks()
             self.lgr.debug('reverseMgr skipBackAndRunForward ran forward to the reverse_to point so we can set breaks and run from there.  cycles now 0x%x' % self.cpu.cycles)
             self.was_at_reverse_point = True
 
-        #self.enableAll()
         if self.current_span_end == self.cpu.cycles:
             self.lgr.debug('reverseMgr skipBackAndRunForward already at current_span_end of 0x%x, now what?' % self.current_span_end)
         else:
+            self.lgr.debug('reverseMgr skipBackAndRunForward call setBreakHaps')
             self.setBreakHaps()
             self.setSpanEndCycle()
             self.lgr.debug('reverseMgr skipBackAndRunForward now continue')
+            #print('remove this')
+            #return
             self.rmContinuationHap()
             SIM_continue(0)
             self.setContinuationHap()
@@ -747,10 +1015,13 @@ class ReverseMgr():
         self.lgr.debug('reverseMgr stopHap len of break cycles is %d current_cycle 0x%x' % (len(self.break_cycles), self.cpu.cycles))
         for hap in self.break_haps:
             SIM_run_alone(self.rmBreakHap, hap)
+        self.rmConvertedBreaks()
         self.break_haps = []
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap)
         self.stop_hap = None
+        SIM_run_alone(self.enableDisabledNewStyle, None)
+
         SIM_run_alone(self.cancelSpanEndCycle, None)
 
         if len(self.break_cycles) == 0:
@@ -767,43 +1038,77 @@ class ReverseMgr():
                     self.callback = None
                     self.lgr.debug('reverseMgr stopHap failed to find break, called callback')
                 else:
-                    self.lgr.debug('reverseMgr stopHap failed to find break, no callback')
-                    print('reverseMgr stopHap failed to find break, no callback')
+                    if self.reverse_to is not None:
+                        SIM_run_alone(self.skipToCycle, self.reverse_to)
+                        self.lgr.debug('reverseMgr stopHap failed to find break, no callback, did skip to cycle 0x%x' % self.reverse_to)
+                    else:
+                        SIM_run_alone(self.skipToOrigin, False)
+                        print('Stopped reversing at origin')
+                        self.lgr.debug('reverseMgr stopHap failed to find break, no callback, skipped to origin')
                  
         else:
             cycle_list = list(self.break_cycles.keys())
             sorted_list = sorted(cycle_list)
-            latest_cycle = sorted_list[-1]
-            latest_bp = self.break_cycles[latest_cycle].bp
-            self.lgr.debug('reverseMgr stopHap latest_cycle 0x%x bp %d' % (latest_cycle, latest_bp))
+            latest_index = sorted_list[-1]
+            latest_break = self.break_cycles[latest_index]
+            self.lgr.debug('reverseMgr stopHap latest_index 0x%x bp %d' % (latest_index, latest_break.bp))
 
-            SIM_run_alone(self.skipAndCallback, latest_cycle)
+            self.rev_done_msg = latest_break.toDisplayString()
+            #for converted in self.bp_values_from_cli:
+            #    self.lgr.debug('reverseMgr stopHap check converted bp_num %d against %d' % (converted.converted_bp_num, latest_break.bp))
+            #    if converted.converted_bp_num == latest_break.bp:
+            #        self.rev_done_msg = converted.toDisplayString(latest_break)
+            #        self.lgr.debug('reverseMgr stopHap st rev_done_msg to %s' % self.rev_done_msg)
+            #        break
+
+            # NOTE latest_index is used to dereference the breakpoint info structure that tells us the cycle we want
+            SIM_run_alone(self.skipAndCallback, latest_index)
         self.was_at_reverse_point = False
 
 
-    def skipAndCallback(self, skip_to_cycle):
+    def skipAndCallback(self, skip_index):
         '''
-        We've run to where we started reversing.  Skip back to the given cycle and invoke the callback (if any).  
+        We've run to where we started reversing, recording breaks and see we hit one.  
+        Skip back to the given cycle and invoke the callback (if any).  
         NOTE the cell of the breakpoint may not be our cell.
         '''
-        self.lgr.debug('reverseMgr skipAndCallback current cycle 0x%x, call skipToCycle for 0x%x' % (self.cpu.cycles, skip_to_cycle))
-        latest_bp = self.break_cycles[skip_to_cycle].bp
-        use_cell = None
-        object_cycles = self.break_cycles[skip_to_cycle].object_cycles
-        if object_cycles is not None:
-            use_cell = self.break_cycles[skip_to_cycle].the_object.name.split('.')[0]
-            self.lgr.debug('reverseMgr skipAndCallback using different cell %s' % use_cell)
-        self.skipToCycle(skip_to_cycle, use_cell=use_cell, object_cycles=object_cycles)
+        break_info = self.break_cycles[skip_index]
+        self.lgr.debug('reverseMgr skipAndCallback current reference cpu cycle 0x%x, call skipToCycle for index %d interator_cycles 0x%x on cpu %s' % (self.cpu.cycles, skip_index,
+             break_info.initiator_cycles, break_info.initiator_cpu.name))
+        self.when_done_skip_index = skip_index
+        cycles = break_info.initiator_cycles
+        if break_info.op_type & 4:
+            # Simics reversing stops on instruction following a read or write
+            cycles = cycles - 1
+        self.skipToCycle(cycles, cpu=break_info.initiator_cpu)
 
-        self.setNextCycle()
-        if self.callback is None:
-            print('Reversing hit breakpoint %d at cycle 0x%x' % (latest_bp, skip_to_cycle))
-            SIM_run_command('disassemble')
-        else:
-            memory = self.break_cycles[skip_to_cycle]
-            self.callback(memory, None, None, None)
-            self.callback = None
-            self.lgr.debug('reverseMgr skipAndCallback done, called callback with memory') 
+    def whenDone(self):
+        self.lgr.debug('reverseMgr whenDone when_done_skip_index is %s' % self.when_done_skip_index)
+        if self.when_done_skip_index is not None:
+            self.setNextCycle()
+            break_info = self.break_cycles[self.when_done_skip_index]
+            self.rmIfOneShot(break_info.bp)
+            if self.callback is not None:
+                self.callback(break_info, None, None, None)
+                self.callback = None
+                self.lgr.debug('reverseMgr skipAndCallback done, called callback with memory with size %d' % (break_info.size)) 
+            self.when_done_skip_index = None
+
+    def checkVMP(self):
+        if self.vmp_was_enabled:
+            cli.quiet_run_command('enable-vmp')
+
+    def rmIfOneShot(self, bp):
+        self.lgr.debug('reverseMgr rmIfOneShot bp %d len of bp_values_from_cli is %d' % (bp, len(self.bp_values_from_cli)))
+        for new_style in self.bp_values_from_cli:
+            # TBD handle name conflicts
+            self.lgr.debug('reverseMgr rmIfOneShot check new_style converted bp num %s against %d' % (new_style.converted_bp_num, bp))
+            if new_style.converted_bp_num == bp: 
+                self.lgr.debug('\tmatch %s' % new_style.toString())
+                if new_style.oneshot:
+                    cmd = 'bp.delete %d' % new_style.bp_num
+                    cli.quiet_run_command(cmd)
+                    self.lgr.debug('rmIfOneShot removed bp %d' % new_style.bp_num)
 
     def rmBreakHap(self, hap):
         SIM_hap_delete_callback_id('Core_Breakpoint_Memop', hap)
@@ -841,35 +1146,64 @@ class ReverseMgr():
     def spanHandleAlone(self, dumb):
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.stopHap, None)
         self.lgr.debug('reverseMgr spanHandleAlone cycle: 0x%x set stop hap and stop simulation to assess if we hit breakpoints' % self.cpu.cycles)
-        SIM_break_simulation('span cycle handler')
+        SIM_break_simulation('')
 
     def setBreakHaps(self):
         '''
         Set haps on all breakpoints so we can record their cycles
         '''
-        for bp in self.bp_list:
+        self.lgr.debug('reverseMgr setBreakHaps') 
+        for bp in self.sim_breakpoints:
             self.lgr.debug('reverseMgr setBreakHaps set hap for bp %d' % bp)
             the_hap = SIM_hap_add_callback_index('Core_Breakpoint_Memop', self.breakCallback, None, bp)
+            self.lgr.debug('reverseMgr setBreakHaps did set hap on bp %d' % bp)
             self.break_haps.append(the_hap) 
+        for new_style in self.bp_values_from_cli: 
+            self.lgr.debug('reverseMgr setBreakHaps newstyle %s' % new_style.toString())
+            if new_style.enabled:
+                the_break = genBreakFromNewStyle(new_style, lgr=self.lgr)
+                self.lgr.debug('reverseMgr setBreakHaps new style the_break is %d' % the_break)
+                new_style.converted_bp_num = the_break
+                self.converted_breaks.append(the_break)
+                the_hap = SIM_hap_add_callback_index('Core_Breakpoint_Memop', self.breakCallback, None, the_break)
+                self.lgr.debug('reverseMgr setBreakHaps did set hap on bp %d from new style bp %d' % (the_break, new_style.bp_num))
+                self.break_haps.append(the_hap) 
+                self.lgr.debug('reverseMgr setBreaks will disable new_style %d' % new_style.bp_num)
+                cmd = 'bp.disable %d' % new_style.bp_num
+                cli.quiet_run_command(cmd)
+                self.disabled_new_style_breaks.append(new_style.bp_num)
 
     class BreakInfo():
         '''
         Internal class used to skip to the point at which a breakpoint occurred.
         '''
-        def __init__(self, the_object, bp, memory, object_cycles=None):
+        def __init__(self, initiator_cpu, initiator_cycles, the_object, bp, memory, reference_cpu_cycles):
+            self.initiator_cpu = initiator_cpu
+            self.initiator_cycles = initiator_cycles
             self.the_object = the_object
             self.bp = bp
             self.logical_address = memory.logical_address
             self.physical_address = memory.physical_address
             self.size = memory.size
-            self.object_cycles = object_cycles
+            self.op_type = SIM_get_mem_op_type(memory)
+            self.reference_cpu_cycles = reference_cpu_cycles
+        def toDisplayString(self):
+            if self.physical_address is not None and self.physical_address != 0:
+                v_p = 'p'
+                addr = self.physical_address
+            else:
+                v_p = 'v'
+                addr = self.logical_address
+            retval = "Breakpoint %d: %s '%s' access to %s:0x%x len=%d" % (self.bp, self.the_object.name, transType(self.op_type), v_p, addr, self.size)
+            return retval
 
     def breakCallback(self, param, the_obj, the_break, memory):
         '''
         HAP invoked when breakpoints are hit while reversing.  We record the cycle for use in identifying
-        the most recent hap.  If the breakpoint is a bp.memory.breakpoint; then we force a continue since Simics
-        will stop on those even if there is a HAP to handle it.
+        the most recent hap, from the perspective of the reference cpu, which may not be the initiator. 
         ''' 
+        self.lgr.debug('reverseMgr breakCallback object:%s' % str(the_obj)) 
+        initiator_cpu = SIM_get_mem_op_initiator(memory)
         if len(self.break_haps) == 0:
             return
         op_type = SIM_get_mem_op_type(memory)
@@ -878,9 +1212,9 @@ class ReverseMgr():
         else:
             break_after = False
         if self.top is not None:
+            # diagnostics
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
-            op_type = SIM_get_mem_op_type(memory)
             if not NOUTILS:
                 op_type_string = resimSimicsUtils.transType(op_type)
 
@@ -890,24 +1224,26 @@ class ReverseMgr():
                 else:
                     self.lgr.debug('reverseMgr breakCallback break num %d memory addr 0x%x cycles: 0x%x eip:0x%x  instruct %s op_type: %s' % (the_break, 
                             memory.logical_address, self.cpu.cycles, eip, instruct[1], op_type_string))
-        object_cycles = None 
-        object_cell = the_obj.name.split('.')[0]
-        if object_cell != self.our_cell:
-            if object_cell not in self.cpu_map:
-                self.lgr.error('reverseMgr breakCallback %s not in cpu map' % object_cell)
-                return
-            object_cycles = self.cpu_map[object_cell].cycles
-            if break_after:
-                object_cycles = object_cycles + 1
+        #object_cycles = None 
+        #object_cell = the_obj.name.split('.')[0]
+        #if object_cell != self.our_cell:
+        #    if object_cell not in self.cpu_map:
+        #        self.lgr.error('reverseMgr breakCallback %s not in cpu map' % object_cell)
+        #        return
+        #    object_cycles = self.cpu_map[object_cell].cycles
+        initiator_cycles = initiator_cpu.cycles
         if break_after:
-            cpu_cycles = self.cpu.cycles+1
-        else:
-            cpu_cycles = self.cpu.cycles
-        self.break_cycles[cpu_cycles] = self.BreakInfo(the_obj, the_break, memory, object_cycles=object_cycles)
-        if the_break in self.bp_cli_list:
-            self.lgr.debug('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
-            print('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
-            SIM_run_alone(self.addCliStopHap, None)
+            initiator_cycles = initiator_cycles + 1
+        break_index = self.getBreakIndex()
+        eip = getRegValue('eip', initiator_cpu)
+        instruct = SIM_disassemble_address(initiator_cpu, eip, 1, 0)
+        self.break_cycles[break_index] = self.BreakInfo(initiator_cpu, initiator_cycles, the_obj, the_break, memory, self.cpu.cycles)
+        self.lgr.debug('reverseMgr breakCallback added break_cycles entry for index %d  op_type %d initiator_cycles 0x%x break_after %r eip: 0x%x %s' % (break_index, 
+           op_type, initiator_cycles, break_after, eip, instruct[1]))
+        #if the_break in self.bp_cli_list:
+        #    self.lgr.debug('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
+        #    print('reverseMgr breakCallback from bp.memory.break breakpoint.  need to continue.  add a stop hap and...')
+        #    SIM_run_alone(self.addCliStopHap, None)
 
     def addCliStopHap(self, dumb):
         ''' 
@@ -934,10 +1270,11 @@ class ReverseMgr():
         if self.nativeReverse():
             cli.quiet_run_command('rev 1')
         else:
-            cycle = self.cpu.cycles - 1
-            self.skipToCycle(cycle)
+            cpu = getPselect()
+            cycle = cpu.cycles - 1
+            self.skipToCycle(cycle, cpu=cpu)
+            # TBD move to when done
             SIM_run_command('disassemble')
-
 
     def cancelDeltaCycle(self, use_cpu):
         SIM_event_cancel_time(use_cpu, self.delta_cycle_event, use_cpu, None, None)
@@ -960,7 +1297,8 @@ class ReverseMgr():
 
     def deltaHandleAlone(self, dumb):
         self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.deltaStopHap, None)
-        SIM_break_simulation('Cycle now 0x%x' % self.cpu.cycles)
+        #SIM_break_simulation('Cycle now 0x%x' % self.cpu.cycles)
+        SIM_break_simulation('Done')
 
     def deltaStopHap(self, param, one, exception, error_string):
         self.lgr.debug('reverseMgr deltaStopHap')
@@ -970,6 +1308,7 @@ class ReverseMgr():
         hap = self.stop_hap
         SIM_run_alone(self.rmStopHap, hap)
         self.stop_hap = None
+        
         #self.enableAll()
 
     def SIM_breakpoint(self, the_object, the_type, the_mode, the_addr, the_count, the_flags):
@@ -985,9 +1324,6 @@ class ReverseMgr():
             if bp in self.sim_breakpoints:
                 self.sim_breakpoints.remove(bp)
                 self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from sim_breakpoints' % bp)
-                if bp in self.bp_list:
-                    self.lgr.debug('reverseMgr SIM_delete_breakpoint removed %d from bp_list' % bp)
-                    self.bp_list.remove(bp)
             else:
                 self.lgr.error('reverseMgr SIM_delete_breakpoint %d not in sim_breakpoints')
 
@@ -997,25 +1333,6 @@ class ReverseMgr():
 
     def enableSimBreaks(self):
         for bp in self.sim_breakpoints:
-            SIM_enable_breakpoint(bp)
-
-    def disableAll(self):
-        '''
-        Disable all breakpoints
-        '''
-        self.rmContinuationHap()
-        for bp in self.bp_list:
-            #print('bp is %s' % bp)
-            SIM_disable_breakpoint(bp)
-
-    def enableAll(self):
-        '''
-        Enable all breakpoints
-        '''
-        self.lgr.debug('reverseMgr enableAll')
-        self.setContinuationHap()
-        for bp in self.bp_list:
-            self.lgr.debug('reverseMgr enableAll bp is %s' % bp)
             SIM_enable_breakpoint(bp)
 
     def setCallback(self, callback):
@@ -1029,7 +1346,7 @@ class ReverseMgr():
 
     def cancelRecordingEndCycle(self, dumb):
         SIM_event_cancel_time(self.cpu, self.recording_end_cycle_event, self.cpu, None, None)
-        self.lgr.debug('reverseMgr cancelRecordingEndCycle')
+        #self.lgr.debug('reverseMgr cancelRecordingEndCycle')
         self.recording_end_event_set = False
 
     def setRecordingEndCycle(self):
@@ -1064,20 +1381,21 @@ class ReverseMgr():
         SIM_run_alone(self.setNextCycle, None)
 
     def rmContinuationHap(self):
+        self.lgr.debug('reverseMgr rmContinuationHapAlone') 
         if self.continuation_hap is not None:
             hap = self.continuation_hap
             self.rmContinuationHapAlone(hap)
             self.continuation_hap = None
 
     def rmContinuationHapAlone (self, hap):
-        self.lgr.debug('reverseMgr rmContinuationHapAlone')
+        self.lgr.debug('reverseMgr rmContinuationHapAlone %s' % hap)
         SIM_hap_delete_callback_id("Core_Continuation", hap)
 
     def setContinuationHap(self):
         '''
         Catch a continue so that we can record snapshots as we move past the latest span.
         '''
-        self.lgr.debug('reverseMgr setContinuationHap cycle 0x%x' % self.cpu.cycles)
+        self.lgr.debug('reverseMgr setContinuationHap, currrent cycle 0x%x' % self.cpu.cycles)
         self.continuation_hap = SIM_hap_add_callback("Core_Continuation", self.continuationHap, None)
 
     def continuationHap(self, dumb, one):
@@ -1117,7 +1435,7 @@ class ReverseMgr():
         ''' Does Simics itself support reversing? '''
         #TBD remove this
         #return False
-        if not self.version().startswith('7'):
+        if not self.version().startswith('7') and not self.force_new:
            if self.oldSimics():
                return False
                #return True
@@ -1126,18 +1444,28 @@ class ReverseMgr():
         else:
            return False
 
-    def mapCPUsToCell(self):
-        '''
-        Populate the cpu map for use when the most recent breakpoint is not tied to our cell.
-        Call this if cells are added or removed.
-        '''
+    #def mapCPUsToCell(self):
+    #    '''
+    #    Populate the cpu map for use when the most recent breakpoint is not tied to our cell.
+    #    Call this if cells are added or removed.
+    #    '''
+    #    for cell in self.conf.sim.cell_list:
+    #        object_cell = cell.name.split('.')[0]
+    #        self.lgr.debug('reverseMgr mapCPUsToCell cell %s' % object_cell)
+    #        cmd = '%s.get-processor-list' % object_cell
+    #        proclist = SIM_run_command(cmd)
+    #        cpu = SIM_get_object(proclist[0])
+    #        self.cpu_map[object_cell] = cpu
+    def getTheCPUs(self):
+        retval = []
         for cell in self.conf.sim.cell_list:
             object_cell = cell.name.split('.')[0]
-            self.lgr.debug('reverseMgr mapCPUsToCell cell %s' % object_cell)
             cmd = '%s.get-processor-list' % object_cell
             proclist = SIM_run_command(cmd)
-            cpu = SIM_get_object(proclist[0])
-            self.cpu_map[object_cell] = cpu
+            for cpu_name in proclist:
+                cpu = SIM_get_object(cpu_name)
+                retval.append(cpu)
+        return retval
 
     def version(self):
         return self.version_string
@@ -1155,10 +1483,156 @@ class ReverseMgr():
         snap_list = self.getSnapList()
         print('reverseManager has %d items in snap_list' % len(snap_list))
 
-'''
-Everything below is for use running directly from the Simics command prompt, e.g., for testing.
-Typically this module would be instantiated from some other Python module.
-'''
+    def enableDisabledNewStyle(self, dumb):
+        self.lgr.debug('enableDisabledNewStyle')
+        for bp in self.disabled_new_style_breaks:
+            cmd = 'bp.enable %d' % bp
+            try:
+                cli.quiet_run_command(cmd)
+            except:
+                # race condition
+                pass
+
+    def rmConvertedBreaks(self):
+        for bp in self.converted_breaks:
+            self.lgr.debug('rmConvertedBreaks removing break %d' % bp)
+            SIM_delete_breakpoint(bp)
+        self.converted_breaks = []
+
+    def showSizeChanges(self):
+        self.performance.showSizeChanges()
+
+    def defineCommands(self, arg, int_t):
+        cli.new_command(
+            "enable-reverse-execution",
+            self.enableReverse,
+            [],
+            short="Enable reverse execution",
+            doc="""
+           Enable reverse execution.
+        """
+        )
+        cli.new_command(
+            "disable-reverse-execution",
+            self.disableReverse,
+            [],
+            short="Disable reverse execution",
+            doc="""
+           Disable reverse execution.
+        """
+        )
+        cli.new_command(
+            "rev",
+            self.rev,
+            [arg(int_t, 'steps', "?", 0)],
+            short="Reverse [N] steps",
+            doc="""
+           Reverse.  If the optional N is provided, it will reverse that number of steps.
+        """
+        )
+        cli.new_command(
+            "skip-to-cycle",
+            self.skipToCycleFromCli,
+            [arg(int_t, 'cycle', "1")],
+            short="Skip to the given cycle",
+            doc="""
+           Skip to the given cycle value.  The reverse manager assumes 1 cycle per instruction.
+        """
+        )
+        cli.new_command(
+            "list-all-breakpoints",
+            self.listSimBreakpoints,
+            [],
+            short="List all breakpoints made via SIM_breakpoint calls",
+            doc="""
+               List all breakpoints made via SIM_breakpoint calls.
+        """
+        )
+    def listSimBreakpoints(self):
+            # Thanks Nick!
+            # Parse bp.list   
+            mem_addrs = set()
+            #print('why am i here?')    
+            #traceback.print_stack()
+            try:
+                result = cli.quiet_run_command( "bp.list", self.output_modes.formatted_text )
+        
+                # result = ([ids], formatted_string)
+                txt = result[1] if isinstance(result, tuple) else str(result)
+        
+                # Extract ALL addr occurrences 
+                for m in re.finditer(r"addr=0x([0-9a-fA-F]+)", txt):
+                    mem_addrs.add(int(m.group(1), 16))
+        
+            except Exception as e:
+                print("WARNING: bp.list parsing failed:", e)
+        
+            # iterate internal breakpoint table
+            bps = self.conf.sim.breakpoints
+            if len(bps) > 0: 
+                print(
+                    f"{'TYPE':<7} {'ACC':<4} {'ACT':<4} "
+                    f"{'START':<18} {'END':<18} {'SIZE':<10} {'KIND':<6} "
+                    f"{'ORIGIN':<18} {'OBJECT':<30} {'HANDLE'}"
+                )
+                print("-" * 150)
+        
+            # main loop
+            for bp in bps:
+                try:
+                    bp_type = int(bp[1])
+                    access  = int(bp[2])
+                    active  = int(bp[5])
+        
+                    obj_field = bp[11]
+                    handles   = bp[12]
+        
+                    # object resolution (string or object)
+                    if isinstance(obj_field, str):
+                        obj = getattr(self.conf, obj_field)
+                        obj_name = obj_field
+                    else:
+                        obj = obj_field
+                        obj_name = obj.name
+        
+                except Exception:
+                    continue
+        
+                for h in handles:
+                    try:
+                        h_val = int(h)
+        
+                        bpx = obj.iface.breakpoint.get_breakpoint(h_val)
+        
+                        start = int(bpx.start)
+                        end   = int(bpx.end)
+        
+                        size = end - start + 1
+        
+                        kind = "single" if start == end else "range"
+        
+                        origin = "bp.memory.break" if start in mem_addrs else "Other"
+        
+                        print(
+                            f"{bp_type_to_str(bp_type):<7} "
+                            f"{access_to_str(access):<4} "
+                            f"{active:<4} "
+                            f"{f'0x{start:016x}':<18} "
+                            f"{f'0x{end:016x}':<18} "
+                            f"{f'0x{size:x}':<10} "
+                            f"{kind:<6} "
+                            f"{origin:<18} "
+                            f"{obj_name:<30} "
+                            f"{h_val}"
+                        )
+        
+                    except Exception:
+        
+                        continue
+                
+#Everything below is for use running directly from the Simics command prompt, e.g., for testing.
+#Typically this module would be instantiated from some other Python module.
+#
 
 def getLogger(name, logdir, level=None):
     os.umask(000)
@@ -1183,19 +1657,30 @@ def getLogger(name, logdir, level=None):
     return lgr
 
 def getCPU(conf):
-    cell = conf.sim.cell_list[0]
-    object_cell = cell.name.split('.')[0]
-    print('Loading ReverseMgr module for cell %s' % object_cell)
-    cmd = '%s.get-processor-list' % object_cell
-    proclist = SIM_run_command(cmd)
-    cpu = SIM_get_object(proclist[0])
+    #cell = conf.sim.cell_list[0]
+    #object_cell = cell.name.split('.')[0]
+    #print('Loading ReverseMgr module for cell %s' % object_cell)
+    #cmd = '%s.get-processor-list' % object_cell
+    #proclist = SIM_run_command(cmd)
+    #cpu = SIM_get_object(proclist[0])
+    pselect_out = cli.quiet_run_command('pselect')[1]
+    pselect = pselect_out.strip()[1:-1] 
+    cpu = SIM_get_object(pselect)
     return cpu
+
 if __name__ == '__main__':
     lgr = getLogger('reverseMgr', '/tmp/')
     cpu = getCPU(conf)
-    rev = ReverseMgr(conf, cpu, lgr)
-    print('Usage: @rev.enableReverse() to enable reverse execution.')
-    print('       @rev.reverse() to reverse to a breakpoint that you have separately set.')
-    print('       @rev.skipToCycle(cycle) to skip to a cycle.')
-    print('       @rev.disableReverse() disable reverse execution.')
+    spanenv = os.getenv('REVERSE_SPAN')
+    if spanenv is not None:
+        span = int(spanenv, 16)
+    else:
+        span = 0x1000000
+    rev = ReverseMgr(conf, cpu, arg, int_t, output_modes, lgr, force_new=True, span=span, report_performance=True)
+    print('ReverseMgr module loaded.  You may now use reversing commands including:')
+    print('\tenable-reverse-execution, will result in Recording snapshots cycles on cpu %s every 0x%x cycles' % (cpu.name, span))
+    print('\tdisable-reverse-execution')
+    print('\trev [n] -- where n is cycles to reverse, default is to just reverse.')
+    print('\tskip-to-cycle cycle')
     print('Logging to  /tmp/reverseMgr.log')
+

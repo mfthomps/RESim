@@ -66,7 +66,7 @@ def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         return instruct
 
 class GetKernelParams():
-    def __init__(self, conf, comp_dict, run_from_snap):
+    def __init__(self, conf, comp_dict, run_from_snap, arg, int_t, output_modes):
         #self.cpu = SIM_current_processor()
         self.log_dir = './logs'
         self.lgr = resimUtils.getLogger('getKernelParams', self.log_dir)
@@ -204,7 +204,7 @@ class GetKernelParams():
         # yah to avoid mode change haps while skipping around 
         self.ignore_mode = False
 
-        self.reverse_mgr = reverseMgr.ReverseMgr(conf, self.cpu, self.lgr, top=self)
+        self.reverse_mgr = reverseMgr.ReverseMgr(conf, self.cpu, arg, int_t, output_modes, self.lgr, top=self)
         self.skip_to_mgr = skipToMgr.SkipToMgr(self.reverse_mgr, self.cpu, self.lgr)
         self.ppc_kparams = ppcKernelParams.PPCKernelParams(self, self.cpu, self.cell, self.mem_utils, self.reverse_mgr, self.skip_to_mgr, self.lgr)
   

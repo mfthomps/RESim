@@ -80,7 +80,7 @@ class TrackThreads():
             execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
             if execve_entry is None:
                 self.lgr.error('TrackThreads setExecveBreaks execve_entry back as None')
-                SIM_break_simulation('remove this')
+                self.top.quit()
                 return
             execve_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, execve_entry, 1, 0)
             hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.execveHap, 'nothing', execve_break, 'trackThreads execve')

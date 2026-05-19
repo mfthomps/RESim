@@ -255,11 +255,6 @@ class TaskUtils():
         if pid is None or pid > self.mem_utils.getUnsigned(0xf0000000):
             self.lgr.debug('taskUtils curThread cur_task_rec 0x%x got crazy pid %s, check saved' % (cur_task_rec, str(pid)))
             return None, None, None
-            #traceback.print_stack()
-            #self.mem_utils.checkSavedCR3(self.cpu)
-            #SIM_break_simulation('remove this cur_task_rec 0x%x' % cur_task_rec)
-            #self.mem_utils.checkSavedCR3(self.cpu)
-            #pid = self.mem_utils.readWord32(self.cpu, cur_task_rec + self.param.ts_pid)
         comm = self.mem_utils.readString(self.cpu, cur_task_rec + self.param.ts_comm, 16)
         #self.lgr.debug('taskUtils curThread comm %s' % comm)
         #self.lgr.debug('taskUtils curThread pid %s' % str(pid))
@@ -975,8 +970,6 @@ class TaskUtils():
                     self.lgr.error('getProcArgsFromStack confused argv, argv_addr was 0x%x' % argv_addr)
                     return None, None
                 #print('sptr is 0x%x' % sptr)
-                #SIM_break_simulation('remove this')
-                #return None, None
                 while not done and i < limit:
                         xaddr = argv + mult*self.mem_utils.WORD_SIZE
                         arg_addr = self.mem_utils.readPtr(cpu, xaddr)
@@ -1009,30 +1002,6 @@ class TaskUtils():
                         else:
                             done = True
                         i += 1
-                else:
-                    # TBD REMOVE
-                    # sysenter and no code jump table
-                    if not at_enter and self.param.x86_reg_swap:
-                        use_reg = 'rdx'
-                    else:
-                        use_reg = 'rsi'
-                    reg_num = cpu.iface.int_register.get_number(use_reg)
-                    reg_val = cpu.iface.int_register.read(reg_num)
-                    prog_addr = self.mem_utils.readPtr(cpu, reg_val)
-                    if prog_addr is None or prog_addr == 0:
-                        return None, None
-                    arg_addr_addr_addr = reg_val + self.mem_utils.WORD_SIZE
-                    #self.lgr.debug('getProcArgsFromStack 64 bit no code jump table, at sysenter prog_addr 0x%x reg_val 0x%x arg_addr_addr_addr 0x%x' % (prog_addr, reg_val, arg_addr_addr_addr))
-                    arg_addr_addr = self.mem_utils.readPtr(cpu, arg_addr_addr_addr)
-                    for i in range(20):
-                        arg_addr = self.mem_utils.readPtr(cpu, arg_addr_addr)
-                        if arg_addr == 0 or arg_addr is None:
-                            break
-                        arg_addr_list.append(arg_addr)
-                        #self.lgr.debug("getProcArgsFromStack adding arg addr %x read from 0x%x" % (arg_addr, arg_addr_addr))
-                        arg_addr_addr = arg_addr_addr + self.mem_utils.WORD_SIZE
-                    SIM_break_simulation('remove this')
-                    
                 if prog_addr is not None:
                     self.lgr.debug('getProcArgsFromStack 64 bit reg_val is 0x%x prog_addr 0x%x' % (reg_val, prog_addr))
                 else:
@@ -1044,10 +1013,6 @@ class TaskUtils():
             prog_string, arg_string_list = self.readExecParamStrings(tid, cpu)
             self.exec_addrs[tid].prog_name = prog_string
             self.exec_addrs[tid].arg_list = arg_string_list
-            #if 'python' in prog_string: 
-            #    SIM_break_simulation('remove this')
-            #self.lgr.debug('getProcArgsFromStack prog_string is %s' % prog_string)
-            #self.lgr.debug('args are %s' % str(arg_string_list))
 
         return prog_string, arg_string_list
 

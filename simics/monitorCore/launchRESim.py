@@ -241,10 +241,10 @@ class LaunchRESim():
         except Exception as e:
             print(e)
             run_command('quit')
-        SIMICS_BASE = os.getenv('SIMICS')
-        parent = os.path.dirname(SIMICS_BASE)
-        print('SIMICS dir is %s' % parent) 
-        lgr.debug('SIMICS dir is %s' % parent) 
+        #SIMICS_BASE = os.getenv('SIMICS')
+        #parent = os.path.dirname(SIMICS_BASE)
+        #print('SIMICS dir is %s' % parent) 
+        #lgr.debug('SIMICS dir is %s' % parent) 
         #run_command('add-directory -prepend %s/simics-qsp-arm-6.02' % parent)        
         #run_command('add-directory -prepend %s/simics-x86-x58-ich10-6.0.30/targets/x58-ich10/images' % parent)        
         #this does not work.  simics broken?
@@ -430,11 +430,11 @@ class LaunchRESim():
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
-                    gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP)
+                    gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP, arg, int_t, output_modes)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
                     lgr.debug('genMonitor for target %s' % RESIM_TARGET)
-                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf)
+                    cgc = genMonitor.GenMonitor(self.comp_dict, self.link_dict, cfg_file, conf=conf, arg=arg, output_modes=output_modes, int_t=int_t)
                     cgc.doInit()
     
     def getSimicsScript(self, section, lgr):    
