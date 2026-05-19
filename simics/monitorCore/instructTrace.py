@@ -2,13 +2,14 @@ from simics import *
 import cli
 import resimSimicsUtils
 class InstructTrace():
-    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False, all_cores=False):
+    def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False, all_cores=False, just_comm=None):
         self.top = top
         self.lgr = lgr
         if just_tid is None:
             tid = self.top.getTID()
         else:
             tid = just_tid
+        self.just_comm = just_comm
         cpu = self.top.getCPU()
         cell_name = self.top.getTopComponentName(cpu)+'.cell'
         cmd = 'pselect %s' % cpu.name
@@ -47,6 +48,11 @@ class InstructTrace():
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, None)
         elif not kernel:
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
+            cpl = self.top.getCPL()
+            self.lgr.debug('InstructTrace cpl is %d' % cpl)
+            if cpl == 0:
+                self.lgr.debug('InstructTrace cpl is zero at start, stop')
+                self.stop()
         self.lgr.debug('InstructTrace starting with tid:%s, watch_threads: %r' % (tid, watch_threads))
 
     def start(self,dumb=None):
@@ -73,7 +79,7 @@ class InstructTrace():
             SIM_run_command(cmd)
 
     def modeChanged(self, want_tid, one, old, new):
-        this_tid = self.top.getTID()
+        cpu, comm, this_tid = self.top.curThread() 
         self.lgr.debug('mode changed %s' % (this_tid))
         if not self.just_kernel:
             if want_tid != this_tid:
@@ -84,6 +90,11 @@ class InstructTrace():
                 elif not self.all_proc:
                     self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
                     return
+        if self.just_comm is not None:
+            if comm != self.just_comm:
+                self.lgr.debug('modeChanged, comm %s does not match %s' % (comm, self.just_comm))
+                self.tracer.disable-instrumentation()
+                return
         cpl = self.top.getCPL()
         if not self.just_kernel:
             if new == Sim_CPU_Mode_Supervisor:

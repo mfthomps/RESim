@@ -2625,6 +2625,7 @@ class GenMonitor():
     def getCPL(self): 
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
         cpl = memUtils.getCPL(cpu)
+        return cpl
 
     def skipBackToUser(self, extra=0):
         if self.reverseEnabled():
@@ -5975,9 +5976,9 @@ class GenMonitor():
     def resetBookmarks(self):
         self.bookmarks = None
 
-    def instructTrace(self, fname, all_proc=False, kernel=False, just_kernel=False, watch_threads=False, just_tid=None, all_cores=False):
+    def instructTrace(self, fname, all_proc=False, kernel=False, just_kernel=False, watch_threads=False, just_tid=None, all_cores=False, just_comm=None):
         self.instruct_trace = instructTrace.InstructTrace(self, self.lgr, fname, all_proc=all_proc, kernel=kernel, 
-                        just_kernel=just_kernel, watch_threads=watch_threads, just_tid=just_tid, all_cores=all_cores)
+                        just_kernel=just_kernel, watch_threads=watch_threads, just_tid=just_tid, all_cores=all_cores, just_comm=None)
         cpu = self.cell_config.cpuFromCell(self.target)
         cpl = memUtils.getCPL(cpu)
         if cpl != 0 or kernel:
