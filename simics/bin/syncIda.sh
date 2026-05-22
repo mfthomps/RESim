@@ -12,10 +12,6 @@ if [ -z "$RESIM_IDA_DATA" ]; then
     echo "RESIM_IDA_DATA not defined."
     exit
 fi
-if [ -z "$IDA_ANALYSIS" ]; then
-    echo "IDA_ANALYSIS not defined."
-    exit
-fi
 if [ $# -lt 2 ] || [ $1 = "-h" ]; then
     echo "syncIda.sh <program> <server> [user]"
     echo "provide the optional user if id on remote differs from local."
@@ -76,17 +72,20 @@ fi
 #  Now copy analysis
 #
 
-analysis_dir=$IDA_ANALYSIS/$root_parent/$root_dir/$program_parent/
-#echo "analysis_dir is $analysis_dir"
-remote_analysis=$( ssh $user$remote "source \$HOME/.resimrc; echo \$IDA_ANALYSIS" )
-#echo "remote_analysis is $remote_analysis"
 remote_program=$remote_analysis/$root_parent/$root_dir/$program_parent/
-
 file_type=$( ssh $user$remote "df $remote_program -TP | tail -n -1 | awk '{print \$2}'" )
 #echo "file_type is $file_type"
 if [[ $file_type == nfs* ]]; then
     echo "Remote is NSF, assume no need to synch analyisis artifacts."
 else
+    if [ -z "$IDA_ANALYSIS" ]; then
+        echo "IDA_ANALYSIS not defined locally."
+        exit
+    fi
+    analysis_dir=$IDA_ANALYSIS/$root_parent/$root_dir/$program_parent/
+    #echo "analysis_dir is $analysis_dir"
+    remote_analysis=$( ssh $user$remote "source \$HOME/.resimrc; echo \$IDA_ANALYSIS" )
+    #echo "remote_analysis is $remote_analysis"
     echo "remote program is $remote_program"
     ssh $user$remote "mkdir -p $remote_program"
     rsync -avh $analysis_dir $usr$remote:$remote_program
