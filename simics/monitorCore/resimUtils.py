@@ -27,6 +27,9 @@ except:
     import configparser as ConfigParser
 
 def getLogger(name, logdir, level=None):
+    if logdir == '/tmp':
+        user = os.getenv('USER')
+        logdir = os.path.join('/tmp', user)
     os.umask(000)
     try:
         os.makedirs(logdir)
