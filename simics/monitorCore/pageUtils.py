@@ -50,6 +50,8 @@ class PtableInfo():
              str(self.ptable_protect), str(self.page_protect), self.ptable_exists, self.page_exists)
         if self.ptable_addr is not None:
             retval = retval + ' ptable_addr: 0x%x' % self.ptable_addr
+        if self.page_base_addr is not None:
+            retval = retval + ' page_base_addr: 0x%x' % self.page_base_addr
         if self.entry is not None:
             if self.phys_addr is not None:
                 retval = retval + ' phys_addr: 0x%x  nx:%d write_protect:%d entry:0x%x' % (self.phys_addr, self.nx, self.writable, self.entry)
@@ -272,6 +274,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
     #tg1 = memUtils.bitRange(tcr_el1, 30, 31)
     #lgr.debug('findPageTableArmV8 tg0 (user) %d' % tg0)
     #lgr.debug('findPageTableArmV8 tg1 (kernel) %d' % tg1)
+    phys = None
     if kernel:
         #lgr.debug('findPageTableArm kernel space')
         ttbr = cpu.translation_table_base1 & 0x0000ffffffffffff
@@ -284,7 +287,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
     vaddr_off = va & 0xfff
     ptable_info.ptable_exists = False
     if do_log:
-        lgr.debug('vaddr_off 0x%x' % vaddr_off)
+        lgr.debug('findPageTableArmV8 vaddr_off 0x%x' % vaddr_off)
     l1_index = memUtils.bitRange(va, 30, 38)
     l1_off = 8 * l1_index
     l1_base_addr = ttbr + l1_off
@@ -293,7 +296,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
         lgr.error('findPageTableArmV8 got None for l1_base_addr ttbr is 0x%x' % ttbr)
         return None
     if do_log: 
-        lgr.debug('findPageTableArm va 0x%x ttbr 0x%x l1_index 0x%x  l1_off 0x%x l1_base_addr 0x%x base is 0x%x' % (va, ttbr, l1_index, l1_off, l1_base_addr, l1_base))
+        lgr.debug('findPageTableArmV8 va 0x%x ttbr 0x%x l1_index 0x%x  l1_off 0x%x l1_base_addr 0x%x base is 0x%x' % (va, ttbr, l1_index, l1_off, l1_base_addr, l1_base))
     l2_index = memUtils.bitRange(va, 21, 29)
     l2_off = 8 * l2_index
     l2_base_addr = (l1_base + l2_off) & 0xfffffffffffffff8
@@ -306,19 +309,22 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
         l3_off = 8 * l3_index
         l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
         l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
-        if l3_base is not None:
+        if l3_base is not None and l3_base > 0:
             l3_basex = l3_base & 0x0000fffffffff000 
-            #lgr.debug('l3_base masked 0x%x' % l3_basex)
-            phys = l3_basex + vaddr_off
-            ap = memUtils.bitRange(l3_base, 6,7)
-            if ap == 1:
-                ptable_info.writable = True 
-            ptable_info.nx = memUtils.testBit(l3_base, 54)
+            if do_log:
+                lgr.debug('l3_base masked 0x%x l3_base was 0x%x l3_base_addr 0x%x' % (l3_basex, l3_base, l3_base_addr))
+            if l3_basex > 0:
+                phys = l3_basex + vaddr_off
+                ap = memUtils.bitRange(l3_base, 6,7)
+                if ap == 1:
+                    ptable_info.writable = True 
+                ptable_info.nx = memUtils.testBit(l3_base, 54)
             
-            if do_log: 
-                lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
-                      l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
+                if do_log: 
+                    lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
+                          l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
         else:
+            lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
             phys = None
         ptable_info.page_base_addr = l3_base_addr
         ptable_info.ptable_exists = True
@@ -328,7 +334,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
         ptable_info.page_base_addr = l2_base_addr
         vaddr_off = va & 0xffff
         phys = l2_basex + vaddr_off
-    if do_log: 
+    if do_log and phys is not None: 
         lgr.debug('got phys of 0x%x' % phys)
     ptable_info.phys_addr = phys
     if phys is not None:
@@ -395,6 +401,8 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
     ''' sld is 2nd level directory, which we may already know from previous failures '''
     ''' TBD, seems off... if cannot read sld context may be wrong.  Why not always wait until
         return to user space? '''
+    if do_log:
+        lgr.debug('findPageTable cpu.architecture %s' % cpu.architecture)
     if cpu.architecture == 'arm':
         return findPageTableArm(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, do_log=do_log)
     if cpu.architecture == 'arm64':
