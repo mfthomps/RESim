@@ -41,6 +41,8 @@ from resimHaps import *
 import resimSimicsUtils
 from resimSimicsUtils import rprint
 import openFlags
+import futex
+import sigaction
 import linuxConstants
 sys.path.append('/usr/local/lib/python2.7/dist-packages')
 sys.path.append('/usr/local/lib/python3.6/dist-packages')
@@ -2363,9 +2365,17 @@ class Syscall():
             ida_msg = '%s tid:%s (%s) waitfortid: %d  loc: 0x%x  options: %d rusage: 0x%x' % (callname, tid, comm, frame['param1'], frame['param2'], frame['param3'], frame['param4'])
 
         elif callname == 'rt_sigaction':
-            handler = self.mem_utils.readPtr(self.cpu, frame['param2'])
             signum = frame['param1']
-            if handler is not None and handler > 100:
+            sigaction_addr = frame['param2']
+            sa_flags_addr = sigaction_addr + 3*word_size 
+            sa_flags = self.mem_utils.readWord32(self.cpu, sa_flags_addr)
+            flag_list = sigaction.decodeFlags(sa_flags)
+            if 'SA_SIGINFO' in flag_list:
+                sa_sigaction = self.mem_utils.readAppPtr(self.cpu, sigaction_addr, size=word_size)
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction_addr: 0x%x sa_sigaction 0x%x flags: %s' % (callname, tid, comm, signum, 
+                   sigaction_addr, sa_sigaction, ' '.join(flag_list))
+            else:
+                handler = self.mem_utils.readAppPtr(self.cpu, sigaction_addr, size=word_size)
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
                 if tid not in self.sig_handler:
                     self.sig_handler[tid] = {}
@@ -2374,10 +2384,8 @@ class Syscall():
                     self.context_manager.genDeleteHap(self.sig_handler[tid][signum], immediate=False)
                 self.sig_handler[tid][signum] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, signum, proc_break, 'sig_handler')
                 self.lgr.debug('syscallHap %s set break on handler 0x%x tid:%s (%s) signum: %rd' % (callname, handler, tid, comm, signum))
-            if handler is not None:
-                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x handler: 0x%x' % (callname, tid, comm, signum, frame['param2'], handler)
-            else:
-                ida_msg = '%s tid:%s (%s) signum: %d sigaction: 0x%x no handler found' % (callname, tid, comm, signum, frame['param2'])
+                ida_msg = '%s tid:%s (%s) signum: %d sigaction_addr: 0x%x handler: 0x%x flags: %s' % (callname, tid, comm, signum, 
+                   sigaction_addr, handler, ' '.join(flag_list))
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
@@ -2568,6 +2576,12 @@ class Syscall():
             else:
                 value = frame['param2']
                 ida_msg = '%s tid:%s (%s) code: %s value: 0x%x' % (callname, tid, comm, code_string, value)
+        elif callname == "futex":
+            exit_info.retval_addr = frame['param1']
+            op = futex.decodeFutex(frame['param2'])
+            val = frame['param3']
+            time_spec = frame['param4']
+            ida_msg = '%s tid:%s (%s) addr: 0x%x op: %s val: 0x%x time_spec: 0x%x' % (callname, tid, comm, exit_info.retval_addr, op, val, time_spec)
 
         elif callname == "not_mapped":
             ida_msg = '%s tid:%s (%s) call_num: 0x%x' % (callname, tid, comm, callnum)
