@@ -63,17 +63,22 @@ has_hits=$( ssh $user$remote "ls $remote_program*.hits" )
 if [[ -z "$has_hits" ]]; then
     echo "No hits files on server, do not try to sync them."
 else
-    mkdir -p $RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent
-    echo "Command is rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent/"
-    rsync -avh $user$remote:$remote_program*.hits $RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent/
+    local_dir=$RESIM_IDA_DATA/$root_parent/$root_dir/$program_parent
+    mkdir -p $local_dir
+    echo "Command is rsync -avh $user$remote:$remote_program*.hits $local_dir"
+    rsync -avh $user$remote:$remote_program*.hits $local_dir || exit
+    echo "Copied hits files from $remote to $local_dir"
 fi
 
 #
 #  Now copy analysis
 #
-
+echo "Checking remote program"
+remote_analysis=$( ssh $user$remote "source \$HOME/.resimrc; echo \$IDA_ANALYSIS" )
+#echo "remote_analysis is $remote_analysis"
 remote_program=$remote_analysis/$root_parent/$root_dir/$program_parent/
-file_type=$( ssh $user$remote "df $remote_program -TP | tail -n -1 | awk '{print \$2}'" )
+#echo "remote program is $remote_program"
+file_type=$( ssh $user$remote "df $remote_program -TP | tail -n -1 | awk '{print \$2}'" ) || exit
 #echo "file_type is $file_type"
 if [[ $file_type == nfs* ]]; then
     echo "Remote is NSF, assume no need to synch analyisis artifacts."
@@ -84,9 +89,6 @@ else
     fi
     analysis_dir=$IDA_ANALYSIS/$root_parent/$root_dir/$program_parent/
     #echo "analysis_dir is $analysis_dir"
-    remote_analysis=$( ssh $user$remote "source \$HOME/.resimrc; echo \$IDA_ANALYSIS" )
-    #echo "remote_analysis is $remote_analysis"
-    echo "remote program is $remote_program"
     ssh $user$remote "mkdir -p $remote_program"
     rsync -avh $analysis_dir $usr$remote:$remote_program
 fi
