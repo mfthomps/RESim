@@ -109,21 +109,8 @@ class WriteData():
         if self.max_packets is not None:
             self.max_packets = int(self.max_packets)
 
-        if self.cpu.architecture == 'arm':
-            lenreg = 'r0'
-            pcreg = 'pc'
-        elif self.cpu.architecture == 'arm64':
-            lenreg = 'x0'
-            pcreg = 'pc'
-        elif self.cpu.architecture == 'ppc32':
-            lenreg = 'r3'
-            pcreg = 'pc'
-        else:
-            lenreg = 'eax'
-            pcreg = 'eip'
-        self.len_reg_num = self.cpu.iface.int_register.get_number(lenreg)
-        self.pc_reg = self.cpu.iface.int_register.get_number(pcreg)
-
+        self.len_reg_num = self.mem_utils.getRegNum(self.cpu, 'syscall_ret')
+        self.pc_reg_num = self.mem_utils.getRegNum(self.cpu, 'pc')
         # most recent packet we've written
         self.current_packet = 0
 
