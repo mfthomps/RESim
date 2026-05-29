@@ -376,7 +376,7 @@ class PageFaultGen():
             else:
                 self.lgr.debug('pageFaultHap cr2 reg is NONE????? set to faulting addr to eip 0x%x' % eip)
                 fault_addr = eip
-        if self.mem_utils.isKernel(self.user_eip):
+        if not self.mem_utils.isKernel(self.user_eip):
             # record cycle and eip for reversing back to user space    
             self.recordFault(tid, self.user_eip)
         if self.top.isCode(fault_addr, tid, target=self.target):
@@ -639,7 +639,7 @@ class PageFaultGen():
         if eip not in self.faulting_cycles[tid]:
             self.faulting_cycles[tid][eip] = []
         self.faulting_cycles[tid][eip].append(self.cpu.cycles)
-        #self.lgr.debug('recordFault tid:%s eip 0x%x cycles 0x%x' % (tid, eip, self.cpu.cycles))
+        #self.lgr.debug('pageFaultGen recordFault tid:%s eip 0x%x cycles 0x%x' % (tid, eip, self.cpu.cycles))
 
 
     def faultCallback(self, cpu, one, exception_number):
@@ -690,6 +690,7 @@ class PageFaultGen():
         self.signal_lib.rmHaps()
 
     def clearFaultingCycles(self):
+        self.lgr.debug('pageFaultGen clearFaultingCycles')
         self.faulting_cycles.clear()
 
     def exitHap2(self, prec, third, forth, memory):
@@ -858,6 +859,13 @@ class PageFaultGen():
             return self.faulting_cycles[tid] 
         else:
             return {}
+
+    def getFaultingCycleList(self, tid):
+        retval = []
+        if tid in self.faulting_cycles:
+            for eip in self.faulting_cycles[tid]:
+                retval.extend(self.faulting_cycles[tid][eip])
+        return retval
 
     def handleExit(self, tid, leader, report_only=False):
         ''' We believe a process has been killed.  Determine if there is a pending page fault. 
