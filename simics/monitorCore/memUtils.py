@@ -959,9 +959,14 @@ class MemUtils():
                     mask = 0xffffffff
                
                 cpl = getCPL(cpu)
-                if reg == 'sp': 
+                if reg == 'sp' and cpu.architecture.startswith('arm'): 
                     if cpl == 0 or arm64_app:
-                        reg = 'sp_el0'
+                        # TBD awkward special case for arm
+                        reg_num = cpu.iface.int_register.get_number('sp_el0')
+                        reg_value = cpu.iface.int_register.read(reg_num)
+                        if reg_value == 0:
+                            # case where we are entering kernel, e.g., vi page fault
+                            reg_num = cpu.iface.int_register.get_number('sp')
                     else:
                         reg = 'sp'
                 #self.lgr.debug('memUtils getRegVal arm64_app %s reg now %s cpl was %d' % (arm64_app, reg, cpl))
