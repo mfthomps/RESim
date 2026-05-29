@@ -1673,9 +1673,8 @@ class GenMonitor():
                             analysis_path = self.full_path
                             self.lgr.debug('coverage, no analysis path, revert to full_path')
                         self.lgr.debug('debug, create Coverage ida_path %s, analysis path: %s' % (ida_path, analysis_path))
-                        
                         self.coverage = coverage.Coverage(self, prog_name, analysis_path, ida_path, self.context_manager[self.target], 
-                           cell_name, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, self.lgr)
+                           cell_name, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, False, self.lgr)
                         if self.coverage is None:
                             self.lgr.error('debug: Coverage is None!')
                         else:
@@ -2363,6 +2362,7 @@ class GenMonitor():
         return self.bookmarks
 
     def getBookmarksJson(self):
+        self.lgr.debug('getBooksmarksJson')
         the_json = self.bookmarks.getBookmarksJson()
         sorted_list = sorted(the_json)
         sorted_json = []
@@ -4059,10 +4059,10 @@ class GenMonitor():
     def origProgAddr(self, eip):
         return self.getSO(eip, show_orig=True)
 
-    def getLoadSize(self, fname):
-        start, size = self.soMap[self.target].getLoadAddrSize(fname)
-        self.lgr.debug('getLoadSize for %s got 0x%x, 0x%x' % (fname, start, size))
-        return start, size
+    def getLoadOffset(self, fname):
+        offset = self.soMap[self.target].getLoadOffset(fname)
+        self.lgr.debug('getLoadOffset for %s got 0x%x' % (fname, offset))
+        return offset
 
     def getSO(self, eip, show_orig=False, target_cpu=None, just_name=False, with_fun=False):
         retval = None
@@ -5256,16 +5256,17 @@ class GenMonitor():
         self.lgr.debug('runToOtherCallback eip 0x%x' % eip)
         self.run_to[self.target].runToKnownCallback(callback)
 
-    def runToOther(self, go=True, threads=False):
+    def runToOther(self, go=True, threads=False, no_libc=False):
         ''' Continue execution until a different library is entered, or main text is returned to '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
 
         if self.isWindows():
-            self.lgr.debug('runToOther eip 0x%x' % eip)
+            self.lgr.debug('runToOther windows eip 0x%x cycle: 0x%x' % (eip, cpu.cycles))
             self.run_to[self.target].runToKnown(threads=threads, skip=eip)
         else:
-            self.soMap[self.target].runToKnown(skip=eip, threads=threads)
+            self.lgr.debug('runToOther eip 0x%x cycle: 0x%x' % (eip, cpu.cycles))
+            self.soMap[self.target].runToKnown(skip=eip, threads=threads, no_libc=no_libc)
         if go:
            SIM_continue(0)
 
@@ -5332,9 +5333,9 @@ class GenMonitor():
                 self.lgr.debug('pageInfo using saved kernel cr3 of 0x%x' % use_cr3)
         else:
             use_cr3 = cr3
-        task_cr3 = memUtils.getCR3(cpu)
-        print('current task cr3 0x%x' % (task_cr3))
-        self.lgr.debug('pageInfo current task cr3 0x%x' % (task_cr3))
+        #task_cr3 = memUtils.getCR3(cpu)
+        #print('current task cr3 0x%x' % (task_cr3))
+        #self.lgr.debug('pageInfo current task cr3 0x%x' % (task_cr3))
         if use_cr3 is not None:
             print('Using cr3 0x%x' % (use_cr3))
      
@@ -5391,40 +5392,52 @@ class GenMonitor():
         if self.target in self.ropCop:
             self.ropCop[self.target].watchROP(watching=watching, callback=callback, addr=addr, size=size)
 
-    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, dead_zone=False, manual_dead_zone=False):
+    def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, 
+                       dead_zone=False, manual_dead_zone=False, map_funs=False, only_funs=None):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
             analysis_path = self.getAnalysisPath(fname)
             tid, cpu = self.context_manager[self.target].getDebugTid() 
+            self.lgr.debug('enableCoverage map_funs %r' % map_funs)
             self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, 
-              report_coverage=report_coverage, create_dead_zone=dead_zone, manual_dead_zone=manual_dead_zone)
+              report_coverage=report_coverage, create_dead_zone=dead_zone, manual_dead_zone=manual_dead_zone, 
+               map_funs=map_funs, only_funs=only_funs)
             self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
-    def mapCoverage(self, fname=None, backstop=False, dead_zone=False):
+    def mapCoverage(self, fname=None, backstop=False, dead_zone=False, map_funs=False, only_funs=None):
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
             analysis_path = self.soMap[self.target].getAnalysisPath(fname)
         else:
             analysis_path = None
-        self.lgr.debug('mapCoverage file (None means use prog name): %s' % analysis_path)
+        self.lgr.debug('mapCoverage map_funs: %r file (None means use prog name): %s' % (map_funs, analysis_path))
         if self.coverage is None and fname is not None:
             cell = self.cell_config.cell_context[self.target]
             cpu = self.cell_config.cpuFromCell(self.target)
             if analysis_path is not None:
                 ida_path = self.getIdaData(analysis_path)
                 self.lgr.debug('mapCoverage, no coveage defined, create one. ida_path is %s' % ida_path)
-                self.coverage = coverage.Coverage(self, analysis_path, ida_path, self.context_manager[self.target], 
-                   cell, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, self.lgr)
+                full_path = self.targetFS[self.target].getFull(fname, lgr=self.lgr)
+                self.coverage = coverage.Coverage(self, full_path, analysis_path, ida_path, self.context_manager[self.target], 
+                   cell, self.soMap[self.target], self.mem_utils[self.target], cpu, self.run_from_snap, map_funs, self.lgr)
             else:
                 self.lgr.error('mapCoverage, could not get analysis path from fname %s' % fname)
         backstop_cycles = None
         if backstop:
             backstop_cycles = defaultConfig.backstopCycles()      
-        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, dead_zone=dead_zone, manual_dead_zone=dead_zone)
+        cover_only_funs = None
+        if only_funs is not None:
+            if os.path.isfile(only_funs):
+                cover_only_funs = json.load(open(only_funs))
+            else:
+                self.lgr.error('No only_funs file at %s' % only_funs)
+                return
+        self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, 
+             dead_zone=dead_zone, manual_dead_zone=dead_zone, map_funs=map_funs, only_funs=cover_only_funs)
 
     def showCoverage(self):
         self.coverage.showCoverage()

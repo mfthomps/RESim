@@ -47,6 +47,7 @@ class CodeSection():
         self.fname = fname
 
 class ProgInfo():
+    # reused for multiple execves
     def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path, interp=None):
         self.text_start = text_start
         self.text_size = text_size
@@ -89,6 +90,8 @@ class LoadInfo():
         self.interp = interp
         if addr is not None:
             self.end = addr+size
+        else:
+            self.end = None
     
 class SOMap():
     def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, run_from_snap, lgr):
@@ -398,7 +401,10 @@ class SOMap():
                 self.so_file_map[tid] = {}
                 self.lgr.debug('soMap addText tid:%s added to so_file_map' % tid)
             else:
-                self.lgr.debug('soMap addText tid:%s already in map len of so_addr_map %d' % (tid, len(self.so_file_map)))
+                # Assuming new program via execve, clear out old map if it exists
+                self.so_addr_map[tid] = {}
+                self.so_file_map[tid] = {}
+                self.lgr.debug('soMap addText tid:%s already in map, clear those. len of so_addr_map %d' % (tid, len(self.so_file_map)))
             if tid in self.prog_start:
                 self.lgr.debug('soMap addText tid:%s already in prog_start as %s, overwrite' % (tid, self.text_prog[tid]))
             
@@ -531,28 +537,28 @@ class SOMap():
 
             self.so_addr_map[tid][prog] = load_info
             self.so_file_map[tid][load_info] = prog
-            self.lgr.debug('soMap addLoader tid: %s prog %s addr: 0x%x' % (tid, prog, addr))
+            self.lgr.debug('soMap addLoader tid:%s prog %s addr: 0x%x' % (tid, prog, addr))
         
         return load_info
         
     def addSO(self, tid_in, prog, addr, count):
-        self.lgr.debug('soMap addSO')
+        self.lgr.debug('soMap addSO tid_in:%s prog %s' % (tid_in, prog))
         if '..' in prog:
             prog = str(Path(prog).resolve())
         prog_basename = os.path.basename(prog)
         if prog_basename not in self.prog_base_map:
             self.prog_base_map[prog_basename] = prog
-            self.lgr.debug('soMap addSO prog_base_map for %s set to %s' % (prog_basename, prog))
+            self.lgr.debug('soMap addSO tid_in:%s prog_base_map for %s set to %s' % (tid_in, prog_basename, prog))
         else:
             if self.prog_base_map[prog_basename] != prog:
-                self.lgr.warning('soMap addeSO collision on program base name %s adding %s.  Replace old with new.' % (prog_basename, prog))
+                self.lgr.warning('soMap addeSO tid_in:%s collision on program base name %s adding %s.  Replace old with new.' % (tid_in, prog_basename, prog))
                 self.prog_base_map[prog_basename] = prog
         #tid = self.getThreadTid(tid_in, quiet=True)
         tid = self.getSOTid(tid_in)
         if tid is None:
             tid = tid_in
         if tid in self.so_addr_map and prog in self.so_addr_map[tid]:
-            self.lgr.debug('soMap addSO tid %s already in map' % tid)
+            self.lgr.debug('soMap addSO tid %s already in map tid_in was %s' % (tid, tid_in))
             ''' multiple mmap calls for one so file.  assume continguous and adjust
                 address to lowest '''
             if self.so_addr_map[tid][prog].addr> addr:
@@ -572,7 +578,7 @@ class SOMap():
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                          elf_info.plt_offset, elf_info.plt_size, full_path, interp=elf_info.interp)
-                    self.lgr.debug('soMap addSo added prog_info for prog %s' % prog)
+                    self.lgr.debug('soMap addSo tid:%s added prog_info for prog %s' % (tid, prog))
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
 
@@ -580,7 +586,8 @@ class SOMap():
 
             self.so_addr_map[tid][prog] = load_info
             self.so_file_map[tid][load_info] = prog
-            self.lgr.debug('soMap addSO tid: %s prog %s addr: 0x%x' % (tid, prog, addr))
+            self.lgr.debug('soMap addSO tid:%s prog %s addr: 0x%x loadinfo.addr 0x%x end 0x%x size 0x%x' % (tid, prog, addr,
+                    load_info.addr, load_info.end, load_info.size))
 
             if self.fun_mgr is not None:
                 self.fun_mgr.add(full_path, addr)
@@ -632,7 +639,6 @@ class SOMap():
             cpu, comm, tid = self.task_utils.curThread() 
             print('no so map for %s' % tid)
             self.lgr.debug('soMap showSO no so map for %s' % tid)
-        print('SO Map for threads led by group leader tid: %s' % tid)
         if tid in self.so_file_map:
             if save:
                 ofile = 'logs/somap-%s.somap' % tid
@@ -750,7 +756,7 @@ class SOMap():
                             self.prog_end[ttid] = self.prog_end[tid]
                             self.text_prog[ttid] = self.text_prog[tid]
                         else:
-                            self.lgr.debug('SOMap handle exit, missing text_start entry tid: %s ttid:%s' % (tid, ttid))
+                            self.lgr.debug('SOMap handle exit, missing text_start entry tid:%s ttid:%s' % (tid, ttid))
         
             else:
                 self.lgr.debug('SOMap handleExit tid:%s NOT in tidlist' % tid)
@@ -918,7 +924,7 @@ class SOMap():
     def stopAlone(self, cpu):
         if len(self.hap_list) > 0:
             self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, cpu)
-            self.lgr.debug('soMap stopAlone')
+            self.lgr.debug('soMap stopAlone cycle: 0x%x' % cpu.cycles)
             for hap in self.hap_list:
                 self.context_manager.genDeleteHap(hap)
             del self.hap_list[:]
@@ -932,7 +938,8 @@ class SOMap():
                 value = memory.logical_address
                 fname, start, end = self.getSOInfo(value)
                 if fname is not None and start is not None:
-                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x' % (tid, value, fname, start, end))
+                    self.lgr.debug('soMap knownHap tid:%s memory 0x%x %s start:0x%x end:0x%x cycle: 0x%x' % (tid, value, fname, start, end,
+                        self.cpu.cycles))
                 else:
                     self.lgr.debug('soMap knownHap tid:%s memory 0x%x NO mapping file %s' % (tid, value, fname))
 
@@ -940,27 +947,34 @@ class SOMap():
             else:
                 self.lgr.debug('soMap knownHap wrong tid, wanted %s got %s' % (tid, cur_tid))
         
-    def runToKnown(self, skip=None, threads=None):        
+    def runToKnown(self, skip=None, threads=None, no_libc=False):        
        # TBD why this and the one in runTo???  threads is not used here
        cpu, comm, cur_tid = self.task_utils.curThread() 
        map_tid = self.getSOTid(cur_tid)
        if map_tid in self.prog_start: 
            start =  self.prog_start[map_tid] 
            length = self.prog_end[map_tid] - self.prog_start[map_tid] 
-           proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
-           self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
-           self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
+           if skip is None or (skip < start or skip > self.prog_end[map_tid]):
+               proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+               self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
+               self.lgr.debug('soMap runToKnow text 0x%x 0x%x' % (start, length))
        else:
            self.lgr.debug('soMap runToKnown no text for %s' % map_tid)
        if map_tid in self.so_file_map:
             for load_info in self.so_file_map[map_tid]:
+                prog = self.so_file_map[map_tid][load_info]
+                base = os.path.basename(prog)
+                if no_libc and ('libc' in base or 'libstdc' in base):
+                    continue
                 start = load_info.addr
                 length = load_info.size
                 end = load_info.end
+                so_length = load_info.end - load_info.addr 
                 if skip is None or not (skip >= start and skip <= end):
-                    proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, start, so_length, 0)
                     self.hap_list.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.knownHap, cur_tid, proc_break, 'runToKnown'))
-                    self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x' % (self.so_file_map[map_tid][load_info], start, length))
+                    self.lgr.debug('soMap runToKnow lib %s 0x%x 0x%x (full 0x%x)' % (prog, start, length,
+                        so_length))
                 else:
                     self.lgr.debug('soMap runToKnow, skip %s' % (self.so_file_map[map_tid][load_info]))
        else:
