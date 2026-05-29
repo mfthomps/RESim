@@ -367,12 +367,12 @@ class reverseToCall():
                 page_cycles = entry_cycles
                 if self.page_faults is not None:
                     pass
-                    #self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                    #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                    self.lgr.debug('tryOneStopped NOT !!!! adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycleList(tid))))
+                    page_cycles = page_cycles + self.page_faults.getFaultingCycleList(tid)
                 for cycles in sorted(page_cycles):
                     if cycles > cur_cycles:
-                        self.lgr.debug('tryBackOne found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
                         got_it = prev_cycles - 1
+                        self.lgr.debug('tryBackOne found cycle between 0x%x and 0x%x, set got_it to 0x%x' % (prev_cycles, cycles, got_it))
                         break
                     else:
                         #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
@@ -548,21 +548,29 @@ class reverseToCall():
             got_it = None
             page_cycles = entry_cycles
             if self.page_faults is not None:
-                #self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycles())))
-                #page_cycles = page_cycles + self.page_faults.getFaultingCycles()
+                self.lgr.debug('jumpOverKernel adding %d page faults to cycles' % (len(self.page_faults.getFaultingCycleList(tid))))
+                page_cycles = page_cycles + self.page_faults.getFaultingCycleList(tid)
                 pass
             for cycles in sorted(page_cycles):
                 if cycles > cur_cycles:
-                    self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
-                    got_it = prev_cycles - 1
-                    break
+                    if prev_cycles is None:
+                        self.lgr.debug('jumpOverKernel first cycle 0x%x greater than cur_cycle 0x%x. Would hit origin.')
+                        
+                        break
+                    else:
+                        self.lgr.debug('jumpOverKernel found cycle between 0x%x and 0x%x' % (prev_cycles, cycles))
+                        got_it = prev_cycles - 1
+                        break
                 else:
                     #self.lgr.debug('tryOneStopped is not cycle 0x%x' % (cycles))
                     prev_cycles = cycles
 
             if not got_it:
-                self.lgr.debug('jumpOverKernel nothing between, assume last cycle of 0x%x' % prev_cycles)
-                got_it = prev_cycles - 1
+                if prev_cycles is None:
+                    self.lgr.debug('jumpOverKernel nothing between and no prev_cycle.  eh?')
+                else:
+                    self.lgr.debug('jumpOverKernel nothing between, assume last cycle of 0x%x' % prev_cycles)
+                    got_it = prev_cycles - 1
 
             status = SIM_simics_is_running()
             if status:
@@ -605,6 +613,7 @@ class reverseToCall():
             page_faults = self.page_faults.getFaultingCycles(tid)
             self.lgr.debug('jumpOverKernel in kernel, but not exit %s len of page_faults is %d. Trying to run back to 0x%x' % (instruct[1], len(page_faults), rev_to))
             if rev_to in page_faults:
+                # page_faults is a dict keyed by EIP
                 skip_to = self.getClosestFault(page_faults[rev_to])
                 if skip_to is None:
                     self.lgr.debug('jumpOverKernel did not find page fault prior to current cycle')
