@@ -6001,6 +6001,9 @@ class GenMonitor():
         self.instruct_trace.endTrace()
         self.instruct_trace = None
 
+    def annotateInstructTrace(self):
+        self.instruct_trace.annotate()
+
     def debugIfNot(self):
         ''' warning, assumes current tid is the one to be debugged. '''
         self.lgr.debug('debugIfNot')
@@ -6503,6 +6506,14 @@ class GenMonitor():
             self.lgr.error('getFunName No function manager yet, are you debugging?')
         else:
             retval = self.fun_mgr.getFunName(addr)
+        return retval
+
+    def getFunAddr(self, addr):
+        retval = self.fun_mgr.getFun(addr)
+        if retval is not None:
+            self.lgr.debug('getFunAddr for 0x%x return 0x%x' % (addr, retval))
+        else:
+            self.lgr.debug('getFunAddr for 0x%x got None' % (addr))
         return retval
 
     def getFun(self, addr):
@@ -7349,6 +7360,10 @@ class GenMonitor():
             SIM_continue(0)
         else:
             self.stepN(1)
+
+    def stepInto(self):
+        # TBD quicker method?
+        self.stepN(1)
 
     def stopAFL(self):
         if self.afl_instance is not None:
