@@ -64,6 +64,7 @@ class Coverage():
         self.bb_hap = []
         self.blocks = None
         self.block_total = 0
+        self.funs = None
         self.funs_hit = []
         # dict of unique bb addrs hit, value is record with cycle and packet number
         self.blocks_hit = OrderedDict()
@@ -168,6 +169,15 @@ class Coverage():
         else:
             self.lgr.debug('Coverage, no blocks at %s' % block_file)
 
+    def loadFuns(self, fun_file):
+        if os.path.isfile(fun_file):
+            with open(fun_file) as fh:
+                self.funs = json.load(fh)
+            self.lgr.debug('coverage loaded funs from %s' % (fun_file))
+        else:
+            self.lgr.debug('Coverage, no funs at %s' % fun_file)
+
+
     def stopCover(self, keep_hits=False):
         self.lgr.debug('coverage, stopCover')
         for bp in self.bp_list:
@@ -261,6 +271,10 @@ class Coverage():
         else:
             self.last_block_file = block_file
             self.loadBlocks(block_file)         
+            if self.map_funs:
+                fun_file = self.analysis_path+'.funs'
+                self.loadFuns(fun_file)         
+            
             self.offset = self.so_map.getLoadOffset(self.prog_path)
             if self.offset is None:
                 self.lgr.error('cover offset for %s is None, bails' % (self.prog_path))
@@ -270,6 +284,58 @@ class Coverage():
                 self.lgr.error('Coverge: No basic blocks defined')
                 return
             self.setBlockBreaks()
+
+    def setBlockBreaksForFun(self, fun, did_breaks_at):
+            tmp_list = []
+            prev_bp = None
+            for block_entry in self.blocks[fun]['blocks']:
+                bb = block_entry['start_ea']
+                bb_rel = bb + self.offset
+                if bb_rel in did_breaks_at:
+                    self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x ALREADY DONE, skip it' % (fun, bb, bb_rel))
+                    continue
+                did_breaks_at.append(bb_rel)
+                self.lgr.debug('***************Coverage fun %s bb 0x%x bb_rel 0x%x len of did_breaks_at is %d' % (fun, bb, bb_rel, len(did_breaks_at)))
+                # TBD REMOVE THIS
+                #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
+                #return
+                #if bb_rel in self.dead_list:
+                #    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
+                #    continue
+                if self.afl:
+                    rand = random.randrange(0, self.map_size)
+                    self.afl_map[bb_rel] = rand
+                bp = self.setBreak(bb_rel)
+                if bp is not None:
+                    self.bp_list.append(bp)                 
+                    self.lgr.debug('coverage setBlockBreaksForFun break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
+                       int(fun), bb, self.offset, bp))
+                    if prev_bp is not None and bp != (prev_bp+1):
+                        self.lgr.debug('cover setBlockBreaks prev_bp is %s bp is %s' % (prev_bp, bp))
+                        if len(tmp_list) > 0:
+                            self.doHapRange(tmp_list)
+                            tmp_list = []
+                        else:
+                            self.lgr.error('coverage setBlockBreaks tmp_list is empty?')
+                    tmp_list.append(bp) 
+                    prev_bp = bp
+                if self.map_funs:
+                    self.lgr.debug('coverage setBlockBreaksForFun is map_funs')
+                    if fun in self.funs:
+                        if 'ranges' in self.funs[fun] and len(self.funs[fun]['ranges']) > 1:
+                            for frange in self.funs[fun]['ranges'][1:]:
+                                bb_rel = frange['start'] + self.offset
+                                bp = self.setBreak(bb_rel)
+                                if bp is not None:
+                                    self.doHapRange([bp])
+                                    self.bp_list.append(bp)                 
+                                    self.did_breaks_at.append(bb_rel)                 
+                                    self.lgr.debug('coverage setBlockBreaks xtra range at 0x%x' % bb_rel)
+                    break
+            if len(tmp_list) > 0:
+                self.doHapRange(tmp_list)
+                tmp_list = []
+            return tmp_list 
 
     def setBlockBreaks(self):
         self.lgr.debug('setBlockBreaks cycle: 0x%x' % self.cpu.cycles)
@@ -282,49 +348,20 @@ class Coverage():
         #with open(missed_fun_file) as fh:
         #    missed_funs = json.load(fh)
         did_breaks_at = []
-        for fun in self.blocks:
-        #    fun_addr = int(fun)
-        #    if fun_addr in missed_funs:
-        #        continue
-            if self.only_funs is not None:
-                fun_addr = int(fun)
-                if fun_addr not in self.only_funs:
-                    continue
-                else:
-                    self.lgr.debug('Coverage fun %s in only_funs %d blocks' % (fun, len(self.blocks[fun]['blocks'])))
-          
-            for block_entry in self.blocks[fun]['blocks']:
-                bb = block_entry['start_ea']
-                bb_rel = bb + self.offset
-                #self.lgr.debug('Coverage fun %s bb 0x%x bb_rel 0x%x' % (fun, bb, bb_rel))
-                # TBD REMOVE THIS
-                #self.lgr.debug('bb 0x%x offset 0x%x' % (bb, self.offset))
-                #return
-                #if bb_rel in self.dead_list:
-                #    #self.lgr.debug('skipping dead spot 0x%x' % bb_rel)
-                #    continue
-                if self.afl:
-                    rand = random.randrange(0, self.map_size)
-                    self.afl_map[bb_rel] = rand
-                if bb_rel in did_breaks_at:
-                    continue
-                bp = self.setBreak(bb_rel)
-                if bp is not None:
-                    did_breaks_at.append(bb_rel)
-                    self.bp_list.append(bp)                 
-                    #self.lgr.debug('cover break at 0x%x fun 0x%x -- bb: 0x%x offset: 0x%x break num: %d' % (bb_rel, 
-                    #   int(fun), bb, self.offset, bp))
-                    if prev_bp is not None and bp != (prev_bp+1):
-                        self.lgr.debug('cover setBlockBreaks prev_bp is %s bp is %s' % (prev_bp, bp))
-                        if len(tmp_list) > 0:
-                            self.doHapRange(tmp_list)
-                            tmp_list = []
-                        else:
-                            self.lgr.error('coverage setBlockBreaks tmp_list is empty?')
-                    tmp_list.append(bp) 
-                    prev_bp = bp
-                if self.map_funs:
-                    break
+        if self.only_funs is None:
+            for fun in self.blocks:
+                tmp_list =  self.setBlockBreaksForFun(fun, did_breaks_at)
+        else:
+            did_funs = []
+            # only_funs is list of start addresses for ranges in function, most of which have one range.
+            for fun in self.only_funs:
+                fun_adjusted = fun + self.offset
+                fun_entry = self.top.getFunAddr(fun_adjusted) - self.offset
+                if fun_entry not in did_funs:
+                    did_funs.append(fun_entry)
+                    self.lgr.debug('coverage setBlockBreaks only_funs addr 0x%x do fun entry 0x%x' % (fun, fun_entry))
+                    fun_entry_string = str(fun_entry)
+                    tmp_list = self.setBlockBreaksForFun(fun_entry_string, did_breaks_at)
 
         ''' physical breaks, context does not matter'''
         self.lgr.debug('coverage generated %d breaks and %d unmapped' % (len(self.bp_list), len(self.unmapped_addrs)))
@@ -968,7 +1005,7 @@ class Coverage():
         s = json.dumps(hit_list)
         if fname is None:
             if self.map_funs:
-                save_name = '%s.fun_hits' % (self.hits_path, fname)
+                save_name = '%s.fun_hits' % (self.hits_path)
             else:
                 save_name = '%s.hits' % self.hits_path
         else:
