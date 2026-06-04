@@ -47,12 +47,13 @@ class IDAFuns():
                 jfuns = json.load(fh)
                 self.lgr.debug('idaFuns read funs from %s' % path)
                 for sfun in jfuns:
+                    fun_addr = int(sfun)
                     fun_rec = jfuns[sfun]
                     fun_name = fun_rec['name']
                     if fun_name.startswith('__imp__'):
                         fun_name = fun_name[7:]
                     fun_name = rmPrefix(fun_name)
-                    adjusted = fun_rec['start'] + offset
+                    adjusted = fun_addr + offset
                     fun = adjusted
                     if fun_name in self.mangle:
                         #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
@@ -60,8 +61,13 @@ class IDAFuns():
                         fun_name = rmPrefix(demangled)
                         fun_rec['name'] = fun_name
                         #lgr.debug('demangled function name for 0x%x changed to %s' % (fun, fun_name))
-                    fun_rec['start'] = adjusted
-                    fun_rec['end'] = fun_rec['end'] + offset
+                    if 'ranges' in fun_rec:
+                        for frange in fun_rec['ranges']:
+                            frange['start'] = frange['start'] + offset 
+                            frange['end'] = frange['end'] + offset 
+                    else:
+                        fun_rec['start'] = adjusted
+                        fun_rec['end'] = fun_rec['end'] + offset
                     ''' index by load address to avoid collisions '''
                     self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
@@ -118,8 +124,16 @@ class IDAFuns():
                         self.lgr.error('idaFuns collision on function 0x%x (%s) fun_int 0x%x offset 0x%x file: %s' % (fun, newfuns[f]['name'], fun_int, offset, funfile))
                         break
                     self.funs[fun] = {}
-                    self.funs[fun]['start'] = fun
-                    self.funs[fun]['end'] = newfuns[f]['end']+offset
+                    if 'ranges' in newfuns[f]:
+                        self.funs[fun]['ranges'] = []
+                        for frange in newfuns[f]['ranges']:
+                            frange['start'] = frange['start']+offset
+                            frange['end'] = frange['end']+offset
+                            self.funs[fun]['ranges'].append(frange)
+                        
+                    else:
+                        self.funs[fun]['start'] = fun
+                        self.funs[fun]['end'] = newfuns[f]['end']+offset
                     fun_name = newfuns[f]['name']
                     fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
@@ -157,7 +171,10 @@ class IDAFuns():
         ''' return the start and end of a function (loaded) given its name '''
         for fun in self.funs:
             if self.funs[fun]['name'] == name:
-                return self.funs[fun]['start'], self.funs[fun]['end']
+                if 'ranges' in self.funs[fun]:
+                    return self.funs[fun]['ranges'][0]['start'], self.funs[fun]['ranges'][0]['end']
+                else:
+                    return self.funs[fun]['start'], self.funs[fun]['end']
         return None, None
  
     def getName(self, fun):
@@ -174,8 +191,13 @@ class IDAFuns():
             #self.lgr.debug('is 0x%x in %x ' % (ip, fun))
             if fun in self.funs:
                 #print('start 0x%x end 0x%x' % (self.funs[fun]['start'], self.funs[fun]['end']))
-                if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                    return True
+                if 'ranges' in self.funs[fun]:
+                    for frange in self.funs[fun]['ranges']:
+                        if ip >= frange['start'] and ip <= frange['end']:
+                            return True
+                else:
+                    if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                        return True
             else:
                 self.lgr.debug('idaFuns inFun given fun 0x%x is not a function' % fun)
         return False 
@@ -185,8 +207,13 @@ class IDAFuns():
         if ip is not None:
             for fun in self.funs:
                 #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
-                if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                    return fun
+                if 'ranges' in self.funs[fun]:
+                    for frange in self.funs[fun]['ranges']:
+                        if ip >= frange['start'] and ip <= frange['end']:
+                            return fun
+                else:
+                    if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                        return fun
         else:
             self.lgr.error('idaFuns getFun called with ip of None')
         return None
@@ -205,11 +232,20 @@ class IDAFuns():
 
     def showFuns(self, search=None):
         for fun in sorted(self.funs):
-            if search is not None:
-                if search in self.funs[fun]['name']:
-                    print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
+            fun_addr = int(fun)
+            if 'ranges' in self.funs[fun]:
+                if search is not None:
+                    if search in self.funs[fun]['name']:
+                        print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], fun_addr))
+                else:
+                    print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], fun_addr))
+
             else:
-                print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], self.funs[fun]['start'], self.funs[fun]['end']))
+                if search is not None:
+                    if search in self.funs[fun]['name']:
+                        print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], fun_addr, self.funs[fun]['end']))
+                else:
+                    print('\t%20s \t0x%x\t%x' % (self.funs[fun]['name'], fun_addr, self.funs[fun]['end']))
 
 
     def demangle(self, fun):
@@ -252,8 +288,12 @@ class IDAFuns():
     def showFunEntries(self, fun_name):
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
-                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
-                print('fun entry 0x%x size %d' % (fun, size))
+                if 'ranges' in self.funs[fun]:
+                    size = self.funs[fun]['ranges'][0]['start'] - self.funs[fun]['ranges'][0]['end']
+                    print('fun entry 0x%x size %d' % (fun, size))
+                else:
+                    size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                    print('fun entry 0x%x size %d' % (fun, size))
 
     def getFunEntry(self, fun_name):
         ''' get the loaded address of the entry of a given function name, with preference to the largest function '''
@@ -261,17 +301,26 @@ class IDAFuns():
         retval = None
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
-                size = self.funs[fun]['end'] - self.funs[fun]['start'] 
-                if size > big:
-                    big = size
-                    retval = self.funs[fun]['start']
+                if 'ranges' in self.funs[fun]:
+                    size = self.funs[fun]['ranges'][0]['end'] - self.funs[fun]['ranges'][0]['start']
+                    if size > big:
+                        big = size
+                        retval = self.funs[fun]['ranges'][0]['start']
+                else:
+                    size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                    if size > big:
+                        big = size
+                        retval = self.funs[fun]['start']
         return retval
  
     def getFunLoaded(self, fun_addr):
         ''' get the loaded function entry for a given analysis function address '''
         retval = None
         if fun_addr in self.funs:
-            retval = self.funs[fun_addr]['start']
+            if 'ranges' in self.funs[fun_addr]:
+                retval = self.funs[fun_addr]['ranges'][0]['start']
+            else:
+                retval = self.funs[fun_addr]['start']
         return retval
 
     def getFunWithin(self, fun_name, start, end):
@@ -281,12 +330,20 @@ class IDAFuns():
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
                 self.lgr.debug('idaFuns getFunWithin found match for %s, fun start 0x%x  end 0x%x' % (fun_name, self.funs[fun]['start'], self.funs[fun]['end']))
-                if self.funs[fun]['start'] >= start and self.funs[fun]['end'] <= end:
-                    size = self.funs[fun]['end'] - self.funs[fun]['start'] 
-                    self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))
-                    if size > big:
-                        big = size
-                        retval = self.funs[fun]['start']
+                if 'ranges' in self.funs[fun]:
+                    if self.funs[fun]['ranges'][0]['start'] >= start and self.funs[fun]['ranges'][0]['end'] <= end:
+                        size = self.funs[fun]['ranges'][0]['end'] - self.funs[fun]['ranges'][0]['start'] 
+                        self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))
+                        if size > big:
+                            big = size
+                            retval = self.funs[fun]['start']
+                else:
+                    if self.funs[fun]['start'] >= start and self.funs[fun]['end'] <= end:
+                        size = self.funs[fun]['end'] - self.funs[fun]['start'] 
+                        self.lgr.debug('idaFuns getFunWithin %s matches, and within, size 0x%x' % (fun_name, size))
+                        if size > big:
+                            big = size
+                            retval = self.funs[fun]['start']
         return retval
            
     def getFuns(self):
