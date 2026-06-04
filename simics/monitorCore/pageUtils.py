@@ -324,7 +324,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
                     lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
                           l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
         else:
-            lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
+            #lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
             phys = None
         ptable_info.page_base_addr = l3_base_addr
         ptable_info.ptable_exists = True
