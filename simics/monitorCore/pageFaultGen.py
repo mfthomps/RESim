@@ -547,8 +547,8 @@ class PageFaultGen():
             if self.cpu.architecture == 'ppc32':
                 self.watchPteg(page_info, prec)
             elif page_info.ptable_addr is None:
-                self.lgr.debug('pageFaultGen pageFaultHapAlone ptable_addr is None? %s' % page_info.valueString())
-
+                #self.lgr.debug('pageFaultGen pageFaultHapAlone ptable_addr is None? %s' % page_info.valueString())
+                pass
             elif not page_info.ptable_exists:
                 if page_info.ptable_addr is not None:
                     #self.lgr.debug('watch pdir address of 0x%x' % page_info.pdir_addr)
@@ -690,7 +690,7 @@ class PageFaultGen():
         self.signal_lib.rmHaps()
 
     def clearFaultingCycles(self):
-        self.lgr.debug('pageFaultGen clearFaultingCycles')
+        #self.lgr.debug('pageFaultGen clearFaultingCycles')
         self.faulting_cycles.clear()
 
     def exitHap2(self, prec, third, forth, memory):
