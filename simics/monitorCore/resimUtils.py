@@ -964,3 +964,28 @@ def getAllHits(full_path, root_prefix):
                     retval.append(h)
     #print('found %d total hits' % len(retval))
     return retval 
+
+def decodeProtect(val):
+    """
+    Decodes an mprotect prot integer into human-readable memory permissions.
+    """
+    # Standard POSIX & Linux protection flags
+    prot_flags = {
+        0x0: "PROT_NONE",
+        0x1: "PROT_READ",
+        0x2: "PROT_WRITE",
+        0x4: "PROT_EXEC"
+    }
+
+    # Handle exact zero
+    if val == 0:
+        return prot_flags[0x0]
+
+    # Bitwise evaluation for combined flags
+    readable_permissions = []
+    for bit_val, name in prot_flags.items():
+        if bit_val and (val & bit_val) == bit_val:
+            readable_permissions.append(name)
+            
+    return " | ".join(readable_permissions) if readable_permissions else "UNKNOWN"
+

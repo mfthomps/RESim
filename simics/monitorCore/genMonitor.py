@@ -96,6 +96,7 @@ import reportCrash
 import reportExit
 import injectIO
 import instructTrace
+import instructTraceAnnotate
 import aflPath
 import trackAFL
 import prepInject
@@ -6001,8 +6002,8 @@ class GenMonitor():
         self.instruct_trace.endTrace()
         self.instruct_trace = None
 
-    def annotateInstructTrace(self):
-        self.instruct_trace.annotate()
+    def annotateInstructTrace(self, fname):
+        instructTraceAnnotate.InstructTraceAnnotate(self, fname, self.lgr)
 
     def debugIfNot(self):
         ''' warning, assumes current tid is the one to be debugged. '''
