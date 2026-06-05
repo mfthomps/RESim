@@ -13,15 +13,16 @@ SA_FLAGS = {
 def decodeFlags(flags): 
     """Decodes the Linux rt_sigaction sa_flags field into a human-readable list."""
     decoded = []
-    
-    # Iterate through all flag values and check if they are set
-    for mask, name in SA_FLAGS.items():
-        if flags & mask:
-            decoded.append(name)
+
+    if flags is not None:    
+        # Iterate through all flag values and check if they are set
+        for mask, name in SA_FLAGS.items():
+            if flags & mask:
+                decoded.append(name)
             
-    # Handle obsolete/synonym masks that share the same bit values
-    if flags & 0x00000001 and "SA_NOCLDSTOP" not in decoded:
-        decoded.append("SA_NOCLDSTOP")
+        # Handle obsolete/synonym masks that share the same bit values
+        if flags & 0x00000001 and "SA_NOCLDSTOP" not in decoded:
+            decoded.append("SA_NOCLDSTOP")
         
     return decoded
 
