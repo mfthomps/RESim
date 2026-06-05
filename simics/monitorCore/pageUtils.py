@@ -304,7 +304,10 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
     l2_basex = l2_base & 0x0000fffffffff000 
     if do_log: 
         lgr.debug('l1_base: 0x%x l2_index 0x%x  l2_off 0x%x l2_base_addr 0x%x l2_base raw 0x%x masked: 0x%x' % (l1_base, l2_index, l2_off, l2_base_addr, l2_base, l2_basex))
-    if l2_base < 0x10000000000000:
+    if l2_base == 0:
+        if do_log: 
+            lgr.debug('l2_base is 0, bail')
+    elif l2_base < 0x10000000000000:
         l3_index = memUtils.bitRange(va, 12, 20)
         l3_off = 8 * l3_index
         l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
@@ -324,7 +327,7 @@ def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False,
                     lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
                           l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
         else:
-            #lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
+            lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
             phys = None
         ptable_info.page_base_addr = l3_base_addr
         ptable_info.ptable_exists = True
