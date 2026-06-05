@@ -2219,7 +2219,8 @@ class Syscall():
                 arg_addr = frame['param1']
                 addr = self.mem_utils.readPtr(self.cpu, arg_addr)
                 length = self.mem_utils.readPtr(self.cpu, arg_addr+4)
-                prot = self.mem_utils.readPtr(self.cpu, arg_addr+8)
+                prot_val = self.mem_utils.readPtr(self.cpu, arg_addr+8)
+                prot = resimUtils.decodeProtect(prot_val)
                 flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
@@ -2240,7 +2241,7 @@ class Syscall():
                 elif fd is None:
                     ida_msg = '%s tid:%s (%s) FD: NONE' % (callname, tid, comm)
                 else:
-                    ida_msg = '%s tid:%s (%s) FD: %s buf: 0x%x  len: %d prot: 0x%x  flags: 0x%x  offset: 0x%x' % (callname, tid, comm, fd, arg_addr, length, prot, flags, offset)
+                    ida_msg = '%s tid:%s (%s) FD: %s buf: 0x%x  len: 0x%x prot: %s  flags: 0x%x  offset: 0x%x' % (callname, tid, comm, fd, arg_addr, length, prot, flags, offset)
 
             #elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
             elif self.cpu.architecture.startswith('arm'):
@@ -2252,8 +2253,9 @@ class Syscall():
                     fd = 'NULL'
                 elif fd is not None:
                     fd = str(fd)  
-                prot = frame['param3']
-                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
+                prot_val = frame['param3']
+                prot = resimUtils.decodeProtect(prot_val)
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
                 self.lgr.debug(ida_msg)
@@ -2263,25 +2265,29 @@ class Syscall():
                     fd = 'NULL'
                 elif fd is not None:
                     fd = str(fd)  
-                prot = frame['param3']
-                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: %d prot: 0x%x  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
+                prot_val = frame['param3']
+                prot = resimUtils.decodeProtect(prot_val)
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
                     fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
                 #if self.watch_first_mmap is not None:
                 #    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
                 #else:
                 #    self.lgr.debug('syscall mmap watch_first_mmap is none')
                 self.lgr.debug('syscall mmap '+taskUtils.stringFromFrame(frame))
-            if prot is not None:
-                is_ex = prot & 4
+            if prot_val is not None:
+                is_ex = prot_val & 4
             else:
                 is_ex = 0
-            exit_info.prot = prot
+            exit_info.prot = prot_val
             self.lgr.debug('syscall mmap fd %s  watch_first_mmap %s  prot %s is exec? %d' % (fd, self.watch_first_mmap, prot, is_ex))
             if fd is not None and fd != 'NULL' and self.watch_first_mmap == int(fd) and is_ex:
                 self.lgr.debug('syscall mmap fd MATCHES watch_first_mmap %d' % int(fd))
                 exit_info.fname = self.mmap_fname
                 self.watch_first_mmap = None
-
+        elif callname == 'munmap':
+            exit_info.retval_addr = frame['param1']
+            exit_info.count = frame['param2']
+            ida_msg = '%s tid:%s (%s) addr: 0x%x len: 0x%x\n' % (callname, tid, comm, exit_info.retval_addr, exit_info.count)
         elif callname in ['select','_newselect', 'pselect6']:        
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
@@ -2376,16 +2382,19 @@ class Syscall():
                    sigaction_addr, sa_sigaction, ' '.join(flag_list))
             else:
                 handler = self.mem_utils.readAppPtr(self.cpu, sigaction_addr, size=word_size)
-                proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
-                if tid not in self.sig_handler:
-                    self.sig_handler[tid] = {}
-                if signum in self.sig_handler[tid]:
-                    self.lgr.debug('syscallHap %s will remove sig_handler for tid:%s (%s) signum %d' % (callname, tid, comm, signum))
-                    self.context_manager.genDeleteHap(self.sig_handler[tid][signum], immediate=False)
-                self.sig_handler[tid][signum] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, signum, proc_break, 'sig_handler')
-                self.lgr.debug('syscallHap %s set break on handler 0x%x tid:%s (%s) signum: %rd' % (callname, handler, tid, comm, signum))
-                ida_msg = '%s tid:%s (%s) signum: %d sigaction_addr: 0x%x handler: 0x%x flags: %s' % (callname, tid, comm, signum, 
-                   sigaction_addr, handler, ' '.join(flag_list))
+                if handler is None:
+                    ida_msg = '%s tid:%s (%s) signum: %d sigaction_addr: 0x%x sa_sigaction None?' % (callname, tid, comm, signum, sigaction_addr)
+                else:
+                    proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, handler, 1, 0)
+                    if tid not in self.sig_handler:
+                        self.sig_handler[tid] = {}
+                    if signum in self.sig_handler[tid]:
+                        self.lgr.debug('syscallHap %s will remove sig_handler for tid:%s (%s) signum %d' % (callname, tid, comm, signum))
+                        self.context_manager.genDeleteHap(self.sig_handler[tid][signum], immediate=False)
+                    self.sig_handler[tid][signum] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.sigHandlerHap, signum, proc_break, 'sig_handler')
+                    self.lgr.debug('syscallHap %s set break on handler 0x%x tid:%s (%s) signum: %s' % (callname, handler, tid, comm, signum))
+                    ida_msg = '%s tid:%s (%s) signum: %s sigaction_addr: 0x%x handler: 0x%x flags: %s' % (callname, tid, comm, signum, 
+                       sigaction_addr, handler, ' '.join(flag_list))
             self.lgr.debug(ida_msg)
             #SIM_break_simulation(ida_msg)
 
@@ -2582,6 +2591,11 @@ class Syscall():
             val = frame['param3']
             time_spec = frame['param4']
             ida_msg = '%s tid:%s (%s) addr: 0x%x op: %s val: 0x%x time_spec: 0x%x' % (callname, tid, comm, exit_info.retval_addr, op, val, time_spec)
+        elif callname == "mprotect":
+            exit_info.retval_addr = frame['param1']
+            exit_info.count = frame['param2']
+            prot = resimUtils.decodeProtect(frame['param3'])
+            ida_msg = '%s tid:%s (%s) addr: 0x%x len: 0x%x prot: %s' % (callname, tid, comm, exit_info.retval_addr, exit_info.count, prot)
 
         elif callname == "not_mapped":
             ida_msg = '%s tid:%s (%s) call_num: 0x%x' % (callname, tid, comm, callnum)
