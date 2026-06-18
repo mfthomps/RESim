@@ -1123,6 +1123,7 @@ class MemUtils():
         Modify params values to reflect the delta between the recorded fs/gs base and the current one.
         This will affect the params structure shared by many modules.
         '''
+        self.lgr.debug('memUtils adjustParam architecture: %s' % cpu.architecture)
         if cpu.architecture.startswith('arm'):
             return
         if cpu.architecture.startswith('ppc32'):
