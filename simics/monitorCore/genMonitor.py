@@ -1560,7 +1560,7 @@ class GenMonitor():
             ''' tbd, this is likely already set by some other action, no harm '''
             self.context_manager[self.target].watchTasks()
             self.context_manager[self.target].setDebugTid()
-            self.recordEntry()
+            self.recordEntry(quiet=True)
             #self.lgr.debug('debug restore RESim context')
             # this is already done in setDebugTid???
             #self.context_manager[self.target].restoreDebugContext()
@@ -2840,7 +2840,7 @@ class GenMonitor():
         ''' reverse until a write to given address '''
         self.stopAtKernelWrite(addr)
 
-    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False):
+    def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False, nth=None):
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2866,6 +2866,7 @@ class GenMonitor():
         else:
             self.lgr.debug('runToCall set no_param to break on this call')
             no_param = syscall.CallParams('runToCall', callname, None, break_simulation=True) 
+            no_param.nth = nth
             call_params = [no_param]
 
         self.lgr.debug('runToCall %s %d params' % (callname, len(call_params)))
@@ -4669,13 +4670,13 @@ class GenMonitor():
             for tid in plist:
                 print(tid)
         
-    def reportMode(self, stop=True, any=False):
+    def reportMode(self, stop=True, any_tid=False):
         self.rmDebugWarnHap()
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         
-        if any:
+        if any_tid:
             tid = -1
         self.lgr.debug('reportMode for tid:%s' % tid)
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChangeReport, tid)
@@ -6353,6 +6354,8 @@ class GenMonitor():
 
     def nowAtCycle(self, dumb=None):
         cpu = self.cell_config.cpuFromCell(self.target)
+        if self.target in self.cycle_event_callback:
+            self.cycle_event_callback[self.target].cancel()
         print('Ran to cycle 0x%x' % cpu.cycles)
 
     def runToSeconds(self, seconds):
@@ -7198,14 +7201,15 @@ class GenMonitor():
             self.lgr.debug('traceWrite, so write %s' % msg)
             self.traceMgr[self.target].write(msg)
 
-    def recordEntry(self, dumb=None):
+    def recordEntry(self, dumb=None, quiet=False):
         ''' record syscall entries '''
         if self.reverseEnabled():
             self.lgr.debug('recordEntry')
             self.record_entry[self.target].watchSysenter()
         else:
-            print('Reverse execution is not enabled.')
-            self.lgr.debug('recordEntry Reverse execution is not enabled.')
+            if not quiet:
+                print('Reverse execution is not enabled.')
+                self.lgr.debug('recordEntry Reverse execution is not enabled.')
 
     def enableReverse(self, target=None):
         if target is None:
@@ -7406,6 +7410,11 @@ class GenMonitor():
         #proc = self.getCurProcRec()
         #thread_list = self.task_utils[self.target].getThreadList(proc=proc)
 
+    def listDirectories(self):
+        SIM_run_command('list-directories')
+
+    def isKernel(self, eip):
+        return self.mem_utils[self.target].isKernel(eip)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
