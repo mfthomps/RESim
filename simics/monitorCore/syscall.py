@@ -470,6 +470,9 @@ class ExitInfo():
         self.src_addr_len = None
         self.prot = None
 
+        # msc hacks
+        self.msc = None
+
 EXTERNAL = 1
 AF_INET = 2
 DEST_PORT = 3
@@ -507,7 +510,7 @@ def hasParamMatchRequest(call_params):
     return retval
 
 ''' syscalls to watch when record_df is true on traceAll.  Note gettimeofday and waitpid are included for exitMaze '''
-record_fd_list = ['connect', 'bind', 'accept', 'open', 'openat', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'fork', 'vfork']
+record_fd_list = ['connect', 'bind', 'accept', 'open', 'openat', 'socketcall', 'gettimeofday', 'waitpid', 'exit', 'exit_group', 'execve', 'clone', 'clone3', 'fork', 'vfork']
 skip_proc_list = ['udevd', 'udevadm', 'modprobe', 'path_id']
 class Syscall():
 
@@ -1734,13 +1737,20 @@ class Syscall():
                         self.lgr.debug('syscall syscallParse, runToCall %s not in call list' % callname)
                         bail_if_not_got = True
                     elif call_param.subcall == callname:
-                        if self.stop_on_call:
-                            do_stop_from_call = True
-                        exit_info.call_params.append(call_param)
-                        self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
-                        got_one = True
-                        # default this to the matched param in case call that is not otherwised parsed in sharedSyscall
-                        exit_info.matched_param = call_param
+                        skip_this = False
+                        if call_param.nth is not None:
+                            call_param.count = call_param.count + 1
+                            self.lgr.debug('syscall %s call_param.count %s call_param.nth %s' % (callname, str(call_param.count), str(call_param.nth)))
+                            if call_param.count < call_param.nth:
+                                skip_this = True
+                        if not skip_this:
+                            if self.stop_on_call:
+                                do_stop_from_call = True
+                            exit_info.call_params.append(call_param)
+                            self.lgr.debug('syscall syscallParse %s, runToCall, no filter, matched, added call_param' % callname)
+                            got_one = True
+                            # default this to the matched param in case call that is not otherwised parsed in sharedSyscall
+                            exit_info.matched_param = call_param
             if bail_if_not_got and not got_one:
                 self.lgr.debug('parseSyscall bailing')
                 return
@@ -1906,17 +1916,40 @@ class Syscall():
                         self.lgr.debug('syscall dup Changed match param to new fd of %d' % exit_info.new_fd)
             # check for use of dmod openReplace fd
             self.checkReadParams(callname, exit_info, tid, comm, frame)
-        elif callname == 'clone':        
-            flags = frame['param1']
-            child_stack = frame['param2']
-            # HACK store child stack addr as fname_addr
-            exit_info.fname_addr = child_stack
-            ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
-                child_stack, frame['param3'], frame['param4'], frame['param5'])
-            #./include/linux/sched.h:#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
-            if not flags & 0x00000400 and self.name == 'runToIO':
-                self.lgr.debug('syscall clone FD not shared, increment FD count for clones')
-                self.clone_fd_count += 1
+        elif callname in ['clone', 'clone3']:        
+            if callname == 'clone':
+                flags = frame['param1']
+                child_stack = frame['param2']
+                # HACK store child stack addr as fname_addr
+                exit_info.fname_addr = child_stack
+                ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
+                    child_stack, frame['param3'], frame['param4'], frame['param5'])
+                #./include/linux/sched.h:#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
+                if not flags & 0x00000400 and self.name == 'runToIO':
+                    self.lgr.debug('syscall clone FD not shared, increment FD count for clones')
+                    self.clone_fd_count += 1
+            else:
+                # clone3
+                clone_args = frame['param1']
+                size = frame['param2']
+                flags = self.mem_utils.readWord(self.cpu, clone_args)
+                flags_string = resimUtils.decodeCloneFlags(flags)
+                pidfd = self.mem_utils.readWord(self.cpu, clone_args+8)
+                child_tid = self.mem_utils.readWord(self.cpu, clone_args+16)
+                parent_tid = self.mem_utils.readWord(self.cpu, clone_args+24)
+                exit_signal = self.mem_utils.readWord(self.cpu, clone_args+32)
+                stack = self.mem_utils.readWord(self.cpu, clone_args+40)
+                stack_size = self.mem_utils.readWord(self.cpu, clone_args+48)
+                tls = self.mem_utils.readWord(self.cpu, clone_args+56)
+                set_tid = self.mem_utils.readWord(self.cpu, clone_args+64)
+                set_tid_size = self.mem_utils.readWord(self.cpu, clone_args+72)
+                cgroup = self.mem_utils.readWord(self.cpu, clone_args+80)
+                ida_msg = ('%s tid:%s (%s) args: 0x%x, size: 0x%x, flags: %s, pidfd: 0x%x, child_tid: 0x%x, parent_tid: 0x%x, exit_signal: 0x%x, stack: 0x%x, stack_size: 0x%x, tls: 0x%x set_tid: 0x%x set_tid_size: 0x%x cgroup: 0x%x' % (callname, tid, comm, clone_args, size, flags_string, pidfd, child_tid, parent_tid, exit_signal, stack, stack_size, tls, set_tid, set_tid_size, cgroup))
+                self.lgr.debug(ida_msg)
+                hackit = True
+                if hackit:
+                    hack_stack = stack + stack_size
+                    exit_info.msc = (hack_stack, tls)
               
             self.context_manager.setIdaMessage(ida_msg)
             for call_param in self.call_params:
@@ -2123,17 +2156,19 @@ class Syscall():
                     self.lgr.debug('call param found %d, matches %d' % (call_param.match_param, frame['param1']))
                     exit_info.call_params.append(call_param)
                 elif call_param.name.startswith('runToW') and type(call_param.match_param) is str:
-                    self.lgr.debug('write match param for tid:%s is string, check match' % tid)
+                    #self.lgr.debug('write match param for tid:%s is string, check match' % tid)
                     max_len = min(count, 1024)
                     byte_tuple = self.mem_utils.getBytes(self.cpu, max_len, exit_info.retval_addr)
                     if byte_tuple is not None:
-                        self.lgr.debug('write has byte tuple...')
+                        #self.lgr.debug('write has byte tuple...')
                         if resimUtils.isPrintable(byte_tuple):
                             s = ''.join(map(chr,byte_tuple))
                             #self.lgr.debug('write is printable s is %s' % s)
                             #self.lgr.debug('check for %s' % call_param.match_param)
                             if call_param.match_param in s:
                                 addParam(exit_info, call_param)
+                        #else:
+                        #    self.lgr.debug('syscall write byte_typle not printable') 
                 elif call_param.match_param.__class__.__name__ == 'Dmod':
                     if not call_param.match_param.commMatch(comm):
                         continue
@@ -2222,6 +2257,7 @@ class Syscall():
                 prot_val = self.mem_utils.readPtr(self.cpu, arg_addr+8)
                 prot = resimUtils.decodeProtect(prot_val)
                 flags = self.mem_utils.readPtr(self.cpu, arg_addr+12)
+                flags_string = resimUtils.decodeMmapFlags
                 fd = self.mem_utils.readPtr(self.cpu, arg_addr+16)
                 offset = self.mem_utils.readPtr(self.cpu, arg_addr+20)
                 if fd == 0xffffffff:
@@ -2241,7 +2277,7 @@ class Syscall():
                 elif fd is None:
                     ida_msg = '%s tid:%s (%s) FD: NONE' % (callname, tid, comm)
                 else:
-                    ida_msg = '%s tid:%s (%s) FD: %s buf: 0x%x  len: 0x%x prot: %s  flags: 0x%x  offset: 0x%x' % (callname, tid, comm, fd, arg_addr, length, prot, flags, offset)
+                    ida_msg = '%s tid:%s (%s) FD: %s buf: 0x%x  len: 0x%x prot: %s  flags: %s  offset: 0x%x' % (callname, tid, comm, fd, arg_addr, length, prot, flags_string, offset)
 
             #elif self.mem_utils.WORD_SIZE == 4 and self.cpu.architecture == 'arm':
             elif self.cpu.architecture.startswith('arm'):
@@ -2254,9 +2290,11 @@ class Syscall():
                 elif fd is not None:
                     fd = str(fd)  
                 prot_val = frame['param3']
+                flags_string = resimUtils.decodeMmapFlags(frame['param4'])
+                self.lgr.debug('wtf param4 is 0x%x flags_string is %s' % (frame['param4'], flags_string))
                 prot = resimUtils.decodeProtect(prot_val)
-                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
-                    fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: %s offset: 0x%x' % (callname, tid, comm,
+                    fd, frame['param1'], frame['param2'], frame['param3'], flags_string, frame['param6'])
                 self.lgr.debug('syscall mmap arm 4 '+taskUtils.stringFromFrame(frame))
                 self.lgr.debug(ida_msg)
             else:
@@ -2267,8 +2305,9 @@ class Syscall():
                     fd = str(fd)  
                 prot_val = frame['param3']
                 prot = resimUtils.decodeProtect(prot_val)
-                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: 0x%x offset: 0x%x' % (callname, tid, comm,
-                    fd, frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param6'])
+                flags_string = resimUtils.decodeMmapFlags(frame['param4'])
+                ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: %s offset: 0x%x' % (callname, tid, comm,
+                    fd, frame['param1'], frame['param2'], frame['param3'], flags_string, frame['param6'])
                 #if self.watch_first_mmap is not None:
                 #    self.lgr.debug('syscall mmap fd: %d from param5  watch_first_mmap is %d' % (fd, self.watch_first_mmap))
                 #else:
@@ -3006,7 +3045,7 @@ class Syscall():
 
             return
 
-        if callnum > 400:
+        if callnum > 500:
             self.lgr.debug('syscallHap callnum is too big... %d' % callnum)
             return
         
