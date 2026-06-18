@@ -23,6 +23,7 @@ class IDAFuns():
         self.lgr.debug('IDAFuns for path %s offset 0x%x' % (path, offset))
         self.mangle = {}
         self.unwind = {}
+        self.fun_cache = None
         if path.endswith('funs'):
             mpath = path[:-4]+'mangle' 
             if os.path.isfile(mpath):
@@ -202,18 +203,27 @@ class IDAFuns():
                 self.lgr.debug('idaFuns inFun given fun 0x%x is not a function' % fun)
         return False 
 
+    def isInFun(self, ip, fun):
+        #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
+        retval = False
+        if 'ranges' in self.funs[fun]:
+            for frange in self.funs[fun]['ranges']:
+                if ip >= frange['start'] and ip <= frange['end']:
+                    return True
+        else:
+            if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
+                return True
+        return retval
+
     def getFun(self, ip):
         ''' Returns the loaded function address of the fuction containing a given ip '''
+        if self.fun_cache is not None and self.isInFun(ip, self.fun_cache):
+            return self.fun_cache
         if ip is not None:
             for fun in self.funs:
-                #print('ip 0x%x start 0x%x - 0x%x' % (ip, self.funs[fun]['start'], self.funs[fun]['end']))
-                if 'ranges' in self.funs[fun]:
-                    for frange in self.funs[fun]['ranges']:
-                        if ip >= frange['start'] and ip <= frange['end']:
-                            return fun
-                else:
-                    if ip >= self.funs[fun]['start'] and ip <= self.funs[fun]['end']:
-                        return fun
+                if self.isInFun(ip, fun):
+                    self.fun_cache = fun
+                    return fun
         else:
             self.lgr.error('idaFuns getFun called with ip of None')
         return None
