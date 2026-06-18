@@ -874,7 +874,7 @@ class PageFaultGen():
             Return True if we think a segv occured, and somebody should do something about it.
         '''
         retval = False
-        self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d' % (tid, str(leader), len(self.pending_faults)))
+        self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d cycle: 0x%x' % (tid, str(leader), len(self.pending_faults), self.cpu.cycles))
         if len(self.pending_faults) > 0:
             thread_group = self.task_utils.getGroupTids(tid)
             recent_cycle = 0
@@ -888,8 +888,8 @@ class PageFaultGen():
                     if recent_tid is None or not self.mem_utils.isKernel(self.pending_faults[pending_tid].eip):
                         recent_cycle = self.pending_faults[pending_tid].cycles
                         recent_tid = pending_tid
-            if recent_tid == tid or tid == leader or leader is None: 
-                if self.pending_faults[recent_tid].page_fault:
+            if (recent_tid is not None and recent_tid == tid) or tid == leader or leader is None: 
+                if recent_tid is not None and self.pending_faults[recent_tid].page_fault:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  SEGV?' % recent_tid)
                 else:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  %s' % (recent_tid, self.pending_faults[recent_tid].name))
