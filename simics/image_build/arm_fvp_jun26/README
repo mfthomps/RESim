@@ -2,3 +2,6 @@ Build kernel, u-boot and boot loader for the Simics ARM FVP Foundation platform
 After running the 2 build scripts, run the mk_itb.sh script to create a combined
 image for loading into ram using the modified fvp-linux-setup.include script,
 which ues the bootm u-boot command.
+
+The myfvp-linux-setup.include is a template for modifying teh
+fvp-linux-setup.include file to use the itb with u-boot bootm.
