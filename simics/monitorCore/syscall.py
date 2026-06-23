@@ -665,6 +665,7 @@ class Syscall():
         self.no_exit_maze = False
 
         self.execve_cycle = self.cpu.cycles
+        # case where child clone returns before parent
 
     def breakOnExecve(self):
         for call in self.call_params:
@@ -788,7 +789,8 @@ class Syscall():
                 self.syscall_info.compat32 = compat32
             has_entry = self.syscall_info.hasEntry(entry)
             self.syscall_info.addCall(callnum, entry, arm64_app)
-            self.lgr.debug('syscall computeBreaks to syscallInfo add %s callnum %d entry 0x%x arm64_app %r' % (call, callnum, entry, arm64_app))
+            if entry is not None:
+                self.lgr.debug('syscall computeBreaks to syscallInfo add %s callnum %d entry 0x%x arm64_app %r' % (call, callnum, entry, arm64_app))
             debug_tid, dumb = self.context_manager.getDebugTid() 
             if not background or debug_tid is not None and not has_entry:
                 proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
@@ -1946,11 +1948,13 @@ class Syscall():
                 cgroup = self.mem_utils.readWord(self.cpu, clone_args+80)
                 ida_msg = ('%s tid:%s (%s) args: 0x%x, size: 0x%x, flags: %s, pidfd: 0x%x, child_tid: 0x%x, parent_tid: 0x%x, exit_signal: 0x%x, stack: 0x%x, stack_size: 0x%x, tls: 0x%x set_tid: 0x%x set_tid_size: 0x%x cgroup: 0x%x' % (callname, tid, comm, clone_args, size, flags_string, pidfd, child_tid, parent_tid, exit_signal, stack, stack_size, tls, set_tid, set_tid_size, cgroup))
                 self.lgr.debug(ida_msg)
-                hackit = True
+                # remnant of arm64 kernel buggy support for 32 bit.  New kernel fixes the bug.
+                hackit = False
                 if hackit:
                     hack_stack = stack + stack_size
                     exit_info.msc = (hack_stack, tls)
-              
+            # in case child returns first
+            self.sharedSyscall.addPendingCloneComm(comm, exit_info)
             self.context_manager.setIdaMessage(ida_msg)
             for call_param in self.call_params:
                 if call_param.name != 'runToClone':
@@ -2232,7 +2236,8 @@ class Syscall():
                             else:
                                 self.lgr.debug('syscall writev failed to find match of %s in %s' % (call_param.match_param, s))
                         else:
-                            s = ''.join(map(chr,byte_tuple))
+                            #s = ''.join(map(chr,byte_tuple))
+                            s = ''.join(chr(byte) for byte in byte_tuple if byte is not None)
                             self.lgr.debug('syscall writev byte not printable: %s' % s)
                        
 
@@ -2291,7 +2296,6 @@ class Syscall():
                     fd = str(fd)  
                 prot_val = frame['param3']
                 flags_string = resimUtils.decodeMmapFlags(frame['param4'])
-                self.lgr.debug('wtf param4 is 0x%x flags_string is %s' % (frame['param4'], flags_string))
                 prot = resimUtils.decodeProtect(prot_val)
                 ida_msg = '%s tid:%s (%s) FD: %s addr: 0x%x len: 0x%x prot: %s  flags: %s offset: 0x%x' % (callname, tid, comm,
                     fd, frame['param1'], frame['param2'], frame['param3'], flags_string, frame['param6'])
