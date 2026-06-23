@@ -891,6 +891,9 @@ class PlayAFL():
     def reportNewHits(self):
         if self.prog_path is not None:
             full_path = self.top.getFullPath(self.prog_path)
+            if full_path is None:
+                self.lgr.error('playAFL reportNewHits failed to get full_path from prog_path %s' % self.prog_path)
+                return
             root_prefix = self.top.getCompDict(self.cell_name, 'RESIM_ROOT_PREFIX')
             old_hits = resimUtils.getAllHits(full_path, root_prefix)
             count = 0
