@@ -590,7 +590,10 @@ class MemUtils():
                 retval = self.getUnsigned(phys_addr)
             elif cpu.architecture == 'arm64':
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
-                return ptable_info.phys_addr
+                if ptable_info is not None:
+                    return ptable_info.phys_addr
+                else:
+                    return None
             else:
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
                 # a mode of 3 is 32 bit mode
@@ -668,7 +671,7 @@ class MemUtils():
             if do_log:
                 self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             #self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
-            if v < self.getUnsigned(self.param.kernel_base):
+            if not self.isKernel(v):
                 retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
             else:
                 retval = self.v2pKaddr(cpu, v, use_pid=use_pid)
@@ -1096,8 +1099,10 @@ class MemUtils():
         else:
             return 'rsp'
 
-    def getSigned(self, val):
-        if self.WORD_SIZE == 4:
+    def getSigned(self, val, word_size=None):
+        if word_size is None:
+            word_size = self.WORD_SIZe
+        if word_size == 4:
             if(val & 0x80000000):
                 val = -0x100000000 + val
         else:
@@ -1649,10 +1654,13 @@ class MemUtils():
         return callnum
 
     def isKernel(self, v):
-        if v >= self.param.kernel_base:
-            return True
+        if self.word_size == 8:
+            retval = (va >> 63) & 1
         else:
-            return False
+            if v >= self.param.kernel_base:
+                return True
+            else:
+                return False
 
     def saveKernelCR3(self, cpu, phys_cr3=None, saved_cr3=None):
         if phys_cr3 is None:
