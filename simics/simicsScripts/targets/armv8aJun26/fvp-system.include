@@ -1,0 +1,162 @@
+decl {
+    ! Setup a ARMv8-A FVP board.
+
+    group "System"
+
+    param board_name : string = "fvp"
+    ! The name of the board.
+
+    param board_type : string = "foundation"
+    ! The type of the board.
+
+    param num_clusters : int = 1
+    ! Number of ARM clusters.
+
+    param cpu_class : string = "arm-cortex-a72"
+    ! The processor core type in the primary cluster.
+
+    param num_cores : int = 1
+    ! Number of ARM cores in the primary cluster.
+
+    param core_freq_mhz : int = 1000
+    ! The processor clock frequency in the primary cluster, in MHz.
+
+    param sec_cpu_class : string = "arm-cortex-a72"
+    ! The processor core type in secondary clusters.
+
+    param sec_num_cores : int = 1
+    ! Number of ARM cores in secondary clusters.
+
+    param sec_core_freq_mhz : int = 1000
+    ! The processor clock frequency in secondary clusters, in MHz.
+
+    param gic_class : string = "gic_500"
+    ! The Generic Interrupt Controller type.
+
+    param memory_megs : int = 8192
+    ! The amount of RAM memory, in MiB.
+
+    group "Devices"
+
+    param create_sata_disk : bool = FALSE
+    ! Create SATA disk and connect to machine.
+
+    param sata_disk_size : int = 2Gi
+    ! Dependent on create_sata_disk. The SATA disk size.
+
+    param sata_disk_image : file("*") or nil = NIL
+    ! Dependent on create_sata_disk. The SATA disk image.
+
+    param virtio_disk_image : string = ""
+    ! Create virtio disk using the specified image file.
+
+    group "Console"
+
+    param create_con0 : bool = TRUE
+    ! Create console with ID 0.
+
+    param create_con1 : bool = TRUE
+    ! Create console with ID 1.
+
+    param create_con2 : bool = FALSE
+    ! Create console with ID 2.
+
+    param create_con3 : bool = FALSE
+    ! Create console with ID 3.
+
+    param enable_gfx : bool = FALSE
+    ! Enable (show) the graphical console.
+
+    param gfx_width : int = 640
+    ! The graphical console width in pixel.
+
+    param gfx_height : int = 480
+    ! The graphical console height in pixel.
+
+    group "Networking"
+
+    param include_ethernet_mac : bool = TRUE
+    ! Whether to include the ethernet MAC.
+
+    param mac0_address : string = "00:01:af:07:9b:80"
+    ! The MAC address for the target.
+
+    group "Components"
+
+    result system : string
+    ! The system component.
+}
+
+if sim->build_id < 6143 {
+        interrupt-script -error (
+                "*** The ARMv8-FVP package requires Simics-Base"
+                + " version 6.0.122 or newer.")
+}
+
+load-module armv8a-fvp-comp
+load-module std-comp
+load-module textcon
+load-module console-components
+
+if ($board_type == "foundation") {
+    $system = (create-armv8a-foundation-board
+           name = $board_name
+           cpu_class = $cpu_class
+           num_clusters = $num_clusters
+           num_cores = $num_cores
+           freq_mhz = $core_freq_mhz
+           gic_class = $gic_class
+           memory_megs = $memory_megs
+           mac_address = $mac0_address
+           virtio_disk_image = $virtio_disk_image
+           include_ethernet_mac = $include_ethernet_mac)
+} else if ($board_type == "base-revc") {
+    $system = (create-armv8a-base-revc-board
+           name = $board_name
+           num_clusters = $num_clusters
+           cpu_class = $cpu_class
+           num_cores = $num_cores
+           freq_mhz = $core_freq_mhz
+           sec_cpu_class = $sec_cpu_class
+           sec_num_cores = $sec_num_cores
+           sec_freq_mhz = $sec_core_freq_mhz
+           gic_class = $gic_class
+           memory_megs = $memory_megs
+           mac_address = $mac0_address
+           virtio_disk_image = $virtio_disk_image
+           include_ethernet_mac = $include_ethernet_mac)
+}
+
+$create_cons = [$create_con0, $create_con1, $create_con2, $create_con3]
+foreach $c in (range (list-length $create_cons)) {
+    if ($create_cons[$c]) {
+        $con_connector = $system.serial + $c
+        $con_name = $system + ".console"+ $c
+        $console = (create-txt-console-comp ($con_name))
+        connect $con_connector $console.serial
+    }
+}
+
+if $enable_gfx {
+    $gfx_console = (create-gfx-console-comp)
+    connect $system.gfx_console $gfx_console.device
+    connect $gfx_console.mouse $system.mse_console
+    connect $gfx_console.keyboard $system.kbd_console
+}
+
+if ($create_sata_disk == TRUE) {
+    load-module sii3132-comp
+
+    $sata_host = (create-sii3132-comp $system.sii3132)
+    connect $sata_host.pci_bus $system.pcie_slot[0]
+
+    if $sata_disk_image {
+        $sata_disk = (create-sata-disk-comp file = $sata_disk_image)
+    } else {
+        $sata_disk = (create-sata-disk-comp size = $sata_disk_size)
+    }
+
+    connect $system.sii3132.sata_slot0 $sata_disk.sata_slot
+}
+
+set-time-quantum seconds = 0.001
