@@ -454,13 +454,18 @@ class GenMonitor():
                     self.param[cell_name] = vxParam.VxParam()
                 elif resimUtils.yesNoTrueFalse(force_param): 
                     # TBD breaks aslr adjustments?
-                    self.lgr.debug('Ignoring snapshot param fir for cell %s, force use of latest param file')
+                    self.lgr.debug('Ignoring snapshot param for cell %s, force use of latest param file')
                 elif os.path.isfile(param_file):
                     self.param[cell_name] = pickle.load(open(param_file, 'rb'))
                     self.lgr.debug('Loaded params for cell %s from pickle' % cell_name)
 
                     # TBD more hackary
-                    if self.param[cell_name].kernel_base == 0xffffffff80000000:
+                    # Move away from this, and just use high order bit for 64-bit and c for 32-bit
+                    cpu = self.cell_config.cpuFromCell(cell_name)
+                    if cpu.architecture == 'arm64':
+                        self.lgr.debug('TBD Hacking arm64 kernel base to 0xffff000000000000')
+                        self.param[cell_name].kernel_base = 0xffff000000000000
+                    elif self.param[cell_name].kernel_base == 0xffffffff80000000:
                         self.param[cell_name].kernel_base = 0xffff800000000000
                         self.lgr.debug('genInit hacked kernel base to 0x%x' % self.param[cell_name].kernel_base)
                     if self.param[cell_name].sys_entry == 0:
@@ -697,49 +702,6 @@ class GenMonitor():
 
         #SIM_break_simulation('mode changed')
 
-    def modeChanged(self, tid_list, one, old, new):
-        cpu = self.cell_config.cpuFromCell(self.target)
-        cpl = memUtils.getCPL(cpu)
-        eip = self.mem_utils[self.target].getRegValue(cpu, 'pc')
-        if new == Sim_CPU_Mode_Hypervisor or old == Sim_CPU_Mode_Hypervisor:
-            return
-        elif new == Sim_CPU_Mode_Supervisor: 
-            mode = 0
-        elif new == Sim_CPU_Mode_User:
-            mode = 1
-            #if cpu.architecture == 'arm64' and cpu.in_aarch64:
-            #    self.lgr.debug('modeChanged arm64 in user space with aarch64, not yet handled, bail')
-            #    return
-        dumb, comm, this_tid = self.task_utils[self.target].curThread() 
-        ''' note may both be None due to failure of getProc '''
-        bail = False
-        if this_tid not in tid_list:
-            ''' or just want may be None if debugging some windows dead zone '''
-            #if want_tid is None and this_tid is not None:
-            #    SIM_break_simulation('mode changed, tid was None, now is not none.')
-            if this_tid is not None:            
-                self.lgr.debug('modeChanged mode changed to %d wrong tid, wanted %s got %s (%s)' % (mode, str(tid_list), this_tid, comm))
-                alive = False
-                for tid in tid_list:
-                    rec = self.task_utils[self.target].getRecAddrForTid(tid)
-                    if rec is not None:
-                        alive = True
-                        break
-                if not alive:
-                    self.lgr.debug('modeChanged no recs for tids %s, assume dead' % str(tid_list))
-                    print('modeChanged no recs for tids %s, assume dead' % str(tid_list))
-                    self.context_manager[self.target].setIdaMessage('Process gone')
-                    SIM_break_simulation('mode changed, tid %s threads all gone' % str(tid_list))
-                    
-                bail = True
-            else:
-                self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
-        if not bail:
-            instruct = SIM_disassemble_address(cpu, eip, 0, 0)
-            self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
-                    mode, str(one), old, new, eip, instruct[1]))
-            SIM_break_simulation('mode changed, break simulation')
-        
     def stopHap(self, stop_action, one, exception, error_string):
         self.lgr.debug('stopHap stop_hap %s' % self.stop_hap)
         if self.stop_hap is not None:
@@ -1458,6 +1420,9 @@ class GenMonitor():
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
         if tid is None:
             tid = this_tid 
+        if cpu is None:
+            self.lgr.error('doDebugCmd sees no cpu from curThread.  Giving up.')
+            return
         machine_size = self.soMap[self.target].getMachineSize(tid)
         self.lgr.debug('doDebugCmd for cpu %s arch: %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.is_compat32, machine_size))
         if cpu.architecture == 'arm':
@@ -1528,6 +1493,9 @@ class GenMonitor():
         self.lgr.debug('genMonitor debug group is %r' % group)
         #self.stopTrace()    
         cpu = self.cell_config.cpuFromCell(self.target)
+        if cpu is None:
+            self.lgr.error('debug sees no cpu, bail')
+            return
         cell_name = self.getTopComponentName(cpu)
         if self.target not in self.magic_origin:
             if resimSimicsUtils.serviceNodeConnected('driver_service_node', lgr=self.lgr):
