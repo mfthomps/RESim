@@ -111,6 +111,8 @@ def getIdaData(full_path, root_prefix, lgr=None):
     if ida_analysis is None:
         print('ERROR: IDA_ANALYSIS not defined')
         return None
+    if full_path is None:
+        return None
     if full_path.startswith(resim_image):
         # given path was a full path relative to RESIM_IMAGE
         offset = len(resim_image)+1
