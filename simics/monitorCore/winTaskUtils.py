@@ -900,6 +900,9 @@ class WinTaskUtils():
         ts_list = self.getTaskStructs()
         for ts in ts_list:
             #self.lgr.debug('getTidsForComm compare <%s> to %s  len is %d' % (comm, ts_list[ts].comm, len(comm)))
+            if ts_list[ts].comm is None:
+                self.lgr.debug('winTaskUtils getTidsForComm ts_list[0x%x].comm is None' % ts)
+                continue 
             if comm == ts_list[ts].comm or (len(comm)>self.commSize() and len(ts_list[ts].comm) == self.commSize() and comm.startswith(ts_list[ts].comm)):
                 pid = ts_list[ts].pid
                 self.lgr.debug('getTidsForComm MATCHED ? %s to %s  pid %d' % (comm, ts_list[ts].comm, pid))
