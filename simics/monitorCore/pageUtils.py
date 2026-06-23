@@ -267,83 +267,6 @@ def getPageEntrySize(cpu):
     else:
         return 8
 
-def findPageTableArmV8(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=False, do_log=False):
-    #reg_num = cpu.iface.int_register.get_number("tcr_el1")
-    #tcr_el1 = cpu.iface.int_register.read(reg_num)
-    #tg0 = memUtils.bitRange(tcr_el1, 14, 15)
-    #tg1 = memUtils.bitRange(tcr_el1, 30, 31)
-    #lgr.debug('findPageTableArmV8 tg0 (user) %d' % tg0)
-    #lgr.debug('findPageTableArmV8 tg1 (kernel) %d' % tg1)
-    phys = None
-    if kernel:
-        #lgr.debug('findPageTableArm kernel space')
-        ttbr = cpu.translation_table_base1 & 0x0000ffffffffffff
-    elif force_cr3 is not None:
-        ttbr = force_cr3
-    else:
-        #lgr.debug('findPageTableArm user space')
-        ttbr = cpu.translation_table_base0
-    ptable_info = PtableInfo(cpu)
-    vaddr_off = va & 0xfff
-    ptable_info.ptable_exists = False
-    if do_log:
-        lgr.debug('findPageTableArmV8 vaddr_off 0x%x' % vaddr_off)
-    l1_index = memUtils.bitRange(va, 30, 38)
-    l1_off = 8 * l1_index
-    l1_base_addr = ttbr + l1_off
-    l1_base = readPhysMemory(cpu, l1_base_addr, 8, lgr)
-    if l1_base is None:
-        lgr.error('findPageTableArmV8 got None for l1_base_addr ttbr is 0x%x' % ttbr)
-        return None
-    if do_log: 
-        lgr.debug('findPageTableArmV8 va 0x%x ttbr 0x%x l1_index 0x%x  l1_off 0x%x l1_base_addr 0x%x base is 0x%x' % (va, ttbr, l1_index, l1_off, l1_base_addr, l1_base))
-    l2_index = memUtils.bitRange(va, 21, 29)
-    l2_off = 8 * l2_index
-    l2_base_addr = (l1_base + l2_off) & 0xfffffffffffffff8
-    l2_base = readPhysMemory(cpu, l2_base_addr, 8, lgr)
-    l2_basex = l2_base & 0x0000fffffffff000 
-    if do_log: 
-        lgr.debug('l1_base: 0x%x l2_index 0x%x  l2_off 0x%x l2_base_addr 0x%x l2_base raw 0x%x masked: 0x%x' % (l1_base, l2_index, l2_off, l2_base_addr, l2_base, l2_basex))
-    if l2_base == 0:
-        if do_log: 
-            lgr.debug('l2_base is 0, bail')
-    elif l2_base < 0x10000000000000:
-        l3_index = memUtils.bitRange(va, 12, 20)
-        l3_off = 8 * l3_index
-        l3_base_addr = (l2_basex + l3_off) & 0xfffffffffffffff8
-        l3_base = readPhysMemory(cpu, l3_base_addr, 8, lgr)
-        if l3_base is not None and l3_base > 0:
-            l3_basex = l3_base & 0x0000fffffffff000 
-            if do_log:
-                lgr.debug('l3_base masked 0x%x l3_base was 0x%x l3_base_addr 0x%x' % (l3_basex, l3_base, l3_base_addr))
-            if l3_basex > 0:
-                phys = l3_basex + vaddr_off
-                ap = memUtils.bitRange(l3_base, 6,7)
-                if ap == 1:
-                    ptable_info.writable = True 
-                ptable_info.nx = memUtils.testBit(l3_base, 54)
-            
-                if do_log: 
-                    lgr.debug('l2_base: 0x%x l3_index 0x%x  l3_off 0x%x l3_base_addr 0x%x base 0x%x phys: 0x%x writable: %d nx: %d' % (l2_basex, l3_index, l3_off, 
-                          l3_base_addr, l3_base, phys, ptable_info.writable, ptable_info.nx))
-        else:
-            lgr.debug('l3_base None or zero, l3_base_addr was 0x%x' % l3_base_addr)
-            phys = None
-        ptable_info.page_base_addr = l3_base_addr
-        ptable_info.ptable_exists = True
-    else:
-        if do_log: 
-            lgr.debug('l2_base base looks like last level, use it 0x%x' % l2_basex)
-        ptable_info.page_base_addr = l2_base_addr
-        vaddr_off = va & 0xffff
-        phys = l2_basex + vaddr_off
-    if do_log and phys is not None: 
-        lgr.debug('got phys of 0x%x' % phys)
-    ptable_info.phys_addr = phys
-    if phys is not None:
-        ptable_info.page_exists = True
-    return ptable_info
-
 def findPageTableArm(cpu, va, lgr, force_cr3=None, use_sld=None, do_log=False):
     ptable_info = PtableInfo(cpu)
     if force_cr3 is not None:
@@ -409,7 +332,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
     if cpu.architecture == 'arm':
         return findPageTableArm(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, do_log=do_log)
     if cpu.architecture == 'arm64':
-        return findPageTableArmV8(cpu, addr, lgr, use_sld=use_sld, force_cr3=force_cr3, kernel=kernel, do_log=do_log)
+        return findPageTableArmV8(cpu, addr, lgr, do_log=do_log)
     if cpu.architecture == 'ppc32':
         return pageUtilsPPC32.findPageTable(cpu, addr, lgr)
     elif isIA32E(cpu):
@@ -652,4 +575,119 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
                     #lgr.debug('phys_addr 0x%x' % ptable_info.phys_addr)
                
 
+    return ptable_info
+
+
+def get_cpu_attr(cpu, attr_name):
+    """Helper to read Simics object attributes/registers."""
+    return SIM_get_attribute(cpu, attr_name)
+
+def findPageTableArmV8(cpu, va, lgr, do_log=False):
+    # thanks Gemini
+    # Determine if it's User Space (TTBR0) or Kernel Space (TTBR1) based on Bit 63
+    ptable_info = PtableInfo(cpu)
+    is_kernel = (va >> 63) & 1
+    space_name = "Kernel Space (TTBR1)" if is_kernel else "User Space (TTBR0)"
+    if do_log:
+        lgr.debug(f"[*] Decoding Virtual Address: 0x{va:x} -> Identified as {space_name}")
+
+    # Read the essential MMU control registers
+    tcr = get_cpu_attr(cpu, "translation_table_base_control") # TCR_EL1
+    
+    if is_kernel:
+        ttbr = get_cpu_attr(cpu, "translation_table_base1")   # TTBR1_EL1
+        tgran = (tcr >> 30) & 0x3                        # TGran1 (Bits 31:30)
+        tsz = (tcr >> 16) & 0x3F                         # T1SZ   (Bits 21:16)
+    else:
+        ttbr = get_cpu_attr(cpu, "translation_table_base0")   # TTBR0_EL1
+        tgran = (tcr >> 14) & 0x3                        # TGran0 (Bits 15:14)
+        tsz = tcr & 0x3F                                 # T0SZ   (Bits 5:0)
+
+    # Parse Page Size (Granule) and select bit shift properties
+    if tgran == 0x0 or tgran == 0x2: 
+        # TGran0 uses 0b00 for 4KB, TGran1 uses 0b10 for 4KB
+        page_size_shift = 12
+        index_width = 9  # 512 entries per page table level
+        granule_str = "4 KB"
+    elif tgran == 0x1:               
+        # Both use 0b01 for 16KB
+        page_size_shift = 14
+        index_width = 11 # 2048 entries per level
+        granule_str = "16 KB"
+    elif tgran == 0x3 or tgran == 0x2: 
+        # TGran0 uses 0b11 for 64KB, TGran1 uses 0b11 for 64KB
+        page_size_shift = 16
+        index_width = 13 # 8192 entries per level
+        granule_str = "64 KB"
+    else:
+        if do_log:
+            lgr.debug(f"[-] Unknown or reserved TGran configuration: 0x{tgran:x}")
+        return ptable_info
+
+    # Calculate effective Virtual Address size configured in TCR
+    va_size = 64 - tsz
+    if do_log:
+        lgr.debug(f"[*] MMU Config: Base Page Size = {granule_str}, Effective VA Size = {va_size}-bit")
+
+    # Mask out ASID/attributes from the translation table base register pointer (Bits 47:1)
+    current_table_base = ttbr & 0x0000FFFFFFFFFFFF
+    
+    # Dynamically determine the root level layout based on VA bits vs. Granule size
+    bits_to_translate = va_size - page_size_shift
+    total_levels = (bits_to_translate + index_width - 1) // index_width
+    start_level = 4 - total_levels
+
+    if do_log:
+        lgr.debug(f"[*] Starting walk at Level {start_level} from Base Physical Address: 0x{current_table_base:x}")
+
+    for level in range(start_level, 4):
+        # Determine bit shift for slicing out index at current level
+        level_shift = page_size_shift + (3 - level) * index_width
+        level_mask = (1 << index_width) - 1
+        index = (va >> level_shift) & level_mask
+
+        # Compute physical location of the individual 64-bit descriptor entry
+        desc_phys_addr = current_table_base + (index * 8)
+        desc = readPhysMemory(cpu, desc_phys_addr, 8, lgr)
+
+        if desc is None:
+            return ptable_info
+
+        if do_log:
+            lgr.debug(f"    [Level {level}] Index: {index} (Addr: 0x{desc_phys_addr:x}) -> Desc: 0x{desc:x}")
+
+        # Check if descriptor is valid (Bit 0 must be 1)
+        if (desc & 1) == 0:
+            if do_log:
+                lgr.debug(f"[-] Translation Fault: Unmapped address at Level {level} (Descriptor is Zero/Invalid).")
+            return ptable_info
+
+        # Check for Block Mappings (Huge Pages): Bit 1 == 0 at Levels 0, 1, or 2
+        if level < 3 and ((desc >> 1) & 1) == 0:
+            offset_mask = (1 << level_shift) - 1
+            phys_block_mask = 0x0000FFFFFFFFFFFF & ~offset_mask
+            
+            phys_addr = (desc & phys_block_mask) | (va & offset_mask)
+            if do_log:
+                lgr.debug(f"[+] Found Block Mapping (Huge Page) at Level {level}!")
+                lgr.debug(f"[+] VA 0x{va:x} -> PA 0x{phys_addr:x}")
+            return ptable_info
+
+        # Step into next lower table structure using bits [47:12] of the descriptor
+        if level == 3:
+            ap = memUtils.bitRange(desc, 6,7)
+            if ap == 1:
+                ptable_info.writable = True 
+            ptable_info.nx = memUtils.testBit(desc, 54)
+        ptable_info.page_base_addr = desc_phys_addr
+        current_table_base = desc & 0x0000FFFFFFFFF000
+
+    # Level 3 Page Table Entry (PTE) processing
+    offset_mask = (1 << page_size_shift) - 1
+    phys_addr = current_table_base | (va & offset_mask)
+    ptable_info.phys_addr = phys_addr
+    ptable_info.page_exists = True
+    if do_log:
+        lgr.debug(f"[+] Found Standard Page Mapping at Level 3!")
+        lgr.debug(f"[+] VA 0x{va:x} -> PA 0x{phys_addr:x}")
     return ptable_info
