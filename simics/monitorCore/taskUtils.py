@@ -210,8 +210,8 @@ class TaskUtils():
             return 0
         #self.lgr.debug('taskUtils getCurThreadRec read cur_task_rec from phys 0x%x' % self.phys_current_task)
         cur_task_rec = self.mem_utils.readPhysPtr(self.cpu, self.phys_current_task)
-        #if cur_task_rec is None:
-        #    self.lgr.debug('FAILED')
+        if cur_task_rec is None:
+            self.lgr.debug('FAILED')
         #else:
         #    self.lgr.debug('taskUtils curTaskRec got task rec 0x%x' % cur_task_rec)
 
@@ -416,7 +416,7 @@ class TaskUtils():
                 task.sibling = []
         if self.param.ts_thread_group_list_head not in (None, -1):
             task.thread_group = self.read_list_head(cpu, addr, self.param.ts_thread_group_list_head)
-            if task.thread_group.next is not None:
+            if task.thread_group is not None and task.thread_group.next is not None:
                 ''' TBD why off by 4? '''
                 #task.thread_group.next = task.thread_group.next + 4
                 task.thread_group.next = task.thread_group.next 
