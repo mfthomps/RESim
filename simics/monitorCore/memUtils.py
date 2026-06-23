@@ -1101,7 +1101,7 @@ class MemUtils():
 
     def getSigned(self, val, word_size=None):
         if word_size is None:
-            word_size = self.WORD_SIZe
+            word_size = self.WORD_SIZE
         if word_size == 4:
             if(val & 0x80000000):
                 val = -0x100000000 + val
@@ -1655,12 +1655,18 @@ class MemUtils():
 
     def isKernel(self, v):
         if self.WORD_SIZE == 8:
-            retval = (v >> 63) & 1
+            #if (v >> 63) & 1:
+            self.lgr.debug('memUtils isKernel wordsize 8 v 0x%x' % v)
+            if testBit(v, 63):
+                retval = True
+            else:
+                retval = False
         else:
             if v >= self.param.kernel_base:
-                return True
+                retval = True
             else:
-                return False
+                retval = False
+        return retval
 
     def saveKernelCR3(self, cpu, phys_cr3=None, saved_cr3=None):
         if phys_cr3 is None:
