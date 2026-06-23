@@ -304,7 +304,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number('esr_el1')
             reg_value = self.cpu.iface.int_register.read(reg_num)
             reg_value = reg_value >> 26
-            self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
+            #self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
             if reg_value == 0x11 or reg_value == 0x15:
                 return
 
@@ -396,7 +396,7 @@ class PageFaultGen():
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
         elif cpu.architecture == 'arm64':
-            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr)
+            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr, do_log=True)
         elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
