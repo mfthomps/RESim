@@ -1130,7 +1130,7 @@ class GenContextMgr():
         #self.lgr.debug('resetWatchTasks tid:%s' % tid)
         self.stopWatchTasksAlone(None)
         self.lgr.debug('resetWatchTasks back from stopWatch')
-        self.watchTasks(set_debug_tid = True, tid=tid)
+        self.watchTasks(set_debug_tid = True, tid=str(tid))
         #self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
             self.lgr.debug('resetWatchTasks tid %s' % tid)
@@ -1284,6 +1284,7 @@ class GenContextMgr():
             self.lgr.debug('contextManager killGroup NO leader.  got %s' % (lead_tid))
             if self.pageFaultGen is not None and self.exit_callback is None:
                 self.pageFaultGen.handleExit(lead_tid, lead_tid)
+            self.demise_cache.append(lead_tid)
 
 
     def deadParrot(self, tid):
@@ -1844,4 +1845,9 @@ class GenContextMgr():
             if hap.handle == hap_handle:
                 return hap.disabled
         self.lgr.error('contextManager isHapDisabled called with unknown hap handle %d' % hap_handle)
-        
+       
+    def nameChanged(self, tid):
+        # a process changed its name.  If it was in my_clones, remove it 
+        if tid in self.my_clones:
+            self.lgr.debug('contextManager nameChanged, remove tid:%s from my_clones.  If it does an execve, we are hosed' % tid)
+            del self.my_clones[tid]

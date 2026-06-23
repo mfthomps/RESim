@@ -167,7 +167,9 @@ class GetKernelParams():
         self.page_hap2 = None
         self.prev_instruct = ''
         # TBD remove unistd from here, only passed because taskutils cannot handle none
-        self.unistd = comp_dict[self.target]['RESIM_UNISTD']
+        self.unistd = None
+        if 'RESIM_UNISTD' in comp_dict[self.target]:
+            self.unistd = comp_dict[self.target]['RESIM_UNISTD']
         self.unistd32 = None
         if 'RESIM_UNISTD_32' in comp_dict[self.target]:
             self.unistd32 = comp_dict[self.target]['RESIM_UNISTD_32']
@@ -939,8 +941,15 @@ class GetKernelParams():
             plist[tasks[t].pid] = t 
         for pid in sorted(plist):
             t = plist[pid]
-            print('pid: %d task_rec: 0x%x  comm: %s children 0x%x 0x%x' % (tasks[t].pid, t, tasks[t].comm, tasks[t].children[0], tasks[t].children[1]))
-            self.lgr.debug('pid: %d task_rec: 0x%x  comm: %s children 0x%x 0x%x' % (tasks[t].pid, t, tasks[t].comm, tasks[t].children[0], tasks[t].children[1]))
+            if t is not None:
+                if tasks[t].children[0] is not None and tasks[t].children[1] is not None:
+                    print('pid: %d task_rec: 0x%x  comm: %s children 0x%x 0x%x' % (tasks[t].pid, t, tasks[t].comm, tasks[t].children[0], tasks[t].children[1]))
+                    self.lgr.debug('pid: %d task_rec: 0x%x  comm: %s children 0x%x 0x%x' % (tasks[t].pid, t, tasks[t].comm, tasks[t].children[0], tasks[t].children[1]))
+                else:
+                    print('pid: %d task_rec: 0x%x  comm: %s one of the children is none' % (tasks[t].pid, t, tasks[t].comm))
+                    self.lgr.debug('pid: %d task_rec: 0x%x  comm: %s one of the children is none' % (tasks[t].pid, t, tasks[t].comm))
+            else:
+                self.lgr.debug('pid: %d t was None?' % pid)
         
         
    
@@ -1209,6 +1218,7 @@ class GetKernelParams():
             self.lgr.debug('arm64 compute.  walk forward to find computed jump')
             # x20 is the syscall number.  
             prefix = 'ldr x1, [x22, x20, lsl #3]'
+            prefix2 = 'ldr x1, [x22, x19, lsl #3]'
             eip = self.mem_utils.getRegValue(self.cpu, 'pc')
             if not self.mem_utils.isKernel(eip):
                 self.lgr.error('stepCompute returned to user space')
@@ -1222,12 +1232,12 @@ class GetKernelParams():
                 eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                 instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
                 self.lgr.debug('stepCompute arm64 pc 0x%x  %s' % (eip, instruct[1]))
-                if not decodeArm.isBranch(self.cpu, prev_instruct[1])  and eip != prev_eip + 4:
+                if not decodeArm.isBranch(self.cpu, prev_instruct[1]) and not prev_instruct[1] == 'ret' and eip != prev_eip + 4:
                     self.lgr.debug('stepCompute eip 0x%x does not follow previous 0x%x, instruct %s' % (eip, prev_eip, instruct[1]))
                     print('stepping interrupted, try again')
                     SIM_run_alone(self.findCompute, False)
                     return
-                if instruct[1].startswith(prefix):
+                if instruct[1].startswith(prefix) or instruct[1].startswith(prefix2):
                     #self.param.syscall_compute = eip
                     print(instruct[1])
                     esr_el1 = self.getEL1()
@@ -2126,6 +2136,7 @@ class GetKernelParams():
         self.delTaskModeAlone(None)
         done = False
         self.reverse_mgr.enableReverse()
+
         bailat = 1000
         i = 0
         our_reg = None
@@ -2134,16 +2145,19 @@ class GetKernelParams():
             i = i + 1
             if i > bailat:
                 print('never found sp_el0 ref')
+                self.lgr.debug('getARM64Task never found sp_el0 ref')
                 return
             SIM_continue(1)
             pc = self.mem_utils.getRegValue(self.cpu, 'pc')
             instruct = my_SIM_disassemble_address(self.cpu, pc, 1, 0)
             #print('instruct at 0x%x is %s' % (pc, instruct[1]))
+            self.lgr.debug('getARM64Task instruct at 0x%x is %s' % (pc, instruct[1]))
             if instruct[1].startswith('msr sp_el0'):
                 done = True
                 print('got instruct at 0x%x' % pc)
+                self.lgr.debug('got instruct at 0x%x' % pc)
                 op2, op1 = decodeArm.getOperands(instruct[1])
-                print('operand 1 %s  2 %s' % (op1, op2))
+                self.lgr.debug('operand 1 %s  2 %s' % (op1, op2))
                 our_reg = op2
         done = False
         bailat = 1000
@@ -2153,6 +2167,7 @@ class GetKernelParams():
             i = i + 1
             if i > bailat:
                 print('never found sp_el0 ref')
+                self.lgr.debugg('getARM64Task never found sp_el0 ref')
                 return
             prev = self.cpu.cycles - 1
             self.skip_to_mgr.skipToTest(prev)
@@ -2169,6 +2184,7 @@ class GetKernelParams():
 
         self.lgr.debug('arm64 our_expr is %s' % our_expr)
         addr = decodeArm.getAddressFromOperand(self.cpu, our_expr, self.lgr)
+        addr = addr & 0xffffffffffffffff
         self.param.current_task = addr
         self.lgr.debug('arm64 current_task found at 0x%x' % addr)
 
@@ -2176,7 +2192,7 @@ class GetKernelParams():
             phys_block = self.cpu.iface.processor_info.logical_to_physical(addr, Sim_Access_Read)
             phys = phys_block.address
         except:
-            self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
+            self.lgr.error('memUtils v2pKaddr logical_to_physical failed on 0x%x' % addr)
             return
 
         self.current_task_phys = phys

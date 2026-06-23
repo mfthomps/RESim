@@ -46,7 +46,7 @@ class RunToModeChange():
         cpl = memUtils.getCPL(cpu)
         if cpl != 0:
             dumb, comm, tid = self.task_utils.curThread() 
-            self.lgr.debug('run2Kernel in user space (%d), set hap' % cpl)
+            self.lgr.debug('runToModeChange run2Kernel in user space (%d), set hap' % cpl)
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, [tid])
             hap_clean = hapCleaner.HapCleaner(cpu)
             hap_clean.add("Core_Mode_Change", self.mode_hap)
@@ -54,7 +54,7 @@ class RunToModeChange():
             self.top.RES_add_stop_callback(self.top.stopHap, stop_action, your_stop=True)
             SIM_continue(0)
         else:
-            self.lgr.debug('run2Kernel, already in kernel')
+            self.lgr.debug('runToModeChange run2Kernel, already in kernel')
             if flist is not None: 
                 #if len(flist) == 1:
                 for fun_item in flist:
@@ -69,43 +69,43 @@ class RunToModeChange():
         if cpl == 0:
             if self.tid_list is None:
                 tid = self.task_utils.curTID() 
-                self.lgr.debug('run2User want_tid %s tid:%s' % (want_tid, tid))
+                self.lgr.debug('runToModeChange run2User want_tid %s tid:%s' % (want_tid, tid))
                 ''' use debug process if defined, otherwise default to current process '''
                 if want_tid is not None:
                     want_tid = str(want_tid)
-                    self.lgr.debug('run2User has want_tid of %s' % want_tid)
+                    self.lgr.debug('runToModeChange run2User has want_tid of %s' % want_tid)
                     self.tid_list = [want_tid]
                 else:
                     self.tid_list = self.context_manager.getThreadTids()
                     if len(self.tid_list) == 0:
                         self.tid_list.append(tid)
-                        self.lgr.debug('run2User tidlist from context_manager empty, add self %s' % tid)
+                        self.lgr.debug('runToModeChange run2User tidlist from context_manager empty, add self %s' % tid)
                     else:
-                        self.lgr.debug('run2User tidlist from context_manager is %s' % self.tid_list)
+                        self.lgr.debug('runToModeChange run2User tidlist from context_manager is %s' % self.tid_list)
            
                     
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, self.tid_list)
-            self.lgr.debug('run2User tid %s in kernel space (%d), set mode hap %d' % (str(self.tid_list), cpl, self.mode_hap))
+            self.lgr.debug('runToModeChange run2User tid %s in kernel space (%d), set mode hap %d' % (str(self.tid_list), cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
             # fails when deleted? 
             hap_clean.add("Core_Mode_Change", self.mode_hap)
             stop_action = hapCleaner.StopAction(hap_clean, flist=flist)
             self.stop_hap = self.top.RES_add_stop_callback(self.top.stopHap, stop_action, your_stop=True)
             if self.stop_hap is not None:
-                self.lgr.debug('run2User added stop_hap of %d' % self.stop_hap)
+                self.lgr.debug('runToModeChange run2User added stop_hap of %d' % self.stop_hap)
             else:
-                self.lgr.debug('run2User failed to set stop hap')
+                self.lgr.debug('runToModeChange run2User failed to set stop hap')
                 return
             simics_status = SIM_simics_is_running()
             if not simics_status:
-                self.lgr.debug('run2User continue')
+                self.lgr.debug('runToModeChange run2User continue')
                 #SIM_run_alone(SIM_continue, 0)
                 SIM_run_alone(self.top.continueForward, None)
                
             else:
-                self.lgr.debug('run2User would continue, but already running?')
+                self.lgr.debug('runToModeChange run2User would continue, but already running?')
         else:
-            self.lgr.debug('run2User, already in user')
+            self.lgr.debug('runToModeChang run2User, already in user')
             if flist is not None: 
                 #if len(flist) == 1:
                 for fun_item in flist:
@@ -135,7 +135,7 @@ class RunToModeChange():
             #if want_tid is None and this_tid is not None:
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
             if this_tid is not None:            
-                self.lgr.debug('modeChanged mode changed to %d wrong tid, wanted %s got %s (%s)' % (mode, str(tid_list), this_tid, comm))
+                self.lgr.debug('runToModeChange modeChanged mode changed to %d wrong tid, wanted %s got %s (%s)' % (mode, str(tid_list), this_tid, comm))
                 alive = False
                 for tid in tid_list:
                     rec = self.task_utils.getRecAddrForTid(tid)
@@ -143,8 +143,8 @@ class RunToModeChange():
                         alive = True
                         break
                 if not alive:
-                    self.lgr.debug('modeChanged no recs for tids %s, assume dead' % str(tid_list))
-                    print('modeChanged no recs for tids %s, assume dead' % str(tid_list))
+                    self.lgr.debug('runToModeChange modeChanged no recs for tids %s, assume dead' % str(tid_list))
+                    print('runToModeChange modeChanged no recs for tids %s, assume dead' % str(tid_list))
                     self.context_manager.setIdaMessage('Process gone')
                     SIM_break_simulation('mode changed, tid %s threads all gone' % str(tid_list))
                 bail = True
@@ -158,7 +158,7 @@ class RunToModeChange():
                 self.lgr.error('mode changed wrong tid, wanted %s got NONE, will break here' % (str(tid_list)))
         if not bail:
             instruct = SIM_disassemble_address(cpu, eip, 0, 0)
-            self.lgr.debug('modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
+            self.lgr.debug('runToModeChange modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
                     mode, str(one), old, new, eip, instruct[1]))
             SIM_break_simulation('mode changed, break simulation')
        
@@ -173,6 +173,6 @@ class RunToModeChange():
             self.mode_hap = None
 
     def restart(self, dumb):
-        self.lgr.debug('runToModeChange restar')
+        self.lgr.debug('runToModeChange restart')
         self.run2User(cpu = self.cpu, flist=self.flist)
 

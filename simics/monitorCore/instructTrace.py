@@ -15,6 +15,7 @@ class InstructTrace():
         cmd = 'pselect %s' % cpu.name
         dumb, ret = cli.quiet_run_command(cmd)
 
+        #SIM_run_command('add-module-directory path = modules/instrumentation-tracer-tool')
         self.version = resimSimicsUtils.version()
         self.lgr.debug('Simics version is %s' % self.version)
         if self.version.startswith('7'):
@@ -43,7 +44,7 @@ class InstructTrace():
             cmd = 'start-command-line-capture %s' % tfile
             #cmd = '%s->file=%s' % (tracer_name, tfile)
             SIM_run_command(cmd)
-        print('begin, or what?')
+        print('Starting cycle: 0x%x' % cpu.cycles)
         if just_kernel:
             self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, None)
         elif not kernel:
@@ -98,10 +99,12 @@ class InstructTrace():
         cpl = self.top.getCPL()
         if not self.just_kernel:
             if new == Sim_CPU_Mode_Supervisor:
+                print('into kernel cycle: 0x%x' % cpu.cycles)
                 self.lgr.debug('instructTrace into kernel, stop trace')
                 SIM_run_alone(self.stop, None)
             else:
-                self.lgr.debug('instructTrace out of  kernel, start trace')
+                print('return from kernel cycles: 0x%x tid:%s' % (cpu.cycles, this_tid))
+                self.lgr.debug('instructTrace out of  kernel, start trace cycles: 0x%x tid:%s' % (cpu.cycles, this_tid))
                 SIM_run_alone(self.start, None)
 
         else:

@@ -304,7 +304,7 @@ class PageFaultGen():
             reg_num = self.cpu.iface.int_register.get_number('esr_el1')
             reg_value = self.cpu.iface.int_register.read(reg_num)
             reg_value = reg_value >> 26
-            self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
+            #self.lgr.debug('pageFaultHap arm64 reg_value 0x%x cycle 0x%x' % (reg_value, self.cpu.cycles))
             if reg_value == 0x11 or reg_value == 0x15:
                 return
 
@@ -396,7 +396,7 @@ class PageFaultGen():
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
         elif cpu.architecture == 'arm64':
-            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr)
+            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr, do_log=True)
         elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
@@ -874,7 +874,7 @@ class PageFaultGen():
             Return True if we think a segv occured, and somebody should do something about it.
         '''
         retval = False
-        self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d' % (tid, str(leader), len(self.pending_faults)))
+        self.lgr.debug('pageFaultGen handleExit tid:%s leader:%s len of pending_faults %d cycle: 0x%x' % (tid, str(leader), len(self.pending_faults), self.cpu.cycles))
         if len(self.pending_faults) > 0:
             thread_group = self.task_utils.getGroupTids(tid)
             recent_cycle = 0
@@ -888,8 +888,8 @@ class PageFaultGen():
                     if recent_tid is None or not self.mem_utils.isKernel(self.pending_faults[pending_tid].eip):
                         recent_cycle = self.pending_faults[pending_tid].cycles
                         recent_tid = pending_tid
-            if recent_tid == tid or tid == leader or leader is None: 
-                if self.pending_faults[recent_tid].page_fault:
+            if (recent_tid is not None and recent_tid == tid) or tid == leader or leader is None: 
+                if recent_tid is not None and self.pending_faults[recent_tid].page_fault:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  SEGV?' % recent_tid)
                 else:
                     self.lgr.debug('pageFaultGen handleExit tid:%s has pending fault.  %s' % (recent_tid, self.pending_faults[recent_tid].name))

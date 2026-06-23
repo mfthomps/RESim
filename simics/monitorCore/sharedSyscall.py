@@ -41,6 +41,8 @@ matched parameters are handled by the stopHap in the syscall module that handled
 class SharedSyscall():
     def __init__(self, top, cpu, cell, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, traceFiles, soMap, dataWatch, traceMgr, stupid_close, lgr):
         self.pending_execve = []
+        self.pending_clone_child = {}
+        self.pending_clone_comm = {}
         self.lgr = lgr
         self.cpu = cpu
         self.cell = cell
@@ -138,6 +140,13 @@ class SharedSyscall():
                     print('\t%s %s' % (tid, prog))
                 else:
                     print('\t%s' % (tid))
+    def pendingClone(self, tid):
+        retval = False
+        for child_tid in self.pending_clone_child:
+            if self.pending_clone_child[child_tid].tid == tid:
+                retval = True
+                break
+        return retval
 
     def rmExitHap(self, tid, context=None, immediate=False):
         # We attempt to share one exit hap per exit eip across all processes
@@ -146,8 +155,13 @@ class SharedSyscall():
         else:
             use_context = self.cpu.current_context
         if use_context not in self.exit_tids:
-            self.lgr.debug('rmExitHap context %s not in exit_tids, do nothing?' % str(use_context))
+            self.lgr.debug('sharedSyscall rmExitHap context %s not in exit_tids, do nothing?' % str(use_context))
             return
+        if self.pendingClone(tid):
+            self.lgr.debug('sharedSyscall rmExitHap, tid:%s has pending child, do not remove' % tid)
+            self.exit_info[tid] = {}     
+            return
+ 
         my_exit_tids = self.exit_tids[use_context]
         if tid is not None:
             rm_tids = {}
@@ -741,7 +755,7 @@ class SharedSyscall():
             else:
                 did_exit = self.handleExit(None, tid, comm)
         if did_exit:
-            #self.lgr.debug('sharedSyscall exitHap remove exitHap for %s' % tid)
+            self.lgr.debug('sharedSyscall exitHap remove exitHap for %s' % tid)
             self.rmExitHap(tid)
             if self.callback is not None:
                 self.lgr.debug('sharedSyscall exitHap call callback (dataWatch kernelReturnHap?)')
@@ -769,13 +783,14 @@ class SharedSyscall():
            a paramter buried in exit_info (see ExitInfo class).
         '''
         word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
-        #self.lgr.debug('sharedSyscall handleExit') 
+        self.lgr.debug('sharedSyscall handleExit tid:%s' % tid) 
         trace_msg = ''
         if tid == '0':
             #self.lgr.debug('exitHap cell %s tid is zero' % (self.cell_name))
             return False
         ''' If this is a new tid, assume it is a child clone or fork return '''
         if exit_info is None:
+            self.lgr.debug('sharedSyscall handleExit tid:%s no exit_info' % tid) 
             ''' no pending syscall for this tid '''
             if not self.traceProcs.tidExists(tid):
                 ''' new TID, add it without parent for now? ''' 
@@ -789,7 +804,7 @@ class SharedSyscall():
                             return    
                 '''
                 leader_tid = self.task_utils.getCurrentThreadLeaderTid()
-                self.lgr.debug('sharedSyscall handleExit maybe clone child return no parent tid %s (%s)  group leader is %s' % (tid, comm, leader_tid))
+                self.lgr.debug('sharedSyscall handleExit maybe clone child return no parent tid %s (%s)  group leader is %s cycle: 0x%x' % (tid, comm, leader_tid, self.cpu.cycles))
                 if leader_tid != tid:
                     self.traceProcs.addProc(tid, leader_tid, comm=comm)
                     if self.context_manager.amWatching(leader_tid):
@@ -797,14 +812,34 @@ class SharedSyscall():
                 else:
                     self.traceProcs.addProc(tid, None, comm=comm)
                 return False
+            if tid in self.pending_clone_child:
+                self.lgr.debug('sharedSyscall handleExit cell %s tid:%s was pending clone child return cycle:0x%x' % (self.cell_name, tid, self.cpu.cycles))
+                trace_msg = trace_msg+' clone return from child tid:%s (%s)' % (tid, comm)
+                self.top.traceWrite(trace_msg.strip())
+                # we stored the exit_info in the dict on return from clone3 in parent.
+                if self.pending_clone_child[tid].msc is not None:
+                    # TBD remove, no longer used with new arm64 kernel
+                    # hack around arm64 bug running 32bit apps
+                    self.top.doInUser(self.hackArm64For32, self.pending_clone_child[tid])
+                del self.pending_clone_child[tid]
+                return False
+            elif comm in self.pending_clone_comm:
+                self.lgr.debug('sharedSyscall handleExit cell %s tid:%s was pending clone comm %s guess parent tid:%s return cycle:0x%x' % (self.cell_name, tid, comm, self.pending_clone_comm[comm].tid, self.cpu.cycles))
+                trace_msg = trace_msg+' clone return from child tid:%s (%s) parent may have been: %s' % (tid, comm, self.pending_clone_comm[comm].tid)
+                self.top.traceWrite(trace_msg.strip())
+                del self.pending_clone_comm[comm]
+                
+
             if self.isPendingExecve(tid):
                 self.lgr.debug('sharedSyscall handleExit cell %s call reschedule from execve?  for tid %s  Remove pending' % (self.cell_name, tid))
                 self.rmPendingExecve(tid)
                 return False 
             else:
                 ''' tid exists, but no execve syscall pending, assume reschedule? '''
-                #self.lgr.debug('exitHap call reschedule for tid %s' % tid)
+                self.lgr.debug('sharedSyscall handleExit call reschedule for tid %s' % tid)
                 return False 
+        else:
+            self.lgr.debug('sharedSyscall handleExit had exit info tid:%s' % tid)
         
         ''' check for nested interrupt return '''
         eip = self.getEIP()
@@ -840,16 +875,25 @@ class SharedSyscall():
         else:
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             ueax = self.mem_utils.getUnsigned(eax)
-            eax = self.mem_utils.getSigned(eax)
+            eax = self.mem_utils.getSigned(eax, word_size=word_size)
 
-        
-
-        self.lgr.debug('handleExit cell %s callnum %d name %s  tid %s cycle: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, self.cpu.cycles))
+        self.lgr.debug('sharedSyscall handleExit cell %s callnum %d name %s  tid %s cycle: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, self.cpu.cycles))
         trace_msg = '\treturn from %s tid:%s (%s), ' % (callname, tid, comm)
         err_trace_msg = '\terror return from %s tid:%s (%s) ' % (callname, tid, comm)
-        if callname == 'clone':
+        if callname in ['clone', 'clone3']:
             if eax == 0:
                 self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax zero, must be in child just return' % tid)
+                if tid in self.pending_clone_child:
+                    del self.pending_clone_child[tid]
+                if comm in self.pending_clone_comm:
+                    del self.pending_clone_comm[comm]
+                trace_msg = trace_msg+' return from child'
+                exit_info.syscall_instance.doTrace(trace_msg.strip(), tid)
+                # TBD can this be hit?  See handling in handleExit
+                if exit_info.msc is not None:
+                    # hack around arm64 bug running 32bit apps
+                    self.top.doInUser(self.hackArm64For32, exit_info)
+                    
                 return
           
             self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax %d' % (tid, eax))
@@ -860,6 +904,9 @@ class SharedSyscall():
             #    SIM_break_simulation('clone faux return?')
             #    return
             # Note hack of using fname_addr for stack base
+            child_tid = str(eax)
+            self.pending_clone_child[child_tid] = exit_info
+            self.lgr.debug('sharedSyscall return from clone in parent, added %s to pending_clone_child' % child_tid)
             if exit_info.fname_addr is not None:
                 if exit_info.fname_addr == 0:
                     self.lgr.debug('sharedSyscall exitHap clone, stack param null, will be cow of parent stack')
@@ -1582,7 +1629,7 @@ class SharedSyscall():
 
         ''' if debugging a proc, and clone call, add the new process '''
         dumb_tid, dumb2 = self.context_manager.getDebugTid() 
-        if dumb_tid is not None and callname == 'clone':
+        if dumb_tid is not None and callname in ['clone', 'clone3']:
             if eax == 0:
                 self.lgr.debug('sharedSyscall handleExit clone but eax is zero ??? tid is %s' % tid)
                 return True
@@ -1613,6 +1660,14 @@ class SharedSyscall():
             #self.lgr.debug('sharedSyscall exitHap cell %s %s'  % (self.cell_name, trace_msg.strip()))
             exit_info.syscall_instance.doTrace(trace_msg.strip(), tid)
         return True
+
+    def hackArm64For32(self, exit_info):
+        # no longer used.  arm64 linux bugs patched in revised kernel.
+        hack_stack, tls = exit_info.msc
+        self.top.writeRegValue('sp', hack_stack, alone=True)
+        self.top.writeRegValue('tpidrro_el0', tls, alone=True)
+        self.lgr.debug('sharedSyscall handleExit return from pending child changed sp to 0x%x and tpidrr0_elo to 0x%x' % (hack_stack, tls))
+        #SIM_break_simulation('remove this')
 
     def checkCount(self, eax, exit_info, trace_msg, data_string):
         '''determine if a runToInput type syscall has an associated count; and if so, 
@@ -1720,7 +1775,7 @@ class SharedSyscall():
             the_name = self.exit_names[tid]
             if the_name.endswith(exit_name):
                 rmlist.append(tid)
-                #self.lgr.debug('sharedSyscall rmExitBySyscallName tid:%s removing: %s context %s' % (tid, name, str(cell))) 
+                self.lgr.debug('sharedSyscall rmExitBySyscallName tid:%s removing: %s context %s' % (tid, name, str(cell))) 
                 self.rmExitHap(tid, context=cell, immediate=immediate)
                 if tid in self.exit_info and the_name in self.exit_info[tid]:
                     del self.exit_info[tid][the_name]
@@ -1953,3 +2008,7 @@ class SharedSyscall():
             return True
         else:
             return False
+
+    def addPendingCloneComm(self, comm, exit_info):
+        self.lgr.debug('sharedSyscall addPendingCloneComm for comm %s exit_info.tid:%s' % (comm, exit_info.tid))
+        self.pending_clone_comm[comm] = exit_info

@@ -966,7 +966,7 @@ of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targe
 \begin{verbatim}
 SIMICS_SCRIPT=x86-x58-ich10/genx86.simics
 \end{verbatim}
-\noindent would use the generic X86 platform distributed with RESim.
+\noindent would use the generic X86 platform distributed with RESim.  See \ref{target-platfroms} for available scripts.
 \item {\tt OS\_TYPE} Either LINUX or LINUX64
 RESim session.
 \item {\tt RESIM\_PARAM} Name of a parameter file created by getKernParams utility.
@@ -1014,7 +1014,9 @@ Example ini files for these target platforms are described in section \ref{examp
 
 Targets platforms from the RESim {\tt simics/simicsScripts/targets} include:
 \begin{itemize}
-\item x86-x58-ich10 -- An x86 platform with legacy BIOS that will boot many different x86 bootable disk images. 
+\item x86-x58-ich10/genx86.simics -- An x86 platform with legacy BIOS that will boot many different x86 bootable disk images. Note the launchRESIM.py may select
+a different script in this directory, or the resim-x86 script below. 
+\item resim-x86/resim-x86.simics -- An x86 platform with legacy BIOS used with Simics 7
 \item arm -- The Simics ARM QSP platform.  By default this boots the Simics-provided QSP kernel.  Alternately you can set the {\tt kernel\_image} 
 parameter to point to a different kernel.  See the directory at:
 \newline
@@ -1029,8 +1031,11 @@ partition is mounted on /mnt by the stock root fs as /dev/qspdc1.
 \newline
 \url{https://nps.box.com/v/resim-arm5-images}
 
-\item armv8a -- The Simics ARMv8-A Fixed Virtual Platform.  See the READMEs at simics/image\_build/arm\_fvp/README for information on building a kernel
+\item armv8a/fvp.simics -- The Simics ARMv8-A Fixed Virtual Platform.  See the READMEs at simics/image\_build/arm\_fvp/README for information on building a kernel
 and ram disk.
+
+\item armv8aJun26/fvp.simics -- The Simics ARMv8-A Fixed Virtual Platform that boots newer linux kernels, e.g., 7.1.  
+See the READMEs at simics/image\_build/arm\_fvp\_jun26/README for information on building a kernel
 
 \item ppc32 -- The Simics 32 bit PowerPC QSP platform.  See the README at simics/image\_build/ppc\_qsp for information on building a kernel. Root
 file systems disks can be simple ext2 file system images.
@@ -2982,7 +2987,7 @@ A sample ini file and parameter file for the ARM5 Integrator platform is at:
 \end{verbatim}
 Informaton on building the kernel image and building a ram disk of a root file system are at
 \begin{verbatim}
-   simics/image_build/arm_fvp
+   simics/image_build/arm_fvp_jun26
 \end{verbatim}
 
 \subsection{Custom devices}

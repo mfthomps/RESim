@@ -1,4 +1,5 @@
 import os
+import mmap
 import sys
 import time
 import logging
@@ -990,4 +991,128 @@ def decodeProtect(val):
             readable_permissions.append(name)
             
     return " | ".join(readable_permissions) if readable_permissions else "UNKNOWN"
+
+def decodeCloneFlags(flags):
+    """
+    Decodes a numeric clone flags argument into a human-readable list of Linux clone flags.
+    Based on Linux clone(2) system call definitions.
+    """
+    CLONE_FLAGS = {
+        0x00000100: "CLONE_VM (Share memory space)",
+        0x00000200: "CLONE_FS (Share filesystem information)",
+        0x00000400: "CLONE_FILES (Share open file descriptors)",
+        0x00000800: "CLONE_SIGHAND (Share signal handlers)",
+        0x00001000: "CLONE_PTRACE (Continue tracing child)",
+        0x00002000: "CLONE_VFORK (Call parent until child exec/exit)",
+        0x00004000: "CLONE_PARENT (Set child parent to caller's parent)",
+        0x00008000: "CLONE_THREAD (Same thread group)",
+        0x00010000: "CLONE_NEWNS (New mount namespace)",
+        0x00020000: "CLONE_SYSVSEM (Share System V SEM_UNDO)",
+        0x00040000: "CLONE_SETTLS (Create new TLS)",
+        0x00080000: "CLONE_PARENT_SETTID (Set TID in parent)",
+        0x00100000: "CLONE_CHILD_CLEARTID (Clear TID in child)",
+        0x00200000: "CLONE_DETACHED (Unused)",
+        0x00400000: "CLONE_UNTRACED (Do not let tracing force PTRACE)",
+        0x00800000: "CLONE_CHILD_SETTID (Set TID in child)",
+        0x01000000: "CLONE_NEWCGROUP (New cgroup namespace)",
+        0x02000000: "CLONE_NEWUTS (New UTS namespace)",
+        0x04000000: "CLONE_NEWIPC (New IPC namespace)",
+        0x08000000: "CLONE_NEWUSER (New user namespace)",
+        0x10000000: "CLONE_NEWPID (New PID namespace)",
+        0x20000000: "CLONE_NEWNET (New network namespace)",
+        0x40000000: "CLONE_IO (Share I/O context)",
+    }
+
+    active_flags = []
+    
+    # Check each known flag using bitwise AND
+    for flag_mask, flag_name in CLONE_FLAGS.items():
+        if (flags & flag_mask) == flag_mask:
+            active_flags.append(flag_name)
+            
+    # Handle the specific exit signal bits masked in the lowest 8 bits
+    exit_signal = flags & 0x000000FF
+    if exit_signal:
+        active_flags.append(f"Exit Signal: {hex(exit_signal)}")
+        
+    return active_flags
+
+def decodeMmapFlagsxxxx(flag_value):
+
+    """Decodes a numeric mmap flags value into a human-readable list of constants."""
+    decoded_flags = []
+    
+    # Dictionary mapping standard POSIX mmap flags to their names
+    flag_map = {
+        mmap.MAP_SHARED: 'MAP_SHARED',
+        mmap.MAP_PRIVATE: 'MAP_PRIVATE',
+        getattr(mmap, 'MAP_ANONYMOUS', getattr(mmap, 'MAP_ANON', 0)): 'MAP_ANONYMOUS',
+        getattr(mmap, 'MAP_FIXED', 0x10): 'MAP_FIXED',
+        getattr(mmap, 'MAP_GROWSDOWN', 0): 'MAP_GROWSDOWN',
+        getattr(mmap, 'MAP_LOCKED', 0): 'MAP_LOCKED',
+        getattr(mmap, 'MAP_NONBLOCK', 0): 'MAP_NONBLOCK',
+        getattr(mmap, 'MAP_NORESERVE', 0): 'MAP_NORESERVE',
+        getattr(mmap, 'MAP_POPULATE', 0): 'MAP_POPULATE',
+        getattr(mmap, 'MAP_STACK', 0): 'MAP_STACK',
+    }
+    
+    # Special handling for MAP_SHARED_VALIDATE if available on the system
+    if hasattr(mmap, 'MAP_SHARED_VALIDATE'):
+        flag_map[mmap.MAP_SHARED_VALIDATE] = 'MAP_SHARED_VALIDATE'
+
+    # Check for bits in the flag value
+    for flag, name in flag_map.items():
+        print('wtf flag 0x%x  %s' % (flag, name))
+        if flag != 0 and (flag_value & flag) == flag:
+            print('wtf appended %s' % name)
+            decoded_flags.append(name)
+            
+    # Remove duplicates in case of aliased constants (e.g., MAP_ANONYMOUS / MAP_ANON)
+    return list(set(decoded_flags))
+
+# Standard Linux x86_64 / generic kernel flag values
+FLAGS_MAP = {
+    # Protection Flags (PROT_*)
+    0x00: "PROT_NONE",
+    0x01: "PROT_READ",
+    0x02: "PROT_WRITE",
+    0x04: "PROT_EXEC",
+    
+    # Mmap Visibility Flags
+    0x01_0: "MAP_SHARED",    # Evaluates to 1 (0x01)
+    0x02_0: "MAP_PRIVATE",   # Evaluates to 2 (0x02)
+    
+    # Common Mmap Behavioral Flags (MAP_*)
+    0x10: "MAP_FIXED",
+    0x20: "MAP_ANONYMOUS",
+    0x0100: "MAP_GROWSDOWN",
+    0x0800: "MAP_DENYWRITE",
+    0x1000: "MAP_EXECUTABLE",
+    0x2000: "MAP_LOCKED",
+    0x4000: "MAP_NORESERVE",
+    0x8000: "MAP_POPULATE",
+    0x10000: "MAP_NONBLOCK",
+    0x20000: "MAP_STACK",
+    0x40000: "MAP_HUGETLB",
+    0x80000: "MAP_SYNC",
+    0x0100000: "MAP_FIXED_NOREPLACE"
+}
+
+def decodeMmapFlags(raw_value):
+    """Decodes a raw integer into hardcoded Linux mmap/prot strings."""
+    # Handle PROT_NONE explicit check
+    if raw_value == 0:
+        return ["PROT_NONE / MAP_SHARED_VALIDATE"]
+        
+    active_flags = []
+    
+    # Check each hardcoded bitmask
+    for mask, name in FLAGS_MAP.items():
+        if mask == 0:
+            continue
+        # Check if the specific bit is set
+        if (raw_value & mask) == mask:
+            active_flags.append(name)
+            
+    return active_flags if active_flags else ["UNKNOWN_FLAG"]
 
