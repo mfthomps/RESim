@@ -1656,7 +1656,7 @@ class MemUtils():
     def isKernel(self, v):
         if self.WORD_SIZE == 8:
             #if (v >> 63) & 1:
-            self.lgr.debug('memUtils isKernel wordsize 8 v 0x%x' % v)
+            #self.lgr.debug('memUtils isKernel wordsize 8 v 0x%x' % v)
             if testBit(v, 63):
                 retval = True
             else:
