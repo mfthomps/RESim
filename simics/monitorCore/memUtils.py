@@ -1654,8 +1654,8 @@ class MemUtils():
         return callnum
 
     def isKernel(self, v):
-        if self.word_size == 8:
-            retval = (va >> 63) & 1
+        if self.WORD_SIZE == 8:
+            retval = (v >> 63) & 1
         else:
             if v >= self.param.kernel_base:
                 return True
