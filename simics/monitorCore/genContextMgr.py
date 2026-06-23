@@ -1284,6 +1284,7 @@ class GenContextMgr():
             self.lgr.debug('contextManager killGroup NO leader.  got %s' % (lead_tid))
             if self.pageFaultGen is not None and self.exit_callback is None:
                 self.pageFaultGen.handleExit(lead_tid, lead_tid)
+            self.demise_cache.append(lead_tid)
 
 
     def deadParrot(self, tid):
