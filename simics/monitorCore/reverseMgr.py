@@ -348,9 +348,15 @@ class ReverseMgr():
 
         else:
             self.cycle_span = span
+        self.force_new = force_new
+        self.report_performance = report_performance
+        self.output_modes = output_modes
         parts = cli.quiet_run_command('version')
         self.version_string = parts[0][0][2]
-        self.lgr.debug('reverseMgr simics version %s reverse cycle_span 0x%x' % (self.version_string, self.cycle_span))
+        if self.nativeReverse():
+            self.lgr.debug('reverseMgr simics version %s native reverse' % (self.version_string))
+        else:
+            self.lgr.debug('reverseMgr simics version %s reverse cycle_span 0x%x' % (self.version_string, self.cycle_span))
         if self.oldSimics():
             cli.quiet_run_command('enable-unsupported-feature internals')
 
@@ -373,9 +379,6 @@ class ReverseMgr():
         self.sim_breakpoints = []
      
         self.performance = Performance(cpu, 1, True, self.lgr, None)
-        self.force_new = force_new
-        self.report_performance = report_performance
-        self.output_modes = output_modes
         if not self.nativeReverse():
             self.defineCommands(arg, int_t)
 
