@@ -18,7 +18,7 @@
 
         fdt-1 {
             description = "Foundation-v8A Device Tree Blob";
-            data = /incbin/("./linux/arch/arm64/boot/dts/arm/foundation-v8-gicv3-psci.dtb");
+            data = /incbin/("./foundation.dtb");
             type = "flat_dt";
             arch = "arm64";
             compression = "none";
@@ -27,7 +27,7 @@
 
         ramdisk-1 {
             description = "Buildroot/Initramfs Root Filesystem";
-            data = /incbin/("/tmp/mike/rootfs_images/ramdisk.cpio.gz");
+            data = /incbin/("./initrd");
             type = "ramdisk";
             arch = "arm64";
             os = "linux";

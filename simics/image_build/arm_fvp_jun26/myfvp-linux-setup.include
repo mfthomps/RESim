@@ -1,5 +1,6 @@
 decl {
     ! Setup Linux on ARMv8-A FVP.
+    ! Modified for use with modern build tool chains, June 2026
 
     group "Components"
 

@@ -1,8 +1,12 @@
 #!/bin/bash
+#
+# Build Linux kernel for the FVP Foundation board.
+# Also creates a patched dtb file.
+#
 set -e
 
 # --- Configuration ---
-WORK_DIR="/eems_images/fvp_foundation_workspace"
+WORK_DIR=$(realpath ./fvp_foundation_workspace)
 mkdir -p $WORK_DIR
 
 KERNEL_DIR="$WORK_DIR/linux"  # Adjust if your kernel source folder is named differently
@@ -39,24 +43,23 @@ make defconfig
 echo "--> Applying and validating configuration..."
 make olddefconfig
 
-
+echo "--> fix dts file..."
 dtsfile=./arch/arm64/boot/dts/arm/foundation-v8-gicv3-psci.dts
-done=$(grep watchdog $dtsfile)
-if [ -z "$done" ]; then
+did_patch=$( grep watchdog $dtsfile || true )
+if [[ -z "$did_patch" ]]; then
     echo "--> patching $dtsfile."
-    echo "not done"
     cat <<EOF >> $dtsfile
 &{/watchdog@2a440000} {
     status = "disabled";
 };
 EOF
 else
-    echo "dts already patched""
+    echo "dts already patched"
 fi
 
 echo "--> Compiling Kernel and Device Tree Blobs..."
 # We build the Image (uncompressed) and the explicit Foundation Model Device Tree
-make -j$(nproc) Image dtbs
+make -j$(nproc) Image dtbs 
 
 echo "--> Copying build artifacts to $OUTPUT_DIR..."
 cp arch/arm64/boot/Image "$OUTPUT_DIR/Image"
