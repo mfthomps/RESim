@@ -38,6 +38,7 @@ socktype = ['dumb', 'SOCK_STREAM', 'SOCK_DGRAM', 'SOCK_RAW', 'SOCK_RDM', 'SOCK_S
 SOCK_TYPE_MASK = 0xf
 AF_LOCAL = 1
 AF_INET = 2
+AF_INET6 = 10
 AF_NETLINK = 16
 AF_PACKET = 17
 domaintype = [ 'AF_UNSPEC', 'AF_LOCAL', 'AF_INET', 'AF_AX25', 'AF_IPX', 'AF_APPLETALK', 'AF_NETROM', 'AF_BRIDGE',
@@ -178,7 +179,7 @@ class SockStruct():
             lgr.debug('net sockStruct sa_family read as 0x%x' % self.sa_family)
         if self.sa_family == AF_LOCAL:
             self.sa_data = mem_utils.readString(cpu, self.addr+2, 256)
-        elif self.sa_family == AF_INET:
+        elif self.sa_family in [AF_INET, AF_INET6]:
             self.port = mem_utils.readWord16le(cpu, self.addr+2)
             self.sin_addr = mem_utils.readWord32(cpu, self.addr+4)
         elif self.sa_family == AF_NETLINK:
@@ -249,7 +250,7 @@ class SockStruct():
             retval = ('%s sa_family unknown' % (fd))
         elif self.sa_family == AF_LOCAL:
             retval = ('%s sa_family%d: %s %s %s sa_data: %s' % (fd, self.sa_family, self.famName(), sock_type, addr, self.sa_data))
-        elif (self.sa_family == AF_INET or self.sa_family == 0) and self.port is not None:
+        elif (self.sa_family in [AF_INET, AF_INET6] or self.sa_family == 0) and self.port is not None:
             retval = ('%s sa_family%d: %s %s %s IP address: %s:%d' % (fd, self.sa_family, self.famName(), sock_type, addr, self.dottedIP(), self.port))
         elif self.sa_family == AF_NETLINK:
             if self.sock_addr_nl is not None:
