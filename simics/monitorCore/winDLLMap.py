@@ -1017,3 +1017,8 @@ class WinDLLMap():
     def isDynamic(self, path):
         # TBD
         return False
+
+    def stopInUser(self):
+        retval = False
+        # doInUser for windows?
+        return retval
