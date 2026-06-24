@@ -22,12 +22,11 @@ else
     sed -i 's/10.10.0.101/10.10.0.100/g' simple.directive
 fi
 
-$HOME/bin/set-title "wintest"
-echo "run-python-file run-to-boot.py" | resim wintest.ini -n || exit
+echo "run-script run-to-boot.py" | resim wintest.ini -n || exit
 sed -i '/RESIM_TARGET/a RUN_FROM_SNAP=booted_test' wintest.ini
 sed -i '/BOOT_CHUNKS/a ONLY_PROGS=simple.only_prog' wintest.ini
-echo "@gkp.go()" | resim wintest.ini -n || exit
-resim wintest.ini -e "@gkp.go(quit=True)" || exit
+#echo "@gkp.go()" | resim wintest.ini -n || exit
+resim wintest.ini -e "@gkp.go(True,quit=True)" || exit
 sed -i 's/^CREATE_RESIM_PARAMS=YES/#CREATE_RESIM_PARAMS=YES/' wintest.ini
 resim wintest.ini -c save_running.simics || exit
 sed -i 's/RUN_FROM_SNAP=booted_test/RUN_FROM_SNAP=running_test/' wintest.ini
