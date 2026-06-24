@@ -1352,5 +1352,10 @@ class SOMap():
         return retval
 
     def stopInUser(self):
+        retval = False
         if self.do_in_user is not None:
             self.do_in_user.stopInUser()
+            retval = True
+        else:
+            self.lgr.debug('soMap stopInUser no doInUser set')
+        return retval
