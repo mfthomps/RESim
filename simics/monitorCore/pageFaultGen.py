@@ -316,7 +316,7 @@ class PageFaultGen():
             #self.top.quit()
             return
         user_ip_addr = sp + self.mem_utils.WORD_SIZE
-        self.lgr.debug('pageFaultGen pageFaultHap user_ip_addr is 0x%x' % user_ip_addr)
+        #self.lgr.debug('pageFaultGen pageFaultHap user_ip_addr is 0x%x' % user_ip_addr)
         self.user_eip = self.mem_utils.readWord(self.cpu, user_ip_addr)
         if self.user_eip is None:
             #SIM_break_simulation('remove this')
@@ -391,12 +391,12 @@ class PageFaultGen():
 
         #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
 
-        self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
+        #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
         if cpu.architecture == 'arm':
             page_info = pageUtils.findPageTableArm(self.cpu, fault_addr, self.lgr)
         elif cpu.architecture == 'arm64':
-            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr, do_log=True)
+            page_info = pageUtils.findPageTableArmV8(self.cpu, fault_addr, self.lgr)
         elif pageUtils.isIA32E(cpu):
             page_info = pageUtils.findPageTableIA32E(self.cpu, fault_addr, self.lgr)
         else:
