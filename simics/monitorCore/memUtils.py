@@ -446,9 +446,10 @@ class MemUtils():
             phys_addr = v - (self.param.kernel_base - self.param.ram_base)
             retval = self.getUnsigned(phys_addr)
         elif cpu.architecture == 'arm64':
-            if cpl > 0:
+            # always use page table in case we are from a mode hap
+            if True or cpl > 0:
                 #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
-                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, kernel=True)
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
                 if ptable_info is not None:
                     retval = ptable_info.phys_addr
                 else:

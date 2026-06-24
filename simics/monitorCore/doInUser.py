@@ -54,6 +54,7 @@ class DoInUser():
 
     def doCallbacks(self, dumb):
         for cb in self.callback_list:
+            self.lgr.debug('doInUser doCallbacks %s' % cb)
             cb(self.param)
 
     def modeChanged(self, cpu, one, old, new):
@@ -63,8 +64,7 @@ class DoInUser():
         cell_name = self.top.getTopComponentName(self.cpu)
         ip = self.top.getEIP()
         #cpl = SIM_processor_privilege_level(self.cpu)
-        cpl = memUtils.getCPL(cpu)
-        self.lgr.debug('doInUser mode_changed %s %s (%s) look for %s, cpl is %d eip: 0x%x' % (cell_name, tid, comm, self.tid, cpl, ip))
+        self.lgr.debug('doInUser modeChanged %s %s (%s) look for %s, eip: 0x%x old: %d new %d cycle: 0x%x' % (cell_name, tid, comm, self.tid, ip, old, new, cpu.cycles))
         if new == Sim_CPU_Mode_User:
             if tid == self.tid:
                 eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
@@ -91,3 +91,8 @@ class DoInUser():
         self.lgr.debug('doInUser restart')
         self.setModeHap()
 
+    def stopInUser(self):
+        self.callback_list.append(self.stopIt)
+
+    def stopIt(self, dumb):
+        SIM_break_simulation('In user space')

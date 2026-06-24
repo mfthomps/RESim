@@ -83,7 +83,7 @@ class RunToModeChange():
                     else:
                         self.lgr.debug('runToModeChange run2User tidlist from context_manager is %s' % self.tid_list)
            
-                    
+            self.top.pauseThreadTrack(cpu, True)
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, self.tid_list)
             self.lgr.debug('runToModeChange run2User tid %s in kernel space (%d), set mode hap %d' % (str(self.tid_list), cpl, self.mode_hap))
             hap_clean = hapCleaner.HapCleaner(cpu)
@@ -160,6 +160,7 @@ class RunToModeChange():
             instruct = SIM_disassemble_address(cpu, eip, 0, 0)
             self.lgr.debug('runToModeChange modeChanged tid:%s cpl reports %d hap reports %d  trigger_obj is %s old: %d  new: %d  eip: 0x%x ins: %s' % (this_tid, cpl, 
                     mode, str(one), old, new, eip, instruct[1]))
+            self.top.pauseThreadTrack(cpu, False)
             SIM_break_simulation('mode changed, break simulation')
        
     def suspend(self, dumb):

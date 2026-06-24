@@ -474,7 +474,6 @@ class ExitInfo():
         self.msc = None
 
 EXTERNAL = 1
-AF_INET = 2
 DEST_PORT = 3
 class CallParams():
     def __init__(self, name, subcall, match_param, break_simulation=False, proc=None, sub_match=None):
@@ -1462,7 +1461,7 @@ class Syscall():
                                  ida_msg = 'BIND to %s, FD: %d' % (call_param.match_param, ss.fd)
                              self.context_manager.setIdaMessage(ida_msg)
 
-                     if AF_INET in call_param.param_flags and ss.sa_family == net.AF_INET:
+                     if net.AF_INET in call_param.param_flags and ss.sa_family in [net.AF_INET, net.AF_INET6]:
                          addParam(exit_info, call_param)
                          self.sockwatch.bind(tid, ss.fd, call_param)
 

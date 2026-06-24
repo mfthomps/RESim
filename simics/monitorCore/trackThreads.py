@@ -38,6 +38,7 @@ class TrackThreads():
         self.so_track = None
         self.cur_comm = None
         self.last_call_cycle = None
+        self.pause_track = False
         self.ignore_progs = context_manager.getIgnoredProgs()
         for prog in syscall.exec_skip_list:
             self.ignore_progs.append(prog)
@@ -119,6 +120,9 @@ class TrackThreads():
     def execveHap(self, dumb, third, forth, memory):
         ''' One of the threads we are tracking is going its own way via an execve, stop watching it '''
         if len(self.execve_hap) == 0: 
+            return
+        if self.pause_track:
+            self.lgr.debug('trackThreads execveHap sees pause, bail')
             return
         cpu, comm, tid = self.task_utils.curThread() 
         if cpu.cycles == self.last_call_cycle:
@@ -303,3 +307,6 @@ class TrackThreads():
         self.lgr.debug('trackThreads checkContext')
         self.stopTrack()
         self.startTrack()
+
+    def pauseTrack(self, pause):
+        self.pause_track = pause

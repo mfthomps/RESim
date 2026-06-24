@@ -83,9 +83,9 @@ class MagicOrigin():
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
             establish a new origin '''
-        self.lgr.debug('magicHap')
+        #self.lgr.debug('magicHap')
         if self.magic_hap is not None:
-            self.lgr.debug('magicHap magic_hap not none, number %d' % magic_number)
+            #self.lgr.debug('magicHap magic_hap not none, number %d' % magic_number)
             if magic_number == 99:
                 if self.break_simulation:
                     SIM_break_simulation('magic stop')
