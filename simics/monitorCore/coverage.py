@@ -1018,7 +1018,7 @@ class Coverage():
             fh.write(s)
             fh.flush()
         self.lgr.debug('coverage saveCoverage to %s' % save_name)
-        print('Coverage saveCoverage to %s' % save_name)
+        print('Coverage save coverage %d hits to %s' % (len(hit_list), save_name))
         if self.create_dead_zone:
             # save once in workspace and once in ida data for bb coloring
             self.saveDeadFile()
