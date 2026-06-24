@@ -130,6 +130,8 @@ class SOMap():
 
         # Used to check for SO watches after execve program is loaded
         self.pending_execve = {}
+        # Support edge case of debugIfNot while in kernel
+        self.do_in_user = None
 
         # NO declarations below here
         if run_from_snap is not None:
@@ -428,7 +430,8 @@ class SOMap():
                     self.pending_execve[prog] = load_addr
                     mem_utils = self.task_utils.getMemUtils()
                     self.lgr.debug('soMap do execve handling in user mode via doInUser')
-                    doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
+                    self.top.pauseThreadTrack(self.cpu, True)
+                    self.do_in_user = doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
                     retval = LoadInfo(load_addr, size, interp=interp)
                 else:
@@ -446,7 +449,8 @@ class SOMap():
             self.lgr.debug('soMap pendingExecve for prog %s' % prog)
             self.checkSOWatch(self.pending_execve[prog], prog)
             del self.pending_execve[prog]
-            
+            self.top.pauseThreadTrack(self.cpu, False)
+            self.do_in_user = None
 
     def addProgInfo(self, prog, path):
         elf_info = elfText.getText(path, self.lgr)
@@ -1346,3 +1350,7 @@ class SOMap():
         else:
             retval = True
         return retval
+
+    def stopInUser(self):
+        if self.do_in_user is not None:
+            self.do_in_user.stopInUser()
