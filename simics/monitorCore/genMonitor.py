@@ -1690,6 +1690,11 @@ class GenMonitor():
 
         if self.target in self.reg_set:
              self.reg_set[self.target].swapContext()
+        cpl = memUtils.getCPL(cpu)
+        if cpl == 0:
+            self.lgr.debug('debug was in kernel, run to user, soMap may have a pending doInUser, use it to stop in user.')
+            self.soMap[self.target].stopInUser()       
+            SIM_continue(0)
 
     def trackThreads(self, target=None):
         self.lgr.debug('trackThreads') 
@@ -2112,8 +2117,8 @@ class GenMonitor():
  
     def toUser(self, flist=None, want_tid=None):
         self.rmDebugWarnHap()
-        self.lgr.debug('toUser want_tid %s' % want_tid)
         cpu = self.cell_config.cpuFromCell(self.target)
+        self.lgr.debug('toUser want_tid %s cycle: 0x%x' % (want_tid, cpu.cycles))
         if self.isVxDKM(cpu=cpu):
             self.vxKMonitor[self.target].toModule()
         else:
@@ -7383,6 +7388,11 @@ class GenMonitor():
 
     def isKernel(self, eip):
         return self.mem_utils[self.target].isKernel(eip)
+
+    def pauseThreadTrack(self, cpu, pause):
+        target = self.cell_config.cellFromCPU(cpu)
+        if self.track_threads is not None and target in self.track_threads:
+            self.track_threads[target].pauseTrack(pause)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
