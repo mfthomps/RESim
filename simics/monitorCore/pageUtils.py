@@ -655,6 +655,10 @@ def findPageTableArmV8(cpu, va, lgr, do_log=False):
 
         if do_log:
             lgr.debug(f"    [Level {level}] Index: {index} (Addr: 0x{desc_phys_addr:x}) -> Desc: 0x{desc:x}")
+        if level == 3:
+            ptable_info.page_base_addr = desc_phys_addr
+        elif level == 2:
+            ptable_info.ptable_addr = desc_phys_addr
 
         # Check if descriptor is valid (Bit 0 must be 1)
         if (desc & 1) == 0:
@@ -679,7 +683,6 @@ def findPageTableArmV8(cpu, va, lgr, do_log=False):
             if ap == 1:
                 ptable_info.writable = True 
             ptable_info.nx = memUtils.testBit(desc, 54)
-        ptable_info.page_base_addr = desc_phys_addr
         current_table_base = desc & 0x0000FFFFFFFFF000
 
     # Level 3 Page Table Entry (PTE) processing
