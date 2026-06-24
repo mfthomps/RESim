@@ -1692,9 +1692,13 @@ class GenMonitor():
              self.reg_set[self.target].swapContext()
         cpl = memUtils.getCPL(cpu)
         if cpl == 0:
-            self.lgr.debug('debug was in kernel, run to user, soMap may have a pending doInUser, use it to stop in user.')
-            self.soMap[self.target].stopInUser()       
-            SIM_continue(0)
+            if self.soMap[self.target].stopInUser(): 
+                self.lgr.debug('debug was in kernel, run to user, soMap has a pending doInUser, use it to stop in user.')
+                print('Was in kernel and soMap has a pending doInUser. We will attempt to run to user space.')
+                SIM_continue(0)
+            else:
+                #self.toUser()
+                pass
 
     def trackThreads(self, target=None):
         self.lgr.debug('trackThreads') 
