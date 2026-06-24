@@ -121,7 +121,7 @@ class Kbuffer():
         eip = self.top.getEIP()
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         self.lgr.debug('Kbuffer findArmBuf eip 0x%x  cycle: 0x%x, is ARM, expect a str: %s' % (eip, self.cpu.cycles, instruct[1]))
-        if instruct[1].startswith('str') or instruct[1].startswith('stp'):
+        if instruct[1].startswith('str') or instruct[1].startswith('stp') or instruct[1].startswith('sttr'):
             op2, op1 = decodeArm.getOperands(instruct[1])
             self.lgr.debug('Kbuffer findArmBuf op1 is %s' % op1)
             our_reg = op1
