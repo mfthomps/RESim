@@ -142,7 +142,7 @@ class RopCop():
         if 'pc' in instruct[1]:
             stack_val = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
             ret_addr = self.mem_utils.readAppPtr(self.cpu, stack_val)
-            self.lgr.debug('ropHap at 0x%x  %s  stack: 0x%x ret_addr: 0x%x' % (addr, instruct[1], stack_val, ret_addr))
+            #self.lgr.debug('ropHap at 0x%x  %s  stack: 0x%x ret_addr: 0x%x' % (addr, instruct[1], stack_val, ret_addr))
             pc = ret_addr - 4
             prev_instruct = SIM_disassemble_address(self.cpu, pc, 1, 0)
             #self.lgr.debug('followCall instruct is %s' % instruct[1])
