@@ -139,6 +139,9 @@ class InjectIO():
         self.stop_hap = None
         self.no_rop = no_rop
         self.instruct_trace = instruct_trace
+        if instruct_trace and not run:
+            print('You will need to start the simulation manually, otherwise Simics loses trace messages.')
+            run = False
         sor = os.getenv('AFL_STOP_ON_READ')
         self.lgr.debug('sor is %s' % sor)
         if sor is not None and sor.lower() in ['true', 'yes']:
@@ -357,7 +360,8 @@ class InjectIO():
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
                 self.lgr.debug('injectIO set ioctl wrote %d to 0x%x' % (bytes_wrote, self.addr_of_count))
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, bytes_wrote)
+                #self.mem_utils.writeWord32(self.cpu, self.addr_of_count, bytes_wrote)
+                self.top.writeWord32(self.addr_of_count, bytes_wrote, target_cpu=self.cpu)
 
         env_max_len = os.getenv('AFL_MAX_LEN')
         if env_max_len is not None:
