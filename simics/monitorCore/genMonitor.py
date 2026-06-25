@@ -821,7 +821,10 @@ class GenMonitor():
             if span is not None:
                 span = int(span, 16)
                 self.lgr.debug('Using reverse span of 0x%x' % span)
-            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.arg, self.int_t, self.output_modes, self.lgr, top=self, span=span)
+            force_new=False
+            if resimUtils.yesNoTrueFalse(os.getenv('FORCE_NEW_REVERSE')):
+                force_new=True
+            self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.arg, self.int_t, self.output_modes, self.lgr, top=self, span=span, force_new=force_new)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
                  self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
@@ -4218,9 +4221,12 @@ class GenMonitor():
         self.mem_utils[target].setRegValue(target_cpu, reg, value)
         #self.lgr.debug('writeRegValue %s, %x ' % (reg, value))
         if alone:
-            SIM_run_alone(self.clearBookmarks, reuse_msg) 
+            self.clearBookmarksAlone(reuse_msg=reuse_msg)
         else:
             self.clearBookmarks(reuse_msg=reuse_msg)
+
+    def clearBookmarksAlone(self, reuse_msg=None):
+        SIM_run_alone(self.clearBookmarks, reuse_msg) 
 
     def writeWord32(self, address, value, target_cpu=None):
         self.writeWord(address, value, target_cpu=target_cpu, word_size=4)
