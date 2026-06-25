@@ -1116,3 +1116,40 @@ def decodeMmapFlags(raw_value):
             
     return active_flags if active_flags else ["UNKNOWN_FLAG"]
 
+
+# Standard Linux kernel bitmask values for poll (from asm-generic/poll.h)
+POLL_FLAGS = {
+    0x0001: "IN",
+    0x0002: "PRI",
+    0x0004: "OUT",
+    0x0008: "ERR",
+    0x0010: "HUP",
+    0x0020: "NVAL",
+    0x0040: "RDNORM",
+    0x0080: "RDBAND",
+    0x0100: "WRNORM",
+    0x0200: "WRBAND",
+    0x0400: "MSG",
+    0x1000: "RDHUP"
+}
+
+
+def decodePollEvents(events_mask):
+    """Decodes a raw short integer into its human-readable Linux poll flags."""
+    if events_mask == 0:
+        return ["No events set (0)"]
+
+    matched_flags = []
+
+    # Check each hardcoded mask bit against the input
+    for mask, name in POLL_FLAGS.items():
+        if events_mask & mask:
+            matched_flags.append(name)
+
+    # Detect any remaining bit flags we haven't mapped
+    all_known_bits = sum(POLL_FLAGS.keys())
+    unknown_bits = events_mask & ~all_known_bits
+    if unknown_bits:
+        matched_flags.append(f"UNKNOWN_FLAGS ({hex(unknown_bits)})")
+
+    return matched_flags
