@@ -448,7 +448,7 @@ class MemUtils():
         elif cpu.architecture == 'arm64':
             # always use page table in case we are from a mode hap
             if True or cpl > 0:
-                self.lgr.debug('memUtils v2pKaddr arm64 always use page tables')
+                #self.lgr.debug('memUtils v2pKaddr arm64 always use page tables')
                 ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, do_log=do_log)
                 if ptable_info is not None and ptable_info.page_exists:
                     retval = ptable_info.phys_addr
@@ -674,11 +674,11 @@ class MemUtils():
                 self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             #self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             if not self.isKernel(v):
-                self.lgr.debug('v2p 0x%x is not kernel' % v)
+                #self.lgr.debug('v2p 0x%x is not kernel' % v)
                 retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
             else:
-                self.lgr.debug('v2p 0x%x is kernel' % v)
-                retval = self.v2pKaddr(cpu, v, use_pid=use_pid, do_log=True)
+                #self.lgr.debug('v2p 0x%x is kernel' % v)
+                retval = self.v2pKaddr(cpu, v, use_pid=use_pid, do_log=do_log)
         return retval
 
     def readByte(self, cpu, vaddr):
@@ -1571,6 +1571,16 @@ class MemUtils():
             self.lgr.error('memUtils writeWord32 value given is None')
             return
         SIM_write_phys_memory(cpu, phys, value, 4)
+
+    def writeWord16(self, cpu, address, value):
+        phys = self.v2p(cpu, address)
+        if phys is None:
+            self.lgr.error('memUtils writeWord16 phys is None for addr 0x%x' % address)
+            return
+        if value is None:
+            self.lgr.error('memUtils writeWord16 value given is None')
+            return
+        SIM_write_phys_memory(cpu, phys, value, 2)
 
     def writeBytes(self, cpu, address, byte_tuple):
         ''' TBD functionally different from writeString? '''
