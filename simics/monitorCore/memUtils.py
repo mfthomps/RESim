@@ -439,7 +439,7 @@ class MemUtils():
             table_base = table_base | 0x164
         return table_base
 
-    def v2pKaddr(self, cpu, v, use_pid=None):
+    def v2pKaddr(self, cpu, v, use_pid=None, do_log=False):
         retval = None
         cpl = getCPL(cpu)
         if cpu.architecture == 'arm':
@@ -448,9 +448,9 @@ class MemUtils():
         elif cpu.architecture == 'arm64':
             # always use page table in case we are from a mode hap
             if True or cpl > 0:
-                #self.lgr.debug('memUtils v2pKaddr arm64 user space, use page tables')
-                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
-                if ptable_info is not None:
+                self.lgr.debug('memUtils v2pKaddr arm64 always use page tables')
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, do_log=do_log)
+                if ptable_info is not None and ptable_info.page_exists:
                     retval = ptable_info.phys_addr
                 else:
                     retval = None
@@ -502,6 +502,7 @@ class MemUtils():
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
+                self.lgr.debug('memUtils v2pKaddr falling back on iface, got phys of 0x%x' % retval)
             except:
                 self.lgr.debug('memUtils v2pKaddr logical_to_physical failed on 0x%x' % v)
             if retval is None:
@@ -673,9 +674,11 @@ class MemUtils():
                 self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             #self.lgr.debug('v2p v 0x%x kernel_base 0x%x' % (v, self.param.kernel_base))
             if not self.isKernel(v):
+                self.lgr.debug('v2p 0x%x is not kernel' % v)
                 retval = self.v2pUserAddr(cpu, v, cpl, use_pid=use_pid, force_cr3=force_cr3, do_log=do_log)
             else:
-                retval = self.v2pKaddr(cpu, v, use_pid=use_pid)
+                self.lgr.debug('v2p 0x%x is kernel' % v)
+                retval = self.v2pKaddr(cpu, v, use_pid=use_pid, do_log=True)
         return retval
 
     def readByte(self, cpu, vaddr):
@@ -824,7 +827,7 @@ class MemUtils():
         try:
             value = SIM_read_phys_memory(cpu, paddr, 4)
         except:
-            self.lgr.debug('readWord32 could not read content of 0x%x vaddr was 0x%x' % (paddr, vaddr))
+            self.lgr.debug('readWord32 could not read content of 0x%x vaddr was 0x%x cycle: 0x%x' % (paddr, vaddr, cpu.cycles))
             value = None
         return value
 
