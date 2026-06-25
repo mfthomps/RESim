@@ -769,7 +769,8 @@ class PlayAFL():
         if self.mem_utils.isKernel(self.addr):
             if self.addr_of_count is not None and not self.top.isWindows():
                 self.lgr.debug('playAFL set ioctl wrote len in_data %d to 0x%x' % (count, self.addr_of_count))
-                self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
+                self.top.writeWord32(self.addr_of_count, count, target_cpu=self.cpu)
+                #self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                 self.write_data.watchIOCtl()
         return count
 
