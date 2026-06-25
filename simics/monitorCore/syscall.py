@@ -387,17 +387,22 @@ class PollInfo():
         self.cpu = cpu
         self.lgr = lgr
         self.fds_list = []
-        cur_addr = fds_addr
-        for i in range (nfds):
-            fd = self.mem_utils.readWord32(cpu, cur_addr)
+        self.nfds = nfds
+        self.getFDInfo()
+
+    def getFDInfo(self):
+        cur_addr = self.fds_addr
+        self.fds_list = []
+        for i in range (self.nfds):
+            fd = self.mem_utils.readWord32(self.cpu, cur_addr)
             if fd == 0xffffffff:
                 break
             elif fd == 0xffffffffffffffff:
                 break
             cur_addr += 4
-            events = self.mem_utils.readWord32(cpu, cur_addr)
+            events = self.mem_utils.readWord16(self.cpu, cur_addr)
             cur_addr += 2
-            revents = self.mem_utils.readWord32(cpu, cur_addr)
+            revents = self.mem_utils.readWord16(self.cpu, cur_addr)
             cur_addr += 2
             self.fds_list.append(self.FDS(fd, events, revents))
 
@@ -407,9 +412,44 @@ class PollInfo():
                 return True
         return False
 
-    def getString(self):
-        fd_list = ', '.join(map(lambda x: str(x.fd), self.fds_list))
-        return 'poll, %d FDs: %s Timeout: %d' % (self.nfds, fd_list, self.timeout) 
+    def clearFDRead(self, fd_in):
+        retval = None
+        cur_addr = self.fds_addr
+        for i in range (self.nfds):
+            fd = self.mem_utils.readWord32(self.cpu, cur_addr)
+            if fd == 0xffffffff:
+                break
+            elif fd == 0xffffffffffffffff:
+                break
+            if fd == fd_in:
+                want_addr = cur_addr+6
+                revents = self.mem_utils.readWord16(self.cpu, want_addr)
+                newevents = revents & 0xfffe
+                self.mem_utils.writeWord16(self.cpu, want_addr, newevents)
+                retval = newevents
+                break
+            cur_addr += 8
+        return retval
+
+    def getFDString(self, output):
+        retval = 'FDs'
+        for entry in self.fds_list:
+            retval = retval+':%d[' % entry.fd
+            if output:
+                events = resimUtils.decodePollEvents(entry.revents)
+                es = '-'.join(map(lambda x: x, events))
+                retval = retval+es
+            else:
+                events = resimUtils.decodePollEvents(entry.events)
+                es = '-'.join(map(lambda x: x, events))
+                retval = retval+es
+            retval=retval+']'
+        return retval
+            
+    def getString(self, output):
+        #fd_list = ', '.join(map(lambda x: str(x.fd), self.fds_list))
+        fd_string = self.getFDString(output) 
+        return 'poll, %d %s Timeout: %d' % (self.nfds, fd_string, self.timeout) 
 
 class SocketInfo():
     def __init__(self, domain, sock_type, protocol):
@@ -2355,7 +2395,7 @@ class Syscall():
             self.lgr.debug('%s frames: %s' % (callname, taskUtils.stringFromFrame(frame)))
             exit_info.poll_info = PollInfo(frame['param1'], frame['param2'], frame['param3'], self.mem_utils, cpu, self.lgr)
 
-            ida_msg = '%s tid:%s (%s) poll_info: %s\n' % (callname, tid, comm, exit_info.poll_info.getString())
+            ida_msg = '%s tid:%s (%s) poll_info: %s\n' % (callname, tid, comm, exit_info.poll_info.getString(False))
             for call_param in self.call_params:
                 if type(call_param.match_param) is int and exit_info.poll_info.hasFD(call_param.match_param) and (call_param.proc is None or call_param.proc == self.comm_cache[tid]):
                     self.lgr.debug('syscall %s call param found %d' % (callname, call_param.match_param))

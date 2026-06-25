@@ -1490,15 +1490,21 @@ class SharedSyscall():
                 trace_msg = trace_msg+('NO select info result: %d\n' % (eax))
         elif callname == 'poll' or callname == 'ppoll':
             if exit_info.poll_info is not None:
-                trace_msg = trace_msg+('%s result: %d\n' % (exit_info.poll_info.getString(), eax))
+                # refresh fd info to get kernel returns
+                exit_info.poll_info.getFDInfo()
+                trace_msg = trace_msg+('%s result: %d\n' % (exit_info.poll_info.getString(True), eax))
                 if self.poll_fixup_callback is not None and not self.poll_fixup_callback(exit_info.poll_info):
                     self.lgr.debug('sharedSyscall select, poll_fixup_callback returned false, bail')
                     return 
                 self.lgr.debug('sharedSyscall %s fool_select is %s' % (callname, self.fool_select))
                 if self.fool_select is not None and eax > 0:
-                    eax = self.modifyPoll(exit_info.poll_info, eax)
-                    if self.dataWatch is not None:
+                    orig_eax = eax
+                    eax = self.modifyPoll(exit_info.poll_info, orig_eax)
+                    if orig_eax != eax:
                         trace_msg = trace_msg.strip() + (' NOTE: eax altered to 0x%x\n' % eax) 
+                    else:
+                        trace_msg = trace_msg.strip() + (' NOTE: IN flag removed from FD: %d' % self.fool_select)
+                    if self.dataWatch is not None:
                         self.dataWatch.markCall(trace_msg, exit_info.old_fd)
  
                 exit_info.matched_param = None
@@ -1759,9 +1765,18 @@ class SharedSyscall():
 
     def modifyPoll(self, poll_info, eax):
         if poll_info.hasFD(self.fool_select):
-            eax = 0
-            self.top.writeRegValue('syscall_ret', eax, alone=True)
-            self.lgr.debug('sharedSyscall modified poll result, eax to %d' % eax)
+            new_revent = poll_info.clearFDRead(self.fool_select)
+            if new_revent is None:
+                self.lgr.debug('sharedSyscall modifyPoll FD: %d had no revent??' % self.fool_select)
+            else:
+                if new_revent == 0:
+                    eax = eax - 1
+                    self.top.writeRegValue('syscall_ret', eax, alone=True)
+                    self.lgr.debug('sharedSyscall modifyPoll result, eax to %d' % eax)
+                else:
+                    flags = resimUtils.decodePollEvents(new_revent)
+                    self.lgr.debug('sharedSyscall modifyPoll, no change to eax, new flags for FD: %d is %s reset origin' % (self.fool_select, flags))
+                    self.top.clearBookmarksAlone()
         return eax
 
     def rmExitBySyscallName(self, name, cell, immediate=False):
