@@ -1,7 +1,8 @@
 # extracted from fvp-linux-setup to run separately after 
 # components are loaded as a PRE_INIT_SCRIPT
 decl {
-    params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+    #params from "%simics%/targets/armv8a-fvp/fvp-linux-setup.include"
+    params from "fvp-linux-setup.include"
 }
 $initrd_size = `VT_logical_file_size(SIM_lookup_file(simenv.initrd_image))`
 $initrd_end = $initrd_addr + $initrd_size
