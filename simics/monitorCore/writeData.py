@@ -597,6 +597,8 @@ class WriteData():
             #self.lgr.debug('writeData callHap wrong tid, got %s wanted %s' % (tid, self.tid)) 
             return
         skip_it = False
+        kernel_buf_was_consumed = self.kernel_buf_consumed
+        #self.lgr.debug('callCallback kernel_buf_was_consumed %r' % kernel_buf_was_consumed)
         if self.top.isWindows():
             # TBD check FD
             eip = self.top.getEIP(self.cpu)
@@ -609,7 +611,7 @@ class WriteData():
                 if operation in self.ioctl_op_map:
                     op_cmd = self.ioctl_op_map[operation]
                     frame_s = taskUtils.stringFromFrame(frame)
-                    self.lgr.debug('writeData callHap,  is Windows is io_ctl tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s frame: %s' % (tid, eip, 
+                    self.lgr.debug('writeData callCallback,  is Windows is io_ctl tid:%s eip: 0x%x cycles: 0x%x callname %s op: %s frame: %s' % (tid, eip, 
                          self.cpu.cycles, callname, op_cmd, frame_s))
                     if op_cmd not in ['RECV', 'RECV_DATAGRAM', 'ReadFile']:
                         skip_it = True
@@ -647,24 +649,24 @@ class WriteData():
                     self.kernel_buf_consumed = True
                     self.bad_read_count += 1
                     if self.bad_read_count > 10:
-                        self.lgr.debug('writeData callHap kernel consumed bad_read_count %d > 100, treat as hang' % self.bad_read_count)
+                        self.lgr.debug('writeData callCallback kernel consumed bad_read_count %d > 100, treat as hang' % self.bad_read_count)
                         if self.hang_callback is not None:
                             self.hang_callback()
                 elif peek == 0:
                     self.total_read = self.total_read + count
                 else:
-                    self.lgr.debug('writeData callHap bad_read_count %d total_read %d' % (self.bad_read_bytes, self.total_read))
+                    self.lgr.debug('writeData callCallback bad_read_count %d total_read %d' % (self.bad_read_bytes, self.total_read))
                     if self.bad_read_bytes == self.total_read:
                         self.bad_read_count += 1
                         if self.bad_read_count > 10:
-                            self.lgr.debug('writeData callHap bad_read_count %d > 100, treat as hang' % self.bad_read_count)
+                            self.lgr.debug('writeData callCallback bad_read_count %d > 100, treat as hang' % self.bad_read_count)
                             if self.hang_callback is not None:
                                 self.hang_callback()
                     else:
                         self.bad_read_bytes = self.total_read
 
                 #self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
-            #self.lgr.debug('writeData callHap, callname  %s fd %s' % (callname, fd))
+            self.lgr.debug('writeData callCallback, callname  %s fd %s' % (callname, fd))
             if callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
                 skip_it = True
             elif fd != self.fd and callname not in ['select', '_newselect', 'pselect6']:
@@ -691,14 +693,15 @@ class WriteData():
 
         if not skip_it:
             self.read_count = self.read_count + 1
-            #self.lgr.debug('writeData callHap, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
+            #self.lgr.debug('writeData callCallback, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
             self.pending_call = True
-            self.handleCall(callname)
+            self.handleCall(callname, kernel_buf_was_consumed=kernel_buf_was_consumed)
 
     def doBreakSimulation(self, msg):
+        #self.lgr.debug('writeData doBreakSimulation %s' % msg)
         if self.write_callback is not None:
             SIM_break_simulation(msg)
-            #self.lgr.debug(msg)
+            self.lgr.debug(msg)
             SIM_run_alone(self.write_callback, 0)
         else:
             # TBD leave it up to playAFL, inject and others?
@@ -708,10 +711,11 @@ class WriteData():
                  self.stop_callback()
             #self.lgr.debug(msg+' no write_callback')
 
-    def handleCall(self, callname):
+    def handleCall(self, callname, kernel_buf_was_consumed=None):
         # TBD reworked, must be updated for Windows
         self.pending_callname = callname
         tid = self.top.getTID()
+        #self.lgr.debug('writeData handleCall %s' % callname)
         if tid != self.tid:
             self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
@@ -751,7 +755,8 @@ class WriteData():
                             SIM_run_alone(self.write_callback, count)
             else:
                 # Kernel buffer
-                if self.kernel_buf_consumed:
+                if (kernel_buf_was_consumed is None and self.kernel_buf_consumed) or kernel_buf_was_consumed == True:
+                    #self.lgr.debug('writeData handleCall kernel_buf_consumed')
                     self.doBreakSimulation('writeData handleCall kernel buffer consumed')
         elif self.select_count_max is not None and callname in['select', '_newselect', 'pselect6']:
             self.checkSelect()
@@ -759,7 +764,7 @@ class WriteData():
             if callname not in['select', '_newselect', 'pselect6']:
                 self.lgr.error('writeData handleCall pending_select but not a select call, bail. cannot get here')
                 return
-            self.lgr.debug('writeData handleCall is select')
+            #self.lgr.debug('writeData handleCall is select')
             if self.mem_utils.isKernel(self.addr):
                 if self.kernel_buf_consumed:
                     #self.lgr.debug('writeData handleCall pending_select, kernel buffer consumed')
@@ -777,7 +782,7 @@ class WriteData():
         elif callname == 'close' and self.stop_on_close:
             self.doBreakSimulation('writeData handleCall close and stop_on_close')
         else:
-            self.lgr.debug('writeData handleCall did not handle call %s' % callname)
+            #self.lgr.debug('writeData handleCall did not handle call %s' % callname)
             pass
            
     def checkIOCtl(self):
@@ -795,18 +800,18 @@ class WriteData():
         # Also used for poll
         retval = True
         if self.no_reset is not None:
-            #self.lgr.debug('writeData checkSelect no reset')
+            self.lgr.debug('writeData checkSelect no reset')
             self.doBreakSimulation('writeData checkSelect no reset')
             retval = False
         elif self.select_count_max is not None:
-            #self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
+            self.lgr.debug('writeData checkSelect, select_count coming in is %d max is %d' % (self.select_count, self.select_count_max))
             self.select_count = self.select_count+1
             if self.select_count_max is not None and self.select_count  >= self.select_count_max:
-                #self.lgr.debug('writeData checkSelect will break simulation cycles: 0x%x' % self.cpu.cycles)
+                self.lgr.debug('writeData checkSelect will break simulation cycles: 0x%x' % self.cpu.cycles)
                 self.doBreakSimulation('writeData checkSelect select count')
                 retval = False
             elif self.ret_hap is None:
-                #self.lgr.debug('writeData checkSelect call to setRetHap')
+                self.lgr.debug('writeData checkSelect call to setRetHap')
                 self.setRetHap()
         return retval
 
