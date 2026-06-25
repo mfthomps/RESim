@@ -664,6 +664,8 @@ def findPageTableArmV8(cpu, va, lgr, do_log=False):
         if (desc & 1) == 0:
             if do_log:
                 lgr.debug(f"[-] Translation Fault: Unmapped address at Level {level} (Descriptor is Zero/Invalid).")
+            ptable_info.exists = False
+            ptable_info.phys_addr = None
             return ptable_info
 
         # Check for Block Mappings (Huge Pages): Bit 1 == 0 at Levels 0, 1, or 2
