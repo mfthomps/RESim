@@ -19,6 +19,10 @@ class InstructTrace():
         self.version = resimSimicsUtils.version()
         self.lgr.debug('Simics version is %s' % self.version)
         if self.version.startswith('7'):
+            self.use_new_tracer = True
+        else:
+            self.use_new_tracer = False
+        if self.use_new_tracer:
             tracer_name = 'my_tracer'
             file = '/tmp/'+fname
             if all_cores:
@@ -38,7 +42,7 @@ class InstructTrace():
         self.just_tid = just_tid
         print('tracer is %s' % tracer_name)
         
-        if not self.version.startswith('7'):
+        if not self.use_new_tracer:
             tfile = '/tmp/%s' % fname
             #cmd = 'output-file-start %s' % tfile
             cmd = 'start-command-line-capture %s' % tfile
@@ -55,12 +59,13 @@ class InstructTrace():
                 self.lgr.debug('InstructTrace cpl is zero at start, stop')
                 self.stop()
         self.lgr.debug('InstructTrace starting with tid:%s, watch_threads: %r' % (tid, watch_threads))
+        print('going south')
 
     def start(self,dumb=None):
         tid = self.top.getTID()
         print('instructTrace starting tid is %s' % tid)
         self.lgr.debug('instructTrace starting tid is %s' % tid)
-        if not self.version.startswith('7'):
+        if not self.use_new_tracer:
             self.tracer.cli_cmds.start()
         else:
             self.tracer.cli_cmds.enable_instrumentation()
@@ -69,31 +74,31 @@ class InstructTrace():
         tid = self.top.getTID()
         print('instructTrace stopping tid is %s' % tid)
         self.lgr.debug('instructTrace stopping tid is %s' % tid)
-        if not self.version.startswith('7'):
+        if not self.use_new_tracer:
             self.tracer.cli_cmds.stop()
         else:
             self.tracer.cli_cmds.disable_instrumentation()
 
     def endTrace(self):
-        if not self.version.startswith('7'):
+        if not self.use_new_tracer:
             cmd = 'output-file-stop'
             SIM_run_command(cmd)
 
     def modeChanged(self, want_tid, one, old, new):
         cpu, comm, this_tid = self.top.curThread() 
-        self.lgr.debug('mode changed %s' % (this_tid))
+        self.lgr.debug('instructTrace mode changed %s' % (this_tid))
         if not self.just_kernel:
             if want_tid != this_tid:
                 if self.watch_threads:
                     if not self.top.amWatching(this_tid):
-                        self.lgr.debug('mode changed wrong tid watching threads, wanted %s got %s' % (want_tid, this_tid))
+                        self.lgr.debug('instructTrace mode changed wrong tid watching threads, wanted %s got %s' % (want_tid, this_tid))
                         return
                 elif not self.all_proc:
-                    self.lgr.debug('mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+                    self.lgr.debug('instructTrace mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
                     return
         if self.just_comm is not None:
             if comm != self.just_comm:
-                self.lgr.debug('modeChanged, comm %s does not match %s' % (comm, self.just_comm))
+                self.lgr.debug('instructTrace modeChanged, comm %s does not match %s' % (comm, self.just_comm))
                 self.tracer.disable-instrumentation()
                 return
         cpl = self.top.getCPL()
