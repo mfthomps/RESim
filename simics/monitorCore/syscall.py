@@ -718,8 +718,9 @@ class Syscall():
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
         self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, msg)
-        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
-        SIM_break_simulation(msg)
+        if self.stop_hap is not None:
+            self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+            SIM_break_simulation(msg)
 
     def doBreaks(self, compat32, background):
         break_list = []
