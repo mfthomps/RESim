@@ -46,7 +46,7 @@ class IDAFuns():
         if os.path.isfile(path):
             with open(path) as fh:
                 jfuns = json.load(fh)
-                self.lgr.debug('idaFuns read funs from %s' % path)
+                self.lgr.debug('idaFuns read funs from %s, offset is 0x%x' % (path, offset))
                 for sfun in jfuns:
                     fun_addr = int(sfun)
                     fun_rec = jfuns[sfun]
@@ -55,6 +55,7 @@ class IDAFuns():
                         fun_name = fun_name[7:]
                     fun_name = rmPrefix(fun_name)
                     adjusted = fun_addr + offset
+                    #self.lgr.debug('\tidaFuns adjusted fun_addr is 0x%x' % adjusted)
                     fun = adjusted
                     if fun_name in self.mangle:
                         #lgr.debug('****************** %s in mangle as %s' % (fun_name, self.mangle[fun_name]))
@@ -375,3 +376,15 @@ class IDAFuns():
             return True
         else:
             return False
+
+    def isWrapperFor(self, fun1, fun2):
+        retval = False
+        if fun1 in self.funs:
+            if 'wrapper_for' in self.funs[fun1]:
+                if self.funs[fun1]['wrapper_for'] == str(fun2):
+                    retval = True
+                else:
+                    self.lgr.debug('idaFuns isWrapperFor fun1 has wrapper_for %s but not fun2 %s' % (self.funs[fun1]['wrapper_for'], fun2))
+        else:
+            self.lgr.debug('idaFuns isWrapperFor fun1 %s not in funs' % fun1)
+        return retval 
