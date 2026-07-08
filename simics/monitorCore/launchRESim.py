@@ -257,12 +257,6 @@ class LaunchRESim():
         resim_targets = os.path.join(RESIM_REPO, 'simics', 'simicsScripts', 'targets')
         cmd = '$resim_targets=%s' % resim_targets 
         run_command(cmd)
-        #sys_include = os.path.join(resim_targets, 'armv8a', 'fvp-system.include')
-        #setup_include = os.path.join(resim_targets, 'armv8a', 'fvp-linux-setup.include')
-        #cmd = '$sys_include=%s' % sys_include 
-        #run_command(cmd)
-        #cmd = '$setup_include=%s' % setup_include 
-        #run_command(cmd)
         
         RESIM_TARGET = 'NONE'
         DRIVER_WAIT = False
