@@ -533,7 +533,7 @@ class reverseToCall():
         self.tid = tid
         retval = False
         if self.cpu is None:
-            self.lgr.debug('reverseToCall cannot jump, cpu not yet defined.')
+            self.lgr.error('reverseToCall cannot jump, cpu not yet defined.')
             return
         cur_cycles = self.cpu.cycles
         eip = self.top.getEIP(self.cpu)
@@ -1033,7 +1033,7 @@ class reverseToCall():
                                 retval = RegisterModType(None, RegisterModType.UNKNOWN)
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
                             addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
-                            rval = self.task_utils.getMemUtils().readPtr(self.cpu, addr)
+                            rval = self.task_utils.getMemUtils().readAppPtr(self.cpu, addr)
                             if addr is None or rval is None:
                                 self.lgr.debug('cycleRegisterMod eip 0x%x cannot get register value from %s' % (eip, instruct[1]))
                                 continue
@@ -1053,7 +1053,7 @@ class reverseToCall():
                                 pc_addr = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
                                 if pc_addr is not None:
                                     #TBD how do we know the instructions are linear?
-                                    pc = self.task_utils.getMemUtils().readPtr(self.cpu, pc_addr)
+                                    pc = self.task_utils.getMemUtils().readAppPtr(self.cpu, pc_addr)
                                     self.lgr.debug('cycleRegisterMod try uncalling pc_addr 0x%x  pc 0x%x' % (pc_addr, pc))
                                     cell = self.top.getCell()
                                     pre_call = pc - 4
