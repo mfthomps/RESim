@@ -62,7 +62,8 @@ class TrackThreads():
                 platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
                 if platform == 'armMixed':
                     self.setExecveBreaks(arm64_app=True)
-                    self.setExecveBreaks(arm64_app=False)
+                    if self.param.syscall_jump is not None:
+                        self.setExecveBreaks(arm64_app=False)
                 elif platform == 'arm64':
                     self.setExecveBreaks(arm64_app=True)
                 else:

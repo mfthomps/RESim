@@ -594,7 +594,8 @@ class SOMap():
                     load_info.addr, load_info.end, load_info.size))
 
             if self.fun_mgr is not None:
-                self.fun_mgr.add(full_path, addr)
+                analysis_path = self.getAnalysisPath(full_path)
+                self.fun_mgr.add(analysis_path, addr)
 
             self.checkSOWatch(addr, prog)
 
@@ -904,12 +905,13 @@ class SOMap():
             if tid in self.prog_start and self.prog_start[tid] is not None and addr_in >= self.prog_start[tid] and addr_in <= self.prog_end[tid]:
                 retval = self.text_prog[tid], self.prog_start[tid], self.prog_end[tid]
             else:
-                for load_addr in self.so_file_map[tid]:
+                for load_info in self.so_file_map[tid]:
+                    #self.lgr.debug('soMap getSOInfo load_addr 0x%x fname %s' % (load_info.addr, self.so_file_map[tid][load_info]))
                     #start = text_seg.locate + text_seg.offset
-                    start = load_addr.addr 
-                    end = load_addr.end
+                    start = load_info.addr 
+                    end = load_info.end
                     if start <= addr_in and addr_in <= end:
-                        retval = self.so_file_map[tid][load_addr], start, end
+                        retval = self.so_file_map[tid][load_info], start, end
                         break
             
         else:

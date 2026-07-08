@@ -718,8 +718,9 @@ class Syscall():
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
         self.stop_hap = self.top.RES_add_stop_callback(self.stopHap, msg)
-        self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
-        SIM_break_simulation(msg)
+        if self.stop_hap is not None:
+            self.lgr.debug('Syscall stopAlone cell %s added stopHap %d Now stop. msg: %s' % (self.cell_name, self.stop_hap, msg))
+            SIM_break_simulation(msg)
 
     def doBreaks(self, compat32, background):
         break_list = []
@@ -800,7 +801,11 @@ class Syscall():
                 platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
                 if platform == 'armMixed':
                     self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=True)
-                    self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=False)
+
+                    if self.param.syscall_jump is not None:
+                        self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=False)
+                    else:
+                        self.lgr.warning('The ini file calls for %s, but the param file has no syscall_jump, it only saw 64-bit apps')
                 elif platform == 'arm64':
                     self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=True)
                 else:

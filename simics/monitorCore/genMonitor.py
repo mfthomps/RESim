@@ -2610,9 +2610,9 @@ class GenMonitor():
 
     def skipBackToUser(self, extra=0):
         if self.reverseEnabled():
-            self.lgr.debug('skipBackToUser')
-            self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             cpu, comm, tid = self.task_utils[self.target].curThread() 
+            self.lgr.debug('skipBackToUser tid:%s' % tid)
+            self.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             self.rev_to_call[self.target].jumpOverKernel(tid)
         else:
             self.lgr.debug('skipBackToUser but reverse execution not enabled.')
@@ -4875,11 +4875,12 @@ class GenMonitor():
 
    
     def stopTrackIO(self, immediate=False, check_crash=True):
-        self.lgr.debug('stopTrackIO immediate %r' % immediate)
-        if immediate:
-            self.stopTrackIOAlone(immediate=immediate, check_crash=check_crash)
-        else:
-            SIM_run_alone(self.stopTrackIOAlone, immediate)
+        if self.track_started and not self.track_finished:
+            self.lgr.debug('stopTrackIO immediate %r' % immediate)
+            if immediate:
+                self.stopTrackIOAlone(immediate=immediate, check_crash=check_crash)
+            else:
+                SIM_run_alone(self.stopTrackIOAlone, immediate)
 
     def pendingFault(self, target=None, no_stop=False):
         retval = False
@@ -4979,21 +4980,22 @@ class GenMonitor():
             self.lgr.debug('error %s' % str(e))
 
     def stopTracking(self, keep_watching=False, keep_coverage=False):
-        self.lgr.debug('stopTracking')
-        self.stopTrackIO(immediate=True, check_crash=False)
-        if self.dataWatch[self.target].didSomething():
-            self.disableOtherBreaks()
-            self.rmAllDmods()
-        self.dataWatch[self.target].removeExternalHaps(immediate=True)
-        self.dataWatch[self.target].disable()
+        if self.track_started and not self.track_finished:
+            self.lgr.debug('stopTracking')
+            self.stopTrackIO(immediate=True, check_crash=False)
+            if self.dataWatch[self.target].didSomething():
+                self.disableOtherBreaks()
+                self.rmAllDmods()
+            self.dataWatch[self.target].removeExternalHaps(immediate=True)
+            self.dataWatch[self.target].disable()
 
-        self.stopThreadTrack(immediate=True)
-        self.noWatchSysEnter()
+            self.stopThreadTrack(immediate=True)
+            self.noWatchSysEnter()
 
-        self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
-        if self.injectIOInstance is not None:
-            self.injectIOInstance.delCallHap()
-        self.track_finished = True
+            self.removeDebugBreaks(immediate=True, keep_watching=keep_watching, keep_coverage=keep_coverage)
+            if self.injectIOInstance is not None:
+                self.injectIOInstance.delCallHap()
+            self.track_finished = True
 
     def goToWatchMark(self, index):
         return self.goToDataMark(index)

@@ -1,0 +1,7 @@
+fvp32_jun26.parm Linux 7.1 with 32-bit applications
+fvp64_jun26.parm Linux 7.1 with 64-bit applications
+fvp_jun26.ini to boot Linux 7.1
+fvp32.param Older Linux4 with 32-bit
+fvp64.param Older Linux4 with 64-bit
+fvp.ini  to boot Linux 4
+fvp.param mix of 32 and 64 bit?  

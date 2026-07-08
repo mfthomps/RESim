@@ -314,6 +314,7 @@ class TaskUtils():
         next = self.mem_utils.readPtr(cpu, addr + offset)
         if next is None:
             self.lgr.debug('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
+            #SIM_break_simulation('remove this')
             return None
         prev = self.mem_utils.readPtr(cpu, addr + offset + self.mem_utils.WORD_SIZE)
         if prev is None:

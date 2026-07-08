@@ -542,11 +542,10 @@ class StackTrace():
                 retval = True
             elif 'printf' in fun1 and fun2 == 'write':
                 retval = True
-        if not retval:
-            fun1_entry = self.fun_mgr.getFunEntry(fun1)
-            fun2_entry = self.fun_mgr.getFunEntry(fun2)
-            if fun1_entry == fun2_entry:
-                retval = True
+        fun1_entry = self.fun_mgr.getFunEntry(fun1)
+        fun2_entry = self.fun_mgr.getFunEntry(fun2)
+        if not retval and fun1_entry == fun2_entry:
+            retval = True
         if not retval and not been_above_clib and self.soMap.isFunNotLibc(ip_of_call_instruct):
             # look for match in existing libc stack frames
             for frame in self.frames:
@@ -565,6 +564,8 @@ class StackTrace():
 
         if not retval and fun1.startswith('g_') and fun1[2:] == fun2:
             retval = True
+        if not retval and self.fun_mgr.isWrapperFor(fun1_entry, fun2_entry):
+                retval = True
         return retval
 
     def doX86(self):
