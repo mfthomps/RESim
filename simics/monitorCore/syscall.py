@@ -801,7 +801,11 @@ class Syscall():
                 platform = self.top.getCompDict(self.cell_name, 'PLATFORM')
                 if platform == 'armMixed':
                     self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=True)
-                    self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=False)
+
+                    if self.param.syscall_jump is not None:
+                        self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=False)
+                    else:
+                        self.lgr.warning('The ini file calls for %s, but the param file has no syscall_jump, it only saw 64-bit apps')
                 elif platform == 'arm64':
                     self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=True)
                 else:
