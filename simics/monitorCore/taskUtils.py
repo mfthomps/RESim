@@ -1042,6 +1042,7 @@ class TaskUtils():
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
     def getSyscallEntry(self, callnum, compat32, arm64_app=None):
+        entry = None
         if callnum is None:
             self.lgr.error('taskUtils getSyscallEntry called with callnum of None')
             return None

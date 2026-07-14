@@ -458,15 +458,28 @@ class findKernelWrite():
         eip = self.top.getEIP(self.cpu)
         ida_message = 'skipAlone?'
         if self.memory_transaction is None:
+           self.lgr.debug('findKernelWrite skipAlone self.memory_transaction is None')
            value = None
         else:
             value = self.mem_utils.readMemory(self.cpu, self.addr, self.memory_transaction.size)
+            if value is None:
+                self.lgr.debug('findKernelWrite skipAlone self.addr 0x%x, self.memory_transaction 0x%x got None' % ((self.addr, self.memory_transaction.logical_address)))
+                frame, cycles = self.top.getRecentEnterCycle()
+                if cycles is not None:
+                    self.lgr.debug('findKernelWrite skipAlone enter cycles 0x%x' % cycles)
+                else:
+                    self.lgr.debug('findKernelWrite skipAlone enter cycles was None')
+            
         #value = self.mem_utils.readWord32(self.cpu, self.addr)
         do_satisfy = False
         data_watch = None
         if value is None:
-            ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
-            bm = "eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
+            if self.memory_transaction is None:
+                ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
+                bm = "eip:0x%x follows kernel paging of memory:0x%x" % (eip, self.addr)
+            else:
+                ida_msg = "Nothing mapped at 0x%x, not paged in? Could be during input syscall." % self.addr
+                bm = "eip:0x%x follows kernel paging of memory:0x%x. Could be during input syscall." % (eip, self.addr)
         else: 
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):

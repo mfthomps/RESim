@@ -898,7 +898,7 @@ class SharedSyscall():
           
             self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax %d' % (tid, eax))
             if eax > 20000:
-                SIM_break_simulation('confused clone')
+                #SIM_break_simulation('confused clone')
                 return False
             #if eax == 120:
             #    SIM_break_simulation('clone faux return?')

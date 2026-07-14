@@ -249,7 +249,7 @@ class BPEnabler():
             self.newstyle_values.append(bp_values)
  
     def disableAll(self):
-        self.lgr.debug('BPEnabler disableAll')
+        #self.lgr.debug('BPEnabler disableAll')
         for bp in self.sim_bp_list:
             if bp in self.newstyle_list:
                # Name overload  TBD 
@@ -261,14 +261,14 @@ class BPEnabler():
         for bp_values in self.newstyle_values:
             if bp_values.enabled:
                 cmd = 'bp.disable %d' % bp_values.bp_num                
-                self.lgr.debug('BPEnabler disable did bp %d' % bp_values.bp_num)
+                #self.lgr.debug('BPEnabler disable did bp %d' % bp_values.bp_num)
                 cli.quiet_run_command(cmd)
 
     def enableAll(self):
-        self.lgr.debug('BPEnabler enable')
+        #self.lgr.debug('BPEnabler enable')
         for bp in self.sim_did_disable:
             SIM_enable_breakpoint(bp)
-            self.lgr.debug('BPEnabler enable did bp %d' % bp)
+            #self.lgr.debug('BPEnabler enable did bp %d' % bp)
         for bp_values in self.newstyle_values:
             if bp_values.enabled:
                 cmd = 'bp.enable %d' % bp_values.bp_num                
@@ -528,7 +528,7 @@ class ReverseMgr():
         elif name.startswith('cycle_'):
             want_cycle = int(name[6:], 16)
             if want_cycle == self.origin_cycle:
-                self.lgr.debug('reverseMgr restoreSnapshot %s was origin, rename it' % name)
+                #self.lgr.debug('reverseMgr restoreSnapshot %s was origin, rename it' % name)
                 name = 'origin'
         if not self.version().startswith('7'):
             if self.oldSimics():
@@ -587,7 +587,7 @@ class ReverseMgr():
             #cli.quiet_run_command('enable-vmp')
         #self.enableSimBreaks()
         bp_enabler.enableAll()
-        self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
+        #self.lgr.debug('reverseMgr restoreSnapshot done, cycle now 0x%x wanted %s' % (self.cpu.cycles, name))
 
     def cycleHandlerAlone(self, cycles):
         if self.latest_span_end != self.cpu.cycles:
@@ -605,7 +605,7 @@ class ReverseMgr():
         ''' Find the span cycles occuring before the given cycles for the given cpu '''
         retval = None
         recorded = self.getMasked(cycles)
-        self.lgr.debug('findCycleSpan for cpu %s cycles 0x%x recorded is 0x%x' % (cpu.name, cycles, recorded))
+        #self.lgr.debug('reverseMgr findCycleSpan for cpu %s cycles 0x%x recorded is 0x%x' % (cpu.name, cycles, recorded))
         if recorded < self.origin_cycle:
             # Are there any recorded cycles for this cpu that are less than the given cycles?
             for loop_cycle in self.span_record:
@@ -613,13 +613,13 @@ class ReverseMgr():
                 if self.span_record[loop_cycle][cpu] < cycles:
                     retval = loop_cycle
             if retval is None:
-                self.lgr.debug('findCycleSpan recorded less than origin and no %s cycles less than cycles.' % cpu.name)
+                self.lgr.debug('reverseMgr findCycleSpan recorded less than origin and no %s cycles less than cycles.' % cpu.name)
             else:
-                self.lgr.debug('findCycleSpan recorded less than origin loop cycle 0x%x has 0x%x cycles for %s and that is less than given cycle' % (loop_cycle, 
+                self.lgr.debug('reverseMgr findCycleSpan recorded less than origin loop cycle 0x%x has 0x%x cycles for %s and that is less than given cycle' % (loop_cycle, 
                       self.span_record[loop_cycle][cpu], cpu.name))
         elif self.latest_span_end is None:
             # No recorded cycles, just use origin
-            self.lgr.debug('findCycleSpan no recorded cycles, just use origin')
+            self.lgr.debug('reverseMgr findCycleSpan no recorded cycles, just use origin')
             retval = self.origin_cycle 
         elif self.span_record[recorded][cpu] == cycles:
                 retval = recorded
@@ -629,11 +629,11 @@ class ReverseMgr():
             while self.span_record[loop_cycles][cpu] > cycles and loop_cycles >= self.origin_cycle:
                 loop_cycles = loop_cycles - self.cycle_span
                 retval = loop_cycles
-            if retval is None:
-                self.lgr.debug('findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did not find any less than given.')
-            else:
-                self.lgr.debug('findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
-                   self.span_record[retval][cpu]))
+            #if retval is None:
+            #    self.lgr.debug('reverseMgr findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did not find any less than given.')
+            #else:
+            #    self.lgr.debug('reverseMgr findCycleSpan recorded cycles for cpu greater than given cycles, looped backward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
+            #       self.span_record[retval][cpu]))
         else:
             # loop forward to find the greatest cpu cycle less than the given
             loop_cycles = recorded
@@ -641,11 +641,11 @@ class ReverseMgr():
             while self.span_record[loop_cycles][cpu] < cycles and loop_cycles != self.latest_span_end:
                 retval = loop_cycles
                 loop_cycles = loop_cycles + self.cycle_span
-            if retval is None:
-                self.lgr.error('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did not find any less than given.')
-            else:
-                self.lgr.debug('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
-                   self.span_record[retval][cpu]))
+            #if retval is None:
+            #    self.lgr.error('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did not find any less than given.')
+            #else:
+            #    self.lgr.debug('findCycleSpan recorded cycles for cpu less than given cycles, looped forward and did found loop_cycles 0x%x with cpu cycles 0x%x' % (retval,
+            #       self.span_record[retval][cpu]))
         return retval
                 
 
@@ -748,7 +748,7 @@ class ReverseMgr():
 
     def skipToCycleFromCli(self, cycle):
         cpu = getPselect()
-        self.lgr.debug('reverseMgr skipToCycleFromCli cycle 0x%x cpu from pselect is %s' % (cycle, cpu.name))
+        #self.lgr.debug('reverseMgr skipToCycleFromCli cycle 0x%x cpu from pselect is %s' % (cycle, cpu.name))
         self.skipToCycle(cycle, cpu=cpu)
 
     def skipToCycle(self, cycle, cpu=None):
@@ -801,11 +801,11 @@ class ReverseMgr():
             #self.disableAll()
             self.setDeltaCycle(cpu, cycle)
             delta = cycle - cpu.cycles
-            self.lgr.debug('reverseMgr runToCycle  0x%x. Now continue from cpu cycles 0x%x delta 0x%x' % (cycle, cpu.cycles, delta))
+            #self.lgr.debug('reverseMgr runToCycle  0x%x. Now continue from cpu cycles 0x%x delta 0x%x' % (cycle, cpu.cycles, delta))
                 
             SIM_continue(0)
             #SIM_continue(delta)
-            self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, cpu.cycles))
+            #self.lgr.debug('reverseMgr runToCycle 0x%x back from continue. Now,  cpu cycles 0x%x' % (cycle, cpu.cycles))
 
             cmd = 'pselect %s' % cpu.name
             cli.quiet_run_command(cmd)
@@ -816,7 +816,7 @@ class ReverseMgr():
             bp_enabler.enableAll()
             self.setNextCycle()
             self.whenDone()
-            self.lgr.debug('reverseMgr runToCycle back from whenDone')
+            #self.lgr.debug('reverseMgr runToCycle back from whenDone')
         if self.oldSimics() and self.latest_span_end is not None and self.latest_span_end > cpu.cycles:
             # TBD should be self.cpu?  matter for old simics?
             self.latest_span_end =  self.getMasked(cpu.cycles)
@@ -1406,14 +1406,16 @@ class ReverseMgr():
         Restart recording of snapshots if needed.
         '''
         if not self.recording_end_event_set:
-            self.lgr.debug('reverseMgr continuationHap cycles: 0x%x' % self.cpu.cycles)
+            #self.lgr.debug('reverseMgr continuationHap cycles: 0x%x' % self.cpu.cycles)
             if not self.recording:
-                self.lgr.debug('reverseMgr continuationHap not recording, set recording end')
+                #self.lgr.debug('reverseMgr continuationHap not recording, set recording end')
                 self.setRecordingEndCycle()
             else:
-                self.lgr.debug('reverseMgr continuationHap am recording')
+                #self.lgr.debug('reverseMgr continuationHap am recording')
+                pass
         else:
-            self.lgr.debug('reverseMgr continuationHap but recording_end_event_set')
+            #self.lgr.debug('reverseMgr continuationHap but recording_end_event_set')
+            pass
 
     def getSpan(self):
         '''

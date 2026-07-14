@@ -299,21 +299,21 @@ foreach $count in (range $num_cpus) {
 			+ " n_threads = $num_threads")
 	}
 
-    if $apic_bus_class == "auto_apic_bus" {
-        local $next_detected_apic_bus_class = (python "extract_needed_apic_bus_class(simenv.cpu)")
-        if $detected_apic_bus_class {
-            if $next_detected_apic_bus_class != $detected_apic_bus_class {
-                echo ("Error: Processors in '" + $motherboard + "' require different apic bus classes.")
-                echo ("       Previously detected bus class is " + $detected_apic_bus_class)
-                echo ("       bus class detected on " + $cpu + " is " + $next_detected_apic_bus_class)
-                interrupt-script
-            }
-        } else {
-            # set apic bus class to what the first apic told us
-            @SIM_get_object(simenv.motherboard).iface.component.get_slot_value('apic_bus').__class_name__ =  simenv.next_detected_apic_bus_class
-        }
-        $detected_apic_bus_class = $next_detected_apic_bus_class
-    }
+    #if $apic_bus_class == "auto_apic_bus" {
+    #    local $next_detected_apic_bus_class = (python "extract_needed_apic_bus_class(simenv.cpu)")
+    #    if $detected_apic_bus_class {
+    #        if $next_detected_apic_bus_class != $detected_apic_bus_class {
+    #            echo ("Error: Processors in '" + $motherboard + "' require different apic bus classes.")
+    #            echo ("       Previously detected bus class is " + $detected_apic_bus_class)
+    #            echo ("       bus class detected on " + $cpu + " is " + $next_detected_apic_bus_class)
+    #            interrupt-script
+    #        }
+    #    } else {
+    #        # set apic bus class to what the first apic told us
+    #        @SIM_get_object(simenv.motherboard).iface.component.get_slot_value('apic_bus').__class_name__ =  simenv.next_detected_apic_bus_class
+    #    }
+    #    $detected_apic_bus_class = $next_detected_apic_bus_class
+    #}
     connect $motherboard.socket[$count] $cpu.socket
 }
 

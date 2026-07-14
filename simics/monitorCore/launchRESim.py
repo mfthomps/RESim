@@ -374,6 +374,14 @@ class LaunchRESim():
                 addSwitchLinkNames('driver', self.comp_dict['driver'], self.link_dict['driver'], switch_map, lgr)
                 if DRIVER_WAIT:
                     print('DRIVER_WAIT -- will continue.  Use @resim.go to monitor')
+            else:
+                lgr.debug('No driver component')
+                START_AGENT = os.getenv('START_AGENT')
+                if resimUtils.yesNoTrueFalse(START_AGENT): 
+                    lgr.debug('Started agent manager')
+                    run_command('start-agent-manager')
+                                
+                
             ''' NOTE RETURN ABOVE '''
             if not DRIVER_WAIT:
                 self.doSections(lgr) 

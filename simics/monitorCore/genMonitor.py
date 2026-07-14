@@ -1208,24 +1208,27 @@ class GenMonitor():
         return frame, cycles
 
     def getPrevSyscallInfo(self, tid=None):
+        retval = ''
         if tid is None:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         frame, cycles = self.getPreviousEnterCycle(tid=tid)
-        call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
-        retval = ''
-        #if call == 'socketcall' or call.upper() in net.callname:
-        if call == 'socketcall':
-            if 'ss' in frame:
-                ss = frame['ss']
-                socket_callnum = frame['param1']
-                socket_callname = net.callname[socket_callnum].lower()
-                retval = ('\ttid: %s syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
-                     call, socket_callname, ss.fd, frame['sp'], frame['pc'], cycles))
+        if frame is not None: 
+            call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+            #if call == 'socketcall' or call.upper() in net.callname:
+            if call == 'socketcall':
+                if 'ss' in frame:
+                    ss = frame['ss']
+                    socket_callnum = frame['param1']
+                    socket_callname = net.callname[socket_callnum].lower()
+                    retval = ('\ttid: %s syscall %s %s fd: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
+                         call, socket_callname, ss.fd, frame['sp'], frame['pc'], cycles))
+                else:
+                    retval = ('\ttid: %s socketcall but no ss in frame?' % tid)
             else:
-                retval = ('\ttid: %s socketcall but no ss in frame?' % tid)
+                retval = ('\ttid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
+                     call, frame['param1'], frame['sp'], frame['pc'], cycles))
         else:
-            retval = ('\ttid: %s syscall %s param1: %d sp: 0x%x pc: 0x%x cycle: 0x%x' % (tid, 
-                 call, frame['param1'], frame['sp'], frame['pc'], cycles))
+            self.lgr.debug('getPrevSyscallInfo got nothing')
         return retval
 
     def revToSyscall(self):
