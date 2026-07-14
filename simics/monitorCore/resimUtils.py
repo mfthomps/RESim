@@ -571,6 +571,12 @@ def getAnalysisPath(ini, fname, fun_list_cache = [], lgr=None, root_prefix=None)
             if os.path.isfile(analysis_path):
                 retval = analysis_path[:-5]
                 lgr.debug('resimUtils getAnalysis symlink got it %s' % retval)
+            else:
+                analysis_path = fname_abs+'.funs'
+                lgr.debug('resimUtils getAnalysis try shared path %s' % analysis_path)
+                if os.path.isfile(analysis_path):
+                    retval = analysis_path[:-5]
+                    lgr.debug('resimUtils getAnalysis analysis shared with binary %s' % retval)
     else:
         if fname.startswith('/'):
             fname = fname[1:]
