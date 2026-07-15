@@ -146,6 +146,7 @@ import myIPC
 import stupidClose
 import cycleCallback
 import watchMalloc
+import record32BitEnter
 
 #import fsMgr
 import json
@@ -7390,6 +7391,11 @@ class GenMonitor():
         if target is None:
             target = self.target
         return self.os_type[target]
+
+    def record32BitEnter(self):
+        self.lgr.debug('record32BitEnter')
+        cpu = self.cell_config.cpuFromCell(self.target)
+        record32BitEnter.Record32BitEnter(self, cpu, self.target, self.param[self.target], self.lgr)
 
     def mftx(self):
         thread_list = self.task_utils[self.target].getThreadList()
