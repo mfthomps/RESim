@@ -1294,8 +1294,12 @@ class MemUtils():
                 self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
             else:
                 self.lgr.debug('memUtils adjustParam sys_entry was to 0x%x' % self.param.sys_entry)
-                self.param.sys_entry = self.param.sys_entry + delta
+                self.param.sys_entry = self.param.sys_entry - delta
                 self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
+        if self.param.sysenter_32 is not None and self.param.sysenter_32 != 0: 
+            self.lgr.debug('memUtils adjustParam sysenter_32 was to 0x%x' % self.param.sysenter_32)
+            self.param.sysenter_32 = self.param.sysenter_32 - delta
+            self.lgr.debug('memUtils adjustParam sysenter_32 adjusted to 0x%x' % self.param.sysenter_32)
 
 
     def getXPCurThread(self, cpu):
