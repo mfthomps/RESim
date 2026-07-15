@@ -44,7 +44,7 @@ class SyscallNumbers():
                 except:
                     continue
                 name = parts[1].strip()
-                self.lgr.debug('syscallNumbers fromTbl call name %s' % name)
+                #self.lgr.debug('syscallNumbers fromTbl call name %s' % name)
                 self.syscalls[callnum] = name
                 self.callnums[name] = callnum
 
