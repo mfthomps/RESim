@@ -7392,10 +7392,10 @@ class GenMonitor():
             target = self.target
         return self.os_type[target]
 
-    def record32BitEnter(self):
+    def record32BitEnter(self, save=True):
         self.lgr.debug('record32BitEnter')
         cpu = self.cell_config.cpuFromCell(self.target)
-        record32BitEnter.Record32BitEnter(self, cpu, self.target, self.param[self.target], self.lgr)
+        record32BitEnter.Record32BitEnter(self, cpu, self.target, self.param[self.target], self.lgr, save=save)
 
     def mftx(self):
         thread_list = self.task_utils[self.target].getThreadList()

@@ -31,19 +31,23 @@ import pickle
 from simics import *
 from resimHaps import *
 class Record32BitEnter():
-    def __init__(self, top, cpu, target, current_param, lgr):
+    def __init__(self, top, cpu, target, current_param, lgr, save=True):
         self.top = top
         self.cpu = cpu
         self.target = target
         self.lgr = lgr
+        self.save = save
         # as originally constituted this is what we want to overwrite with new enter values
         fname = '%s.param' % self.target
         self.param = pickle.load(open( fname, "rb" ))
 
         self.enter_delta = current_param.sysenter - self.param.sysenter 
-        self.lgr.debug('record32BitEnter enter_delta (current_param.sysenter - original.sysenter) is 0x%x' % self.enter_delta)
+        self.lgr.debug('record32BitEnter enter_delta (current_param.sysenter (0x%x) - original.sysenter (0x%x) is 0x%x' % (current_param.sysenter, self.param.sysenter, self.enter_delta))
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeHap, None)
         # set to none for testing 
+        if current_param.sys_entry is not None:
+            self.lgr.debug('original sys_entry was 0x%x, current 0x%x' % (self.param.sys_entry, current_param.sys_entry))
+            self.lgr.debug('original sysenter_32 was 0x%x, current 0x%x' % (self.param.sysenter_32, current_param.sysenter_32))
         self.param.sys_entry = None
         self.param.sysenter_32 = None
 
@@ -61,25 +65,28 @@ class Record32BitEnter():
             self.lgr.debug('record32BitEnter modeHap returning to user eip 0x%x instruct %s tid:%s (%s)'% (eip, instruct[1], tid, comm))
 
     def recordInt128(self, dumb):
+        eip = self.top.getEIP()
         self.param.sys_entry = self.top.getEIP() - self.enter_delta
-        self.lgr.debug('record32BitEnter recordInt128 set sys_entry to 0x%x enter_delta was 0x%x' % (self.param.sys_entry, self.enter_delta))
+        self.lgr.debug('record32BitEnter recordInt128 eip: 0x%x set sys_entry to 0x%x enter_delta was 0x%x' % (eip, self.param.sys_entry, self.enter_delta))
         if self.param.sysenter_32 is None:
             SIM_continue(0)
         else:
             self.saveParams()
 
     def recordEnter32(self, dumb):
-        self.param.sysenter_32 = self.top.getEIP() - self.enter_delta
-        self.lgr.debug('record32BitEnter recordEnter32 set sysenter_32 to 0x%x enter_delta was 0x%x' % (self.param.sysenter_32, self.enter_delta))
+        eip = self.top.getEIP()
+        self.param.sysenter_32 = eip - self.enter_delta
+        self.lgr.debug('record32BitEnter recordEnter32 eip: 0x%x set sysenter_32 to 0x%x enter_delta was 0x%x' % (eip, self.param.sysenter_32, self.enter_delta))
         if self.param.sys_entry is None:
             SIM_continue(0)
         else:
             self.saveParams()
 
     def saveParams(self):
-        self.lgr.debug(self.param.getParamString())
-        self.lgr.debug('saveParam')
-        fname = '%s.param' % self.target
-        pickle.dump( self.param, open( fname, "wb" ) )
-        self.param.printParams()
-        print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
+        if self.save:
+            self.lgr.debug(self.param.getParamString())
+            self.lgr.debug('saveParam')
+            fname = '%s.param' % self.target
+            pickle.dump( self.param, open( fname, "wb" ) )
+            self.param.printParams()
+            print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
