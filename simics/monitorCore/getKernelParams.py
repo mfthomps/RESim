@@ -97,6 +97,7 @@ class GetKernelParams():
         platform = None
         self.want_arm32 = False
         self.want_arm64 = False
+        self.want_x86_32 = False
         if 'PLATFORM' in comp_dict[self.target]:
             platform = comp_dict[self.target]['PLATFORM']
             self.lgr.debug('PLATFORM is %s' % platform)
@@ -114,6 +115,11 @@ class GetKernelParams():
                     self.want_arm32 = True
                     self.lgr.debug('Will look for only ARM 32 bit syscall jump tables')
                     print('Will look for only ARM 32 bit syscall jump tables')
+            elif platform.startswith('x86'):
+                if platform == 'x86Mixed':
+                    self.lgr.warning('Will look for 32bit x86 kernel entry int 64bit kernel.  WARNING unless there are lots of 32 bit apps running this may not coverge.')
+                    self.lgr.warning('Consider using the record32BitEntry function.')
+                    self.want_x86_32 = True
         if self.os_type in ['WIN7', 'WINXP']:
             self.param = winKParams.WinKParams(self.os_type)
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
@@ -1090,7 +1096,7 @@ class GetKernelParams():
         elif old == Sim_CPU_Mode_Supervisor and compat32:
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
-            #self.lgr.debug('entryModeChanged entering kernel')
+            self.lgr.debug('entryModeChanged entering kernel')
             if self.dumb_count < 50:
                 if not self.isWindows() and self.param.mm_struct is None:
                     if not self.getPageTableDirectory():
@@ -1100,7 +1106,7 @@ class GetKernelParams():
             instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
-            #self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
+            self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
@@ -1112,13 +1118,19 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChanged found sysenter %s' % instruct[1])
                 self.hack_stop = True
                 SIM_break_simulation('entryModeChanged found sysenter')
+            elif self.param.sysenter is not None and instruct[1].startswith('sysenter') and self.want_x86_32 and self.param_sysenter_32 is None:
+                self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s looking for 32bit entry to 64 bit kernel' % (old, new, eip, instruct[1]))
+                self.lgr.debug('entryModeChanged found sysenter %s' % instruct[1])
+                self.hack_stop = True
+                SIM_break_simulation('entryModeChanged found sysenter')
+ 
             elif compat32:
                 if instruct[1].startswith('sysenter') or instruct[1].startswith('int 128'):
                     self.lgr.debug('mode changed compat32 old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
                     self.hack_stop = True
                     SIM_break_simulation('entryModeChanged compat32 found sysenter')
             else:
-                #self.lgr.debug('entryModeChanged nothing to do, continue')
+                self.lgr.debug('entryModeChanged nothing to do, continue')
                 pass
             #if self.param.sys_entry is not None and self.skip_sysenter:
             #    self.lgr.debug('entryModeChanged got sys_entry and told to skip sysenter')
@@ -1543,10 +1555,14 @@ class GetKernelParams():
                 self.param.sys_entry = 0
             self.param.sysenter = eip 
             #SIM_run_alone(self.findCompute, None)
+        elif (self.prev_instruct == 'sysenter') and self.want_x86_32 and self.param.sysenter_32 is None:
+            self.lgr.debug('getEntries is sysenter from 32bit eax %d eip: 0x%x' % (eax, eip))
+            self.param.sysenter = eip 
             
         if self.dumb_count > self.mode_entry_limit and (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
                  and (self.param.sysexit is not None or self.skip_sysenter or self.mem_utils.WORD_SIZE==8) and self.param.iretd is not None \
-                 and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None):
+                 and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None) \
+                 and not (self.want_x86_32 and self.param.sysenter_32 is None):
             SIM_run_alone(self.deleteHaps, None)
 
             self.lgr.debug('kernel entry and exits found')
@@ -1740,7 +1756,7 @@ class GetKernelParams():
             SIM_run_alone(self.deleteHaps, None)
             SIM_run_alone(self.findCompute, True)
         else:
-            SIM_run_along(self.continueAhead, None)
+            SIM_run_alone(self.continueAhead, None)
 
     def compat32Entry(self):
         self.taskUtils = taskUtils.TaskUtils(self.cpu, self.target, self.param, self.mem_utils, self.unistd, self.unistd32, None, self.lgr)
