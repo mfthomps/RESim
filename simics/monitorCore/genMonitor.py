@@ -4728,10 +4728,11 @@ class GenMonitor():
 
     def compat32(self):
         cpu = self.cell_config.cpuFromCell(self.target)
-        if cpu.architecture.lower().startswith('x8'):
-            mode = self.task_utils[self.target].getExecMode()
-            if mode == 3:
-                return True
+        if not hasattr(self.param[self.target], 'sysenter_32') or (self.param[self.target].sysenter_32 is None or self.param[self.target].sysenter_32 == 0):
+            if cpu.architecture.lower().startswith('x8'):
+                mode = self.task_utils[self.target].getExecMode()
+                if mode == 3:
+                    return True
         return False
 
     def readString(self, addr, size=256):
@@ -7392,10 +7393,10 @@ class GenMonitor():
             target = self.target
         return self.os_type[target]
 
-    def record32BitEnter(self, save=True):
-        self.lgr.debug('record32BitEnter')
+    def record32BitEnter(self, want, save=True):
+        self.lgr.debug('record32BitEnter want %s' % want)
         cpu = self.cell_config.cpuFromCell(self.target)
-        record32BitEnter.Record32BitEnter(self, cpu, self.target, self.param[self.target], self.lgr, save=save)
+        record32BitEnter.Record32BitEnter(self, cpu, self.target, self.param[self.target], want, self.lgr, save=save)
 
     def mftx(self):
         thread_list = self.task_utils[self.target].getThreadList()
