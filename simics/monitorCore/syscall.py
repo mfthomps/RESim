@@ -770,6 +770,11 @@ class Syscall():
                         break_list.append(proc_break1)
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break1, proc_break1, 'syscall'))
+                        if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0:
+                            proc_break = self.context_manager.genBreakpoint(self.cell, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter_32, 1, 0)
+                            break_addrs.append(self.param.sysenter_32)
+                            break_list.append(proc_break)
+                            self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
                     else:
                         self.lgr.debug('Syscall no callnum, set sysenter break at 0x%x ' % (self.param.sysenter))
                         self.proc_hap.append(self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.syscallHap, self.syscall_info, proc_break, 'syscall'))
@@ -2797,6 +2802,18 @@ class Syscall():
                 self.lgr.debug('syscall will linger and catch next occurance')
                 self.top.skipAndMail()
 
+    def is32BitInt128(self, break_eip):
+        retval = False
+        if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0 and break_eip == self.param.sys_entry:
+            retval = True
+        return retval
+
+    def is32BitSysenter(self, break_eip):
+        retval = False
+        if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0 and break_eip == self.param.sysenter_32:
+            retval = True
+        return retval
+
     def getExitAddrs(self, break_eip, syscall_info, frame = None):
         word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         ''' Get the system call exit addresses and the call parameter frame'''
@@ -2804,7 +2821,7 @@ class Syscall():
         exit_eip2 = None
         exit_eip3 = None
         #self.lgr.debug('syscall getExitAddrs break_eip 0x%x' % break_eip)
-        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128:
+        if break_eip == self.param.sysenter or break_eip == self.param.compat_32_entry or break_eip == self.param.compat_32_int128 or self.is32BitSysenter(break_eip) or self.is32BitInt128(break_eip):
             #self.lgr.debug('syscall getExitAddrs frame in regs?')
             # caller frame will be in regs
             if frame is None:
@@ -3015,7 +3032,7 @@ class Syscall():
 
         frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(break_eip, self.syscall_info)
         if frame is None or frame['param1'] is None:
-            self.lgr.debug('syscallHap frame or parm1 is none?  %s' % str(frame))
+            self.lgr.debug('syscallHap frame or param1 is none?  %s' % str(frame))
             return
         if self.syscall_info.callnum is None:
            # tracing all
