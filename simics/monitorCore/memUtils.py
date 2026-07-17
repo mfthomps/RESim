@@ -1121,8 +1121,10 @@ class MemUtils():
                 val = -0x10000000000000000 + val
         return val
 
-    def getUnsigned(self, val):
-        if self.WORD_SIZE == 4:
+    def getUnsigned(self, val, word_size=None):
+        if word_size is None:
+            word_size = self.WORD_SIZE
+        if word_size == 4:
             retval = val & 0xFFFFFFFF
             return retval
         else:
@@ -1215,10 +1217,12 @@ class MemUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
             else:
-                if msr_offset is None:
+                if not msr_offset:
                     self.param.sysexit = self.param.sysexit + delta
                 else:
-                    self.param.sysexit = self.param.sysexit + delta
+                    self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit was 0x%x' % self.param.sysexit)
+                    self.param.sysexit = self.param.sysexit + kernel_offset
+                    self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit adjusted to 0x%x' % self.param.sysexit)
 
         if self.param.sysret64 is not None:
             if self.WORD_SIZE == 4:
