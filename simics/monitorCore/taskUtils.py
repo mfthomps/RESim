@@ -1228,6 +1228,7 @@ class TaskUtils():
             frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
         else:
+            # x86
             frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
             frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
             if self.mem_utils.WORD_SIZE == 8 and not compat32:
