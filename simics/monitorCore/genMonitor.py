@@ -2945,7 +2945,9 @@ class GenMonitor():
  
  
     def stopTrace(self):
+        # assumes not running.  May be called by user who interrupted RESim.  Do some cleanup.
         self.lgr.debug('stopTrace')
+        self.is_monitor_running.setRunning(False)
         self.syscallManager[self.target].rmAllSyscalls()
 
     def rmCallTrace(self, cell_name, callname):
