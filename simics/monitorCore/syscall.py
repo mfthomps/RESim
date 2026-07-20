@@ -1382,8 +1382,6 @@ class Syscall():
                     exit_info.retval_addr = ss.addr
                     exit_info.count_addr = ss.length
                 #self.lgr.debug('syscall socketParse socket_callname %s got SockStruct from param2: 0x%x %s' % (socket_callname, frame['param2'], ss.getString()))
-            if tid == '652':
-                SIM_break_simulation('remove this socketParse')
         else:
             # Not socketcall
             socket_callname = callname
