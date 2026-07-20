@@ -1221,7 +1221,7 @@ class MemUtils():
                     self.param.sysexit = self.param.sysexit + delta
                 else:
                     self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit was 0x%x' % self.param.sysexit)
-                    self.param.sysexit = self.param.sysexit + kernel_offset
+                    self.param.sysexit = self.param.sysexit + kernel_offset_delta
                     self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit adjusted to 0x%x' % self.param.sysexit)
 
         if self.param.sysret64 is not None:

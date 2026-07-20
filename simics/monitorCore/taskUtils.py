@@ -314,7 +314,6 @@ class TaskUtils():
         next = self.mem_utils.readPtr(cpu, addr + offset)
         if next is None:
             self.lgr.debug('read_list_head got none for next addr 0x%x offset 0x%x' % (addr, offset))
-            #SIM_break_simulation('remove this')
             return None
         prev = self.mem_utils.readPtr(cpu, addr + offset + self.mem_utils.WORD_SIZE)
         if prev is None:
@@ -1041,7 +1040,7 @@ class TaskUtils():
         else:
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
-    def getSyscallEntry(self, callnum, compat32, arm64_app=None):
+    def getSyscallEntry(self, callnum, compat32, arm64_app=None, enter_32=False):
         entry = None
         if callnum is None:
             self.lgr.error('taskUtils getSyscallEntry called with callnum of None')
@@ -1075,6 +1074,11 @@ class TaskUtils():
             entry = self.mem_utils.readPtr(self.cpu, val)
             self.lgr.debug('getSyscallEntry call 0x%x entry 0x%x' % (callnum, entry))
     
+        elif enter_32 and hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None: 
+            if callnum in self.param.code_jump_table_32:
+                entry = self.param.code_jump_table_32[callnum]
+            else:
+                self.lgr.error('getSyscallEntry code_jump_table_32 missing call for %d' % callnum)
         elif hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None: 
             if callnum in self.param.code_jump_table:
                 entry = self.param.code_jump_table[callnum]
@@ -1107,6 +1111,7 @@ class TaskUtils():
     def frameFromStackSyscall(self):
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
+        frame = None
         if self.cpu.architecture.startswith('arm'):
             frame = self.frameFromRegs()
         else:
@@ -1116,7 +1121,11 @@ class TaskUtils():
                     rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
                     regs_addr = rdi 
                     self.lgr.debug('frameFromStackSyscall with code_jump_table, 64bit regs_addr from rdi is 0x%x' % (regs_addr))
-                    frame = self.getFrameStrange(regs_addr, self.cpu)
+                    if hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None:
+                        self.lgr.debug('frameFromStackSyscall use 32bit code jump table')
+                        frame = self.getFrameStrange32(regs_addr, self.cpu)
+                    else:
+                        frame = self.getFrameStrange(regs_addr, self.cpu)
                     self.lgr.debug('frame: %s' % stringFromFrame(frame))
                 else:
                     rax = self.mem_utils.getRegValue(self.cpu, 'rax')
@@ -1164,7 +1173,26 @@ class TaskUtils():
                 self.lgr.error('taskUtils getFrame error reading stack from starting at 0x%x' % v_addr)
         return retval
 
+    def getFrameStrange32(self, v_addr, cpu):
+        # offsets from rdi.  TBD automate?
+        # param1 028
+        # param2 0x58
+        # param3 0x60
+        # param4 0x68
+        # param5 0x70
+        retval = {}
+        phys_addr = self.mem_utils.v2p(cpu, v_addr)
+        param_offset = [0x28, 0x58, 0x60, 0x68, 0x70, 0x78, 0x80]
+        i = 1
+        for offset in param_offset:
+            param = 'param%d' % i
+            retval[param] = SIM_read_phys_memory(cpu, phys_addr+offset, self.mem_utils.WORD_SIZE)
+            i += 1
+        return retval
+
+
     def getFrameStrange(self, v_addr, cpu):
+        # x64 code jump tables configuration-dependent register offsets.  TBD automate within getKernelParams?
         retval = {}
         x38_addr = v_addr + 0x38
         phys_addr = self.mem_utils.v2p(cpu, x38_addr)
@@ -1273,7 +1301,7 @@ class TaskUtils():
         else:
             return [callname]
 
-    def syscallName(self, callnum, compat32):
+    def syscallName(self, callnum, compat32, enter_32=False):
         if self.arm64:
             #self.lgr.debug('taskUtils syscallName for num %d' % callnum)
             if self.mem_utils.arm64App(self.cpu) and self.syscall_numbers is not None:
@@ -1290,7 +1318,7 @@ class TaskUtils():
                 else:
                     return 'not_mapped'
                 
-        elif not compat32:
+        elif not compat32 and not enter_32:
             if callnum in self.syscall_numbers.syscalls:
                 return self.syscall_numbers.syscalls[callnum]
             else:
@@ -1305,7 +1333,7 @@ class TaskUtils():
             return 'not_mapped'
         return 'not_mapped'
 
-    def syscallNumber(self, callname, compat32, arm64_app=None):
+    def syscallNumber(self, callname, compat32, arm64_app=None, enter_32=False):
         if self.arm64:
             if arm64_app is None:
                 arm64_app = self.mem_utils.arm64App(self.cpu)
@@ -1321,7 +1349,7 @@ class TaskUtils():
                 else:
                     self.lgr.debug('taskUtils not arm64 app syscallNumber %s not in callnums32' % callname)
                     return -1
-        elif not compat32:
+        elif not compat32 and not enter_32:
             if callname in self.syscall_numbers.callnums:
                 return self.syscall_numbers.callnums[callname]
             else:

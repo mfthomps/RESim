@@ -29,7 +29,9 @@ need not spin until some 32 bit app runs.
 '''
 import pickle
 from simics import *
+import cli
 from resimHaps import *
+import getKernelParams
 class Record32BitEnter():
     def __init__(self, top, cpu, target, current_param, want, lgr, save=True):
         self.top = top
@@ -46,11 +48,11 @@ class Record32BitEnter():
         self.lgr.debug('record32BitEnter enter_delta (current_param.sysenter (0x%x) - original.sysenter (0x%x) is 0x%x' % (current_param.sysenter, self.param.sysenter, self.enter_delta))
         # set to none for testing 
         if current_param.sys_entry is not None and self.param.sys_entry is not None and want == 'int 128':
-            self.param.sys_entry = None
             self.lgr.debug('record32BitEnter original sys_entry was 0x%x, current 0x%x' % (self.param.sys_entry, current_param.sys_entry))
+            self.param.sys_entry = None
         if current_param.sysenter_32 is not None and self.param.sysenter_32 is not None and want == 'sysenter':
-            self.param.sysenter_32 = None
             self.lgr.debug('record32BitEnter original sysenter_32 was 0x%x, current 0x%x' % (self.param.sysenter_32, current_param.sysenter_32))
+            self.param.sysenter_32 = None
         cpu, comm, tid =  self.top.getCurrentProc()
         if comm.startswith('('):
             # weird in kernel comm
@@ -110,15 +112,16 @@ class Record32BitEnter():
 
     def recordInt128(self, dumb):
         eip = self.top.getEIP()
-        self.param.sys_entry = self.top.getEIP() + self.enter_delta
+        self.param.sys_entry = self.top.getEIP() - self.enter_delta
         self.lgr.debug('record32BitEnter recordInt128 eip: 0x%x set sys_entry to 0x%x enter_delta was 0x%x' % (eip, self.param.sys_entry, self.enter_delta))
         self.saveParams()
 
     def recordEnter32(self, dumb):
         eip = self.top.getEIP()
-        self.param.sysenter_32 = eip + self.enter_delta
+        self.param.sysenter_32 = eip - self.enter_delta
         self.lgr.debug('record32BitEnter recordEnter32 eip: 0x%x set sysenter_32 to 0x%x enter_delta was 0x%x' % (eip, self.param.sysenter_32, self.enter_delta))
         # we need to run to user return and then back up 1 to get the instruction and address
+        self.record32JumpTbl()
         self.top.allowReverse()
         self.doSysexit()
 
@@ -134,6 +137,21 @@ class Record32BitEnter():
 
     def recordExit32(self, dumb):
         SIM_run_alone(self.recordExit32Alone, None)
+
+    def record32JumpTbl(self):
+        done = False
+        prev_eip = None
+        max_count = 500
+        for i in range(max_count):
+            dumb, dumb2 = cli.quiet_run_command('si')
+            eip = self.top.getEIP()
+            instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
+            if instruct[1].startswith('je '):
+                self.param.code_jump_table_32 = getKernelParams.computeESIJumpTable(prev_eip, self.cpu, self.lgr)
+                self.lgr.debug('record32JumpTbl got table of %d entries' % len(self.param.code_jump_table_32))
+                break
+            else:
+                prev_eip = eip
 
     def saveParams(self):
         if self.save:

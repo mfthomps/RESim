@@ -817,12 +817,14 @@ class Syscall():
                     self.setComputeBreaks(False, background, break_list, break_addrs, arm64_app=False)
             else:
                 self.setComputeBreaks(compat32, background, break_list, break_addrs)
+                if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0:
+                    self.setComputeBreaks(compat32, background, break_list, break_addrs, enter_32=True)
 
         return break_list, break_addrs
 
-    def setComputeBreaks(self, compat32, background, break_list, break_addrs, arm64_app=None):
+    def setComputeBreaks(self, compat32, background, break_list, break_addrs, arm64_app=None, enter_32=False):
         for call in self.call_list:
-            callnum = self.task_utils.syscallNumber(call, compat32, arm64_app=arm64_app)
+            callnum = self.task_utils.syscallNumber(call, compat32, arm64_app=arm64_app, enter_32=enter_32)
             #self.lgr.debug('SysCall setComputeBreaks call: %s  num: %d arm64_app %s' % (call, callnum, str(arm64_app)))
             if callnum is not None and callnum < 0:
                 if call == 'mmap':
@@ -830,7 +832,7 @@ class Syscall():
                 if callnum is not None and callnum < 0:
                     self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
                     return None, None
-            entry = self.task_utils.getSyscallEntry(callnum, compat32, arm64_app=arm64_app)
+            entry = self.task_utils.getSyscallEntry(callnum, compat32, arm64_app=arm64_app, enter_32=enter_32)
             #phys = self.mem_utils.v2p(cpu, entry)
             #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
             if self.syscall_info is None:
@@ -1380,6 +1382,8 @@ class Syscall():
                     exit_info.retval_addr = ss.addr
                     exit_info.count_addr = ss.length
                 #self.lgr.debug('syscall socketParse socket_callname %s got SockStruct from param2: 0x%x %s' % (socket_callname, frame['param2'], ss.getString()))
+            if tid == '652':
+                SIM_break_simulation('remove this socketParse')
         else:
             # Not socketcall
             socket_callname = callname
@@ -1748,7 +1752,7 @@ class Syscall():
     def syscallParse(self, callnum, callname, frame, cpu, tid, comm, syscall_info, quiet=False):
         '''
         Parse a system call using many if blocks.  Note that setting exit_info to None prevent the return from the
-        syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.
+        syscall from being observed (which is useful if this turns out to be not the exact syscall you were looking for.)
         '''
         word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         exit_info = ExitInfo(self, cpu, tid, comm, callnum, callname, syscall_info.compat32, frame)
@@ -2815,7 +2819,7 @@ class Syscall():
             retval = True
         return retval
 
-    def getExitAddrs(self, break_eip, syscall_info, frame = None):
+    def getExitAddrs(self, break_eip, syscall_info, callnum, frame = None):
         word_size = self.mem_utils.wordSize(self.cpu, cpl=3)
         ''' Get the system call exit addresses and the call parameter frame'''
         exit_eip1 = None
@@ -2863,10 +2867,12 @@ class Syscall():
                         pass
         elif self.is32BitSysenter(break_eip):
             exit_eip1 = self.param.sysexit
+            exit_eip2 = self.param.sysret64
+            exit_eip3 = self.param.iretd
             # force use of 32bit frames
             frame = self.task_utils.frameFromRegs(compat32=True)
             use_32 = True
-            self.lgr.debug('syscall getExitAddrs is 32bit sysenter, use sysexit 0x%x' % (exit_eip1))
+            self.lgr.debug('syscall getExitAddrs is 32bit sysenter, but use all sys rets because Linux exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
 
         elif break_eip == self.param.sys_entry:
            # self.lgr.debug('syscall getExitAddrs is sys_entry')
@@ -2928,23 +2934,33 @@ class Syscall():
                 #    self.lgr.debug('getExitAddrs calculated exit_eip1 0x%x No second exit' % exit_eip1)
             elif word_size == 8:
                 if frame is None:
-                    #self.lgr.debug('getExitAddrs calculated, word size 8')
+                    self.lgr.debug('getExitAddrs calculated, word size 8')
                     if hasattr(self.param, 'code_jump_table') and self.param.code_jump_table is not None:
                         frame = self.task_utils.frameFromStackSyscall()
+                        if hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None:
+                            if callnum in self.param.code_jump_table_32:
+                                self.lgr.debug('getExitAddrs callnum %d entry 0x%x' % (callnum, self.param.code_jump_table_32[callnum]))
+                                if self.param.code_jump_table_32[callnum] == break_eip:
+                                    use_32 = True
                     else:
                         frame = self.task_utils.frameFromRegs(compat32=syscall_info.compat32)
-                exit_eip1 = self.param.sysexit
-                exit_eip2 = self.param.iretd
-                exit_eip3 = self.param.sysret64
+                if use_32:
+                    self.lgr.debug('getExitAddrs calculated is use_32, set exit_eip1 to sysexit 0x%x and eip2 to iretd 0x%x' % (self.param.sysexit, self.param.iretd))
+                    exit_eip1 = self.param.sysexit
+                    exit_eip2 = self.param.iretd
+                else:
+                    exit_eip1 = self.param.sysexit
+                    exit_eip2 = self.param.iretd
+                    exit_eip3 = self.param.sysret64
             else:
                 if frame is None:
-                    #self.lgr.debug('getExitAddrs calculated, word size 4')
+                    self.lgr.debug('getExitAddrs calculated, word size 4')
                     frame = self.task_utils.frameFromStackSyscall()
                 exit_eip1 = self.param.sysexit
                 exit_eip2 = self.param.iretd
             #self.lgr.debug('getExitAddrs calculated')
             frame_string = taskUtils.stringFromFrame(frame)
-            #self.lgr.debug('frame string %s' % frame_string)
+            self.lgr.debug('frame string %s' % frame_string)
         return frame, exit_eip1, exit_eip2, exit_eip3, use_32
         
     def sigHandlerHap(self, signum, context, break_num, memory):
@@ -2986,7 +3002,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        #self.lgr.debug('syscallHap for %s cycle: 0x%x' % (tid, self.cpu.cycles))
+        self.lgr.debug('syscallHap BEGIN for %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
@@ -3025,6 +3041,7 @@ class Syscall():
             ''' for example, rec calls rec_from '''
             if self.hack_cycle+20 >= cpu.cycles:
                 callnum = self.mem_utils.getCallNum(cpu)
+                # TBD what about use_32?  do this after getExitAddrs?
                 callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32) 
                 #self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. name: %s TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, self.name, callnum, callname, cpu.cycles))
                 return
@@ -3044,15 +3061,15 @@ class Syscall():
                arm64_app = self.mem_utils.arm64App(self.cpu)
            callnum = self.syscall_info.getCall(break_eip, arm64_app)
 
-        frame, exit_eip1, exit_eip2, exit_eip3, use_32 = self.getExitAddrs(break_eip, self.syscall_info)
-        use_32 = use_32 | self.syscall_info.compat32
+        frame, exit_eip1, exit_eip2, exit_eip3, use_32 = self.getExitAddrs(break_eip, self.syscall_info, callnum)
+        self.lgr.debug('syscallHap got exit adders, use_32 is %r' % use_32)
         if frame is None or frame['param1'] is None:
             self.lgr.debug('syscallHap frame or param1 is none?  %s' % str(frame))
             return
         if self.syscall_info.callnum is None:
            # tracing all
            tracing_all = True
-           callname = self.task_utils.syscallName(callnum, use_32)
+           callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32, enter_32=use_32)
            self.lgr.debug('syscallHap tid:%s traceAll callnum 0x%x name %s param1 0x%x cycle: 0x%x' % (tid, callnum, callname, frame['param1'], self.cpu.cycles))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                self.lgr.debug('syscallHap not in record_fd list: %s' % callname)
@@ -3070,7 +3087,7 @@ class Syscall():
                break_handle = self.context_manager.getBreakHandle(break_num)
                self.lgr.debug('syscallHap name: %s break eip 0x%x not in syscall_info arm64_app %r break_num 0x%x handle: 0x%x  Assume computed break set is not applicable to this process' % (self.name, break_eip, arm64_app, break_num, break_handle))
                return
-           callname = self.task_utils.syscallName(callnum, use_32)
+           callname = self.task_utils.syscallName(callnum, self.syscall_info.compat32, enter_32=use_32)
            self.lgr.debug('syscallHap computed, callnum is %s name %s cycle: 0x%x' % (callnum, callname, self.cpu.cycles))
 
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
@@ -3160,7 +3177,7 @@ class Syscall():
             if callname == 'sigreturn':
                 return
             else:
-                if pending_call == self.task_utils.syscallNumber('pipe', use_32) and callnum == self.task_utils.syscallNumber('pipe2', use_32):
+                if pending_call == self.task_utils.syscallNumber('pipe', self.syscall_info.compat32, enter_32=use_32) and callnum == self.task_utils.syscallNumber('pipe2', self.syscall_info.compat32, enter_32=use_32):
                     self.lgr.debug('syscall was pending pipe  tid:%s call %d' % (tid, pending_call))
                     return
                 else:
@@ -3500,9 +3517,9 @@ class Syscall():
         ''' set exits for a list of frames, intended for tracking when syscall has already been made and the process is waiting '''
         cpu, cur_comm, cur_tid = self.task_utils.curThread() 
         eip = self.top.getEIP()
-        self.lgr.debug('setExits cur_tid: %s eip: 0x%x cycles: 0x%x' % (cur_tid, eip, self.cpu.cycles))
+        self.lgr.debug('syscall setExits cur_tid: %s eip: 0x%x cycles: 0x%x' % (cur_tid, eip, self.cpu.cycles))
         for tid in frames:
-            self.lgr.debug('setExits frame of tid:%s is %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frames[tid]), self.cpu.cycles))
+            self.lgr.debug('syscall setExits frame of tid:%s is %s cycles: 0x%x' % (tid, taskUtils.stringFromFrame(frames[tid]), self.cpu.cycles))
             if frames[tid] is None:
                 continue
             pc = frames[tid]['pc']
@@ -3510,20 +3527,20 @@ class Syscall():
             syscall_info = SyscallInfo(self.cpu, None, True, self.trace)
             callname = self.task_utils.syscallName(callnum, False) 
 
-            frame, exit_eip1, exit_eip2, exit_eip3 = self.getExitAddrs(pc, syscall_info, frame=frames[tid])
+            frame, exit_eip1, exit_eip2, exit_eip3, use_32 = self.getExitAddrs(pc, syscall_info, callnum, frame=frames[tid])
             if tid == cur_tid:
                 if memUtils.getCPL(cpu) != 0:
-                    self.lgr.debug('sharedSyscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
+                    self.lgr.debug('syscall setExits tid:%s is current thread which is not in kernel, skip it' % tid)
                     continue   
                 if eip in [exit_eip1, exit_eip2, exit_eip3]:
-                    self.lgr.debug('sharedSyscall  tid:%s setExits is current thread about to exit, skip this one' % tid)
+                    self.lgr.debug('syscall setExits tid:%s is current thread about to exit, skip this one' % tid)
                     continue   
             comm = self.task_utils.getCommFromTid(tid)
             exit_info = ExitInfo(self, self.cpu, tid, comm, callnum, callname, False, frame)
             exit_info.retval_addr = frames[tid]['param2']
             exit_info.count = frames[tid]['param3']
             exit_info.old_fd = frames[tid]['param1']
-            self.lgr.debug('setExits set count to param3 now 0x%x' % exit_info.count)
+            self.lgr.debug('syscall setExits set count to param3 now 0x%x' % exit_info.count)
 
             the_callname = callname
             if callname == 'socketcall' or callname.upper() in net.callname:
@@ -3536,14 +3553,14 @@ class Syscall():
                 if type(cp.match_param) is int:
                     if cp.match_param == exit_info.old_fd:
                         if cp.nth is not None:
-                            self.lgr.debug('setExits found call param as integer our fd, cp.nth is not None it is %s' % str(cp.nth))
+                            self.lgr.debug('syscall setExits found call param as integer our fd, cp.nth is not None it is %s' % str(cp.nth))
                             cp.count = cp.count + 1
                             if cp.count >= cp.nth:
-                                self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
+                                self.lgr.debug('syscall setExits found call param as integer set call params to %s' % str(cp))
                                 exit_info.call_params.append(cp)
                                 exit_info.matched_param = cp
                         else:
-                            self.lgr.debug('setExits found call param as integer set call params to %s' % str(cp))
+                            self.lgr.debug('syscall setExits found call param as integer set call params to %s' % str(cp))
                             exit_info.call_params.append(cp)
                             exit_info.matched_param = cp
                  
@@ -3553,13 +3570,13 @@ class Syscall():
             if len(exit_info.call_params) > 0:
                 exit_info.origin_reset = origin_reset
                 if exit_info.retval_addr is not None:
-                    self.lgr.debug('setExits almost done for tid:%s call %d retval_addr is 0x%x' % (tid, callnum, exit_info.retval_addr))
+                    self.lgr.debug('syscall setExits almost done for tid:%s call %d retval_addr is 0x%x' % (tid, callnum, exit_info.retval_addr))
                 else:
-                    self.lgr.debug('setExits almost done for tid:%s call %d retval_addr is None' % (tid, callnum))
+                    self.lgr.debug('syscall setExits almost done for tid:%s call %d retval_addr is None' % (tid, callnum))
                 exit_info_name = '%s-%s-exit' % (the_callname, self.name)
                 self.sharedSyscall.addExitHap(self.cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, exit_info_name, context_override=context_override)
             else:
-                self.lgr.debug('setExits no potential call_params after removing non-matching integers, NO EXIT set.')
+                self.lgr.debug('syscall setExits no potential call_params after removing non-matching integers, NO EXIT set.')
 
 
     def addCallParams(self, call_params):
