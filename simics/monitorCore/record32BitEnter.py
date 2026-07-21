@@ -122,6 +122,7 @@ class Record32BitEnter():
         self.lgr.debug('record32BitEnter recordEnter32 eip: 0x%x set sysenter_32 to 0x%x enter_delta was 0x%x' % (eip, self.param.sysenter_32, self.enter_delta))
         # we need to run to user return and then back up 1 to get the instruction and address
         self.record32JumpTbl()
+
         self.top.allowReverse()
         self.doSysexit()
 
@@ -142,16 +143,20 @@ class Record32BitEnter():
         done = False
         prev_eip = None
         max_count = 500
+        self.param.code_jump_table_32 = None
         for i in range(max_count):
             dumb, dumb2 = cli.quiet_run_command('si')
             eip = self.top.getEIP()
             instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
             if instruct[1].startswith('je '):
-                self.param.code_jump_table_32 = getKernelParams.computeESIJumpTable(prev_eip, self.cpu, self.lgr)
+                self.param.code_jump_table_32 = getKernelParams.computeESIJumpTable(prev_eip, self.cpu, 4, self.lgr)
                 self.lgr.debug('record32JumpTbl got table of %d entries' % len(self.param.code_jump_table_32))
                 break
             else:
                 prev_eip = eip
+        if self.param.code_jump_table_32 is not None:
+            for callnum in self.param.code_jump_table_32:
+                self.param.code_jump_table_32[callnum] = self.param.code_jump_table_32[callnum] - self.enter_delta
 
     def saveParams(self):
         if self.save:
