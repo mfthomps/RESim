@@ -2825,6 +2825,7 @@ class GenMonitor():
         self.stopAtKernelWrite(addr)
 
     def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False, nth=None):
+        ''' run to the given system call '''
         cell = self.cell_config.cell_context[self.target]
         self.is_monitor_running.setRunning(True)
         self.lgr.debug('runToCall')
@@ -2858,7 +2859,11 @@ class GenMonitor():
             tf = 'logs/runToCall_%s.trace' % callname
             cpu = self.cell_config.cpuFromCell(self.target)
             self.traceMgr[self.target].open(tf, cpu)
-        self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger)
+        if callname != 'socketcall':
+            self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger)
+        if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+            self.lgr.debug('runToCall, add 2nd syscall for compat32')
+            self.syscallManager[self.target].watchSyscall(None, [callname], call_params, callname, stop_on_call=stop_on_call, linger=linger, compat32=True)
         if run: 
             SIM_continue(0)
 
@@ -3243,7 +3248,7 @@ class GenMonitor():
                 exit_calls = ['exit_group', 'tgkill', 'exit']
                 self.exit_group_syscall[self.target] = self.syscallManager[self.target].watchSyscall(context, exit_calls, [], 'debugExit')
                 retval = self.exit_group_syscall[self.target]
-                #self.lgr.debug('debugExitHap')
+                self.lgr.debug('debugExitHap done')
         return retval
 
     def rmDebugExitHap(self):
@@ -3485,6 +3490,8 @@ class GenMonitor():
         self.is_monitor_running.setRunning(True)
         #start, end = self.context_manager[self.target].getText()
         load_info = self.soMap[self.target].getLoadInfo()
+        compat32 = self.compat32()
+        self.lgr.debug('runToText compat32 %r' % compat32)
         if this_tid:
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         else:
@@ -3536,10 +3543,10 @@ class GenMonitor():
         #    #self.call_traces[self.target]['open'] = self.traceSyscall(callname='open', soMap=self.soMap)
         if not self.isWindows():
             call_list = ['open', 'openat', 'mmap']
-            if self.mem_utils[self.target].WORD_SIZE == 4 or self.is_compat32: 
+            if self.mem_utils[self.target].WORD_SIZE == 4 or compat32: 
                 call_list.append('mmap2')
 
-            self.syscallManager[self.target].watchSyscall(None, call_list, [], 'runToText')
+            self.syscallManager[self.target].watchSyscall(None, call_list, [], 'runToText', compat32=compat32)
 
             self.lgr.debug('debug watching open syscall and mmap')
 
@@ -3593,10 +3600,11 @@ class GenMonitor():
         if name is not None:
             #call_name = '%s-%s' % (call[0], name)
             call_name = name
+        compat32 = self.compat32()
         if cell is None:
-            self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, self.is_compat32))
+            self.lgr.debug('genMonitor runTo cellname %s call_name %s compat32 %r' % (cell_name, call_name, compat32))
         else:
-            self.lgr.debug('genMonitor runTo cellname %s cell: %s call_name %s compat32 %r' % (cell_name, cell.name, call_name, self.is_compat32))
+            self.lgr.debug('genMonitor runTo cellname %s cell: %s call_name %s compat32 %r' % (cell_name, cell.name, call_name, compat32))
         call_param_name = call_name
         if call_params is None:
             call_params_list = []
@@ -3620,11 +3628,17 @@ class GenMonitor():
             for context in self.context_manager[self.target].getContexts():
                 self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                            callback=callback)
+                if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+                    self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+                           callback=callback, compat32=True)
  
         else:
             context = self.context_manager[self.target].getContextName(cell)
             the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
                    callback=callback)
+            if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+                the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+                       callback=callback, compat32=True)
         if the_syscall is not None:
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
@@ -3632,7 +3646,7 @@ class GenMonitor():
                 if frames[tid] is None:
                     self.lgr.error('frame for tid %s is none?' % tid)
                     continue
-                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
+                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], compat32) 
                 self.lgr.debug('runTo found %s in kernel for tid:%s' % (call, tid))
                 #if call == 'socketcall': 
                 #    if 'ss' in frames[tid]:
@@ -3682,7 +3696,7 @@ class GenMonitor():
         except:
             self.lgr.error('invalid pattern: %s' % addr)
             return
-        ''' NOTE: socketCallName returns "socket" for x86 '''
+        ''' NOTE: socketCallName returns "socketcall" for 32bit x86 '''
 
         if self.isWindows(self.target):
             cname = 'CONNECT'
@@ -3850,6 +3864,13 @@ class GenMonitor():
                 run_fun=None, proc=None, run=True, kbuf=False, call_list=None, sub_match=None, target=None, just_input=False):
         if target is None:
             target = self.target
+        target_cpu = self.cell_config.cpuFromCell(target)
+        # default, may change based on SO prog entry once we get the comm
+        word_size = self.mem_utils[target].wordSize(target_cpu)
+        compat32 = self.compat32(target=target)
+        if word_size == 8 and compat32:
+            word_size = 4
+        self.lgr.debug('runToIO word_size %d compat32 %r' % (word_size, compat32))
         if self.isWindows(target):
             if kbuf:
                 kbuffer = self.kbuffer[target]
@@ -3882,20 +3903,26 @@ class GenMonitor():
             tid, cpu = self.context_manager[target].getDebugTid() 
             if tid is None:
                 cpu, comm, tid = self.task_utils[target].curThread() 
-    
+            else:
+                comm = self.task_utils[target].getCommFromTid(tid)
+            so_word_size = self.soMap[target].getProgWordSize(comm)
+            if so_word_size is not None:
+                word_size = so_word_size
+                self.lgr.debug('runToIO, word size changed based on so entry to %d' % word_size)
+
             if not just_input:
                 # add open to catch Dmods for open_replace
                 calls = ['open', 'openat', 'read', 'write', '_llseek', 'socketcall', 'close', 'ioctl', 'select', 'pselect6', '_newselect']
-                accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
+                accept_call = self.task_utils[target].socketCallName('accept', compat32)
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
-                if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.mem_utils[target].WORD_SIZE == 8:
+                if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or word_size == 8:
                     calls.remove('socketcall')
                     for scall in net.callname[1:]:
                         #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
                         calls.append(scall.lower())
-                if self.mem_utils[target].WORD_SIZE == 8:
+                if word_size == 8:
                     self.lgr.debug('runToIO not just input remove calls not in 64 bit apps')
                     #calls.remove('recv')
                     calls.remove('_llseek')
@@ -3915,7 +3942,7 @@ class GenMonitor():
                     calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'poll']
                     for call in net.readcalls:
                         calls.append(call.lower())
-                elif self.mem_utils[target].WORD_SIZE == 8:
+                elif word_size == 8:
                     self.lgr.debug('runToIO just input wordisize 8') 
                     calls = ['read', 'close', 'ioctl', 'pselect6', 'ppoll']
                     for call in net.readcalls:
@@ -3923,13 +3950,13 @@ class GenMonitor():
                     calls.remove('recv')
                 else: 
                     calls = ['read', 'close', 'socketcall', 'ioctl', 'select', 'pselect6', '_newselect']
-                accept_call = self.task_utils[target].socketCallName('accept', self.is_compat32)
+                accept_call = self.task_utils[target].socketCallName('accept', compat32)
                 for c in accept_call:
                     calls.append(c)
 
             calls.append('clone')
             calls.append('execve')
-            if self.mem_utils[target].WORD_SIZE == 8:
+            if word_size == 8:
                 calls.append('dup3')
             else:
                 calls.append('dup2')
@@ -3944,7 +3971,7 @@ class GenMonitor():
                 kbuffer_mod = self.kbuffer[target] 
                 self.sharedSyscall[target].setKbuffer(kbuffer_mod)
             the_syscall = self.syscallManager[target].watchSyscall(None, calls, [call_params], 'runToIO', linger=linger, flist=flist_in, 
-                             skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod)
+                             skip_and_mail=skip_and_mail, kbuffer=kbuffer_mod, compat32=compat32)
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
             skip_calls = ['select', 'pselect6', '_newselect']
@@ -3952,7 +3979,7 @@ class GenMonitor():
                 if frames[tid] is None:
                     self.lgr.error('frames[%s] is None' % tid)
                     continue
-                call = self.task_utils[target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
+                call = self.task_utils[target].syscallName(frames[tid]['syscall_num'], compat32) 
                 self.lgr.debug('runToIO found %s in kernel for tid:%s' % (call, tid))
                 if call not in calls or call in skip_calls:
                    del frames[tid]
@@ -3983,13 +4010,15 @@ class GenMonitor():
             call_param_list.append(call_param)
 
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
-        self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %d sub_match: %s' % (fd, cpu.cycles, count, sub_match))
+        word_size = self.soMap[target].getProgWordSize(comm)
+        self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %d sub_match: %s word_size %d' % (fd, cpu.cycles, count, sub_match, word_size))
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
-        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.mem_utils[self.target].WORD_SIZE == 8:
+        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or word_size == 8:
             calls.remove('socketcall')
             for scall in net.readcalls:
                 calls.append(scall.lower())
-        if self.mem_utils[self.target].WORD_SIZE == 8:
+        self.is_compat32 = self.compat32()
+        if word_size == 8 and not compat32:
             calls.remove('recv')
             calls.remove('_newselect')
             calls.remove('select')
@@ -4000,7 +4029,7 @@ class GenMonitor():
 
         # TBD Name of call syscall is checked elsewhere for runToIO ?
         the_syscall = self.syscallManager[self.target].watchSyscall(None, calls, call_param_list, 'runToIO', linger=linger, flist=flist_in, 
-                                 skip_and_mail=skip_and_mail)
+                                 skip_and_mail=skip_and_mail, compat32=compat32)
         for call in calls:
             self.call_traces[self.target][call] = the_syscall
         self.call_traces[self.target]['runToIO'] = the_syscall
@@ -4728,14 +4757,31 @@ class GenMonitor():
         call = 'write'
         self.call_traces[self.target][call] = self.traceSyscall(callname=call)
 
-    def compat32(self):
-        cpu = self.cell_config.cpuFromCell(self.target)
-        if not hasattr(self.param[self.target], 'sysenter_32') or (self.param[self.target].sysenter_32 is None or self.param[self.target].sysenter_32 == 0):
-            if cpu.architecture.lower().startswith('x8'):
+    def compat32(self, target=None):
+        ''' return True if running on an x64 and we believe the target process is 32bit '''
+        retval = False
+        if target is None:
+            target = self.target
+        debug_tid, debug_cpu = self.context_manager[target].getDebugTid() 
+
+        if debug_tid is None:
+            cpu, comm, tid = self.task_utils[target].curThread() 
+        else:
+            cpu = debug_cpu
+            tid = debug_tid
+            comm = self.task_utils[target].getCommFromTid(debug_tid)
+        self.lgr.debug('compat32 tid:%s (%s)' % (tid, comm))
+        if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8:
+            so_word_size = self.soMap[target].getProgWordSize(comm)
+            self.lgr.debug('compat32 so_word_size %s' % so_word_size)
+            if so_word_size is not None:
+                if so_word_size == 4:
+                    retval = True
+            else:
                 mode = self.task_utils[self.target].getExecMode()
                 if mode == 3:
-                    return True
-        return False
+                    retval= True
+        return retval
 
     def readString(self, addr, size=256):
         cpu = self.cell_config.cpuFromCell(self.target)
