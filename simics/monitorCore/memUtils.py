@@ -1280,6 +1280,10 @@ class MemUtils():
                         self.lgr.debug('memUtils adjustParam this_syscall_jump 0x%x, param.syscall_jump 0x%x jump_delta 0x%x' % (this_syscall_jump, self.param.syscall_jump, jump_delta))
                         for call in self.param.code_jump_table:
                             self.param.code_jump_table[call] = self.param.code_jump_table[call] + jump_delta
+                        
+                        if hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None:
+                            for call in self.param.code_jump_table_32:
+                                self.param.code_jump_table_32[call] = self.param.code_jump_table_32[call] + jump_delta
 
             else:
                 self.param.syscall_compute = self.param.syscall_compute - delta
