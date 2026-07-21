@@ -1040,7 +1040,7 @@ class TaskUtils():
         else:
             self.lgr.error('taskUtils, swapExecTid some tid not in exec_addrs?  %s to %s  ' % (old, new))
  
-    def getSyscallEntry(self, callnum, compat32, arm64_app=None, enter_32=False):
+    def getSyscallEntry(self, callnum, compat32, arm64_app=None):
         entry = None
         if callnum is None:
             self.lgr.error('taskUtils getSyscallEntry called with callnum of None')
@@ -1074,7 +1074,7 @@ class TaskUtils():
             entry = self.mem_utils.readPtr(self.cpu, val)
             self.lgr.debug('getSyscallEntry call 0x%x entry 0x%x' % (callnum, entry))
     
-        elif enter_32 and hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None: 
+        elif compat32 and hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None: 
             if callnum in self.param.code_jump_table_32:
                 entry = self.param.code_jump_table_32[callnum]
             else:
@@ -1301,7 +1301,7 @@ class TaskUtils():
         else:
             return [callname]
 
-    def syscallName(self, callnum, compat32, enter_32=False):
+    def syscallName(self, callnum, compat32):
         if self.arm64:
             #self.lgr.debug('taskUtils syscallName for num %d' % callnum)
             if self.mem_utils.arm64App(self.cpu) and self.syscall_numbers is not None:
@@ -1318,7 +1318,7 @@ class TaskUtils():
                 else:
                     return 'not_mapped'
                 
-        elif not compat32 and not enter_32:
+        elif not compat32:
             if callnum in self.syscall_numbers.syscalls:
                 return self.syscall_numbers.syscalls[callnum]
             else:
@@ -1333,7 +1333,7 @@ class TaskUtils():
             return 'not_mapped'
         return 'not_mapped'
 
-    def syscallNumber(self, callname, compat32, arm64_app=None, enter_32=False):
+    def syscallNumber(self, callname, compat32, arm64_app=None):
         if self.arm64:
             if arm64_app is None:
                 arm64_app = self.mem_utils.arm64App(self.cpu)
@@ -1349,7 +1349,7 @@ class TaskUtils():
                 else:
                     self.lgr.debug('taskUtils not arm64 app syscallNumber %s not in callnums32' % callname)
                     return -1
-        elif not compat32 and not enter_32:
+        elif not compat32:
             if callname in self.syscall_numbers.callnums:
                 return self.syscall_numbers.callnums[callname]
             else:
