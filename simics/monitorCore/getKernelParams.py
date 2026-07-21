@@ -50,6 +50,7 @@ import cli
 import w7Params
 import winxpParams
 import winKParams
+import syscallNumbers
 def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
         if False and 'cluster' in cpu.name:
@@ -64,13 +65,19 @@ def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         else:
             instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
         return instruct
-def computeESIJumpTable(begin, cpu, lgr):
+def computeESIJumpTable(begin, cpu, word_size, lgr):
     call_map = {}
     stack = []
+    resim_dir = os.getenv('RESIM_DIR')
+    if word_size == 8:
+        call_tbl_path = os.path.join(resim_dir, 'linux', 'ia64.tbl')
+    else:
+        call_tbl_path = os.path.join(resim_dir, 'linux', 'ia32.tbl')
+    syscall_numbers = syscallNumbers.SyscallNumbers(call_tbl_path, lgr)
     #begin = 0xffffffffb8c04cd9
     stack.append(begin)
     current_call = None
-    lgr.debug('computeESIJumpTable begin: 0x%x' % begin)
+    lgr.debug('computeESIJumpTable begin: 0x%x word_size %d' % (begin, word_size))
     while len(stack) > 0:
         #if len(call_map) > 10:
         #    print('doneish')
@@ -81,6 +88,7 @@ def computeESIJumpTable(begin, cpu, lgr):
         #print('popped 0x%x instruct %s' % (current_eip, instruct[1]))
         lgr.debug('\tpopped 0x%x instruct %s' % (current_eip, instruct[1]))
         while not did_call:
+            lgr.debug('\t\tbegin did_call loop instruct eip 0x%x %s' % (current_eip, instruct[1]))
             if instruct[1].startswith('cmp esi'):
                 try:
                     current_call = int(instruct[1].strip().split(',')[1], 16)
@@ -120,10 +128,10 @@ def computeESIJumpTable(begin, cpu, lgr):
                     #    print('after je mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
                 current_eip = current_eip + instruct[0]
                 instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
-                lgr.debug('\t\t current_eip incremeted to 0x%x, instruct %s' % (current_eip, instruct[1]))
+                lgr.debug('\t\tcurrent_call 0x%x current_eip incremented to 0x%x, instruct %s' % (current_call, current_eip, instruct[1]))
                 if instruct[1].startswith('j'):
                     jump_to = int(instruct[1].strip().split()[1], 16)
-                    #print('pushed jump_to after ja or jbe 0x%x' % jump_to)
+                    lgr.debug('pushed jump_to after ja or jbe 0x%x' % jump_to)
                     stack.append(jump_to)
                     current_eip = current_eip + instruct[0]
                     instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
@@ -133,6 +141,10 @@ def computeESIJumpTable(begin, cpu, lgr):
                     elif instruct[1].startswith('call '):
                         # call right after a je, assume the syscall num is 1 greater than current
                         current_call = current_call + 1
+                        lgr.debug('\t\tsyscall 0x%x call is right after je' % current_call)
+                        while current_call in syscall_numbers.syscalls and syscall_numbers.syscalls[current_call] == 'not implemented':
+                            current_call = current_call + 1
+                            lgr.debug('\t\tsyscall %d not implemented 0x%x' % current_call)
                         call_to_eip = int(instruct[1].strip().split()[1], 16)
                         if current_call in call_map:
                             lgr.debug('\t\t************** call after je already has current_call 0x%x' % current_call)
@@ -146,6 +158,7 @@ def computeESIJumpTable(begin, cpu, lgr):
                         break
                 
             elif instruct[1].startswith('jne'):
+                lgr.debug('\t\tis jne %s' % instruct[1])
                 jmp_to = int(instruct[1].strip().split()[1], 16)
                 jmp_instruct = SIM_disassemble_address(cpu, jmp_to, 1, 0)
                 if jmp_instruct[1].startswith('call'):
@@ -154,8 +167,8 @@ def computeESIJumpTable(begin, cpu, lgr):
                         print('************** already has current_call 0x%x' % current_call)
                         lgr.debug('\t\t************** already has current_call 0x%x' % current_call)
                 else:
-                    print('confused expected call got %s' % jmp_instruct[1])
-                    break
+                    lgr.debug('\t\texpected call got %s push the jmp_to' % jmp_instruct[1])
+                    stack.append(jmp_to)
                 # expect next to be call for current_call
                 current_eip = current_eip + instruct[0]
                 instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
@@ -1517,7 +1530,7 @@ class GetKernelParams():
                     break
                 elif instruct[1].startswith('je ') and prev_instruct.startswith('cmp esi'):
                     self.lgr.debug('\tstepCompute believe esi-based coded jump table at 0x%x' % prev_eip)
-                    self.param.code_jump_table = computeESIJumpTable(prev_eip, self.cpu, self.lgr)
+                    self.param.code_jump_table = computeESIJumpTable(prev_eip, self.cpu, 8, self.lgr)
                     # kernel syscall handling location for use in fixStackFrame
                     if last_call is not None:
                         self.param.syscall_compute = last_call
