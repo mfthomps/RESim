@@ -881,6 +881,8 @@ class WriteData():
     def doRetFixup(self, fd, callname=None, addr_of_count=None, peek=0):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
         #self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s' % (fd, self.fd, self.total_read, self.read_limit, peek))
+        #if self.kernel_buf_consumed:
+        #    return None
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         # hack
@@ -903,7 +905,7 @@ class WriteData():
         if self.mem_utils.isKernel(self.addr):
             if (self.total_read + eax) > self.read_limit:
                 self.kernel_buf_consumed = True
-                self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d and break simulation' % (eax, self.read_limit, self.total_read))
+                #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d and break simulation' % (eax, self.read_limit, self.total_read))
                 SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation stop_callback %s' % (self.total_read, self.read_limit, self.stop_callback))
                 if self.stop_callback is not None:
                     self.stop_callback()
@@ -918,7 +920,7 @@ class WriteData():
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
             if self.mem_utils.isKernel(self.addr):
-                self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
+                #self.lgr.debug('writeData retHap read limit, set kernel_buf_consumed')
                 self.kernel_buf_consumed = True
                 if self.shared_syscall is not None and self.no_reset is None:
                     self.shared_syscall.foolSelect(self.fd)
@@ -952,7 +954,7 @@ class WriteData():
                      self.setSelectStopHap()
                  # TBD why was this being deleted?
                  #SIM_run_alone(self.delRetHap, None)
-                 self.lgr.debug('writeData doRetFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
+                 #self.lgr.debug('writeData doRetFixup read over limit of %d, setCallHap and let it go' % self.read_limit)
             else:
                  ''' User space injections begin after the return.  TBD should not get here because should be caught by a read call? ''' 
                  self.lgr.debug('writeData retHap read over limit of %d' % self.read_limit)
