@@ -8,6 +8,10 @@ def backstopCycles():
 
 def aflBackstopCycles():
     backstop_cycles =   1000000
+    wrong = os.getenv('AFL_BACKSTOP_CYCLES') 
+    if wrong is not None:
+        print('*******ERROR **********  Use AFL_BACK_STOP_CYCLES, not AFL_BACKSTOP_CYCLES')
+        return None
     backstop = os.getenv('AFL_BACK_STOP_CYCLES') 
     if backstop is not None:
         backstop_cycles = int(backstop)
