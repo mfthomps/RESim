@@ -21,6 +21,7 @@ class TrackThreads():
         self.targetFS = targetFS
         self.sharedSyscall = sharedSyscall
         self.syscallManager = syscallManager
+        self.compat32 = compat32
         self.lgr = lgr
         self.exit_break1 = {}
         self.exit_break2 = {}
@@ -32,7 +33,6 @@ class TrackThreads():
         self.finish_hap = {}
         self.finish_break = {}
         self.first_mmap_hap = {}
-        self.compat32 = compat32
         self.clone_hap = None
         self.child_stacks = {}
         self.so_track = None
@@ -50,12 +50,17 @@ class TrackThreads():
         if self.call_hap is not None:
             self.lgr.debug('TrackThreads startTrack called, but already tracking')
             return
-        #self.lgr.debug('TrackThreads startTrack for %s compat32 is %r' % (self.cell_name, self.compat32))
+        #self.lgr.debug('TrackThreads startTrack for %s' % (self.cell_name))
     
         if len(self.execve_hap) > 0:
             self.lgr.debug('TrackThreads startTrack called, but already has an execve hap???')
             return
 
+        # If x86, determine if we will have 2 sets of breakpoints, one for32bit and one for 64.
+        # The self.compat32 is an artifact of old systems that only ran 32 bit on a 64 bit kernel.
+        do_32_64 = False
+        if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0: 
+            do_32_64 = True
         if not self.top.isWindows(): 
             # TBD move execve hap to syscall and use callback?  not good to duplicate computed entry point handling
             if self.cpu.architecture == 'arm64':
@@ -69,17 +74,26 @@ class TrackThreads():
                 else:
                     self.setExecveBreaks(arm64_app=False)
             else:
-                self.setExecveBreaks()
+                if do_32_64: 
+                    self.lgr.debug('TrackThreads startTrack do_32_64 is true, do both')
+                    self.setExecveBreaks()
+                    self.setExecveBreaks(compat32=True)
+                else:
+                    self.setExecveBreaks(compat32=self.compat32)
         if not self.top.tracingAll(self.cell_name):
-            self.trackSO()
+            if do_32_64: 
+                self.trackSO()
+                self.trackSO(compat32=True)
+            else:
+                self.trackSO(compat32=self.compat32)
         #self.context_manager.watchTasks(restore_debug=False)
         #self.trackClone()
 
-    def setExecveBreaks(self, arm64_app=None):
-        execve_callnum = self.task_utils.syscallNumber('execve', self.compat32, arm64_app=arm64_app)
-        self.lgr.debug('TrackThreads setExecveBreaks execve_callnum is %d' % execve_callnum)
+    def setExecveBreaks(self, arm64_app=None, compat32=False):
+        execve_callnum = self.task_utils.syscallNumber('execve', compat32, arm64_app=arm64_app)
+        self.lgr.debug('TrackThreads setExecveBreaks execve_callnum is %d compat32: %r' % (execve_callnum, compat32))
         if execve_callnum is not None:
-            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, self.compat32, arm64_app=arm64_app)
+            execve_entry = self.task_utils.getSyscallEntry(execve_callnum, compat32, arm64_app=arm64_app)
             if execve_entry is None:
                 self.lgr.error('TrackThreads setExecveBreaks execve_entry back as None')
                 self.top.quit()
@@ -109,7 +123,6 @@ class TrackThreads():
             #self.lgr.debug('syscall stopTrace, delete mmap hap tid:%s' % tid)
             self.context_manager.genDeleteHap(self.first_mmap_hap[tid], immediate=immediate)
         self.first_mmap_hap = {}
-        self.stopTrackClone(immediate)
         ''' try deleting both contexts '''
         resim_context = self.context_manager.getRESimContextName()
         self.syscallManager.rmSyscall('trackSO', context=resim_context, immediate=immediate)
@@ -252,7 +265,8 @@ class TrackThreads():
             #self.addSO(prog_string, tid)
 
 
-    def trackSO(self):
+    def trackSO(self, compat32=False):
+        self.lgr.debug('TrackThreads trackSO compat32: %r' % compat32)
         if self.top.isWindows():
             call_list = ['OpenFile', 'CreateSection', 'MapViewOfSection', 'CreateFile', 'OpenSection']
             if self.top.osType(self.cell_name) == 'WINXP':
@@ -261,48 +275,13 @@ class TrackThreads():
                 call_list.append('CreateUserProcess')
         else:
             call_list = ['open', 'openat', 'mmap']
-            if self.mem_utils.WORD_SIZE == 4 or self.compat32: 
+            if self.mem_utils.WORD_SIZE == 4 or compat32: 
+                self.lgr.debug('TrackThreads trackSO adding mmap2')
                 call_list.append('mmap2')
         ''' Use cell of None so only our threads get tracked '''
         call_params = []
-        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False, linger=True)
-        self.lgr.debug('TrackThreads trackSO')
+        self.so_track = self.syscallManager.watchSyscall(None, call_list, call_params, 'trackSO', stop_on_call=False, linger=True, compat32=compat32)
         #self.lgr.debug('TrackThreads watching open syscall for %s is %s' % (self.cell_name, str(self.open_syscall)))
-
-    def cloneHap(self, dumb, third, forth, memory):
-        ''' TBD remove not used '''
-        if self.clone_hap is None:
-            return
-        cpu, comm, tid = self.task_utils.curThread() 
-        if cpu.architecture.startswith('arm'):
-            frame = self.task_utils.frameFromRegs()
-        else:
-            frame = self.task_utils.frameFromStackSyscall()
-        flags = frame['param1']
-        child_stack = frame['param2']
-        self.lgr.debug('cloneHap tid:%s flags:0x%x  stack:0x%x' % (tid, flags, child_stack))
-        if tid not in self.child_stacks:
-            self.child_stacks[tid] = []
-        self.child_stacks[tid].append(child_stack)
-
-    def getChildStack(self, tid):
-        ''' TBD assumes first scheduled clone is the one first created '''
-        if tid in self.child_stacks and len(self.child_stacks[tid]) > 0:
-            return self.child_stacks[tid].pop(0)
-        else:
-            return None
-
-    def trackClone(self):
-        ''' TBD not used '''
-        callnum = self.task_utils.syscallNumber('clone', self.compat32)
-        entry = self.task_utils.getSyscallEntry(callnum, self.compat32)
-        self.lgr.debug('trackClone entry 0x%x' % entry)
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, entry, 1, 0)
-        self.clone_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.cloneHap, None, proc_break, 'track-clone')
-
-    def stopTrackClone(self, immediate):
-        if self.clone_hap is not None:
-            self.context_manager.genDeleteHap(self.clone_hap, immediate) 
 
     def checkContext(self):
         self.lgr.debug('trackThreads checkContext')
