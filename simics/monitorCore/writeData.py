@@ -200,6 +200,8 @@ class WriteData():
         self.hang_callback = None
         self.bad_read_count = 0
         self.bad_read_bytes = 0
+        self.compat32 = self.top.compat32()
+        self.lgr.debug('writeData compat32 %r' % self.compat32)
 
     def reset(self, in_data, expected_packet_count, addr):
         #self.lgr.debug('writeData reset')
@@ -626,8 +628,9 @@ class WriteData():
         else:
             eip = self.top.getEIP(self.cpu)
             callnum = self.mem_utils.getCallNum(self.cpu)
-            callname = self.top.syscallName(callnum)
-            frame = self.top.frameFromRegs()
+            callname = self.top.syscallName(callnum, compat32=self.compat32)
+            frame = self.top.frameFromRegs(compat32=self.compat32)
+            #self.lgr.debug('callCallback callnum %d callname %s' % (callnum, callname))
             peek = False
             if callname == 'socketcall':        
                 ''' must be 32-bit get params from struct '''
@@ -666,7 +669,7 @@ class WriteData():
                         self.bad_read_bytes = self.total_read
 
                 #self.lgr.debug('writeData callHap count %d total read now %d read limit is %d' % (count, self.total_read, self.read_limit))
-            self.lgr.debug('writeData callCallback, callname  %s fd %s' % (callname, fd))
+            #self.lgr.debug('writeData callCallback, callname  %s fd %s' % (callname, fd))
             if callname not in ['recv', 'read', 'recvfrom', 'ioctl', 'close', 'select', '_newselect', 'pselect6']:
                 skip_it = True
             elif fd != self.fd and callname not in ['select', '_newselect', 'pselect6']:
@@ -717,7 +720,7 @@ class WriteData():
         tid = self.top.getTID()
         #self.lgr.debug('writeData handleCall %s' % callname)
         if tid != self.tid:
-            self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
+            #self.lgr.debug('writeData handleCall wrong tid, got %d wanted %d' % (tid, self.tid)) 
             return
         if callname in ['recv', 'recvfrom', 'read', 'RECV', 'RECV_DATAGRAM', 'ReadFile']:
             #self.lgr.debug('writeData handleCall is recv')
@@ -871,7 +874,7 @@ class WriteData():
             if poll_info.hasFD(self.fd):
                 if not self.checkSelect():
                     retval = False
-                self.lgr.debug('writeData doRetPoll kbuf consumed and has our FD as a read retval %r' % retval)
+                #self.lgr.debug('writeData doRetPoll kbuf consumed and has our FD as a read retval %r' % retval)
                 #self.doBreakSimulation('writeData doRetSelect select on our fd')
         return retval
                 
@@ -1027,14 +1030,14 @@ class WriteData():
             if self.pending_select.setHasFD(self.fd, self.pending_select.readfds): 
                 if self.mem_utils.isKernel(self.addr):
                     self.checkSelect()
-                self.lgr.debug('writeData retHap was pending select now %s' % self.pending_select.getString())
+                #self.lgr.debug('writeData retHap was pending select now %s' % self.pending_select.getString())
                 self.pending_select.resetFD(self.fd, self.pending_select.readfds)
                 eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
                 eax = eax -1
                 self.top.writeRegValue('syscall_ret', eax, alone=True)
                 #self.lgr.debug('writeData retHap modified select result, cleared fd and set eax to %d' % eax)
             else:
-                self.lgr.debug('writeData retHap had pending_select, but not our fd, which is %d' % self.fd)
+                #self.lgr.debug('writeData retHap had pending_select, but not our fd, which is %d' % self.fd)
                 pass
             self.pending_select = None
         elif self.pending_callname == 'ioctl' and self.watch_ioctl:
