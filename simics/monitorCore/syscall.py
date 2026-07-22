@@ -3008,6 +3008,7 @@ class Syscall():
  
         if self.syscall_info.callnum is None and self.callback is not None:
             # only used syscall to set breaks, we'll take it from here.
+            #self.lgr.debug('syscallHap call callback %s' % self.callback)
             self.callback()
             return
         if tid == '0':
