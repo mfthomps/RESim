@@ -531,7 +531,7 @@ class Coverage():
         op_type = SIM_get_mem_op_type(memory)
         type_name = SIM_get_mem_op_type_name(op_type)
         physical = memory.physical_address
-        self.lgr.debug('tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
+        self.lgr.debug('coverage tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
         if break_num in self.missing_haps:
             tid = self.top.getTID(target=self.cell_name)
             if length == 4:
@@ -539,14 +539,14 @@ class Coverage():
                     mem_trans = self.MyMemTrans(self.cpu, memory, tid)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
-                    self.lgr.error('tableHap op_type is not store')
+                    self.lgr.error('coverage tableHap size 4 op_type is not store')
             else:
                 #self.lgr.error('coverage tableHap for 64 bits not yet handled')
                 if op_type is Sim_Trans_Store:
                     mem_trans = self.MyMemTrans(self.cpu, memory, tid)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
-                    self.lgr.error('tableHap op_type is not store')
+                    self.lgr.error('coverage tableHap op_type is not store')
         else:
             self.lgr.debug('coverage tableHap breaknum should have not hap %d' % break_num) 
 
