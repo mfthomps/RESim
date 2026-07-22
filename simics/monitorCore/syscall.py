@@ -3002,7 +3002,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug('syscallHap BEGIN for %s cycle: 0x%x' % (tid, self.cpu.cycles))
+        #self.lgr.debug('syscallHap BEGIN for %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
