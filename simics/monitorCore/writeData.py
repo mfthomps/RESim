@@ -134,11 +134,11 @@ class WriteData():
         self.loadPickle(snapshot_name)
 
         if self.call_ip is not None:
-            self.lgr.debug('writeData packet count %d add: 0x%x max_len (before adjust) %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
-                 self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header))
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len (before adjust) %d in_data len: %d call_ip: 0x%x return_ip: 0x%x context: %s stop_on_read: %r udp: %s stop_callback %s' % (self.expected_packet_count, 
+                 self.addr, self.max_len, len(in_data), self.call_ip, self.return_ip, str(self.cell), self.stop_on_read, self.udp_header, self.stop_callback))
         else:
-            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s' % (self.expected_packet_count, 
-                 self.addr, self.max_len, len(in_data), str(self.cell), self.stop_on_read, self.udp_header))
+            self.lgr.debug('writeData packet count %d add: 0x%x max_len %d in_data len: %d context: %s stop_on_read: %r udp: %s stop_callback %s' % (self.expected_packet_count, 
+                 self.addr, self.max_len, len(in_data), str(self.cell), self.stop_on_read, self.udp_header, self.stop_callback))
 
         self.tid = self.top.getTID()
         self.filter = filter
@@ -884,8 +884,8 @@ class WriteData():
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
         #self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s eax: 0x%x tid:%s' % (fd, self.fd, self.total_read, self.read_limit, peek, eax, tid))
-        #if self.kernel_buf_consumed:
-        #    return None
+        if self.kernel_buf_consumed:
+            return None
         # hack
         self.top.flushTrace()
         if tid != self.tid or fd != self.fd:
@@ -897,7 +897,7 @@ class WriteData():
             return eax
         remain = self.read_limit - self.total_read
 
-        if self.total_read >= self.read_limit and self.stop_on_read:
+        if self.total_read > self.read_limit and self.stop_on_read:
             self.lgr.debug('writeData doRetFixup even before this read, total_read was %d and read_limit 0x%x, so we will break.  btw, read count was %d' % (self.total_read, self.read_limit, eax))
             SIM_break_simulation('writeData doRetFixup even before this read, total_read was %d and read_limit 0x%x, so we will break.  btw, read count was %d' % (self.total_read, self.read_limit, eax))
             if self.stop_callback is not None:
@@ -906,7 +906,7 @@ class WriteData():
         if self.mem_utils.isKernel(self.addr):
             if (self.total_read + eax) > self.read_limit:
                 self.kernel_buf_consumed = True
-                #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d and break simulation' % (eax, self.read_limit, self.total_read))
+                #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d and break simulation.  stop_callback %s' % (eax, self.read_limit, self.total_read, self.stop_callback))
                 SIM_break_simulation('writeData doRetFixup total_read 0x%x over read_limit 0x%x and stop_on_read, break simulation stop_callback %s' % (self.total_read, self.read_limit, self.stop_callback))
                 if self.stop_callback is not None:
                     self.stop_callback()
