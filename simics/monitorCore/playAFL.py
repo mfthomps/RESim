@@ -508,6 +508,15 @@ class PlayAFL():
                self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('backstop')
 
+    def consumedCallback(self):
+        SIM_run_alone(self.consumedCallbackAlone, None)
+
+    def consumedCallbackAlone(self, cycles):
+        self.lgr.info('playAFL kernel buffer consumed detected')
+        if self.stop_hap is None:
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
+        SIM_break_simulation('consumed')
+
     def hangCallback(self, cycles):
         SIM_run_alone(self.hangCallbackAlone, cycles)
 
@@ -763,7 +772,7 @@ class PlayAFL():
                      pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                      #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
                      filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
-                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max, backstop_delay=self.backstop_delay)
+                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max, backstop_delay=self.backstop_delay, stop_callback=self.consumedCallback)
         else:
             self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
         count = self.write_data.write()
