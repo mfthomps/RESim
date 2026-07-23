@@ -650,6 +650,7 @@ class WriteData():
             if self.mem_utils.isKernel(self.addr) and callname in ['recv', 'recvfrom', 'read']:
                 if (self.total_read + count) > self.read_limit:
                     self.kernel_buf_consumed = True
+                    #self.lgr.debug('writeData callCallback kernel consumed set True') 
                     self.bad_read_count += 1
                     if self.bad_read_count > 10:
                         self.lgr.debug('writeData callCallback kernel consumed bad_read_count %d > 100, treat as hang' % self.bad_read_count)
@@ -696,7 +697,7 @@ class WriteData():
 
         if not skip_it:
             self.read_count = self.read_count + 1
-            #self.lgr.debug('writeData callCallback, read_count is %d tid:%s callname %s' % (self.read_count, tid, callname))
+            #self.lgr.debug('writeData callCallback, read_count is %d tid:%s callname %s kernel_buf_was_consumed: %s' % (self.read_count, tid, callname, kernel_buf_was_consumed))
             self.pending_call = True
             self.handleCall(callname, kernel_buf_was_consumed=kernel_buf_was_consumed)
 
@@ -759,8 +760,8 @@ class WriteData():
             else:
                 # Kernel buffer
                 if (kernel_buf_was_consumed is None and self.kernel_buf_consumed) or kernel_buf_was_consumed == True:
-                    #self.lgr.debug('writeData handleCall kernel_buf_consumed')
-                    self.doBreakSimulation('writeData handleCall kernel buffer consumed')
+                    #self.lgr.debug('writeData handleCall kernel_buf_consumed kernel_buf_was_consumed: %s' % kernel_buf_was_consumed)
+                    self.doBreakSimulation('writeData handleCall kernel buffer consumed\n')
         elif self.select_count_max is not None and callname in['select', '_newselect', 'pselect6']:
             self.checkSelect()
         elif self.pending_select is not None:
@@ -880,11 +881,11 @@ class WriteData():
                 
     def doRetFixup(self, fd, callname=None, addr_of_count=None, peek=0):
         ''' We've returned from a read/recv.  Fix up eax if needed and track kernel buffer consumption.'''
-        #self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s' % (fd, self.fd, self.total_read, self.read_limit, peek))
-        #if self.kernel_buf_consumed:
-        #    return None
         eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
         tid = self.top.getTID()
+        #self.lgr.debug('writeData doRetFixup begin fd %d looking for %d total_read: %d  read_limit %d peek: %s eax: 0x%x tid:%s' % (fd, self.fd, self.total_read, self.read_limit, peek, eax, tid))
+        #if self.kernel_buf_consumed:
+        #    return None
         # hack
         self.top.flushTrace()
         if tid != self.tid or fd != self.fd:
@@ -910,12 +911,12 @@ class WriteData():
                 if self.stop_callback is not None:
                     self.stop_callback()
                 return None
-
-        if peek == 0:
-            self.total_read = self.total_read + eax
-            #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
-        else:
-            self.lgr.debug('writeData doRetFixup WAS PEEK read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        # total_read adjusted in call callback
+        #if peek == 0:
+        #    self.total_read = self.total_read + eax
+        #    #self.lgr.debug('writeData doRetFixup read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
+        #else:
+        #    self.lgr.debug('writeData doRetFixup WAS PEEK read %d, limit %d total_read %d remain: %d no_reset: %s' % (eax, self.read_limit, self.total_read, remain, self.no_reset))
 
         #if self.stop_on_read and self.total_read >= self.read_limit:
         if self.total_read >= self.read_limit:
