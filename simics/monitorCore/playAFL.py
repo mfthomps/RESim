@@ -98,7 +98,6 @@ class PlayAFL():
         self.commence_params = commence_params
         self.stop_hap_cycle = None
         self.run = run
-        self.hang_cycles = defaultConfig.hangCycles()
         self.addr_of_count = None
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
@@ -190,10 +189,13 @@ class PlayAFL():
         self.call_break = None
         self.addr = None
         self.in_data = None
+        self.hang_cycles = defaultConfig.hangCycles()
         if self.afl_mode:
-            self.backstop_cycles = defaultConfig.aflBackstopCycles('AFL_BACK_STOP_CYCLES')
+            self.backstop_cycles = defaultConfig.aflBackstopCycles()
+            self.hang_cycles = defaultConfig.hangCycles(afl=True)
         else:
             self.backstop_cycles = defaultConfig.backstopCycles()
+            self.hang_cycles = defaultConfig.hangCycles()
        
         self.lgr.debug('playAFL backstop_cycles is %d (0x%x).  hang_cycles %d (0x%x)' % (self.backstop_cycles, self.backstop_cycles, self.hang_cycles, self.hang_cycles))
         if os.getenv('BACK_STOP_DELAY') is not None:
@@ -242,6 +244,8 @@ class PlayAFL():
             self.top.quit()
             return None
         self.lgr.debug('playAFL back from loadPickle')
+        parts = cli.quiet_run_command('version')
+        self.version_string = parts[0][0][2]
 
         if target_proc is None:
             self.lgr.debug('playAFL call debugTidGroup')
@@ -265,8 +269,6 @@ class PlayAFL():
             self.restoreOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback, not_to_user=False)
-        parts = cli.quiet_run_command('version')
-        self.version_string = parts[0][0][2]
         self.did_exit = False
 
     #def restoreOrigin():
@@ -660,7 +662,7 @@ class PlayAFL():
                 # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
                 self.exit_syscall.resetHackCycle()
 
-            self.lgr.debug('playAFL goAlone now continue')
+            self.lgr.debug('playAFL goAlone now continue current context %s' % self.cpu.current_context)
             if self.repeat:
                 #if self.repeat_counter > 20:
                 #    return
@@ -673,9 +675,9 @@ class PlayAFL():
                     print('Told not to run yet.')
             else:
                 if self.run:
-                    self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
+                    self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x context: %s' % (self.cpu.cycles, self.cpu.current_context))
                     SIM_continue(0)
-                    self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x' % self.cpu.cycles)
+                    self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x context: %s' % (self.cpu.cycles, self.cpu.current_context))
                     pass
                 else:
                     print('Told not to run yet.')
