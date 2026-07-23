@@ -1719,7 +1719,7 @@ class GenMonitor():
             cpu, comm, tid = self.task_utils[self.target].curThread() 
             self.track_threads[self.target] = trackThreads.TrackThreads(self, cpu, self.target, tid, self.context_manager[self.target], 
                     self.task_utils[self.target], self.mem_utils[self.target], self.param[self.target], self.traceProcs[self.target], 
-                    self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.is_compat32, self.lgr)
+                    self.soMap[self.target], self.targetFS[self.target], self.sharedSyscall[self.target], self.syscallManager[self.target], self.compat32(), self.lgr)
         else:
             self.track_threads[self.target].checkContext()
             self.lgr.debug('trackThreads already tracking for %s' % self.target)
@@ -3582,7 +3582,8 @@ class GenMonitor():
 
 
     def runTo(self, call_list, call_params, cell_name=None, cell=None, run=True, linger_in=False, background=False, 
-              ignore_running=False, name=None, flist=None, callback = None, all_contexts=False):
+              ignore_running=False, name=None, flist=None, callback = None, all_contexts=False, word_size=None):
+        ''' Run to we return from a system call in the given list.  By default will set breaks on 64-bit and 32-bit x86 calls '''
         retval = None
         self.lgr.debug('runTo call_list %s' % str(call_list))
         if not ignore_running and self.checkOnlyIgnore():
@@ -3626,19 +3627,23 @@ class GenMonitor():
                 call_list.append('ioctl')
         if all_contexts:
             for context in self.context_manager[self.target].getContexts():
-                self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
-                           callback=callback)
-                if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+                if word_size is None or word_size == 8:
                     self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
-                           callback=callback, compat32=True)
+                           callback=callback)
+                if word_size is None or word_size == 4:
+                    if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+                        self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+                               callback=callback, compat32=True)
  
         else:
             context = self.context_manager[self.target].getContextName(cell)
-            the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
-                   callback=callback)
-            if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+            if word_size is None or word_size == 8:
                 the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
-                       callback=callback, compat32=True)
+                       callback=callback)
+            if word_size is None or word_size == 4:
+                if hasattr(self.param[self.target], 'sysenter_32') and self.param[self.target].sysenter_32 is not None and self.param[self.target].sysenter_32 != 0: 
+                    the_syscall = self.syscallManager[cell_name].watchSyscall(context, call_list, call_params_list, name, linger=linger_in, background=background, flist=flist, 
+                           callback=callback, compat32=True)
         if the_syscall is not None:
             ''' find processes that are in the kernel on IO calls '''
             frames = self.getDbgFrames()
@@ -4522,6 +4527,9 @@ class GenMonitor():
     def writeConfig(self, name):
         if '-' in name:
             print('Avoid use of - in snapshot names.')
+            return
+        if os.path.isdir(name):
+            print('%s already exists.  Remove it or chose another name for the snapshot.' % name)
             return
         cmd = 'write-configuration %s' % name 
         SIM_run_command(cmd)
@@ -6018,8 +6026,8 @@ class GenMonitor():
             retval =  self.full_path
         return retval 
 
-    def frameFromRegs(self):
-        reg_frame = self.task_utils[self.target].frameFromRegs()
+    def frameFromRegs(self, compat32=False):
+        reg_frame = self.task_utils[self.target].frameFromRegs(compat32=compat32)
         return reg_frame
 
     def getTidsForComm(self, comm):
@@ -6193,9 +6201,9 @@ class GenMonitor():
     def getParam(self):
         return self.param[self.target]
 
-    def syscallName(self, callnum):
+    def syscallName(self, callnum, compat32=False):
         #self.lgr.debug('syscallName %d' % callnum)
-        return self.task_utils[self.target].syscallName(callnum, self.is_compat32) 
+        return self.task_utils[self.target].syscallName(callnum, compat32) 
 
     def showLinks(self):
         for computer in self.link_dict:
