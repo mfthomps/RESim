@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "testDedupe begin"
-dedupCoverage.py ubuntu_driver.ini cadet-tst
+dedupCoverage.py cadet_driver.ini cadet-tst
 ufile=$HOME/afl/output/cadet-tst/cadet-tst.unique
 if [ -f $ufile ]; then
     num_paths=$(grep -o coverage /home/mike/afl/output/cadet-tst/cadet-tst.unique | wc -l)
