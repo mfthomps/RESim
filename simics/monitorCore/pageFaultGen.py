@@ -413,7 +413,7 @@ class PageFaultGen():
             else:
                 self.pending_faults[tid] = prec
                 if self.mode_hap is None:
-                    #self.lgr.debug('pageFaultGen adding mode hap')
+                    self.lgr.debug('pageFaultGen adding mode hap')
                     self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
@@ -434,12 +434,22 @@ class PageFaultGen():
             return
         dumb, comm, tid = self.task_utils.curThread() 
         if tid != want_tid:
-            #self.lgr.debug('pageFaultGen modeChanged wrong tid  tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
+            if comm == 'apport':
+                # If apport starts, assume kernel crash detection
+                if self.afl: 
+                    #self.lgr.debug('pageFaultGen modeChanged apport for crash handling is afl, stop simulation')
+                    SIM_break_simulation('apport')
+                else:
+                    #self.lgr.debug('pageFaultGen modeChanged apport for crash handling call hapAlone')
+                    SIM_run_alone(self.hapAlone, self.pending_faults[want_tid])
+                SIM_run_alone(self.rmModeHapAlone, None) 
+            else:
+                self.lgr.debug('pageFaultGen modeChanged wrong tid  tid:%s (%s) wanted: %s old: %d new: %d' % (tid, comm, want_tid, old, new))
             return
 
-        #self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
+        self.lgr.debug('pageFaultGen modeChanged tid:%s wanted: %s old: %d new: %d' % (tid, want_tid, old, new))
         if new != Sim_CPU_Mode_Supervisor:
-            #self.lgr.debug('pageFaultGen modeChanged user space')
+            self.lgr.debug('pageFaultGen modeChanged user space')
             if tid in self.pending_faults:
                 #self.lgr.debug('pageFaultGen modeChanged user space, was a pending fault for addr 0x%x cycle: 0x%x' % (self.pending_faults[tid].cr2, self.cpu.cycles))
                 prec = self.pending_faults[tid]
@@ -498,8 +508,8 @@ class PageFaultGen():
                             SIM_break_simulation('page fault')
                         else:
                             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
-                            SIM_run_alone(self.rmModeHapAlone, None) 
-                            #SIM_break_simulation('remove this')
+                        SIM_run_alone(self.rmModeHapAlone, None) 
+                        #SIM_break_simulation('remove this')
                     elif tid not in self.pending_double_faults:
                         if len(self.pending_double_faults) > 0:
                             self.lgr.error('pageFaultGen have two pending double faults TBD fix this')
@@ -514,7 +524,7 @@ class PageFaultGen():
                             SIM_break_simulation('page fault')
                         else:
                             SIM_run_alone(self.hapAlone, self.pending_faults[tid])
-                            SIM_run_alone(self.rmModeHapAlone, None) 
+                        SIM_run_alone(self.rmModeHapAlone, None) 
                             #SIM_break_simulation('remove this')
                 else:
                     if self.user_eip is not None:
@@ -631,7 +641,7 @@ class PageFaultGen():
             #     self.faultCallback, self.cpu, 15, max_intr) 
         self.loadProbes()
         self.lgr.debug('pageFaultGen watch for signal lib')
-        #self.signal_lib.watchThis(tid, afl=self.afl)
+        self.signal_lib.watchThis(tid, afl=self.afl)
 
     def recordFault(self, tid, eip):
         if tid not in self.faulting_cycles:
