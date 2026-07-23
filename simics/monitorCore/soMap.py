@@ -1257,7 +1257,10 @@ class SOMap():
                 # may be call from readReplace or jumper
                 self.lgr.debug('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
         else:
-            prog = prog_in
+            if prog_in.startswith(self.root_prefix):
+                prog = prog_in[len(self.root_prefix):]
+            else:
+                prog = prog_in
         return prog
 
     def getLoadOffset(self, prog_in, tid=None):
