@@ -49,11 +49,11 @@ rm -f driver-ready.flag
 if [[ "$2" == -n ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
-    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
+    ./simics $LMGRD_SUCKS -no-gui --no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE
 elif [[ "$2" == -b ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
-    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e "@SIM_main_loop()" -batch-mode
+    ./simics $LMGRD_SUCKS -no-gui --no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e "@SIM_main_loop()" -batch-mode
 elif [[ "$2" == -e ]];then
     if [ "$#" -lt 3 ]; then
         echo "usage: resim <target> [-e] @cgc.command"
@@ -62,7 +62,7 @@ elif [[ "$2" == -e ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
     echo "cmd is $3"
-    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e $3
+    ./simics $LMGRD_SUCKS -no-gui --no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE -e $3
 elif [[ "$2" == -c ]];then
     if [ "$#" -lt 3 ]; then
         echo "usage: resim <target> [-c] command"
@@ -71,7 +71,7 @@ elif [[ "$2" == -c ]];then
     export RESIM_DISPLAY=$DISPLAY
     unset DISPLAY
     echo "cmd is $3"
-    ./simics $LMGRD_SUCKS -no-gui -no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE $3
+    ./simics $LMGRD_SUCKS -no-gui --no-win -p $RESIM/simics/monitorCore/launchRESim.py -L $SIMICS_WORKSPACE $3
 elif [ "$#" -gt 1 ];  then
     echo "unknown option $2"
 else
