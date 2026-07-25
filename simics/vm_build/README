@@ -1,0 +1,7 @@
+Scripts for provisioning an x86 VM for use as a RESim target, e.g., for testing
+Assumes  "mike ALL=(ALL) NOPASSWD:ALL" was added to /etc/sudoers
+
+When done, convert to an image file: 
+     VBoxManage clonemedium --format RAW /path/to/source.vdi /path/to/destination.img
+
+TBD: we added build essential and xinetd packages.  Need instructions for those.
