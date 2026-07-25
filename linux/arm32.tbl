@@ -77,8 +77,8 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 75	setrlimit	man/ cs/	0x4b	unsigned int resource	struct rlimit *rlim	-	-	-	-
 76	not implemented		0x4c						
 77	getrusage	man/ cs/	0x4d	int who	struct rusage *ru	-	-	-	-
-78	gettimeofday	man/ cs/	0x4e	struct timeval *tv	struct timezone *tz	-	-	-	-
-79	settimeofday	man/ cs/	0x4f	struct timeval *tv	struct timezone *tz	-	-	-	-
+78	gettimeofday	man/ cs/	0x4e	struct __kernel_old_timeval *tv	struct timezone *tz	-	-	-	-
+79	settimeofday	man/ cs/	0x4f	struct __kernel_old_timeval *tv	struct timezone *tz	-	-	-	-
 80	getgroups	man/ cs/	0x50	int gidsetsize	gid_t *grouplist	-	-	-	-
 81	setgroups	man/ cs/	0x51	int gidsetsize	gid_t *grouplist	-	-	-	-
 82	not implemented		0x52						
@@ -92,7 +92,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 90	not implemented		0x5a						
 91	munmap	man/ cs/	0x5b	unsigned long addr	size_t len	-	-	-	-
 92	truncate	man/ cs/	0x5c	const char *path	long length	-	-	-	-
-93	ftruncate	man/ cs/	0x5d	unsigned int fd	unsigned long length	-	-	-	-
+93	ftruncate	man/ cs/	0x5d	unsigned int fd	off_t length	-	-	-	-
 94	fchmod	man/ cs/	0x5e	unsigned int fd	umode_t mode	-	-	-	-
 95	fchown	man/ cs/	0x5f	unsigned int fd	uid_t user	gid_t group	-	-	-
 96	getpriority	man/ cs/	0x60	int which	int who	-	-	-	-
@@ -103,8 +103,8 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 101	not implemented		0x65						
 102	not implemented		0x66						
 103	syslog	man/ cs/	0x67	int type	char *buf	int len	-	-	-
-104	setitimer	man/ cs/	0x68	int which	struct itimerval *value	struct itimerval *ovalue	-	-	-
-105	getitimer	man/ cs/	0x69	int which	struct itimerval *value	-	-	-	-
+104	setitimer	man/ cs/	0x68	int which	struct __kernel_old_itimerval *value	struct __kernel_old_itimerval *ovalue	-	-	-
+105	getitimer	man/ cs/	0x69	int which	struct __kernel_old_itimerval *value	-	-	-	-
 106	stat	man/ cs/	0x6a	const char *filename	struct __old_kernel_stat *statbuf	-	-	-	-
 107	lstat	man/ cs/	0x6b	const char *filename	struct __old_kernel_stat *statbuf	-	-	-	-
 108	fstat	man/ cs/	0x6c	unsigned int fd	struct __old_kernel_stat *statbuf	-	-	-	-
@@ -133,7 +133,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 131	quotactl	man/ cs/	0x83	unsigned int cmd	const char *special	qid_t id	void *addr	-	-
 132	getpgid	man/ cs/	0x84	pid_t pid	-	-	-	-	-
 133	fchdir	man/ cs/	0x85	unsigned int fd	-	-	-	-	-
-134	bdflush	man/ cs/	0x86	int func	long data	-	-	-	-
+134	bdflush	man/ cs/	0x86	?	?	?	?	?	?
 135	sysfs	man/ cs/	0x87	int option	unsigned long arg1	unsigned long arg2	-	-	-
 136	personality	man/ cs/	0x88	unsigned int personality	-	-	-	-	-
 137	not implemented		0x89						
@@ -239,7 +239,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 237	fremovexattr	man/ cs/	0xed	int fd	const char *name	-	-	-	-
 238	tkill	man/ cs/	0xee	pid_t pid	int sig	-	-	-	-
 239	sendfile64	man/ cs/	0xef	int out_fd	int in_fd	loff_t *offset	size_t count	-	-
-240	futex	man/ cs/	0xf0	u32 *uaddr	int op	u32 val	struct __kernel_timespec *utime	u32 *uaddr2	u32 val3
+240	futex	man/ cs/	0xf0	u32 *uaddr	int op	u32 val	const struct __kernel_timespec *utime	u32 *uaddr2	u32 val3
 241	sched_setaffinity	man/ cs/	0xf1	pid_t pid	unsigned int len	unsigned long *user_mask_ptr	-	-	-
 242	sched_getaffinity	man/ cs/	0xf2	pid_t pid	unsigned int len	unsigned long *user_mask_ptr	-	-	-
 243	io_setup	man/ cs/	0xf3	unsigned nr_reqs	aio_context_t *ctx	-	-	-	-
@@ -248,7 +248,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 246	io_submit	man/ cs/	0xf6	aio_context_t	long	struct iocb * *	-	-	-
 247	io_cancel	man/ cs/	0xf7	aio_context_t ctx_id	struct iocb *iocb	struct io_event *result	-	-	-
 248	exit_group	man/ cs/	0xf8	int error_code	-	-	-	-	-
-249	lookup_dcookie	man/ cs/	0xf9	u64 cookie64	char *buf	size_t len	-	-	-
+249	lookup_dcookie	man/ cs/	0xf9	?	?	?	?	?	?
 250	epoll_create	man/ cs/	0xfa	int size	-	-	-	-	-
 251	epoll_ctl	man/ cs/	0xfb	int epfd	int op	int fd	struct epoll_event *event	-	-
 252	epoll_wait	man/ cs/	0xfc	int epfd	struct epoll_event *events	int maxevents	int timeout	-	-
@@ -268,7 +268,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 266	statfs64	man/ cs/	0x10a	const char *path	size_t sz	struct statfs64 *buf	-	-	-
 267	fstatfs64	man/ cs/	0x10b	unsigned int fd	size_t sz	struct statfs64 *buf	-	-	-
 268	tgkill	man/ cs/	0x10c	pid_t tgid	pid_t pid	int sig	-	-	-
-269	utimes	man/ cs/	0x10d	char *filename	struct timeval *utimes	-	-	-	-
+269	utimes	man/ cs/	0x10d	char *filename	struct __kernel_old_timeval *utimes	-	-	-	-
 270	arm_fadvise64_64	man/ cs/	0x10e	?	?	?	?	?	?
 271	pciconfig_iobase	man/ cs/	0x10f	long which	unsigned long bus	unsigned long devfn	-	-	-
 272	pciconfig_read	man/ cs/	0x110	unsigned long bus	unsigned long dfn	unsigned long off	unsigned long len	void *buf	-
@@ -325,14 +325,14 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 323	mkdirat	man/ cs/	0x143	int dfd	const char * pathname	umode_t mode	-	-	-
 324	mknodat	man/ cs/	0x144	int dfd	const char * filename	umode_t mode	unsigned dev	-	-
 325	fchownat	man/ cs/	0x145	int dfd	const char *filename	uid_t user	gid_t group	int flag	-
-326	futimesat	man/ cs/	0x146	int dfd	const char *filename	struct timeval *utimes	-	-	-
+326	futimesat	man/ cs/	0x146	int dfd	const char *filename	struct __kernel_old_timeval *utimes	-	-	-
 327	fstatat64	man/ cs/	0x147	int dfd	const char *filename	struct stat64 *statbuf	int flag	-	-
 328	unlinkat	man/ cs/	0x148	int dfd	const char * pathname	int flag	-	-	-
 329	renameat	man/ cs/	0x149	int olddfd	const char * oldname	int newdfd	const char * newname	-	-
 330	linkat	man/ cs/	0x14a	int olddfd	const char *oldname	int newdfd	const char *newname	int flags	-
 331	symlinkat	man/ cs/	0x14b	const char * oldname	int newdfd	const char * newname	-	-	-
 332	readlinkat	man/ cs/	0x14c	int dfd	const char *path	char *buf	int bufsiz	-	-
-333	fchmodat	man/ cs/	0x14d	int dfd	const char * filename	umode_t mode	-	-	-
+333	fchmodat	man/ cs/	0x14d	int dfd	const char *filename	umode_t mode	-	-	-
 334	faccessat	man/ cs/	0x14e	int dfd	const char *filename	int mode	-	-	-
 335	pselect6	man/ cs/	0x14f	int	fd_set *	fd_set *	fd_set *	struct __kernel_timespec *	void *
 336	ppoll	man/ cs/	0x150	struct pollfd *	unsigned int	struct __kernel_timespec *	const sigset_t *	size_t	-
@@ -370,7 +370,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 367	fanotify_init	man/ cs/	0x16f	unsigned int flags	unsigned int event_f_flags	-	-	-	-
 368	fanotify_mark	man/ cs/	0x170	int fanotify_fd	unsigned int flags	u64 mask	int fd	const char *pathname	-
 369	prlimit64	man/ cs/	0x171	pid_t pid	unsigned int resource	const struct rlimit64 *new_rlim	struct rlimit64 *old_rlim	-	-
-370	name_to_handle_at	man/ cs/	0x172	int dfd	const char *name	struct file_handle *handle	int *mnt_id	int flag	-
+370	name_to_handle_at	man/ cs/	0x172	int dfd	const char *name	struct file_handle *handle	void *mnt_id	int flag	-
 371	open_by_handle_at	man/ cs/	0x173	int mountdirfd	struct file_handle *handle	int flags	-	-	-
 372	clock_adjtime	man/ cs/	0x174	clockid_t which_clock	struct __kernel_timex *tx	-	-	-	-
 373	syncfs	man/ cs/	0x175	int fd	-	-	-	-	-
@@ -389,7 +389,7 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 386	bpf	man/ cs/	0x182	int cmd	union bpf_attr *attr	unsigned int size	-	-	-
 387	execveat	man/ cs/	0x183	int dfd	const char *filename	const char *const *argv	const char *const *envp	int flags	-
 388	userfaultfd	man/ cs/	0x184	int flags	-	-	-	-	-
-389	membarrier	man/ cs/	0x185	int cmd	int flags	-	-	-	-
+389	membarrier	man/ cs/	0x185	int cmd	unsigned int flags	int cpu_id	-	-	-
 390	mlock2	man/ cs/	0x186	unsigned long start	size_t len	int flags	-	-	-
 391	copy_file_range	man/ cs/	0x187	int fd_in	loff_t *off_in	int fd_out	loff_t *off_out	size_t len	unsigned int flags
 392	preadv2	man/ cs/	0x188	unsigned long fd	const struct iovec *vec	unsigned long vlen	unsigned long pos_l	unsigned long pos_h	rwf_t flags
@@ -398,3 +398,47 @@ NR	syscall name	references	%r7	arg0 (%r0)	arg1 (%r1)	arg2 (%r2)	arg3 (%r3)	arg4 
 395	pkey_alloc	man/ cs/	0x18b	unsigned long flags	unsigned long init_val	-	-	-	-
 396	pkey_free	man/ cs/	0x18c	int pkey	-	-	-	-	-
 397	statx	man/ cs/	0x18d	int dfd	const char *path	unsigned flags	unsigned mask	struct statx *buffer	-
+398	rseq	man/ cs/	0x18e	struct rseq *rseq	uint32_t rseq_len	int flags	uint32_t sig	-	-
+399	io_pgetevents	man/ cs/	0x18f	aio_context_t ctx_id	long min_nr	long nr	struct io_event *events	struct __kernel_timespec *timeout	const struct __aio_sigset *sig
+400	migrate_pages	man/ cs/	0x190	pid_t pid	unsigned long maxnode	const unsigned long *from	const unsigned long *to	-	-
+401	kexec_file_load	man/ cs/	0x191	int kernel_fd	int initrd_fd	unsigned long cmdline_len	const char *cmdline_ptr	unsigned long flags	-
+402	not implemented		0x192						
+403	clock_gettime64	man/ cs/	0x193	?	?	?	?	?	?
+404	clock_settime64	man/ cs/	0x194	?	?	?	?	?	?
+405	clock_adjtime64	man/ cs/	0x195	?	?	?	?	?	?
+406	clock_getres_time64	man/ cs/	0x196	?	?	?	?	?	?
+407	clock_nanosleep_time64	man/ cs/	0x197	?	?	?	?	?	?
+408	timer_gettime64	man/ cs/	0x198	?	?	?	?	?	?
+409	timer_settime64	man/ cs/	0x199	?	?	?	?	?	?
+410	timerfd_gettime64	man/ cs/	0x19a	?	?	?	?	?	?
+411	timerfd_settime64	man/ cs/	0x19b	?	?	?	?	?	?
+412	utimensat_time64	man/ cs/	0x19c	?	?	?	?	?	?
+413	pselect6_time64	man/ cs/	0x19d	?	?	?	?	?	?
+414	ppoll_time64	man/ cs/	0x19e	?	?	?	?	?	?
+415	not implemented		0x19f						
+416	io_pgetevents_time64	man/ cs/	0x1a0	?	?	?	?	?	?
+417	recvmmsg_time64	man/ cs/	0x1a1	?	?	?	?	?	?
+418	mq_timedsend_time64	man/ cs/	0x1a2	?	?	?	?	?	?
+419	mq_timedreceive_time64	man/ cs/	0x1a3	?	?	?	?	?	?
+420	semtimedop_time64	man/ cs/	0x1a4	?	?	?	?	?	?
+421	rt_sigtimedwait_time64	man/ cs/	0x1a5	?	?	?	?	?	?
+422	futex_time64	man/ cs/	0x1a6	?	?	?	?	?	?
+423	sched_rr_get_interval_time64	man/ cs/	0x1a7	?	?	?	?	?	?
+424	pidfd_send_signal	man/ cs/	0x1a8	int pidfd	int sig	siginfo_t *info	unsigned int flags	-	-
+425	io_uring_setup	man/ cs/	0x1a9	u32 entries	struct io_uring_params *p	-	-	-	-
+426	io_uring_enter	man/ cs/	0x1aa	unsigned int fd	u32 to_submit	u32 min_complete	u32 flags	const void *argp	size_t argsz
+427	io_uring_register	man/ cs/	0x1ab	unsigned int fd	unsigned int op	void *arg	unsigned int nr_args	-	-
+428	open_tree	man/ cs/	0x1ac	int dfd	const char *path	unsigned flags	-	-	-
+429	move_mount	man/ cs/	0x1ad	int from_dfd	const char *from_path	int to_dfd	const char *to_path	unsigned int ms_flags	-
+430	fsopen	man/ cs/	0x1ae	const char *fs_name	unsigned int flags	-	-	-	-
+431	fsconfig	man/ cs/	0x1af	int fs_fd	unsigned int cmd	const char *key	const void *value	int aux	-
+432	fsmount	man/ cs/	0x1b0	int fs_fd	unsigned int flags	unsigned int ms_flags	-	-	-
+433	fspick	man/ cs/	0x1b1	int dfd	const char *path	unsigned int flags	-	-	-
+434	pidfd_open	man/ cs/	0x1b2	pid_t pid	unsigned int flags	-	-	-	-
+435	clone3	man/ cs/	0x1b3	struct clone_args *uargs	size_t size	-	-	-	-
+436	close_range	man/ cs/	0x1b4	unsigned int fd	unsigned int max_fd	unsigned int flags	-	-	-
+437	not implemented		0x1b5						
+438	not implemented		0x1b6						
+439	faccessat2	man/ cs/	0x1b7	int dfd	const char *filename	int mode	int flags	-	-
+983041	ARM_breakpoint	man/ cs/	0xf0001	?	?	?	?	?	?
+983042	ARM_cacheflush	man/ cs/	0xf0002	?	?	?	?	?	?
