@@ -252,7 +252,6 @@ class PlayAFL():
             self.top.debugTidGroup(tid, to_user=False)
             self.lgr.debug('playAFL call finishInit')
             self.finishInit()
-
             if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
@@ -383,12 +382,13 @@ class PlayAFL():
     def finishInit(self):
         self.lgr.debug('playAFL finishInit')
         if self.dfile != 'oneplay' or self.repeat:
-            self.lgr.debug('playAFL finishInit call to remove debug breaks')
-            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
+            # DO NOT do this or you break context because breaks have been set with debug context
+            #self.lgr.debug('playAFL finishInit call to remove debug breaks')
+            #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             self.lgr.debug('playAFL finishInit call to restore watch of exits')
             self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
-            self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
+            self.lgr.debug('playAFL finishInit target_proc None')
             if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.restoreOrigin()
         if self.target_proc is None:
@@ -987,7 +987,8 @@ class PlayAFL():
                 self.lgr.debug('playAFL stopHap, coverage not set and no search list')
             self.top.clearExitTid()
             if self.repeat or self.dfile != 'oneplay':
-                self.context_manager.stopWatchTasks()
+                #self.lgr.debug('playAFL stopHap, not calling stopWatchTasks')
+                #self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
 
     def loadPickle(self, name):
