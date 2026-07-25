@@ -18,7 +18,7 @@
 
         fdt-1 {
             description = "Foundation-v8A Device Tree Blob";
-            data = /incbin/("./foundation.dtb");
+            data = /incbin/("./foundation-v8-gicv3-psci.dtb");
             type = "flat_dt";
             arch = "arm64";
             compression = "none";
