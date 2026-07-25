@@ -357,7 +357,7 @@ class ReverseMgr():
             self.lgr.debug('reverseMgr simics version %s native reverse' % (self.version_string))
         else:
             self.lgr.debug('reverseMgr simics version %s reverse cycle_span 0x%x' % (self.version_string, self.cycle_span))
-        if self.oldSimics():
+        if self.oldSimics() or force_new:
             cli.quiet_run_command('enable-unsupported-feature internals')
 
         # map cell names to cpu's for use if reverse finds break on some other cell
@@ -491,6 +491,7 @@ class ReverseMgr():
                 #SIM_run_alone(cli.quiet_run_command, cmd)
                 cli.quiet_run_command(cmd)
             else:
+                self.lgr.debug('reverseMgr not 7, not oldSimics, take %s' % name)
                 VT_take_snapshot(name)
         else:
             SIM_take_snapshot(name)
@@ -999,8 +1000,6 @@ class ReverseMgr():
             self.setBreakHaps()
             self.setSpanEndCycle()
             self.lgr.debug('reverseMgr skipBackAndRunForward now continue')
-            #print('remove this')
-            #return
             self.rmContinuationHap()
             SIM_continue(0)
             self.setContinuationHap()
@@ -1238,7 +1237,7 @@ class ReverseMgr():
         if break_after:
             initiator_cycles = initiator_cycles + 1
         break_index = self.getBreakIndex()
-        eip = getRegValue('eip', initiator_cpu)
+        eip = getRegValue('pc', initiator_cpu)
         instruct = SIM_disassemble_address(initiator_cpu, eip, 1, 0)
         self.break_cycles[break_index] = self.BreakInfo(initiator_cpu, initiator_cycles, the_obj, the_break, memory, self.cpu.cycles)
         self.lgr.debug('reverseMgr breakCallback added break_cycles entry for index %d  op_type %d initiator_cycles 0x%x break_after %r eip: 0x%x %s' % (break_index, 
@@ -1384,11 +1383,14 @@ class ReverseMgr():
         SIM_run_alone(self.setNextCycle, None)
 
     def rmContinuationHap(self):
-        self.lgr.debug('reverseMgr rmContinuationHapAlone') 
+        self.lgr.debug('reverseMgr rmContinuationHap continuation_hap %s' % self.continuation_hap) 
         if self.continuation_hap is not None:
+            self.lgr.debug('reverseMgr rmContinuationHap hap not none') 
             hap = self.continuation_hap
             self.rmContinuationHapAlone(hap)
             self.continuation_hap = None
+        else:
+            self.lgr.debug('reverseMgr rmContinuationHap was none') 
 
     def rmContinuationHapAlone (self, hap):
         self.lgr.debug('reverseMgr rmContinuationHapAlone %s' % hap)
@@ -1405,6 +1407,8 @@ class ReverseMgr():
         '''
         Restart recording of snapshots if needed.
         '''
+        if self.continuation_hap is None:
+            return
         if not self.recording_end_event_set:
             #self.lgr.debug('reverseMgr continuationHap cycles: 0x%x' % self.cpu.cycles)
             if not self.recording:
@@ -1477,8 +1481,14 @@ class ReverseMgr():
 
     def getSnapList(self):
         if not self.version().startswith('7'):
-            raw_list = cli.quiet_run_command('list-snapshots')[1]
-            retval = self.parselist(raw_list)
+
+            if self.oldSimics():
+                raw_list = cli.quiet_run_command('list-snapshots')[1]
+                self.lgr.debug(raw_list)
+                retval = self.parselist(raw_list)
+            else:
+                retval = VT_list_snapshots()
+                retval.sort()
         else:
             retval = SIM_list_snapshots()
             retval.sort()

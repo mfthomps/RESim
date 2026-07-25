@@ -39,7 +39,6 @@ make defconfig
 ./scripts/config --disable CONFIG_RTC_DRV_EFI
 ./scripts/config --disable CONFIG_RTC_DRV_DS3232
 ./scripts/config --disable CONFIG_RTC_DRV_DS3232_HWMON
-
 echo "--> Applying and validating configuration..."
 make olddefconfig
 

@@ -27,8 +27,10 @@ import pageUtils
 import pageUtilsPPC32
 import json
 import sys
+import os
 import struct
 import decode
+import resimSimicsUtils
 import traceback
 from simics import *
 import cli
@@ -388,6 +390,10 @@ class MemUtils():
       
         else: 
             self.lgr.error('memUtils, unknown architecture %s' % arch)
+        # hack to support older arm64 linux kernel (pre 7.1)
+        self.new_arm = True
+        if os.getenv('OLD_ARM_KERNEL') == 'TRUE':
+            self.new_arm = False
        
     def isReg(self, reg):
         if reg.upper() in self.regs:
@@ -447,9 +453,10 @@ class MemUtils():
             retval = self.getUnsigned(phys_addr)
         elif cpu.architecture == 'arm64':
             # always use page table in case we are from a mode hap
-            if True or cpl > 0:
+            if self.new_arm or cpl > 0:
                 #self.lgr.debug('memUtils v2pKaddr arm64 always use page tables')
-                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, do_log=do_log)
+                # kernel param only used for old arm page tables
+                ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, do_log=do_log, kernel=True)
                 if ptable_info is not None and ptable_info.page_exists:
                     retval = ptable_info.phys_addr
                 else:
@@ -1114,8 +1121,10 @@ class MemUtils():
                 val = -0x10000000000000000 + val
         return val
 
-    def getUnsigned(self, val):
-        if self.WORD_SIZE == 4:
+    def getUnsigned(self, val, word_size=None):
+        if word_size is None:
+            word_size = self.WORD_SIZE
+        if word_size == 4:
             retval = val & 0xFFFFFFFF
             return retval
         else:
@@ -1152,8 +1161,8 @@ class MemUtils():
             self.lgr.debug('memUtils adjustParam current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
 
         delta = param_xs_base - new_xs_base
-        if delta == 0:
-            return
+        #if delta == 0:
+        #    return
         self.lgr.debug('memUtils adjustParam word size %d delta 0x%x' % (self.WORD_SIZE, delta))
 
         ''' Adjust parameters for ASLR '''
@@ -1163,6 +1172,7 @@ class MemUtils():
         #    self.param.current_task = self.param.current_task + abs(delta)
         kernel_offset = False
         msr_offset = False
+        version = resimSimicsUtils.version()
         if hasattr(self.param, 'rand_kernel_offset') and self.param.rand_kernel_offset is not None:
             # random kernel code (kernel_offset) sysenter is the same, but other code is offset by constant
             self.lgr.debug('memUtils adjustParam x86, rand_kernel_offset is 0x%x' % self.param.rand_kernel_offset)
@@ -1171,7 +1181,7 @@ class MemUtils():
             op2, op1 = decode.getOperands(instruct[1])
             this_kernel_offset = int(op2, 16)
             kernel_offset_delta = this_kernel_offset - self.param.rand_kernel_offset
-        else:
+        elif version.startswith('7'):
             cmd = 'get-msr %s 0x176' % cpu.name
             dumb, value = cli.quiet_run_command(cmd)
             this_msr_176 = int(value,16)
@@ -1183,7 +1193,8 @@ class MemUtils():
                 msr_offset = True
                 self.lgr.debug('memUtils adjustParam x86, param msr_176 is 0x%x this one 0x%x kernel_offset_delta 0x%x' % (self.param.msr_176, this_msr_176,
                     kernel_offset_delta))
-            #pass
+        else:
+            self.lgr.debug('memUtils adjustParam x86 no kernel aslr?')
 
         self.lgr.debug('memUtils adjustParam kernel_offset %r  msr_offset %r' % (kernel_offset, msr_offset))
         if self.param.sysenter is not None and not kernel_offset:
@@ -1206,10 +1217,12 @@ class MemUtils():
             if self.WORD_SIZE == 4:
                 self.param.sysexit = self.param.sysexit + delta
             else:
-                if msr_offset is None:
+                if not msr_offset:
                     self.param.sysexit = self.param.sysexit + delta
                 else:
-                    self.param.sysexit = self.param.sysexit + delta
+                    self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit was 0x%x' % self.param.sysexit)
+                    self.param.sysexit = self.param.sysexit + kernel_offset_delta
+                    self.lgr.debug('memUtils adjustParam sysexit with msr_offset sysexit adjusted to 0x%x' % self.param.sysexit)
 
         if self.param.sysret64 is not None:
             if self.WORD_SIZE == 4:
@@ -1267,6 +1280,10 @@ class MemUtils():
                         self.lgr.debug('memUtils adjustParam this_syscall_jump 0x%x, param.syscall_jump 0x%x jump_delta 0x%x' % (this_syscall_jump, self.param.syscall_jump, jump_delta))
                         for call in self.param.code_jump_table:
                             self.param.code_jump_table[call] = self.param.code_jump_table[call] + jump_delta
+                        
+                        if hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None:
+                            for call in self.param.code_jump_table_32:
+                                self.param.code_jump_table_32[call] = self.param.code_jump_table_32[call] + jump_delta
 
             else:
                 self.param.syscall_compute = self.param.syscall_compute - delta
@@ -1294,8 +1311,12 @@ class MemUtils():
                 self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
             else:
                 self.lgr.debug('memUtils adjustParam sys_entry was to 0x%x' % self.param.sys_entry)
-                self.param.sys_entry = self.param.sys_entry + delta
+                self.param.sys_entry = self.param.sys_entry + kernel_offset_delta
                 self.lgr.debug('memUtils adjustParam sys_entry adjusted to 0x%x' % self.param.sys_entry)
+        if hasattr(self.param, 'sysenter_32') and self.param.sysenter_32 is not None and self.param.sysenter_32 != 0: 
+            self.lgr.debug('memUtils adjustParam sysenter_32 was to 0x%x' % self.param.sysenter_32)
+            self.param.sysenter_32 = self.param.sysenter_32 + kernel_offset_delta
+            self.lgr.debug('memUtils adjustParam sysenter_32 adjusted to 0x%x' % self.param.sysenter_32)
 
 
     def getXPCurThread(self, cpu):

@@ -8,7 +8,7 @@ import sys
 from struct import *
 '''
 '''
-host = '10.0.0.91'
+host = '10.0.0.22'
 port = 5001
 if len(sys.argv) > 1:
     port = int(sys.argv[1].strip())

@@ -47,7 +47,7 @@ seems to be advancing close to or faster than real time.
 Create a snapshot so you can return to that point without rebooting:
     @cgc.writeConfig('running')
 
-The driver username is mike, password is password.
+The driver username is mike, password is mike.
 You can either login via the driver console, or use:
        run-command-file mapdriver.simics
 and then ssh to localhost port 4022 (assuming you've put the id\_rsa key 
@@ -69,10 +69,9 @@ want additional spurrious data arriving after the snapshot is created.
 Use the poll.io to create a snapshot for use with fuzzing or injectIO:
     Start from the "running" snapshot you created above.
     resim ubuntu_driver.ini -n
-    run-command-file mapdriver.simics
     @cgc.debugProc('Network_File_System')
     From another terminal in the workspace:
-      drive-driver.py poll.directive -t -d
+      drive-driver poll.directive -d
     @cgc.writeConfig('network_file_system')
     @cgc.trackIO(0, max_marks=50, kbuf=True)
     @cgc.prepInjectWatch(1, 'read0')

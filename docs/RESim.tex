@@ -1304,11 +1304,22 @@ The kernel parameter management mostly accounts for ASLR by tracking differences
 captured, and addresses during the current boot, e.g, using the FS base address.  However, if the disk image containing the kernel is modified,
 the addresses may change in a manner that is not accounted for.  Repeat the kernel parameter creation steps to mitigate that.
 
-\subsubsection{Kernel Parameters for 32-bit compatibility}
-If a 64-bit Linux environment includes 32-bit applications, first create kernel parameters per the above, and then run until one of the 32-bit applications
-is scheduled and use @cgc.writeConfig to save
-the state.  Modify the ini file to restore that state and set CREATE\_RESIM\_PARAMS to YES.  Then start the monitor and use
+\subsubsection{Kernel Parameters for x86 32-bit compatibility}
+If a 64-bit x86 Linux environment includes 32-bit applications, there are different strategies for extending the param file to include the 32-bit entry points.
+
+For older kernels, e.g., prior to Linux 4.0?,  start by creating kernel parameters per the above, and the remove the CREATE\_RESIM\_PARAMS setting.
+Then run RESim until one of the 32-bit applications is about to be 
+scheduled (e.g., invoke a 32 bit program via the command line).  Then use @cgc.writeConfig to save the state.  
+Modify the ini file to restore that state and set CREATE\_RESIM\_PARAMS to YES.  Then start the monitor and use
 {\tt @gkp.compat32()}.  This will modify the kernel parameters in the .param file to include those needed to monitor 32-bit applications.
+
+For newer kernels, it depends on whether there are significant 32-bit applications running to be seen by getKernelParams.  If so, set the
+PLATFORM to x86Mixed. Then run @cgc.record32BitEntry() and cause the 32 bit application to run.
+Otherwise, create the param file as usual and save a backup of it.  Then, boot the system and run to the point of a 32-bit application starting via
+toProc.  You will now use the record32BitEnter function.  Assuming the application first uses {\tt int 128} system calls and then sysenter system calls,
+use record32BitEnter('int 128').  After that reports the param file has been saved, use record32BitEnter('sysenter'), which will also save the kernel's
+exit address for sysexit.  The param file is not updated.  If you run into trouble, always restore the origin param file before trying again to ensure
+you are starting from a known state.
 
 \subsection{Program binary locations}
 \label{program-binaries}
@@ -2381,7 +2392,7 @@ in the workspace.
 A set of RESim ini environment variables affect the fuzzing sessions.  These include:
 \begin{itemize}
 \item Each fuzzing session will run until some number of cycles have elapsed since the most recent basic block hit.  This
-value is defined in the {\tt AFL\_BACK\_STOP\_CYCLES} environment variable within the ini file.  A session will also end
+value is defined in the {\tt AFL\_BACK\_STOP\_CYCLES} environment variable within the ini file (in the ENV section).  A session will also end
 if the there is not more data to inject into application memory upon hitting the read call address.
 
 \item The {\tt HANG\_CYCLES} value determines when a session is considered to be hung, e.g., the program is in an infinite loop.
@@ -3920,7 +3931,8 @@ If updating the driver, use the DRIVER\_WAIT=NO directive in the ini file to pre
 (the driver\_ready.flag) -- at least until you finish configuring a driver.
 
 The Wind River \textit{real network} interfaces are not entirely stable, as a result, the real-network connect used to update the driver can often stall/hang.
-Be prepared to kill apt-gets and retry multiple times depending on your network setup.  It will eventually work.
+Be prepared to kill apt-gets and retry multiple times depending on your network setup.  It may eventually work.  If major package installation is needed,
+you may need to create a VM using VirtualBox or such.
 
 The Python world uses SSL certificates in a manner that leads to breakage.  If pip fails on SSL validation, use the -v option
 to find which new python.org server is causing the problem, and use the --trusted-host dog.pythonwhatever.org option on pip.
@@ -3936,7 +3948,7 @@ Set the default route on the driver to the service node address, e.g.,
 \end{verbatim}
 And connect to the real network:
 \begin{verbatim}
-connect-real-network 10.0.0.91 switch0
+connect-real-network 10.0.0.91 switch1
 \end{verbatim}
 And set the service node as the dns server in /etc/resolv.conf, e.g.,  {\tt nameserver 10.0.0.1}.
 You can then use apt-get to get new packages.  And scp to push files onto the machine.  Then use save-persistent-state and bin/checkpoint-merge to
@@ -4012,6 +4024,11 @@ to create a new craff file (found in the checkpoint directory).
 load-module trace
 new-tracer
 trace0.start
+\end{verbatim}
+
+Simics 7 changed the tracer:
+\begin{verbatim}
+new-tracer-tool name=mydog file=/tmp/goodinstruct.trace -connect-all
 \end{verbatim}
 
 \item The Simics command line uses standard bash history.  The up arrow can save much time and syntax problems.

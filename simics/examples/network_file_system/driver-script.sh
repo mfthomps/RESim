@@ -13,6 +13,7 @@ mkdir -p /home/mike/.ssh
 chown -R mike:mike /home/mike/.ssh
 /usr/bin/simics-agent --executable --overwrite --download throw.py --to /home/mike/
 /usr/bin/simics-agent --executable --overwrite --download clock.sh --to /home/mike/
+/usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
 
 # NOTE: default driver image has 10.0.0.91 as IP, redefine that.
 ip addr del 10.0.0.91/24 dev ens25
@@ -23,6 +24,7 @@ ip addr add 10.0.0.140/24 dev ens25
 #ethtool -K ens11 rx off tx off
 #ethtool -K ens12 rx off tx off
 #ethtool -K ens25 rx off tx off
+systemctl start start_driver_server
 
 ln -s /var/log/syslog /var/log/messages
 chmod a+r /var/log/syslog

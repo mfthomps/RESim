@@ -48,7 +48,7 @@ class CodeSection():
 
 class ProgInfo():
     # reused for multiple execves
-    def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path, interp=None):
+    def __init__(self, text_start, text_size, text_offset, plt_addr, plt_offset, plt_size, local_path, interp=None, word_size=None):
         self.text_start = text_start
         self.text_size = text_size
         self.text_end = None
@@ -66,13 +66,15 @@ class ProgInfo():
             self.plt_offset = plt_offset
             self.plt_size = plt_size
         self.local_path = local_path
+        self.word_size=word_size
+
     def setDynamic(self):
         self.dynamic = True
 
     def toString(self):
         if self.text_start is not None and self.plt_size is not None:
-            return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x' % (self.text_start, self.text_size,
-                self.text_offset, self.plt_addr, self.plt_offset, self.plt_size))
+            return('text_start 0x%x text_size 0x%x text_offset 0x%x plt_addr 0x%x plt_offset 0x%x plt_size 0x%x word_size %s' % (self.text_start, self.text_size,
+                self.text_offset, self.plt_addr, self.plt_offset, self.plt_size, self.word_size))
         elif self.text_offset is not None:
             if self.text_size is not None:
                 return('relocatable text_offset 0x%x size: 0x%x interp: %s' % (self.text_offset, self.text_size, self.interp))
@@ -456,7 +458,7 @@ class SOMap():
         elf_info = elfText.getText(path, self.lgr)
         if elf_info is not None:
             self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                   elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp)
+                   elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp, word_size=elf_info.word_size)
             interp = elf_info.interp
             self.lgr.debug('soMap addProgInfo prog info %s %s' % (prog, self.prog_info[prog].toString()))
             if self.prog_info[prog].text_start is None:
@@ -1255,7 +1257,10 @@ class SOMap():
                 # may be call from readReplace or jumper
                 self.lgr.debug('soMap fullProg called for %s, but not in prog_base_map' % prog_in)
         else:
-            prog = prog_in
+            if prog_in.startswith(self.root_prefix):
+                prog = prog_in[len(self.root_prefix):]
+            else:
+                prog = prog_in
         return prog
 
     def getLoadOffset(self, prog_in, tid=None):
@@ -1325,9 +1330,18 @@ class SOMap():
         return retval
 
     def getProgSize(self, prog_in):
+        retval = None
         prog = self.fullProg(prog_in)
         if prog in self.prog_info:
-            return self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+            retval = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
+        return retval
+
+    def getProgWordSize(self, prog_in):
+        retval = None
+        prog = self.fullProg(prog_in)
+        if prog in self.prog_info and hasattr(self.prog_info[prog], 'word_size'):
+            retval = self.prog_info[prog].word_size
+        return retval
 
     def rmTask(self, tid):
         if tid in self.so_file_map:

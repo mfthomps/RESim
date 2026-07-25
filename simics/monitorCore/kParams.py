@@ -60,8 +60,10 @@ class Kparams():
                 self.current_task_gs = True
         # int80 goes here
         self.sys_entry = None
-        # sysenter instruction vectors here
+        # sysenter instruction vectors here, also used for syscall
         self.sysenter = None
+        # sysenter for 32 bit apps
+        self.sysenter_32 = None
         self.sysexit = None
         self.iretd = None
         self.sysret64 = None
@@ -103,6 +105,7 @@ class Kparams():
 
         # New linux hardcoded jump table
         self.code_jump_table = None
+        self.code_jump_table_32 = None
 
         # kernels that hardcode an offset into code during init
         self.rand_kernel_offset = None

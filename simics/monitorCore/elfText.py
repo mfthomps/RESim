@@ -5,7 +5,7 @@ import shlex
 import subprocess
 import resimUtils
 class Text():
-    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp):
+    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp, word_size):
         self.text_start = address
         self.text_offset = offset
         self.text_size = size
@@ -13,6 +13,7 @@ class Text():
         self.plt_offset = plt_offset
         self.plt_size = plt_size
         self.interp = interp
+        self.word_size = word_size
 
     def toString(self):
         if self.text_start is not None:
@@ -75,6 +76,7 @@ def getText(path, lgr):
     is_dyn = False
     is_aarch64 = False
     interp = None
+    word_size = 4
  
     line_list = out[0].decode("utf-8").splitlines()
     line_iterator = iter(line_list) 
@@ -84,12 +86,17 @@ def getText(path, lgr):
         if line.startswith('ELF Header'):
             iself = True
             continue
+        if line.strip().startswith('Class:'): 
+            if 'ELF64' in line:
+                word_size = 4
+            continue
         if line.strip().startswith('Type:') and 'DYN' in line:
             is_dyn = True
             continue
         if line.strip().startswith('Machine:') and 'AArch64' in line:
             lgr.debug('Is AArch64')
             is_aarch64 = True
+            word_size = 8
             continue
         if line.strip().startswith('Entry point'):
             if lgr is not None:
@@ -173,7 +180,7 @@ def getText(path, lgr):
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
     if addr is not None or is_dyn or is_aarch64:
-        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp)
+        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp, word_size)
    
     return retval
 

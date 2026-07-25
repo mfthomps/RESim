@@ -19,8 +19,8 @@ chown -R mike:mike /home/mike/.ssh
 /usr/bin/simics-agent  --overwrite --download driver-server.py --to /tmp/
 
 ip addr add 10.0.0.140/24 dev ens25
-ip addr add 10.20.200.91/24 dev ens11
-ip link set ens11 up
+ip addr add 10.20.200.91/24 dev ens11f0
+ip link set ens11f0 up
 
 systemctl start start_driver_server
 

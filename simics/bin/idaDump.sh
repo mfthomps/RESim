@@ -63,10 +63,21 @@ if [ -z "$IDA_ANALYSIS" ]; then
     export IDA_ANALYSIS=/mnt/resim_eems/resim/archive/analysis
 fi
 if [[ $target = $here/* ]]; then
+    echo "target is $target"
+    if [[ -L $target ]]; then
+        echo "Is link"
+        target_path=$(readlink $target)
+        target="${target_path#/}"
+    fi
     target=$(realpath --relative-to="${PWD}" "$target")
     echo "full path given to runIda, truncate it to $target"
 fi
 
+if [[ -L $target ]]; then
+    echo "Is link"
+    target_path=$(readlink $target)
+    target="${target_path#/}"
+fi
 export ida_target_path=$(realpath "$target")
 ida_db_path=$RESIM_IDA_DATA/$root_parent/$root_dir/$target.$ida_suffix
 other_ida_db_path=$RESIM_IDA_DATA/$root_parent/$root_dir/$target.idb

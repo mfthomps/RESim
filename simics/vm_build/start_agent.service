@@ -1,0 +1,12 @@
+[Unit]
+Description=Start simics agent on driver
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+ExecStart=/usr/bin/start_agent.sh
+
+[Install]
+WantedBy=multi-user.target
+

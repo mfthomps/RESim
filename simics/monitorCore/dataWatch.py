@@ -6650,15 +6650,22 @@ class DataWatch():
     def watchMmap(self):
         dum_cpu, comm, tid = self.task_utils.curThread()
         word_size = self.top.wordSize(tid, target=self.cell_name)
+        compat32 = self.top.compat32(target=self.cell_name)
+        if compat32:
+            word_size = 4
         if word_size == 8:
             call_list = ['mmap']
         else:
             call_list = ['mmap', 'mmap2']
-        self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
-        self.lgr.debug('dataWatch did watchMmap')
+        self.top.runTo(call_list, None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True, word_size=word_size)
+        self.lgr.debug('dataWatch did watchMmap word_size was %d' % word_size)
 
     def watchExecve(self):
-        self.top.runTo(['execve'], None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True)
+        word_size = self.top.wordSize(tid, target=self.cell_name)
+        compat32 = self.top.compat32(target=self.cell_name)
+        if compat32:
+            word_size = 4
+        self.top.runTo(['execve'], None, linger_in=True, name='dataWatchMmap', run=False, ignore_running=True, word_size=word_size)
         self.lgr.debug('dataWatch did watchExecve')
 
     def checkLoopCmp(self, eip, instruct, addr):

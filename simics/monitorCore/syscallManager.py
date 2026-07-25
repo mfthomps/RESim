@@ -34,11 +34,12 @@ REDO_SYSCALLS = 2
 REMOVED_OK = 3
 class SyscallInstance():
     ''' Track Syscall module instances '''
-    def __init__(self, name, call_names, syscall, call_params, lgr):
+    def __init__(self, name, call_names, syscall, call_params, compat32, lgr):
         ''' most recently assigned name, do not read too much into it'''
         self.name = name
         ''' the list of syscall names handled by the syscall instance '''
         self.call_names = call_names
+        self.compat32 = compat32
         ''' the syscall instance '''
         self.syscall = syscall
         ''' map which system calls apply to each parameter name 
@@ -191,7 +192,7 @@ class SyscallManager():
             context = self.getDebugContextName()
             
         cell = self.context_manager.getCellFromContext(context)
-        self.lgr.debug('syscallManager watchAllSyscalls name %s context %s callback %s' % (name, context, callback))
+        self.lgr.debug('syscallManager watchAllSyscalls name %s context %s callback %s compat32: %r' % (name, context, callback, compat32))
         # gather parameters first and stuff them into traceall
         removed_params = self.rmSyscallByContext(context)
         if self.top.isWindows(self.cell_name):
@@ -231,7 +232,7 @@ class SyscallManager():
             call instances, e.g, an open watched for a dmod and a SO mapping.
         '''
         # TBD callback should be per call parameter, not per syscall instance
-        self.lgr.debug('syscallManager watchSyscall given context %s name: %s call_list %s' % (context, name, str(call_list)))
+        self.lgr.debug('syscallManager watchSyscall given context %s name: %s compat32: %r call_list %s' % (context, name, compat32, str(call_list)))
         retval = None 
         if context is None:
             # NOTE may return default context
@@ -283,13 +284,13 @@ class SyscallManager():
                                    stop_on_call=stop_on_call, skip_and_mail=skip_and_mail, kbuffer=kbuffer, trace=trace)
                 ''' will have at least one call parameter, perhaps the dummy. '''
                 self.lgr.debug('syscallManager watchSyscall context %s, created new instance for %s' % (context, name))
-                new_instance = SyscallInstance(name, call_list, retval, call_params_list, self.lgr)
+                new_instance = SyscallInstance(name, call_list, retval, call_params_list, compat32, self.lgr)
                 if context not in self.syscall_dict:
                     self.lgr.debug('syscalManager added context %s to syscall_dict' % context)
                     self.syscall_dict[context] = {}
                 self.syscall_dict[context][name] = new_instance
         else:
-            if len(instance_list) == 1 and (instance_list[0].callsMatch(call_list) or instance_list[0].hasAllCalls(call_list)):
+            if len(instance_list) == 1 and (instance_list[0].compat32==compat32) and (instance_list[0].callsMatch(call_list) or instance_list[0].hasAllCalls(call_list)):
                 instance_list[0].addCallParams(call_params_list, call_list)
                 self.lgr.debug('syscallManager watchSyscall, did not create new instance for %s, added params to %s' % (name, instance_list[0].name))
                 retval = instance_list[0].syscall
@@ -309,7 +310,8 @@ class SyscallManager():
                 existing_param_call_list = {}
 
                 for call_instance in instance_list:
-    
+                    if call_instance.compat32 != compat32:
+                        continue  
                     existing_call_list = list(call_instance.call_names)
                     self.lgr.debug('syscallManager watchSyscall recreate from existing_call_list: %s' % existing_call_list)
                     ''' Call list to pass to new syscall constructor '''
@@ -363,7 +365,7 @@ class SyscallManager():
                                self.dataWatch, call_list=new_call_list, call_params=call_params_list, targetFS=self.targetFS, linger=linger, soMap=self.soMap,
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
 
-                new_call_instance = SyscallInstance(name, new_call_list, retval, call_params_list, self.lgr)
+                new_call_instance = SyscallInstance(name, new_call_list, retval, call_params_list, compat32, self.lgr)
                 new_call_instance.syscall = retval
                 ''' add back old params and corresponding call lists'''
                 for param in old_call_params:
@@ -463,7 +465,7 @@ class SyscallManager():
                                background=background, name=name, flist_in=flist, callback=callback, compat32=compat32, stop_on_call=stop_on_call, kbuffer=kbuffer)
                 self.lgr.debug('syscallManager rmSyscall created syscall with call list %s' % str(new_call_list))
 
-                new_call_instance = SyscallInstance(name, new_call_list, retval, [], self.lgr)
+                new_call_instance = SyscallInstance(name, new_call_list, retval, [], compat32, self.lgr)
                 new_call_instance.syscall = retval
                 ''' add back old params and corresponding call lists'''
                 for param in old_call_params:

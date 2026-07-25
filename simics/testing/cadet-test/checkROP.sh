@@ -6,6 +6,9 @@ if [[ -z "$rop_result" ]]; then
 else
     rev_result=$( grep "while writing 0x75 to 0x" logs/monitors/resim.log )
     if [[ -z "$rev_result" ]]; then
+        rev_result=$( grep "Could be during input syscall." logs/monitors/resim.log )
+    fi
+    if [[ -z "$rev_result" ]]; then
         echo "ROP test failed to reverse to kernel write"
         exit 1
     else

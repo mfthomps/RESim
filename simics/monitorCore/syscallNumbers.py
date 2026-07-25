@@ -26,7 +26,7 @@ class SyscallNumbers():
                 return
         else:
             self.lgr.debug('syscallNumbers')
-            if fpath.endswith('ia64.tbl') or fpath.endswith('arm32.tbl'):
+            if fpath.endswith('ia64.tbl') or fpath.endswith('arm32.tbl') or fpath.endswith('ia32.tbl'):
                 self.fromTbl(fpath)
             elif fpath.endswith('arm64.tbl'):
                 self.fromArm64Tbl(fpath)
@@ -44,7 +44,7 @@ class SyscallNumbers():
                 except:
                     continue
                 name = parts[1].strip()
-                self.lgr.debug('syscallNumbers fromTbl call name %s' % name)
+                #self.lgr.debug('syscallNumbers fromTbl call name %s' % name)
                 self.syscalls[callnum] = name
                 self.callnums[name] = callnum
 

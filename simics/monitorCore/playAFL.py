@@ -98,7 +98,6 @@ class PlayAFL():
         self.commence_params = commence_params
         self.stop_hap_cycle = None
         self.run = run
-        self.hang_cycles = defaultConfig.hangCycles()
         self.addr_of_count = None
         self.cycle_event = None
         self.initial_cycle = self.target_cpu.cycles
@@ -190,10 +189,13 @@ class PlayAFL():
         self.call_break = None
         self.addr = None
         self.in_data = None
+        self.hang_cycles = defaultConfig.hangCycles()
         if self.afl_mode:
-            self.backstop_cycles = defaultConfig.aflBackstopCycles('AFL_BACK_STOP_CYCLES')
+            self.backstop_cycles = defaultConfig.aflBackstopCycles()
+            self.hang_cycles = defaultConfig.hangCycles(afl=True)
         else:
             self.backstop_cycles = defaultConfig.backstopCycles()
+            self.hang_cycles = defaultConfig.hangCycles()
        
         self.lgr.debug('playAFL backstop_cycles is %d (0x%x).  hang_cycles %d (0x%x)' % (self.backstop_cycles, self.backstop_cycles, self.hang_cycles, self.hang_cycles))
         if os.getenv('BACK_STOP_DELAY') is not None:
@@ -242,13 +244,14 @@ class PlayAFL():
             self.top.quit()
             return None
         self.lgr.debug('playAFL back from loadPickle')
+        parts = cli.quiet_run_command('version')
+        self.version_string = parts[0][0][2]
 
         if target_proc is None:
             self.lgr.debug('playAFL call debugTidGroup')
             self.top.debugTidGroup(tid, to_user=False)
             self.lgr.debug('playAFL call finishInit')
             self.finishInit()
-
             if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.disableReverse()
             self.initial_context = self.target_cpu.current_context
@@ -265,8 +268,6 @@ class PlayAFL():
             self.restoreOrigin()
             self.top.setTarget(target_cell)
             self.top.debugProc(target_proc, self.playInitCallback, not_to_user=False)
-        parts = cli.quiet_run_command('version')
-        self.version_string = parts[0][0][2]
         self.did_exit = False
 
     #def restoreOrigin():
@@ -381,12 +382,13 @@ class PlayAFL():
     def finishInit(self):
         self.lgr.debug('playAFL finishInit')
         if self.dfile != 'oneplay' or self.repeat:
-            self.lgr.debug('playAFL finishInit call to remove debug breaks')
-            self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
+            # DO NOT do this or you break context because breaks have been set with debug context
+            #self.lgr.debug('playAFL finishInit call to remove debug breaks')
+            #self.top.removeDebugBreaks(keep_watching=False, keep_coverage=False, immediate=True)
             self.lgr.debug('playAFL finishInit call to restore watch of exits')
             self.exit_syscall = self.top.debugExitHap()
         elif self.target_proc is None:
-            self.lgr.debug('playAFL finishInit target_proc None, call resetOrigin')
+            self.lgr.debug('playAFL finishInit target_proc None')
             if self.dfile != 'oneplay' or self.afl_mode or self.search_list is not None:
                 self.restoreOrigin()
         if self.target_proc is None:
@@ -505,6 +507,15 @@ class PlayAFL():
         if self.stop_hap is None:
                self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
         SIM_break_simulation('backstop')
+
+    def consumedCallback(self):
+        SIM_run_alone(self.consumedCallbackAlone, None)
+
+    def consumedCallbackAlone(self, cycles):
+        self.lgr.info('playAFL kernel buffer consumed detected')
+        if self.stop_hap is None:
+               self.stop_hap = self.top.RES_add_stop_callback(self.stopHap,  None)
+        SIM_break_simulation('consumed')
 
     def hangCallback(self, cycles):
         SIM_run_alone(self.hangCallbackAlone, cycles)
@@ -660,7 +671,7 @@ class PlayAFL():
                 # syscall tracks cycle of recent entry to avoid hitting same hap for a single syscall.  clear that.
                 self.exit_syscall.resetHackCycle()
 
-            self.lgr.debug('playAFL goAlone now continue')
+            self.lgr.debug('playAFL goAlone now continue current context %s' % self.cpu.current_context)
             if self.repeat:
                 #if self.repeat_counter > 20:
                 #    return
@@ -673,9 +684,9 @@ class PlayAFL():
                     print('Told not to run yet.')
             else:
                 if self.run:
-                    self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x' % self.cpu.cycles)
+                    self.lgr.debug('playAFL goAlone repeat not set, do continue from cycle: 0x%x context: %s' % (self.cpu.cycles, self.cpu.current_context))
                     SIM_continue(0)
-                    self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x' % self.cpu.cycles)
+                    self.lgr.debug('playAFL goAlone repeat not set, back from did continue cycle: 0x%x context: %s' % (self.cpu.cycles, self.cpu.current_context))
                     pass
                 else:
                     print('Told not to run yet.')
@@ -761,7 +772,7 @@ class PlayAFL():
                      pad_to_size=self.pad_to_size, backstop_cycles=self.backstop_cycles, force_default_context=force_default_context, 
                      #filter=self.filter_module, stop_on_read=self.stop_on_read, write_callback=write_callback)
                      filter=self.filter_module, stop_on_read=self.stop_on_read, shared_syscall=self.top.getSharedSyscall(), write_callback=write_callback,
-                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max, backstop_delay=self.backstop_delay)
+                     ioctl_count_max=self.ioctl_count_max, select_count_max=self.select_count_max, backstop_delay=self.backstop_delay, stop_callback=self.consumedCallback)
         else:
             self.write_data.reset(self.in_data, self.afl_packet_count, self.addr)
         count = self.write_data.write()
@@ -976,7 +987,8 @@ class PlayAFL():
                 self.lgr.debug('playAFL stopHap, coverage not set and no search list')
             self.top.clearExitTid()
             if self.repeat or self.dfile != 'oneplay':
-                self.context_manager.stopWatchTasks()
+                #self.lgr.debug('playAFL stopHap, not calling stopWatchTasks')
+                #self.context_manager.stopWatchTasks()
                 SIM_run_alone(self.goAlone, True)
 
     def loadPickle(self, name):

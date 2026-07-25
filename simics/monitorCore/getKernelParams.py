@@ -50,6 +50,7 @@ import cli
 import w7Params
 import winxpParams
 import winKParams
+import syscallNumbers
 def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
         if False and 'cluster' in cpu.name:
@@ -64,6 +65,132 @@ def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         else:
             instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
         return instruct
+def computeESIJumpTable(begin, cpu, word_size, lgr):
+    call_map = {}
+    stack = []
+    resim_dir = os.getenv('RESIM_DIR')
+    if word_size == 8:
+        call_tbl_path = os.path.join(resim_dir, 'linux', 'ia64.tbl')
+    else:
+        call_tbl_path = os.path.join(resim_dir, 'linux', 'ia32.tbl')
+    syscall_numbers = syscallNumbers.SyscallNumbers(call_tbl_path, lgr)
+    #begin = 0xffffffffb8c04cd9
+    stack.append(begin)
+    current_call = None
+    lgr.debug('computeESIJumpTable begin: 0x%x word_size %d' % (begin, word_size))
+    while len(stack) > 0:
+        #if len(call_map) > 10:
+        #    print('doneish')
+        #    break
+        current_eip = stack.pop()
+        instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+        did_call = False
+        #print('popped 0x%x instruct %s' % (current_eip, instruct[1]))
+        lgr.debug('\tpopped 0x%x instruct %s' % (current_eip, instruct[1]))
+        while not did_call:
+            lgr.debug('\t\tbegin did_call loop instruct eip 0x%x %s' % (current_eip, instruct[1]))
+            if instruct[1].startswith('cmp esi'):
+                try:
+                    current_call = int(instruct[1].strip().split(',')[1], 16)
+                    if current_call > 0x200:
+                        print('current call is 0x%x, eh?' % current_call)
+                        lgr.debug('\t\tcurrent call is 0x%x, eh?' % current_call)
+                        break
+                    last_call = current_call
+                except:
+                    print('failed to get current call from %s' % instruct[1])
+                    lgr.debug('\t\tfailed to get current call from %s' % instruct[1])
+                    break
+            elif instruct[1].startswith('test esi'):
+                #print('is test esi ip 0x%x' % current_eip)
+                current_call = 0
+                #current_eip = current_eip + instruct[0]
+                #instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+            else:
+                print('expected cmp esi, bail got %s' % instruct[1])
+                lgr.debug('\t\texpected cmp esi, bail got %s' % instruct[1])
+                break
+            current_eip = current_eip + instruct[0]
+            instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+            #print('instruct %s' % instruct[1])
+            if instruct[1].startswith('je'):
+                #print('is je instruct %s' % instruct[1])
+                lgr.debug('\t\tis je instruct %s' % instruct[1])
+                jmp_eip = int(instruct[1].strip().split()[1], 16)
+                jmp_instruct = SIM_disassemble_address(cpu, jmp_eip, 1, 0)
+                lgr.debug('\t\tgot je to eip  0x%x that instruct is %s' % (jmp_eip, jmp_instruct[1]))
+                call_to_eip = int(jmp_instruct[1].strip().split()[1], 16)
+                if current_call in call_map:
+                    print('************** after je already has current_call 0x%x' % current_call)
+                else:
+                    call_map[current_call] = jmp_eip
+                    #if current_call < 8:
+                    #    print('after je mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
+                current_eip = current_eip + instruct[0]
+                instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+                lgr.debug('\t\tcurrent_call 0x%x current_eip incremented to 0x%x, instruct %s' % (current_call, current_eip, instruct[1]))
+                if instruct[1].startswith('j'):
+                    jump_to = int(instruct[1].strip().split()[1], 16)
+                    lgr.debug('pushed jump_to after ja or jbe 0x%x' % jump_to)
+                    stack.append(jump_to)
+                    current_eip = current_eip + instruct[0]
+                    instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+                else:
+                    if instruct[1].startswith('cmp esi'):
+                        continue
+                    elif instruct[1].startswith('call '):
+                        # call right after a je, assume the syscall num is 1 greater than current
+                        current_call = current_call + 1
+                        lgr.debug('\t\tsyscall 0x%x call is right after je' % current_call)
+                        while current_call in syscall_numbers.syscalls and syscall_numbers.syscalls[current_call] == 'not implemented':
+                            current_call = current_call + 1
+                            lgr.debug('\t\tsyscall %d not implemented 0x%x' % current_call)
+                        call_to_eip = int(instruct[1].strip().split()[1], 16)
+                        if current_call in call_map:
+                            lgr.debug('\t\t************** call after je already has current_call 0x%x' % current_call)
+                        else:
+                            call_map[current_call] = current_eip
+                            #if current_call < 8:
+                            #    print('after jne mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
+                        did_call = True
+                    else:
+                        lgr.debug('\t\tafter je, expected a jump got %s' % instruct[1])
+                        break
+                
+            elif instruct[1].startswith('jne'):
+                lgr.debug('\t\tis jne %s' % instruct[1])
+                jmp_to = int(instruct[1].strip().split()[1], 16)
+                jmp_instruct = SIM_disassemble_address(cpu, jmp_to, 1, 0)
+                if jmp_instruct[1].startswith('call'):
+                    call_to_eip  = int(jmp_instruct[1].strip().split()[1], 16)
+                    if current_call in call_map:
+                        print('************** already has current_call 0x%x' % current_call)
+                        lgr.debug('\t\t************** already has current_call 0x%x' % current_call)
+                else:
+                    lgr.debug('\t\texpected call got %s push the jmp_to' % jmp_instruct[1])
+                    stack.append(jmp_to)
+                # expect next to be call for current_call
+                current_eip = current_eip + instruct[0]
+                instruct = SIM_disassemble_address(cpu, current_eip, 1, 0)
+                if instruct[1].startswith('call'):
+                    call_to_eip = int(instruct[1].strip().split()[1], 16)
+                    if current_call in call_map:
+                        lgr.debug('\t\t************** already has current_call 0x%x' % current_call)
+                        print('************** already has current_call 0x%x' % current_call)
+                    else:
+                        call_map[current_call] = current_eip
+                        #if current_call < 8:
+                        #    print('after jne mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
+                    did_call = True
+            else:
+                print('confused by instruct %s' % instruct[1])
+                lgr.debug('\t\tconfused by instruct %s' % instruct[1])
+                break
+        #print('broke after did_call')
+        pass
+    key_list = call_map.keys()
+    lgr.debug('computeESIJumpTable len of key_list is %d' % len(key_list))
+    return call_map
 
 class GetKernelParams():
     def __init__(self, conf, comp_dict, run_from_snap, arg, int_t, output_modes):
@@ -97,6 +224,7 @@ class GetKernelParams():
         platform = None
         self.want_arm32 = False
         self.want_arm64 = False
+        self.want_x86_32 = False
         if 'PLATFORM' in comp_dict[self.target]:
             platform = comp_dict[self.target]['PLATFORM']
             self.lgr.debug('PLATFORM is %s' % platform)
@@ -114,6 +242,11 @@ class GetKernelParams():
                     self.want_arm32 = True
                     self.lgr.debug('Will look for only ARM 32 bit syscall jump tables')
                     print('Will look for only ARM 32 bit syscall jump tables')
+            elif platform.startswith('x86'):
+                if platform == 'x86Mixed':
+                    self.lgr.warning('Will look for 32bit x86 kernel entry int 64bit kernel.  WARNING unless there are lots of 32 bit apps running this may not coverge.')
+                    self.lgr.warning('Consider using the record32BitEntry function.')
+                    self.want_x86_32 = True
         if self.os_type in ['WIN7', 'WINXP']:
             self.param = winKParams.WinKParams(self.os_type)
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
@@ -1090,7 +1223,7 @@ class GetKernelParams():
         elif old == Sim_CPU_Mode_Supervisor and compat32:
             self.lgr.debug('entryModeChanged, leaving kernel, compat32 so ignore?')
         elif old == Sim_CPU_Mode_User:
-            #self.lgr.debug('entryModeChanged entering kernel')
+            self.lgr.debug('entryModeChanged entering kernel')
             if self.dumb_count < 50:
                 if not self.isWindows() and self.param.mm_struct is None:
                     if not self.getPageTableDirectory():
@@ -1100,7 +1233,7 @@ class GetKernelParams():
             instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
 
             self.prev_instruct = instruct[1]
-            #self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
+            self.lgr.debug('entryModeChanged pid:%s supervisor eip 0x%x instruct %s count %d' % (pid, eip, instruct[1], self.dumb_count))
 
             if self.param.sys_entry is None and instruct[1].startswith('int 128'):
                 self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
@@ -1112,13 +1245,19 @@ class GetKernelParams():
                 self.lgr.debug('entryModeChanged found sysenter %s' % instruct[1])
                 self.hack_stop = True
                 SIM_break_simulation('entryModeChanged found sysenter')
+            elif self.param.sysenter is not None and instruct[1].startswith('sysenter') and self.want_x86_32 and self.param_sysenter_32 is None:
+                self.lgr.debug('mode changed old %d  new %d eip: 0x%x %s looking for 32bit entry to 64 bit kernel' % (old, new, eip, instruct[1]))
+                self.lgr.debug('entryModeChanged found sysenter %s' % instruct[1])
+                self.hack_stop = True
+                SIM_break_simulation('entryModeChanged found sysenter')
+ 
             elif compat32:
                 if instruct[1].startswith('sysenter') or instruct[1].startswith('int 128'):
                     self.lgr.debug('mode changed compat32 old %d  new %d eip: 0x%x %s' % (old, new, eip, instruct[1]))
                     self.hack_stop = True
                     SIM_break_simulation('entryModeChanged compat32 found sysenter')
             else:
-                #self.lgr.debug('entryModeChanged nothing to do, continue')
+                self.lgr.debug('entryModeChanged nothing to do, continue')
                 pass
             #if self.param.sys_entry is not None and self.skip_sysenter:
             #    self.lgr.debug('entryModeChanged got sys_entry and told to skip sysenter')
@@ -1391,7 +1530,7 @@ class GetKernelParams():
                     break
                 elif instruct[1].startswith('je ') and prev_instruct.startswith('cmp esi'):
                     self.lgr.debug('\tstepCompute believe esi-based coded jump table at 0x%x' % prev_eip)
-                    self.computeESIJumpTable(prev_eip)
+                    self.param.code_jump_table = computeESIJumpTable(prev_eip, self.cpu, 8, self.lgr)
                     # kernel syscall handling location for use in fixStackFrame
                     if last_call is not None:
                         self.param.syscall_compute = last_call
@@ -1543,10 +1682,14 @@ class GetKernelParams():
                 self.param.sys_entry = 0
             self.param.sysenter = eip 
             #SIM_run_alone(self.findCompute, None)
+        elif (self.prev_instruct == 'sysenter') and self.want_x86_32 and self.param.sysenter_32 is None:
+            self.lgr.debug('getEntries is sysenter from 32bit eax %d eip: 0x%x' % (eax, eip))
+            self.param.sysenter = eip 
             
         if self.dumb_count > self.mode_entry_limit and (self.param.sysenter is not None or self.skip_sysenter) and self.param.sys_entry is not None \
                  and (self.param.sysexit is not None or self.skip_sysenter or self.mem_utils.WORD_SIZE==8) and self.param.iretd is not None \
-                 and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None):
+                 and not (self.mem_utils.WORD_SIZE == 8 and self.param.sysret64 is None) \
+                 and not (self.want_x86_32 and self.param.sysenter_32 is None):
             SIM_run_alone(self.deleteHaps, None)
 
             self.lgr.debug('kernel entry and exits found')
@@ -1740,7 +1883,7 @@ class GetKernelParams():
             SIM_run_alone(self.deleteHaps, None)
             SIM_run_alone(self.findCompute, True)
         else:
-            SIM_run_along(self.continueAhead, None)
+            SIM_run_alone(self.continueAhead, None)
 
     def compat32Entry(self):
         self.taskUtils = taskUtils.TaskUtils(self.cpu, self.target, self.param, self.mem_utils, self.unistd, self.unistd32, None, self.lgr)
@@ -2280,120 +2423,6 @@ class GetKernelParams():
         key_list = call_map.keys()
         self.lgr.debug('computeJumpTable len of key_list is %d' % len(key_list))
 
-    def computeESIJumpTable(self, begin):
-        call_map = {}
-        stack = []
-        #begin = 0xffffffffb8c04cd9
-        stack.append(begin)
-        current_call = None
-        self.lgr.debug('computeESIJumpTable begin: 0x%x' % begin)
-        while len(stack) > 0:
-            #if len(call_map) > 10:
-            #    print('doneish')
-            #    break
-            current_eip = stack.pop()
-            instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-            did_call = False
-            #print('popped 0x%x instruct %s' % (current_eip, instruct[1]))
-            self.lgr.debug('\tpopped 0x%x instruct %s' % (current_eip, instruct[1]))
-            while not did_call:
-                if instruct[1].startswith('cmp esi'):
-                    try:
-                        current_call = int(instruct[1].strip().split(',')[1], 16)
-                        if current_call > 0x200:
-                            print('current call is 0x%x, eh?' % current_call)
-                            self.lgr.debug('\t\tcurrent call is 0x%x, eh?' % current_call)
-                            break
-                        last_call = current_call
-                    except:
-                        print('failed to get current call from %s' % instruct[1])
-                        self.lgr.debug('\t\tfailed to get current call from %s' % instruct[1])
-                        break
-                elif instruct[1].startswith('test esi'):
-                    #print('is test esi ip 0x%x' % current_eip)
-                    current_call = 0
-                    #current_eip = current_eip + instruct[0]
-                    #instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-                else:
-                    print('expected cmp esi, bail got %s' % instruct[1])
-                    self.lgr.debug('\t\texpected cmp esi, bail got %s' % instruct[1])
-                    break
-                current_eip = current_eip + instruct[0]
-                instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-                #print('instruct %s' % instruct[1])
-                if instruct[1].startswith('je'):
-                    #print('is je instruct %s' % instruct[1])
-                    self.lgr.debug('\t\tis je instruct %s' % instruct[1])
-                    jmp_eip = int(instruct[1].strip().split()[1], 16)
-                    jmp_instruct = SIM_disassemble_address(self.cpu, jmp_eip, 1, 0)
-                    self.lgr.debug('\t\tgot je to eip  0x%x that instruct is %s' % (jmp_eip, jmp_instruct[1]))
-                    call_to_eip = int(jmp_instruct[1].strip().split()[1], 16)
-                    if current_call in call_map:
-                        print('************** after je already has current_call 0x%x' % current_call)
-                    else:
-                        call_map[current_call] = jmp_eip
-                        #if current_call < 8:
-                        #    print('after je mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
-                    current_eip = current_eip + instruct[0]
-                    instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-                    self.lgr.debug('\t\t current_eip incremeted to 0x%x, instruct %s' % (current_eip, instruct[1]))
-                    if instruct[1].startswith('j'):
-                        jump_to = int(instruct[1].strip().split()[1], 16)
-                        #print('pushed jump_to after ja or jbe 0x%x' % jump_to)
-                        stack.append(jump_to)
-                        current_eip = current_eip + instruct[0]
-                        instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-                    else:
-                        if instruct[1].startswith('cmp esi'):
-                            continue
-                        elif instruct[1].startswith('call '):
-                            # call right after a je, assume the syscall num is 1 greater than current
-                            current_call = current_call + 1
-                            call_to_eip = int(instruct[1].strip().split()[1], 16)
-                            if current_call in call_map:
-                                self.lgr.debug('\t\t************** call after je already has current_call 0x%x' % current_call)
-                            else:
-                                call_map[current_call] = current_eip
-                                #if current_call < 8:
-                                #    print('after jne mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
-                            did_call = True
-                        else:
-                            self.lgr.debug('\t\tafter je, expected a jump got %s' % instruct[1])
-                            break
-                    
-                elif instruct[1].startswith('jne'):
-                    jmp_to = int(instruct[1].strip().split()[1], 16)
-                    jmp_instruct = SIM_disassemble_address(self.cpu, jmp_to, 1, 0)
-                    if jmp_instruct[1].startswith('call'):
-                        call_to_eip  = int(jmp_instruct[1].strip().split()[1], 16)
-                        if current_call in call_map:
-                            print('************** already has current_call 0x%x' % current_call)
-                            self.lgr.debug('\t\t************** already has current_call 0x%x' % current_call)
-                    else:
-                        print('confused expected call got %s' % jmp_instruct)
-                        break
-                    # expect next to be call for current_call
-                    current_eip = current_eip + instruct[0]
-                    instruct = SIM_disassemble_address(self.cpu, current_eip, 1, 0)
-                    if instruct[1].startswith('call'):
-                        call_to_eip = int(instruct[1].strip().split()[1], 16)
-                        if current_call in call_map:
-                            self.lgr.debug('\t\t************** already has current_call 0x%x' % current_call)
-                            print('************** already has current_call 0x%x' % current_call)
-                        else:
-                            call_map[current_call] = current_eip
-                            #if current_call < 8:
-                            #    print('after jne mapped 0x%x to 0x%x current_eip 0x%x' % (current_call, call_to_eip, current_eip))
-                        did_call = True
-                else:
-                    print('confused by instruct %s' % instruct[1])
-                    self.lgr.debug('\t\tconfused by instruct %s' % instruct[1])
-                    break
-            #print('broke after did_call')
-            pass
-        self.param.code_jump_table = call_map
-        key_list = call_map.keys()
-        self.lgr.debug('computeESIJumpTable len of key_list is %d' % len(key_list))
 
     def getTargetEnv(self, name, target=None):
         retval = None

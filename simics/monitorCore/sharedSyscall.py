@@ -208,6 +208,7 @@ class SharedSyscall():
 
     def addExitHap(self, cell, tid, exit_eip1, exit_eip2, exit_eip3, exit_info, name, context_override=None):
         ''' only use current context value, ignore cell!'''
+        # TBD not a one-to-one mapping of sysenter to sysexit?  why multiple exits for one enter?
         self.hack_exit_tid = tid
         if tid not in self.exit_info:
             self.exit_info[tid] = {}
@@ -239,7 +240,7 @@ class SharedSyscall():
         if exit_eip1 is not None: 
             #self.lgr.debug('addExitHap exit_eip1 0x%x not none, len of exit tids is %d %s' % (exit_eip1, len(my_exit_tids[exit_eip1]), current_context))
             if len(my_exit_tids[exit_eip1]) == 0:
-                #self.lgr.debug('addExitHap new exit EIP1 0x%x for tid:%s current_context: %s' % (exit_eip1, tid, current_context))
+                self.lgr.debug('addExitHap new exit EIP1 0x%x for tid:%s current_context: %s' % (exit_eip1, tid, current_context))
                 if exit_eip1 not in self.exit_hap[current_context]:
                     exit_break = self.context_manager.genBreakpoint(current_context, 
                                     Sim_Break_Linear, Sim_Access_Execute, exit_eip1, 1, 0)
@@ -874,7 +875,7 @@ class SharedSyscall():
             ueax = self.mem_utils.getUnsigned(eax)
         else:
             eax = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
-            ueax = self.mem_utils.getUnsigned(eax)
+            ueax = self.mem_utils.getUnsigned(eax, word_size=word_size)
             eax = self.mem_utils.getSigned(eax, word_size=word_size)
 
         self.lgr.debug('sharedSyscall handleExit cell %s callnum %d name %s  tid %s cycle: 0x%x' % (self.cell_name, exit_info.callnum, callname, tid, self.cpu.cycles))
@@ -1752,7 +1753,7 @@ class SharedSyscall():
 
     def foolSelect(self, fd):
         ''' Modify return values from select to reflect no data for this fd ''' 
-        self.lgr.debug('sharedSyscall foolSelect set select fd to %d' % fd)
+        #self.lgr.debug('sharedSyscall foolSelect set select fd to %d' % fd)
         self.fool_select = fd
 
     def modifySelect(self, select_info, eax):
