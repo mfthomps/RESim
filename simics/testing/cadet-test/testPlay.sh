@@ -1,5 +1,5 @@
 #!/bin/bash
-hitfile=$RESIM_IDA_DATA/cadet01/cadet_fs/home/mike/cadet01.cadet-tst.hits
+hitfile=$RESIM_IDA_DATA/cadet01/cadet_fs/usr/sbin/cadet01.cadet-tst.hits
 rm -f $hitfile
 echo "testPlay begin"
 runPlay cadet_driver.ini cadet01
