@@ -1181,10 +1181,23 @@ class MemUtils():
             op2, op1 = decode.getOperands(instruct[1])
             this_kernel_offset = int(op2, 16)
             kernel_offset_delta = this_kernel_offset - self.param.rand_kernel_offset
-        elif version.startswith('7'):
-            cmd = 'get-msr %s 0x176' % cpu.name
-            dumb, value = cli.quiet_run_command(cmd)
-            this_msr_176 = int(value,16)
+        else:
+            this_msr_176 = None
+            if version.startswith('7'):
+                cmd = 'get-msr %s 0x176' % cpu.name
+                dumb, value = cli.quiet_run_command(cmd)
+                this_msr_176 = int(value,16)
+            else:
+                cmd = '%s.msrs' % cpu.name
+                dumb, value = cli.quiet_run_command(cmd)
+                for line in value.splitlines(): 
+                    if 'ia32_sysenter_eip' in line:
+                        mvalue = line.split()[2]
+                        this_msr_176 = int(mvalue, 16)
+                        break
+            if this_msr_176 is None:
+                self.lgr.error('failed to get x86 msr 0x176')
+                self.top.quit() 
             kernel_offset_delta = this_msr_176 - self.param.msr_176
             self.lgr.debug('memUtils adjustParam x86, this_msr_176 is 0x%x param.msr_176 0x%x kernel_offset_delta 0x%x' % (this_msr_176, self.param.msr_176, kernel_offset_delta))
             if False and kernel_offset_delta == 0:
@@ -1193,8 +1206,6 @@ class MemUtils():
                 msr_offset = True
                 self.lgr.debug('memUtils adjustParam x86, param msr_176 is 0x%x this one 0x%x kernel_offset_delta 0x%x' % (self.param.msr_176, this_msr_176,
                     kernel_offset_delta))
-        else:
-            self.lgr.debug('memUtils adjustParam x86 no kernel aslr?')
 
         self.lgr.debug('memUtils adjustParam kernel_offset %r  msr_offset %r' % (kernel_offset, msr_offset))
         if self.param.sysenter is not None and not kernel_offset:
