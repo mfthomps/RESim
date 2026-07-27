@@ -667,6 +667,18 @@ class WinDLLMap():
                 retval.append(code_section) 
         return retval
 
+    def findCodeSection(self, tid, name):
+        retval = None
+        name = name.lower()
+        pid = self.pidFromTID(tid)
+        if pid in self.section_map:
+            for fname in self.section_map[pid]:
+                if fname.lower().endswith(name):
+                    section = self.section_map[pid][fname]
+                    retval = soMap.CodeSection(section.load_addr, section.size, fname)
+                    break
+        return retval
+
     def addSOWatch(self, fname, callback, name=None):
         if name is None:
             name = 'NONE'
@@ -1022,3 +1034,6 @@ class WinDLLMap():
         retval = False
         # doInUser for windows?
         return retval
+
+    def getProgWordSize(self, prog): 
+        return 8
