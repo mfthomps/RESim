@@ -2856,7 +2856,7 @@ class Syscall():
                         exit_eip3 = self.param.sysret64
                         self.lgr.debug('syscall getExitAddrs has all sys rets exit1 0x%x 2 0x%x 3 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
                     else:
-                        self.lgr.debug('syscall getExitAddrs has 2 sysexit and iretd exit1 0x%x 2 0x%x' % (exit_eip1, exit_eip2, exit_eip3))
+                        self.lgr.debug('syscall getExitAddrs has 2 sysexit and iretd exit1 0x%x 2 0x%x' % (exit_eip1, exit_eip2))
                         pass
                 else:
                     if self.param.sysret64 is not None:
