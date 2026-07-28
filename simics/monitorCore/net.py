@@ -328,7 +328,8 @@ class Msghdr():
 
     def getMsgName(self):
         retval = None
-        if self.msg_name is not None and self.msg_namelen > 0:
+        # TBD sometimes msg_name is 5??
+        if self.msg_name is not None and self.msg_namelen > 0 and self.msg_name > 0xff:
             if self.msg_namelen > 200:
                 self.lgr.error('net Msghdr getMsgName msg_namelen seems large %d' % self.msg_namelen)
                 retval = 'name len too big???'
@@ -341,7 +342,7 @@ class Msghdr():
             retval = 'msg_name not initialized'
         else:
             msg_name = ''
-            if self.msg_namelen > 0:
+            if self.msg_namelen > 0 and self.msg_name > 0xff:
                 if self.msg_namelen > 200:
                     self.lgr.error('net Msghdr getString msg_namelen seems large %d' % self.msg_namelen)
                     retval = 'msg_name BROKEN addr 0x%x  msg_namelen: %d  msg_name: %s msg_iov: 0x%x  msg_iovlen: %d  msg_control: 0x%x msg_controllen %d flags 0x%x' % (self.msg_name,
