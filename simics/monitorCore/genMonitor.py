@@ -3717,7 +3717,7 @@ class GenMonitor():
         self.lgr.debug('runToSecondaryDmod (but alone) for primary %s' % primary.path) 
         SIM_run_alone(self.dmod_mgr[self.target].runToSecondary, primary)
 
-    def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False, primary=True):
+    def runToDmod(self, dfile, cell_name=None, background=False, comm=None, break_simulation=False, primary=None):
         if cell_name is None:
             cell_name = self.target
             run = True
