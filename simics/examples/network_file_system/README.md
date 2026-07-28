@@ -1,21 +1,7 @@
-# DARPA Cyber Grand Challenge (CGC) services
+# DARPA Cyber Grand Challenge (CGC) Network File System 
 
 This directory contains files for exploring the CGC Network\_File\_System
 service.  
-
-The server image named in the ubuntu\_driver.ini file contains
-a suite of CGC services as reconstituted for Linux by Trail-of-Bits.  You can
-adapt files in this directory to explore any of those services.
-
-The driver image includes polls and proof-of-vulnerability (PoV) exploits, which can
-be run from the driver using poll.py and pov.py.  Note that not all
-polls and PoVs work as originally intended.  
-
-The services run under inetd, and thus handle network IO via stdin/stdout.
-
-The driver image includes a service.map file that maps services to their TCP ports.
-And it includes a common\_names.txt to map between CGC competition naming and 
-the common names used for the services.
 
 Create a RESim workspace on your Simics host and copy these files into it, e.g.,
 
@@ -26,11 +12,21 @@ Create a RESim workspace on your Simics host and copy these files into it, e.g.,
    
 If you are running on NPS infrastructure, all images and the binaries named in the
 ubuntu\_driver.ini file should be already available through the RESIM\_IMAGE
-environment variable.
+environment variable.  Otherwise, get the disk images and binary files from 
+    https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQC-hSPskpwKRqvVSauYb_l4AU6FLcnA4awKbLYIQL5Pn18?e=9gzkHU
 
-Otherwise, get the disk images and binary files from 
-    https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk
-and untar the cgc-fs.tar.
+should be copied to:
+    $RESIM_IMAGES/cadet01/cadet.disk0.hd_image.craff
+
+And the driver image at
+    https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
+
+should be copied to:
+    $RESIM_IMAGES/driver/driver_22.disk0.hd_image.craff
+
+Create a directory at $RESIM\_IMAGES/cgc-images and untar the cgc file system tar from into that directory:
+    https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQDWlCqxWdb7UrQoRon3yFuHAUMjlo0ijej-qHPoO_eknso?e=zJUpjs
+
 And adjust paths in the ubuntu\_driver.ini as needed.
 
 You can then run the simulation:
@@ -41,7 +37,8 @@ It may take a few moments for the driver and target system to boot.
 The simulation will stop at the simics> prompt when it is booted.
 Use the "c" command at the simics prompt to run forward a while to get
 past all the Linux initialization.  Use the "ptime" command to watch time
-advance.  Use the "stop" stop command to stop the simuation when "Time"
+advance.  It should run to at least 60 seconds to let the target
+initialize.  Use the "stop" stop command to stop the simuation when "Time"
 seems to be advancing close to or faster than real time.
 
 Create a snapshot so you can return to that point without rebooting:
