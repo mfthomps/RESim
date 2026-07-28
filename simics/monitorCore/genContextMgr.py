@@ -851,6 +851,8 @@ class GenContextMgr():
             add_tid = tid
         if add_tid not in self.catch_tid:
             self.catch_tid.append(add_tid)
+        else:
+            self.lgr.debug('contextManager catchTid %s already in catch_tid list' % add_tid)
         if callback is not None:
             self.catch_callback[add_tid] = callback 
         self.lgr.debug('contextManager catchTid %s callback %s' % (add_tid, str(callback)))
@@ -1601,11 +1603,12 @@ class GenContextMgr():
 
     def newProg(self, prog_string, tid):
         # use comm for checkFirstScheduled so it does not match if we are not yet debugging after an exec
+        #self.lgr.debug('contextManager newProg %s' % prog_string)
         dumcpu, comm, cur_tid = self.task_utils.curThread()
-        self.checkFirstSchedule(None, tid, comm)
+        base = os.path.basename(prog_string)
+        self.checkFirstSchedule(None, tid, base)
         if len(self.ignore_progs) > 0:
-            base = os.path.basename(prog_string)
-            self.lgr.debug('contextManager newProg, ignore tid %s check for base %s' % (tid, base))
+            self.lgr.debug('contextManager newProg, tid %s check for base %s' % (tid, base))
             for ignore in self.ignore_progs:
                 if base.startswith(ignore):
                     self.lgr.debug('contextManager newProg, ignore tid %s %s' % (tid, base))
