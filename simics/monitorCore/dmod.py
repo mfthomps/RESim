@@ -208,7 +208,7 @@ class Dmod():
             if was is not None:
                 entire_match = was.group(0)
                 new_string = re.sub(entire_match, self.fiddle.becomes, s, re.M|re.I)
-                self.lgr.debug('dmod cell: %s replace %s with %s. Orig len %d new len %d in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, len(s), len(new_string), s))
+                self.lgr.debug('dmod subReplace cell: %s replace %s with %s. Orig len %d new len %d in \n%s' % (self.cell_name, self.fiddle.was, self.fiddle.becomes, len(s), len(new_string), s))
                 self.lgr.debug('new_string: %s' % new_string)
                 self.top.writeString(addr, new_string, target_cpu=cpu)
             else:
