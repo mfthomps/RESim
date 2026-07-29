@@ -10,5 +10,3 @@ script, and to run teecadet.sh as the driver's interactive script.
 The target runs cadet01 as a service.  The tests will first use
 debugProc followed by a continue for some cycles to create a snapshot
 after the cadet server is initialialized.
-
-Scripts rely on xdotool.
