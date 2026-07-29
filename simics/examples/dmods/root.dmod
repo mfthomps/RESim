@@ -1,0 +1,11 @@
+#
+# provide root access without the root password
+#
+sub_replace read 
+#
+# match
+# was
+# becomes
+root:x:0:0:root
+root:x:
+root::
