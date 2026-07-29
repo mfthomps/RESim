@@ -1919,6 +1919,7 @@ class Syscall():
         elif callname == 'close':        
             fd = frame['param1']
             ida_msg = '%s tid:%s (%s) FD:%d' % (callname, tid, comm, frame['param1'])
+            self.lgr.debug('syscallHap syscallParse '+ida_msg)
             if self.traceProcs is not None:
                 #self.lgr.debug('syscallparse for close tid:%s' % tid)
                 self.traceProcs.close(tid, fd)
@@ -3002,7 +3003,7 @@ class Syscall():
         if self.context_manager.isIgnoreContext():
             return
         cpu, comm, tid = self.task_utils.curThread() 
-        #self.lgr.debug('syscallHap BEGIN for %s cycle: 0x%x' % (tid, self.cpu.cycles))
+        self.lgr.debug('syscallHap BEGIN for %s cycle: 0x%x' % (tid, self.cpu.cycles))
         if self.cpu.architecture == 'arm64' and self.arm64BailCheck(break_num):
             return
  
@@ -3014,7 +3015,7 @@ class Syscall():
         if tid == '0':
             return
         compat32 = self.top.compat32(target=self.cell_name) | self.syscall_info.compat32
-        self.lgr.debug('syscallHap compat32 is %r but self.syscall_info.compat32 is %r' % (compat32, self.syscall_info.compat32))
+        #self.lgr.debug('syscallHap compat32 is %r but self.syscall_info.compat32 is %r' % (compat32, self.syscall_info.compat32))
         # beware some systems execv init to some other process that you may care about
         #if tid == '1':
         #    return
@@ -3045,7 +3046,7 @@ class Syscall():
                 callnum = self.mem_utils.getCallNum(cpu)
                 # TBD what about use_32?  do this after getExitAddrs?
                 callname = self.task_utils.syscallName(callnum, compat32) 
-                #self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. name: %s TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, self.name, callnum, callname, cpu.cycles))
+                self.lgr.debug('syscallHap tid:%s (%s) skip back-to-back calls within 10 cycles. name: %s TBD fix this for cases where cycles match. call_num %d call_name %s cycles now 0x%x?.' % (tid, comm, self.name, callnum, callname, cpu.cycles))
                 return
             else:
                 self.hack_cycle = cpu.cycles
