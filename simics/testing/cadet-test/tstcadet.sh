@@ -18,7 +18,7 @@ resim-ws.sh
 export WS=$RESIM_DIR/simics/workspace
 echo "ws is $WS"
 cp $WS/authorized_keys .
-
+cp $RESIM_DIR/simics/examples/cadet/* .
 cp $TD/*.simics .
 cp $TD/*.ini .
 cp $TD/*.param .
@@ -35,8 +35,8 @@ resim cadet_driver.ini -c test_prep.simics
 ./checkPrep.sh || exit
 sed -i 's/RUN_FROM_SNAP=cadet/RUN_FROM_SNAP=cadetread/' cadet_driver.ini
 resim cadet_driver.ini -c test_track.simics
-./checkTrack.sh
-./testAFL.sh 
+./checkTrack.sh || exit
+./testAFL.sh || exit
 ./testPlay.sh || exit
 ./testDedupe.sh || exit
 ./testRunTrack.sh || exit
