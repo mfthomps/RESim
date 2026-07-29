@@ -27,14 +27,7 @@ if [ "$1" == "-e" ]; then
 #
 #   Examples
 #
-    cp $RESIM_DIR/simics/workspace/mytarget.ini .
-    cp $RESIM_DIR/simics/workspace/ubuntu_driver.ini .
-    cp $RESIM_DIR/simics/workspace/client.py .
-    cp $RESIM_DIR/simics/workspace/ubuntu.param .
-    cp $RESIM_DIR/simics/workspace/clear-linux.ini .
-    cp $RESIM_DIR/simics/workspace/clear64.param .
-    cp $RESIM_DIR/simics/workspace/mapdriver.simics .
-    cp $RESIM_DIR/simics/workspace/README-cadet01.txt .
+    cp $RESIM_DIR/simics/examples/cadet/* .
 fi
 here=`pwd`
 #if [ ! -d ./targets/qsp-x86 ]; then
