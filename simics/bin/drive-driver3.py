@@ -244,6 +244,9 @@ def main():
             sendFiles([client_path], sock, target)
             cmd='/bin/chmod a+x /tmp/%s' % client_cmd
             doCommand(cmd, sock, target)
+    else:
+        print('Directive is missing SESSION definition.')
+        exit(1)
     if args.disconnect:
         magic_path = os.path.join(resim_dir, 'simics', 'magic', 'simics-magic')
         sendFiles([magic_path], sock, target)
