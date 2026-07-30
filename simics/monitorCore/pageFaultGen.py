@@ -743,7 +743,7 @@ class PageFaultGen():
             self.lgr.debug('pageFaultGen skipAlone to cycle 0x%x' % prec.cycles) 
             target_cycles = prec.cycles
             print('skipping back to user space, please wait.')
-            if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
+            if not self.top.skipToCycle(target_cycles, self.cpu, disable=True, quiet=False):
                 return
             print('Completed skip.')
             self.lgr.debug('pageFaultGen skipAlone back from skip cycle now 0x%x' % self.cpu.cycles)
@@ -756,22 +756,22 @@ class PageFaultGen():
                 eip = cur_eip
             if self.mem_utils.isKernel(eip):
                 target_cycles = self.cpu.cycles - 1
-                if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
+                if not self.top.skipToCycle(target_cycles, self.cpu, disable=True, quiet=False):
                     return
                 else:
                     cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
-                    self.lgr.debug('pageFaultGen skipAlone landed in kernel 0x%x, backed up one to 0x%x eip:0x%x' % (eip, target_cycles, cur_eip))
+                    self.lgr.debug('pageFaultGen skipAlone landed in kernel 0x%x, back up one to 0x%x eip:0x%x' % (eip, target_cycles, cur_eip))
                     if cur_eip == eip: 
                         self.lgr.debug('pageFaultGen skipAlone same eip, back up more')
                         target_cycles = self.cpu.cycles - 1
-                        if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
+                        if not self.top.skipToCycle(target_cycles, self.cpu, disable=True, quiet=False):
                             return
                         
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen skipAlone after another backup, eip is 0x%x' % (cur_eip))
                     elif self.mem_utils.isKernel(cur_eip):
                         target_cycles = self.cpu.cycles - 1
-                        if not self.top.skipToCycle(target_cycles, self.cpu, disable=True):
+                        if not self.top.skipToCycle(target_cycles, self.cpu, disable=True, quiet=False):
                             return
                         cur_eip = self.mem_utils.getRegValue(self.cpu, 'pc')
                         self.lgr.debug('pageFaultGen still in kernel after back one, after another backup, eip is 0x%x' % (cur_eip))
