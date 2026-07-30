@@ -1185,8 +1185,8 @@ class reverseToCall():
         self.lgr.debug('followTaintX86 instruct at 0x%x self.reg %s instruct is %s' % (eip, self.reg, str(instruct)))
         op1, op0 = self.decode.getOperands(instruct[1])
         mn = self.decode.getMn(instruct[1])
-        if not self.multOne(op0, mn) and not mn.startswith('mov') and not mn == 'pop' and not mn.startswith('cmov') \
-                                     and not self.orValue(op1, mn) and not mn == 'add' and not mn == 'xor':
+        if not self.multOne(op0, mn) and not mn.startswith('mov') and not mn.startswith('cmov') \
+                                     and not self.orValue(op1, mn) and mn not in ['pop', 'add', 'sub', 'xor']:
             ''' NOTE: treating "or" and "add" and imult of one as a "mov" '''
             if mn == 'xchg':
                 self.lgr.debug('followTaintX86, is xchg, track %s' % reg_mod_type.value)
@@ -1196,21 +1196,20 @@ class reverseToCall():
                 self.lgr.debug('followTaintX86, is lea, track %s' % reg_mod_type.value)
                 self.doRevToModReg(reg_mod_type.value, taint=self.taint, kernel=self.kernel)
                 return
-             
             self.lgr.debug('followTaintX86, %s not a move, we are stumped cycle 0x%x' % (instruct[1], self.cpu.cycles))
             self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s" stumped' % (eip, instruct[1]))
             self.top.skipAndMail()
 
-        elif mn == 'add':
+        elif mn in ['add', 'sub']:
            offset = None
            #offset = int(op1, 16)
            offset = self.getOpValue(op1)
            if offset is not None:
                offset = self.mem_utils.getUnsigned(offset)
-               self.lgr.debug('followTaint, add check offset of %s is 0x%x' % (op1, offset))
+               self.lgr.debug('followTaint, %s check offset of %s is 0x%x' % (mn, op1, offset))
            if offset is not None and offset <= 8:
                ''' wth, just an address adjustment? '''
-               self.lgr.debug('followTaintX86, add of %x, assume address adjust, e.g., heap struct' % offset)
+               self.lgr.debug('followTaintX86, %s of %x, assume address adjust, e.g., heap struct' % (mn, offset))
                self.bookmarks.setBacktrackBookmark('eip:0x%x inst:"%s"' % (eip, instruct[1]))
                self.doRevToModReg(op0, taint=self.taint, kernel=self.kernel)
                return 

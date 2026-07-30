@@ -348,7 +348,7 @@ def addressFromExpression(cpu, exp, lgr, reg_values={}):
 
 def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
     prefix, bracketed = getInBrackets(cpu, operand, lgr)
-    lgr.debug('bracketed it %s prefix is %s' % (bracketed, prefix))
+    lgr.debug('decode getAddressFromOperand, bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
         #address = addressFromExpression(cpu, bracketed, lgr, reg_values=reg_values)
@@ -370,7 +370,7 @@ def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
                           #lgr.debug("adjusting by offset %d" % offset)
                           address = address + offset
                       except:
-                          lgr.debug('did not parse offset %s' % prefix)
+                          lgr.debug('decode getAddressFromOperand did not parse offset %s' % prefix)
                           pass
 
         else:
