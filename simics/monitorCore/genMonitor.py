@@ -6877,7 +6877,7 @@ class GenMonitor():
         tid_list = None
         self.run_to[self.target].traceSO(threads=threads)
 
-    def skipToCycle(self, cycle, cpu=None, disable=False):
+    def skipToCycle(self, cycle, cpu=None, disable=False, quiet=True):
         if cpu is None:
             cpu = self.cell_config.cpuFromCell(self.target)
             # assumption called by user, so reset watches
@@ -6890,11 +6890,11 @@ class GenMonitor():
             # assume user invoked, make sure we are not tracking, or that will mess things up
             self.stopTracking()
             self.lgr.debug('skipToCycle assume user invoked did stopTracking')
-        retval = self.skip_to_mgr[self.target].skipToTest(cycle)
+        retval = self.skip_to_mgr[self.target].skipToTest(cycle, quiet=quiet)
         self.context_manager[self.target].clearReverseContext()
         if disable:
             self.context_manager[self.target].enableAll()
-        self.lgr.debug('skipToCycle done wanted cycle 0x%x' % cycle)
+        self.lgr.debug('skipToCycle done wanted cycle 0x%x quiet was %r' % (cycle, quiet))
         return retval
 
     def cutRealWorld(self):
