@@ -1,4 +1,4 @@
 SESSION=TCP
-FILE=ropme.io
+FILE=pal.io
 IP=10.0.0.22
 PORT=5001

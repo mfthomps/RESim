@@ -752,7 +752,7 @@ class findKernelWrite():
         
         if self.addr == self.prev_addr:
             self.iter_count += 1
-            if self.iter_count > 5:
+            if self.iter_count > 500:
                 self.lgr.debug('findKernelWrite backOneAlone, cannot track values back beyond %s' % str(instruct))
                 bm = 'eip:0x%x inst:"%s Seems to be iteration, bailing"' % (eip, instruct[1])
                 self.bookmarks.setBacktrackBookmark(bm)
@@ -800,7 +800,10 @@ class findKernelWrite():
         mn = self.decode.getMn(instruct[1])
         self.lgr.debug('findKernelWrite backOneAlone BACKTRACK backOneAlone, write described above occured at 0x%x : %s' % (eip, str(instruct[1])))
         bm = 'eip:0x%x inst:"%s"' % (eip, instruct[1])
-        self.bookmarks.setBacktrackBookmark(bm)
+        if self.iter_count > 0:
+            self.bookmarks.setBacktrackBookmark(bm, iterate = self.iter_count)
+        else:
+            self.bookmarks.setBacktrackBookmark(bm)
         self.lgr.debug('BT bookmark: %s' % bm)
         ''' If asked to just find previous buffer, then don't continue with reverse taint once a register source is found '''
         taint = True
@@ -851,8 +854,13 @@ class findKernelWrite():
                    value = int(op1,16)
                 except:
                    pass
-                if value is not None:
-                    ''' stumped, constant loaded into memory '''
+                if mn in ['add', 'sub']:
+                    self.lgr.debug('findKernelWrite backOneAlone, found %s of constant %x, keep on trucking' % (mn, value))
+                    previous = self.cpu.cycles-1
+                    self.top.skipToCycle(previous, cpu=self.cpu, disable=True)
+                    self.top.stopAtKernelWrite(self.addr, self.rev_to_call, kernel=self.kernel)
+                elif value is not None:
+                    # stumped, constant loaded into memory 
                     self.lgr.debug('findKernelWrite backOneAlone, found constant %x, stumped' % value)
                     SIM_run_alone(self.cleanup, False)
                     self.top.skipAndMail()

@@ -4778,7 +4778,7 @@ class GenMonitor():
             cpu = debug_cpu
             tid = debug_tid
             comm = self.task_utils[target].getCommFromTid(debug_tid)
-        self.lgr.debug('compat32 tid:%s (%s)' % (tid, comm))
+        #self.lgr.debug('compat32 tid:%s (%s)' % (tid, comm))
         if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8:
             so_word_size = self.soMap[target].getProgWordSize(comm)
             self.lgr.debug('compat32 so_word_size %s' % so_word_size)
@@ -6422,6 +6422,7 @@ class GenMonitor():
         self.lgr.debug('runToSeconds.  Now %s, want %s Will run forward %d ms' % (now, seconds, int(ms)))
         cmd = 'run count = %d unit = ms' % (int(ms))
         SIM_run_command(cmd)
+        print('Should now be at %d seconds' % seconds)
         
     def loadJumpers(self):    
         for target in self.context_manager:
@@ -6505,7 +6506,7 @@ class GenMonitor():
         if target not in self.page_faults:
             return False
         tid_list = self.task_utils[target].getGroupTids(tid)
-        self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
+        #self.lgr.debug('hasPendingFault tid %s got list of %d tids' % (tid, len(tid_list))) 
         for t in tid_list:
             fault = self.page_faults[target].hasPendingPageFault(t)
         
