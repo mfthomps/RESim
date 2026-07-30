@@ -1944,6 +1944,8 @@ class Syscall():
                                 self.lgr.debug('syscall closed fd %d, stop trace' % fd)
                                 self.stopTrace()
                                 self.dataWatch.stoppingTrace(fd)
+                                self.lgr.debug('syscall now return None')
+                                return None
                         else:
                             self.lgr.debug('syscall closed fd %d, but clone_fd_count not yet 1 %d' % (fd, self.clone_fd_count))
                             self.clone_fd_count -= 1
