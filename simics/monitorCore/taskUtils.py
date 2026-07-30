@@ -1120,19 +1120,19 @@ class TaskUtils():
                 if self.mem_utils.WORD_SIZE == 8:
                     rdi = self.mem_utils.getRegValue(self.cpu, 'rdi')
                     regs_addr = rdi 
-                    self.lgr.debug('frameFromStackSyscall with code_jump_table, 64bit regs_addr from rdi is 0x%x' % (regs_addr))
+                    #self.lgr.debug('frameFromStackSyscall with code_jump_table, 64bit regs_addr from rdi is 0x%x' % (regs_addr))
                     if hasattr(self.param, 'code_jump_table_32') and self.param.code_jump_table_32 is not None:
-                        self.lgr.debug('frameFromStackSyscall use 32bit code jump table')
+                        #self.lgr.debug('frameFromStackSyscall use 32bit code jump table')
                         frame = self.getFrameStrange32(regs_addr, self.cpu)
                     else:
                         frame = self.getFrameStrange(regs_addr, self.cpu)
-                    self.lgr.debug('frame: %s' % stringFromFrame(frame))
+                    #self.lgr.debug('frame: %s' % stringFromFrame(frame))
                 else:
                     rax = self.mem_utils.getRegValue(self.cpu, 'rax')
                     regs_addr = rax
-                    self.lgr.debug('frameFromStackSyscall with code_jump_table, regs_addr from rax is 0x%x' % (regs_addr))
+                    #self.lgr.debug('frameFromStackSyscall with code_jump_table, regs_addr from rax is 0x%x' % (regs_addr))
                     frame = self.getFrame(regs_addr, self.cpu)
-                    self.lgr.debug('frame: %s' % stringFromFrame(frame))
+                    #self.lgr.debug('frame: %s' % stringFromFrame(frame))
             else:
                 regs_addr = esp + self.mem_utils.WORD_SIZE
                 #regs = self.mem_utils.readPtr(self.cpu, regs_addr)
@@ -1141,7 +1141,7 @@ class TaskUtils():
         return frame
     
     def frameFromStack(self):
-        self.lgr.debug('frameFromStack')
+        #self.lgr.debug('frameFromStack')
         #reg_num = self.cpu.iface.int_register.get_number(self.mem_utils.getESP())
         #esp = self.cpu.iface.int_register.read(reg_num)
         esp = self.mem_utils.getRegValue(self.cpu, 'esp')
