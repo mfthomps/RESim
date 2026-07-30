@@ -1,5 +1,8 @@
 !./background.sh "drive-driver json.directive -d"
 @cgc.debugSnap()
+echo "done with snap"
 @cgc.trackIO(11, count=18)
+echo "done with track"
+@cgc.writeConfig('aftertrack')
 @cgc.saveWatchMarks('my.wm')
 q
