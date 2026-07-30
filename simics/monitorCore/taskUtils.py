@@ -1233,9 +1233,15 @@ class TaskUtils():
                 frame[p] = self.mem_utils.getRegValue(self.cpu, memUtils.param_map['arm'][p])
             cpl = memUtils.getCPL(self.cpu)
             if cpl == 0:
-                frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp_usr')
-                frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'lr')
-                frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr_usr')
+                if self.cpu.architecture == ('arm64'):
+                    # TBD SO WRONG.  Not used for anything.  syscall populates frame.  So just give zeros rather than argue with Simics register names
+                    frame['sp'] = 0
+                    frame['pc'] = 0
+                    frame['lr'] = 0
+                else:
+                    frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp_usr')
+                    frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'lr')
+                    frame['lr'] = self.mem_utils.getRegValue(self.cpu, 'lr_usr')
             else:
                 frame['sp'] = self.mem_utils.getRegValue(self.cpu, 'sp')
                 frame['pc'] = self.mem_utils.getRegValue(self.cpu, 'pc')
