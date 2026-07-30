@@ -763,7 +763,7 @@ class ReverseMgr():
         if cpu is None:
             #self.lgr.debug('reverseMgr skipToCycle cpu was None, using self')
             cpu = self.cpu
-        #self.lgr.debug('reverseMgr skipToCycle cpu %s cycle 0x%x' % (cpu.name, cycle))
+        self.lgr.debug('reverseMgr skipToCycle cpu %s cycle 0x%x quiet %r' % (cpu.name, cycle, quiet))
         #if self.top is not None:
         #     eip = self.top.getEIP()
         #     self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cpu: %s' % (our_cycles, self.cpu.cycles, eip, use_cpu.name))
