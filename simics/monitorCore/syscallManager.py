@@ -151,7 +151,7 @@ class SyscallInstance():
 
 class SyscallManager():
     def __init__(self, top, cpu, cell_name, param, mem_utils, task_utils, context_manager, traceProcs, sharedSyscall, lgr, 
-                   traceMgr, soMap, dataWatch, compat32, targetFS, os_type, myIPC):
+                   traceMgr, soMap, dataWatch, targetFS, os_type, myIPC):
         self.top = top
         self.param = param
         self.cpu = cpu
@@ -168,7 +168,6 @@ class SyscallManager():
         if self.soMap is None:
             self.lgr.error('SOMap is none in syscall manager')
         self.targetFS = targetFS
-        self.compat32 = compat32
         self.os_type = os_type
         self.myIPC = myIPC
 
@@ -186,7 +185,7 @@ class SyscallManager():
                          trace=False, binders=None, connectors=None, record_fd=False, swapper_ok=False, netInfo=None, call_params_list=[], no_gui=False):
    
         if compat32 is None:
-            compat32 = self.compat32
+            compat32 = self.top.compat32()
 
         if context is None:
             context = self.getDebugContextName()
@@ -596,7 +595,7 @@ class SyscallManager():
         retval = None
         length = None 
         callnum = self.mem_utils.getCallNum(self.cpu)
-        callname = self.task_utils.syscallName(callnum, self.compat32) 
+        callname = self.task_utils.syscallName(callnum, self.top.compat32()) 
         if callname is None:
             self.lgr.debug('getReadAddr bad call number %d' % callnum)
             return None, None

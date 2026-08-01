@@ -82,7 +82,7 @@ class RegisterToTrack():
 
 class reverseToCall():
     def __init__(self, top, cell_name, param, task_utils, mem_utils, page_size, context_manager, name, 
-                 is_monitor_running, bookmarks, logdir, compat32, run_from_snap, record_entry, reverse_mgr):
+                 is_monitor_running, bookmarks, logdir, run_from_snap, record_entry, reverse_mgr):
             #print('call getLogger')
             logname = '%s-%s' % (name, cell_name)
             self.lgr = resimUtils.getLogger(logname, logdir)
@@ -94,7 +94,7 @@ class reverseToCall():
             self.cpu = None
             self.tid = None
             self.cell_name = cell_name
-            self.compat32 = compat32
+            self.compat32 = False
             #self.lgr = lgr
             self.page_size = page_size
             self.lgr.debug('reverseToCall, in init cell %s' % self.cell_name)
@@ -168,6 +168,7 @@ class reverseToCall():
             self.cpu = cpu
             self.x_pages = x_pages
             self.page_faults = page_faults
+            self.compat32 = self.top.compat32()
             if bookmarks is not None: 
                 self.bookmarks = bookmarks
                 self.lgr.debug('reverseToCall setup bookmarks set to %s' % str(bookmarks))
