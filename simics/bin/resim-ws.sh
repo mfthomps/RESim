@@ -12,6 +12,14 @@ if [[ -z "$RESIM_DIR" ]]; then
    echo "RESIM_DIR not defined"
    exit
 fi
+if [[ -z "$RESIM_IMAGE" && "$1" == "-e" ]]; then
+   echo "RESIM_IMAGE not defined"
+   exit
+fi
+if [[ -z "$IDA_ANALYSIS" && "$1" == "-e" ]]; then
+   echo "IDA_ANALYSIS not defined"
+   exit
+fi
 if [ "$1" == "-h" ]; then
    echo "resim-ws.sh"
    echo "   Create a Simics workspace (project) directory and populate it with common RESim files."
@@ -27,7 +35,11 @@ if [ "$1" == "-e" ]; then
 #
 #   Examples
 #
-    cp $RESIM_DIR/simics/examples/cadet/* .
+    cp $RESIM_DIR/simics/examples/cadet/* . 2>/dev/null
+    mkdir -p $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
+    mkdir -p $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
+    cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01  $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
+    cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01.*  $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
 fi
 here=`pwd`
 #if [ ! -d ./targets/qsp-x86 ]; then
