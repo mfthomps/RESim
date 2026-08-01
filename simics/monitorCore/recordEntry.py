@@ -30,7 +30,7 @@ import net
 import os
 import pickle
 class RecordEntry():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, param, compat32, snap_name, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, param, snap_name, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -38,7 +38,7 @@ class RecordEntry():
         self.task_utils = task_utils
         self.param = param
         self.context_manager = context_manager
-        self.compat32 = compat32
+        self.compat32 = False
         self.lgr = lgr
         self.sysenter_cycles = {}
         self.recent_cycle = {}
@@ -71,6 +71,7 @@ class RecordEntry():
         if self.cpu is None:
             return
         self.lgr.debug('recordEntry watchSysenter context of cpu %s' % self.cpu.current_context)
+        self.compat32 = self.top.compat32()
         cell = self.top.getCell()
         if self.sysenter_hap is None:
             if self.top.isVxDKM(self.cell_name):

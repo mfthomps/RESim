@@ -250,8 +250,6 @@ class GenMonitor():
 
         self.reg_list = None
 
-        self.is_compat32 = False
-
         self.relocate_funs = {}
         self.coverage = None
         self.real_script = None
@@ -656,8 +654,8 @@ class GenMonitor():
             call_info = ''
             if reason is not None and reason != 'page_fault':
                 callnum = self.mem_utils[self.target].getRegValue(cpu, 'syscall_num')
-                callname = self.task_utils[self.target].syscallName(callnum, self.is_compat32)
-                call_info = 'callnum %d (%s)  compat32: %r' % (callnum, callname, self.is_compat32)
+                callname = self.task_utils[self.target].syscallName(callnum, self.compat32())
+                call_info = 'callnum %d (%s)  compat32: %r' % (callnum, callname, self.compat32())
             self.lgr.debug('\tstopModeChanged entered kernel, eip 0x%x %s reason: %s %s tid:%s' % (eip, instruct[1], reason, call_info, this_tid))
         self.lgr.debug('stopModeChanged, continue')
         SIM_run_alone(SIM_continue, 0)
@@ -743,9 +741,8 @@ class GenMonitor():
             self.lgr.debug('genMonitor stopHap will delete hap %s' % str(self.stop_hap))
             self.RES_delete_stop_hap(self.stop_hap)
             self.stop_hap = None
-        self.is_compat32 = self.compat32()
         ''' check functions in list '''
-        self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_tid %r' % (self.is_compat32, stop_action.listFuns(), wrong_tid))
+        self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_tid %r' % (self.compat32(), stop_action.listFuns(), wrong_tid))
         stop_action.run(wrong_tid=wrong_tid)
         self.is_monitor_running.setRunning(False)
         self.lgr.debug('stopAlone back from stop_action.run')
@@ -813,11 +810,10 @@ class GenMonitor():
             #if self.param[cell_name].fs_base is None:
             #    cur_task_rec = self.mem_utils[cell_name].getCurrentTask(cpu)
             #    #self.lgr.debug('stack based rec was 0x%x  mine is 0x%x' % (cur_task_rec, tu_cur_task_rec))
-
             ''' manages setting haps/breaks based on context swtiching.  TBD will be one per cpu '''
             self.context_manager[cell_name] = genContextMgr.GenContextMgr(self, cell_name, self.task_utils[cell_name], self.param[cell_name], cpu, self.lgr) 
             self.record_entry[cell_name] = recordEntry.RecordEntry(self, cpu, cell_name, self.mem_utils[cell_name], self.task_utils[cell_name], self.context_manager[cell_name], 
-                                           self.param[cell_name], self.is_compat32, self.run_from_snap, self.lgr)
+                                           self.param[cell_name], self.run_from_snap, self.lgr)
             span = self.getCompDict(cell_name, 'REVERSE_SPAN')
             if span is not None:
                 span = int(span, 16)
@@ -827,7 +823,7 @@ class GenMonitor():
                 force_new=True
             self.reverse_mgr[cell_name] = reverseMgr.ReverseMgr(self.conf, cpu, self.arg, self.int_t, self.output_modes, self.lgr, top=self, span=span, force_new=force_new)
             self.rev_to_call[cell_name] = reverseToCall.reverseToCall(self, cell_name, self.param[cell_name], self.task_utils[cell_name], self.mem_utils[cell_name],
-                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.is_compat32, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
+                 self.PAGE_SIZE, self.context_manager[cell_name], 'revToCall', self.is_monitor_running, None, self.log_dir, self.run_from_snap, self.record_entry[cell_name], self.reverse_mgr[cell_name])
             self.pfamily[cell_name] = pFamily.Pfamily(self, cell, self.param[cell_name], cpu, self.mem_utils[cell_name], self.task_utils[cell_name], self.lgr)
             self.traceOpen[cell_name] = traceOpen.TraceOpen(self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name], cpu, cell, self.lgr)
             #self.traceProcs[cell_name] = traceProcs.TraceProcs(cell_name, self.lgr, self.proc_list[cell_name], self.run_from_snap)
@@ -849,7 +845,7 @@ class GenMonitor():
             self.back_stop[cell_name] = backStop.BackStop(self, cpu, self.lgr)
             self.dataWatch[cell_name] = dataWatch.DataWatch(self, cpu, cell_name, self.PAGE_SIZE, self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.task_utils[cell_name], self.rev_to_call[cell_name], self.param[cell_name], 
-                  self.run_from_snap, self.back_stop[cell_name], self.is_compat32, self.comp_dict[cell_name], self.soMap[cell_name], self.reverse_mgr[cell_name], self.lgr)
+                  self.run_from_snap, self.back_stop[cell_name], self.comp_dict[cell_name], self.soMap[cell_name], self.reverse_mgr[cell_name], self.lgr)
             self.trackFunction[cell_name] = trackFunctionWrite.TrackFunctionWrite(cpu, cell, self.param[cell_name], self.mem_utils[cell_name], 
                   self.task_utils[cell_name], 
                   self.context_manager[cell_name], self.lgr)
@@ -864,7 +860,7 @@ class GenMonitor():
             self.myIPC[cell_name] = myIPC.MyIPC(self, cpu, cell_name, self.mem_utils[cell_name], self.param[cell_name], self.lgr)
             self.syscallManager[cell_name] = syscallManager.SyscallManager(self, cpu, cell_name, self.param[cell_name], self.mem_utils[cell_name], self.task_utils[cell_name],
                                      self.context_manager[cell_name], self.traceProcs[cell_name], self.sharedSyscall[cell_name], self.lgr, self.traceMgr[cell_name], self.soMap[cell_name], 
-                                     self.dataWatch[cell_name], self.is_compat32, self.targetFS[cell_name], self.os_type[cell_name], self.myIPC[cell_name])
+                                     self.dataWatch[cell_name], self.targetFS[cell_name], self.os_type[cell_name], self.myIPC[cell_name])
 
             self.reverseTrack[cell_name] = reverseTrack.ReverseTrack(self, self.dataWatch[cell_name], self.context_manager[cell_name], 
                   self.mem_utils[cell_name], self.rev_to_call[cell_name], self.lgr)
@@ -1214,7 +1210,7 @@ class GenMonitor():
             cpu, comm, tid = self.task_utils[self.target].curThread() 
         frame, cycles = self.getPreviousEnterCycle(tid=tid)
         if frame is not None: 
-            call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+            call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.compat32())
             #if call == 'socketcall' or call.upper() in net.callname:
             if call == 'socketcall':
                 if 'ss' in frame:
@@ -1240,7 +1236,7 @@ class GenMonitor():
         self.skip_to_mgr[self.target].skipToTest(prev)
         print('Reversed to previous syscall:') 
         self.lgr.debug('Reversed to previous syscall:') 
-        call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+        call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.compat32())
         if call == 'socketcall' or call.upper() in net.callname:
             if 'ss' in frame:
                 ss = frame['ss']
@@ -1288,7 +1284,7 @@ class GenMonitor():
                     #frame, cycles = self.rev_to_call[self.target].getRecentCycleFrame(tid)
                     print('frame for %s was none' % tid)
                     continue
-                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.compat32())
                 if call == 'socketcall' or call.upper() in net.callname:
                     if 'ss' in frame:
                         ss = frame['ss']
@@ -1325,7 +1321,7 @@ class GenMonitor():
                 if frame is None:
                     #print('frame for %s was none' % tid)
                     continue
-                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+                call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.compat32())
                 if call == 'socketcall' or call.upper() in net.callname:
                     if 'ss' in frame:
                         ss = frame['ss']
@@ -1431,7 +1427,7 @@ class GenMonitor():
             self.lgr.error('doDebugCmd sees no cpu from curThread.  Giving up.')
             return
         machine_size = self.soMap[self.target].getMachineSize(tid)
-        self.lgr.debug('doDebugCmd for cpu %s arch: %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.is_compat32, machine_size))
+        self.lgr.debug('doDebugCmd for cpu %s arch: %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.compat32(), machine_size))
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
         elif cpu.architecture == 'arm64':
@@ -1463,7 +1459,7 @@ class GenMonitor():
                 self.lgr.error('doDebugCmd failed to get windows machine type')
                 return None 
 
-        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.is_compat32:
+        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.compat32():
             cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
         else:
             cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
@@ -1517,6 +1513,9 @@ class GenMonitor():
                 self.setPathToProg(tid)
                 self.lgr.debug('debug called setPathToProg for tid %s full_path now %s' % (tid, self.full_path))
             # TBD already called in debugTidList.  Does a group==True cover it?
+            ''' tbd, this is likely already set by some other action, no harm '''
+            self.context_manager[self.target].watchTasks()
+            self.context_manager[self.target].setDebugTid()
             if not group or self.bookmarks is None:
                 if not self.no_gdb and self.bookmarks is None:
                     self.lgr.debug('genMonitor debug call doDebugCmd')
@@ -1532,9 +1531,6 @@ class GenMonitor():
                 self.reverse_mgr[self.target].enableReverse()
                 #self.setDebugBookmark('origin', cpu)
                 self.bookmarks.setOrigin(cpu)
-            ''' tbd, this is likely already set by some other action, no harm '''
-            self.context_manager[self.target].watchTasks()
-            self.context_manager[self.target].setDebugTid()
             self.recordEntry(quiet=True)
             #self.lgr.debug('debug restore RESim context')
             # this is already done in setDebugTid???
@@ -2550,7 +2546,7 @@ class GenMonitor():
                 tid, cpu = self.context_manager[target].getDebugTid() 
             if target in self.page_faults:
                 self.lgr.debug('genMonitor watchPageFaults tid %s' % tid)
-                self.page_faults[target].watchPageFaults(tid=tid, compat32=self.is_compat32, afl=afl)
+                self.page_faults[target].watchPageFaults(tid=tid, compat32=self.compat32(), afl=afl)
                 #self.lgr.debug('genMonitor watchPageFaults back')
 
     def stopWatchPageFaults(self, tid=None, target=None, immediate=False):
@@ -3708,7 +3704,7 @@ class GenMonitor():
             call = ['CONNECT']
         else:
             cname = 'connect'
-            call = self.task_utils[self.target].socketCallName('connect', self.is_compat32)
+            call = self.task_utils[self.target].socketCallName('connect', self.compat32())
         call_params = syscall.CallParams('runToConnect', cname, addr, break_simulation=True, proc=proc)        
         call_params.nth = nth
         self.runTo(call, call_params, name='connect')
@@ -3782,7 +3778,7 @@ class GenMonitor():
     # TBD redo all these runTo's to not rely on subcalls
     def runToSend(self, substring):
         if not self.isWindows():
-            call = self.task_utils[self.target].socketCallName('send', self.is_compat32)
+            call = self.task_utils[self.target].socketCallName('send', self.compat32())
         else:
             call = ['SEND']
         call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
@@ -3790,13 +3786,13 @@ class GenMonitor():
         self.runTo(call, call_params, name='send')
 
     def runToSendTo(self, substring):
-        call = self.task_utils[self.target].socketCallName('sendto', self.is_compat32)
+        call = self.task_utils[self.target].socketCallName('sendto', self.compat32())
         call_params = syscall.CallParams('runToSend', 'send', substring, break_simulation=True)        
         self.lgr.debug('runToSend to %s' % substring)
         self.runTo(call, call_params, name='send')
 
     def runToSendPort(self, port):
-        call = self.task_utils[self.target].socketCallName('sendto', self.is_compat32)
+        call = self.task_utils[self.target].socketCallName('sendto', self.compat32())
         call_params = syscall.CallParams('runtoSendPort', 'sendto', port, break_simulation=True)        
         call_params.param_flags.append(syscall.DEST_PORT)
         self.lgr.debug('runToSendPort to port %s' % port)
@@ -3808,7 +3804,7 @@ class GenMonitor():
             call = ['RECV']
         else:
             # socketCallName returns a list
-            call = self.task_utils[self.target].socketCallName('recv', self.is_compat32)
+            call = self.task_utils[self.target].socketCallName('recv', self.compat32())
             if 'socketcall' in call:
                 call_params = syscall.CallParams('runToReceive', 'recv', substring, break_simulation=True)        
             else:
@@ -3818,7 +3814,7 @@ class GenMonitor():
 
     def runToReceiveMsg(self, substring):
         # socketCallName returns a list
-        call = self.task_utils[self.target].socketCallName('recvmsg', self.is_compat32)
+        call = self.task_utils[self.target].socketCallName('recvmsg', self.compat32())
         if 'socketcall' in call:
             call_params = syscall.CallParams('runToReceiveMsg', 'recvmsg', substring, break_simulation=True)        
         else:
@@ -3833,7 +3829,7 @@ class GenMonitor():
 
     def runToAccept(self, fd, flist=None, proc=None, run=True, linger=False, nth=None):
         if not self.isWindows():
-            call = self.task_utils[self.target].socketCallName('accept', self.is_compat32)
+            call = self.task_utils[self.target].socketCallName('accept', self.compat32())
         else:
             call = ['ACCEPT', '12083_ACCEPT', 'DuplicateObject']
         call_params = syscall.CallParams('runToAccept', 'accept', fd, break_simulation=True, proc=proc)        
@@ -3859,7 +3855,7 @@ class GenMonitor():
             call = ['BIND']
         else:
             cname = 'BIND'
-            call = self.task_utils[self.target].socketCallName('bind', self.is_compat32)
+            call = self.task_utils[self.target].socketCallName('bind', self.compat32())
 
         call_params = syscall.CallParams('runToBind', cname, addr, break_simulation=True, proc=proc)        
         self.lgr.debug('runToBind to %s ' % (addr))
@@ -4018,11 +4014,11 @@ class GenMonitor():
         word_size = self.soMap[target].getProgWordSize(comm)
         self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %d sub_match: %s word_size %d' % (fd, cpu.cycles, count, sub_match, word_size))
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
+        compat32 = self.compat32()
         if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or word_size == 8:
             calls.remove('socketcall')
             for scall in net.readcalls:
                 calls.append(scall.lower())
-        self.is_compat32 = self.compat32()
         if word_size == 8 and not compat32:
             calls.remove('recv')
             calls.remove('_newselect')
@@ -4046,7 +4042,7 @@ class GenMonitor():
                 if frames[tid] is None:
                     self.lgr.error('frame for tid %s is none?' % tid)
                     continue
-                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], self.is_compat32) 
+                call = self.task_utils[self.target].syscallName(frames[tid]['syscall_num'], compat32) 
                 self.lgr.debug('runToInput found %s in kernel for tid:%s ' % (call, tid))
                 if call not in calls:
                     del frames[tid]
@@ -4778,7 +4774,7 @@ class GenMonitor():
             cpu = debug_cpu
             tid = debug_tid
             comm = self.task_utils[target].getCommFromTid(debug_tid)
-        #self.lgr.debug('compat32 tid:%s (%s)' % (tid, comm))
+        self.lgr.debug('compat32 tid:%s (%s) mem_utils.WORD_SIZE %d' % (tid, comm, self.mem_utils[target].WORD_SIZE))
         if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8:
             so_word_size = self.soMap[target].getProgWordSize(comm)
             self.lgr.debug('compat32 so_word_size %s' % so_word_size)
@@ -4916,7 +4912,7 @@ class GenMonitor():
                 self.dataWatch[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
 
-        self.dataWatch[self.target].trackIO(fd, done_callback, self.is_compat32, max_marks, quiet=quiet, offset=offset, length=length, backstop_cycles=backstop_cycles)
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.compat32(), max_marks, quiet=quiet, offset=offset, length=length, backstop_cycles=backstop_cycles)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
         if track_malloc:
             self.traceMalloc()
@@ -5654,7 +5650,7 @@ class GenMonitor():
         self.stopTrackIO(immediate=True)
         self.clearWatches()
         self.lgr.debug('trackXMLFile stopped track and cleared watchs')
-        self.dataWatch[self.target].trackFile(self.stopTrackIO, self.is_compat32)
+        self.dataWatch[self.target].trackFile(self.stopTrackIO, self.compat32())
         self.lgr.debug('trackXMLFile back from dataWatch, now run to IO')
         if self.coverage is not None:
             self.coverage.doCoverage()
@@ -6102,7 +6098,7 @@ class GenMonitor():
         exit_list = self.sharedSyscall[self.target].getExitList('traceAll')
         for tid in exit_list:
             frame = exit_list[tid]
-            call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.is_compat32)
+            call = self.task_utils[self.target].syscallName(frame['syscall_num'], self.compat32())
             self.lgr.debug('showSyscallExits tid:%s  syscall %s' % (tid, call))
             print('tid:%s  syscall %s' % (tid, call))
 
@@ -6452,12 +6448,12 @@ class GenMonitor():
 
     def getSyscallEntry(self, callname):
         retval = None
-        callnum = self.task_utils[self.target].syscallNumber(callname, self.is_compat32)
+        callnum = self.task_utils[self.target].syscallNumber(callname, self.compat32())
         #self.lgr.debug('SysCall doBreaks call: %s  num: %d' % (call, callnum))
         if callnum is not None and callnum < 0:
             self.lgr.error('getSyscallEntry bad call number %d for call <%s>' % (callnum, callname))
         elif callnum is not None:
-            retval = self.task_utils[self.target].getSyscallEntry(callnum, self.is_compat32)
+            retval = self.task_utils[self.target].getSyscallEntry(callnum, self.compat32())
         else:
             self.lgr.error('getSyscallEntry got no call number for %s' % callname)
             

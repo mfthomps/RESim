@@ -655,6 +655,7 @@ class ReverseMgr():
         '''
         Enable reverse execution.  This should only be called for one instance of reverseMgr at a time.
         '''
+        self.quiet=True
         self.lgr.debug('reversMgr enableReverse')
         if self.nativeReverse():
             self.lgr.debug('enableReverse, use native')
@@ -753,17 +754,18 @@ class ReverseMgr():
         #self.lgr.debug('reverseMgr skipToCycleFromCli cycle 0x%x cpu from pselect is %s' % (cycle, cpu.name))
         self.skipToCycle(cycle, cpu=cpu, quiet=False)
 
-    def skipToCycle(self, cycle, cpu=None, quiet=True):
+    def skipToCycle(self, cycle, cpu=None, quiet=None):
         '''  
         Skip to a given cycle.   
         Parameter cpu: The cpu.
         Parameter cycle: The cycle to skip to on the cpu
         '''
-        self.quiet = quiet
+        if self.quiet is not None:
+            self.quiet = quiet
         if cpu is None:
             #self.lgr.debug('reverseMgr skipToCycle cpu was None, using self')
             cpu = self.cpu
-        self.lgr.debug('reverseMgr skipToCycle cpu %s cycle 0x%x quiet %r' % (cpu.name, cycle, quiet))
+        #self.lgr.debug('reverseMgr skipToCycle cpu %s cycle 0x%x quiet %r' % (cpu.name, cycle, quiet))
         #if self.top is not None:
         #     eip = self.top.getEIP()
         #     self.lgr.debug('reverseMgr skipToCycle 0x%x from cycle 0x%x eip 0x%x use_cpu: %s' % (our_cycles, self.cpu.cycles, eip, use_cpu.name))
@@ -773,9 +775,15 @@ class ReverseMgr():
             return False
         cycle_span = self.findCycleSpan(cpu, cycle)
         if cycle_span is None:
-            # cycle prior to origin
-            #self.lgr.debug('skipToCycle, the cycle span is less than origin')
-            self.when_done_skip_index = None
+            if cycle == self.origin_cycle:
+                # restore origin and run forward to desired cycle
+                self.cancelSpanCycle()
+                self.restoreSnapshot('origin')
+                self.runToCycle(cpu, cycle)
+            else:
+                # cycle prior to origin
+                #self.lgr.debug('skipToCycle, the cycle span is less than origin')
+                self.when_done_skip_index = None
         elif self.span_record[cycle_span][cpu] == cycle:
             #self.lgr.debug('skipToCycle, already at the requested cycle')
             self.when_done_skip_index = None
@@ -796,8 +804,10 @@ class ReverseMgr():
             self.lgr.error('reverseMgr runToCycle 0x%x less than current 0x%x' % (cycle, cpu.cycles))
             return
         elif cycle == cpu.cycles:
-            self.lgr.debug('reverseMgr runToCycle already at cycle 0x%x' % cycle)
-            print('Already at cycle 0x%x' % cycle)
+            #self.lgr.debug('reverseMgr runToCycle already at cycle 0x%x' % cycle)
+            #print('Already at cycle 0x%x' % cycle)
+            if not self.quiet:
+                SIM_run_command('disassemble')
         else:
             bp_enabler = BPEnabler(self.conf, self.sim_breakpoints, self.lgr)
             bp_enabler.disableAll()
@@ -959,7 +969,7 @@ class ReverseMgr():
         if self.reverse_to is not None and self.reverse_to > self.current_span_start:
             delta = self.reverse_to - self.current_span_start
             if delta > self.cycle_span and not missing_snapshots:
-                #self.lgr.error('reverseMgr skipBackAndRunForward reached reverse_to 0x%x without hitting break, delta would have been 0x%x.' % (self.reverse_to, delta))
+                self.lgr.error('reverseMgr skipBackAndRunForward reached reverse_to 0x%x without hitting break, delta would have been 0x%x.' % (self.reverse_to, delta))
                 self.skipToCycle(self.reverse_to)
                 return
 
@@ -1080,7 +1090,7 @@ class ReverseMgr():
         NOTE the cell of the breakpoint may not be our cell.
         '''
         break_info = self.break_cycles[skip_index]
-        #self.lgr.debug('reverseMgr skipAndCallback current reference cpu cycle 0x%x, call skipToCycle for index %d interator_cycles 0x%x on cpu %s' % (self.cpu.cycles, skip_index,
+        #self.lgr.debug('reverseMgr skipAndCallback current reference cpu cycle 0x%x, call skipToCycle for index %d initiator_cycles 0x%x on cpu %s' % (self.cpu.cycles, skip_index,
         #     break_info.initiator_cycles, break_info.initiator_cpu.name))
         self.when_done_skip_index = skip_index
         cycles = break_info.initiator_cycles
