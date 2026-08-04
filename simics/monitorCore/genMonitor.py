@@ -4198,7 +4198,7 @@ class GenMonitor():
     def resetOriginIfReversing(self, cpu=None, enable=True):
         self.resetOrigin(cpu=cpu, enable=False)
 
-    def resetOrigin(self, cpu=None, enable=True):
+    def resetOrigin(self, cpu=None, enable=True, run=False):
         ''' reset the reverse origin.  NOTE: if enable is true, will enable reversing whether 
             currently enabled or not '''
         self.lgr.debug('resetOrigin')
@@ -4213,12 +4213,16 @@ class GenMonitor():
         self.reverse_mgr[self.target].disableReverse()
         self.lgr.debug('reset Origin rev ex disabled')
         if enable:
-            self.reverse_mgr[self.target].enableReverse(two_step=True)
+            self.reverse_mgr[self.target].enableReverse(two_step=False)
             self.lgr.debug('reset Origin rev ex enabled')
             if self.bookmarks is not None:
                 self.bookmarks.setOrigin(cpu, self.context_manager[self.target].getIdaMessage())
             else:
                 self.lgr.debug('genMonitor resetOrigin without bookmarks, assume you will use bookmark0')
+        if run:
+            self.lgr.debug('genMonitor resetOrigin run set so continue')
+            SIM_continue(0)
+            self.lgr.debug('genMonitor resetOrigin back from continue')
 
     def clearBookmarks(self, reuse_msg=False):
         if self.reverseEnabled():
@@ -6143,7 +6147,7 @@ class GenMonitor():
 
     def stopAndGo(self, callback):
         ''' Will stop simulation and invoke the given callback once stopped.
-            It also calls our stopHap, which 
+            It uses our stopHap to make the callback.
         '''
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
         if cpu is not None:
@@ -6893,13 +6897,14 @@ class GenMonitor():
         self.lgr.debug('skipToCycle done wanted cycle 0x%x quiet was %r' % (cycle, quiet))
         return retval
 
-    def cutRealWorld(self):
+    def cutRealWorld(self, run=True):
         self.lgr.debug('cutRealWorld')
         print('Cutting links to real networks')
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld()
-        self.resetOrigin()
+        # Note setting run means the call to resetOrigin will not return until simulation stops again.
+        self.resetOrigin(run=run)
 
     def runTo32(self):
         self.run_to[self.target].runTo32()

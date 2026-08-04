@@ -49,27 +49,36 @@ class MagicOrigin():
 
     def deleteMagicHap(self):
         if self.magic_hap is not None:
+            hap = self.magic_hap
             #self.lgr.debug('magicOrigin deleteMagicHap')
-            SIM_run_alone(self.deleteMagicHapAlone, None)
-
-    def deleteMagicHapAlone(self, dumb):
-        if self.magic_hap is not None:
-            RES_hap_delete_callback_id("Core_Magic_Instruction", self.magic_hap)
             self.magic_hap = None
+            SIM_run_alone(self.deleteMagicHapAlone, hap)
+
+    def deleteMagicHapAlone(self, hap):
+        if self.magic_hap is not None:
+            RES_hap_delete_callback_id("Core_Magic_Instruction", hap)
 
     def setOrigin(self, dumb=None):
+        ''' We have stopped the simulation and are running alone.  Cut real world interfaces and set the origin '''
         #self.disconnect(run=False)
-        self.top.cutRealWorld()
-        #cmd = 'default_service_node0.status'
-        self.top.disableReverse()
-        self.top.enableReverse()
         self.did_magic = True
-        self.lgr.debug('MagicOrigin to tid and then set origin')
+        self.lgr.debug('MagicOrigin call cutRealWorld')
+        self.top.cutRealWorld()
+        self.lgr.debug('MagicOrigin back from cutRealWorld')
+        return
+
+
+        #cmd = 'default_service_node0.status'
+        #self.top.disableReverse()
+        #self.top.enableReverse()
         if self.top.isRunningTo():
-            self.top.setOriginWhenStopped()
-            self.lgr.debug('MagicOrigin back from calling setOriginWhen stopped, now continue')
-            SIM_run_command('c')
+            pass
+            # there is an active runTo. Delay setting of the origin until its stopHap processes its function list.
+            #self.top.setOriginWhenStopped()
+            #self.lgr.debug('MagicOrigin back from calling setOriginWhen stopped, now continue')
+            #SIM_run_command('c')
         else:
+            self.lgr.debug('MagicOrigin to tid and then set origin')
             self.top.toTid('-1', callback=self.top.resetOrigin)
         #self.bookmarks.setOrigin(self.cpu)
         #self.lgr.debug('MagicOrigin, continue')
@@ -77,8 +86,8 @@ class MagicOrigin():
 
     def justCutReal(self, dumb=None):
         self.top.cutRealWorld()
-        self.lgr.debug('MagicOrigin justCutReal, now continue')
-        SIM_run_command('c')
+        #self.lgr.debug('MagicOrigin justCutReal, now continue')
+        #SIM_run_command('c')
 
     def magicHap(self, dumb, cell, magic_number):
         ''' invoked when driver executes a magic instruction, indicating save to  
