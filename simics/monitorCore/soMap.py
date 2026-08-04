@@ -431,7 +431,7 @@ class SOMap():
                     #self.checkSOWatch(load_addr, prog)
                     self.pending_execve[prog] = load_addr
                     mem_utils = self.task_utils.getMemUtils()
-                    self.lgr.debug('soMap do execve handling in user mode via doInUser')
+                    self.lgr.debug('soMap do execve handling in user mode via doInUser for prog %s' % prog)
                     self.top.pauseThreadTrack(self.cpu, True)
                     self.do_in_user = doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
