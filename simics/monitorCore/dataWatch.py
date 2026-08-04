@@ -57,7 +57,7 @@ MAX_WATCH_MARKS = 1000
 mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', 'strnicmp', 'strncasecmp', 'fnmatch', 'buffer_caseless_compare', 'strtok', 'strpbrk', 'strspn', 'strcspn', 
             'strcasecmp', 'strncpy', 'strlcpy', 'strtoul', 'String5toInt', 'string_strncmp', 'string_strnicmp', 'string_strlen',
             'strtol', 'strtoll', 'strtoq', 'atoi', 'mempcpy', 'wcscmp', 'mbscmp', 'mbscmp_l', 'trim', 'getopt',
-            'j_memcpy', 'strchr', 'strrchr', 'strstr', 'strdup', 'strndup', 'g_strndup', 'g_strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 
+            'j_memcpy', 'strchr', 'strrchr', 'strchrnul', 'strstr', 'strdup', 'strndup', 'g_strndup', 'g_strdup', 'memset', 'sscanf', 'strlen', 'LOWEST', 'glob', 
             'fwrite', 'IO_do_write', 'getpwnam', 'getspnam', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'inet_pton', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
@@ -1453,7 +1453,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch returnHap, return from %s  0x%x  to: 0x%x count %d ' % (self.mem_something.fun, 
                        self.mem_something.src, self.mem_something.dest, self.mem_something.length))
                 self.watchMarks.compare(self.mem_something.fun, self.mem_something.dest, self.mem_something.src, self.mem_something.length, buf_start)
-        elif self.mem_something.fun in ['strchr', 'strrchr', 'memchr']:
+        elif self.mem_something.fun in ['strchr', 'strrchr', 'memchr', 'strchrnul']:
             buf_start = self.findRange(self.mem_something.src)
             if self.mem_something.the_chr is None:
                 self.lgr.debug('dataWatch returnHap, return from %s but the_chr is None? ' % (self.mem_something.fun))
@@ -2811,7 +2811,7 @@ class DataWatch():
         elif self.mem_something.fun in ['buffer_caseless_compare']:
             self.mem_something.dest, self.mem_something.length, self.mem_something.src = self.getCallParams(sp, word_size)
 
-        elif self.mem_something.fun in ['strchr', 'strrchr']:
+        elif self.mem_something.fun in ['strchr', 'strrchr', 'strchrnul']:
             self.mem_something.src, self.mem_something.the_chr, dumb = self.getCallParams(sp, word_size)
             self.lgr.debug('gatherCallParams fun %s src 0x%x' % (self.mem_something.fun, self.mem_something.src))
             if self.mem_something.src is None:
@@ -6080,7 +6080,7 @@ class DataWatch():
             #    pass
             #self.lgr.debug('dataWatch memsomething frame fname: %s' % frame.fname)
             if frame.instruct is not None:
-                #self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
+                self.lgr.debug('dataWatch memsomething before adjust, fun is %s' % frame.fun_name)
                 #if self.top.isWindows():
                 #    fun = None
                 #else:
@@ -6088,10 +6088,10 @@ class DataWatch():
                 if fun is not None:
                     if fun not in local_mem_funs and fun.startswith('v'):
                         fun = fun[1:]
-                    #if frame.fun_addr is not None:
-                    #    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
-                    #else:
-                    #    self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr None(maybe got jmp) ip: 0x%x sp: 0x%x' % (i, fun, frame.ip, frame.sp))
+                    if frame.fun_addr is not None:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, fun, frame.fun_addr, frame.ip, frame.sp))
+                    else:
+                        self.lgr.debug('dataWatch memsomething frame %d fun is %s fun_addr None(maybe got jmp) ip: 0x%x sp: 0x%x' % (i, fun, frame.ip, frame.sp))
                 elif frame.fun_addr is not None:
                     if frame.ip is not None and frame.sp is not None:
                         self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr: 0x%x ip: 0x%x sp: 0x%x' % (i, frame.fun_addr, frame.ip, frame.sp))
@@ -6102,10 +6102,10 @@ class DataWatch():
                     self.lgr.debug('dataWatch memsomething frame %d fun is None fun_addr is none' % i)
                     continue
                 if fun is not None and fun == prev_fun and fun != 'None':
-                    #self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
+                    self.lgr.debug('dataWatch memsomething repeated fun is %s  -- skip it' % fun)
                     continue
                 else:
-                    #self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
+                    self.lgr.debug('dataWatch memsomething set prev_fun to %s' % fun)
                     prev_fun = fun
                 if op_type == Sim_Trans_Store and fun in allocators:
                     # TBD generalize this mess
