@@ -153,7 +153,7 @@ class DataWatch():
     ''' Watch a range of memory and stop when it is read.  Intended for use in tracking
         reads to buffers into which data has been read, e.g., via RECV. '''
     def __init__(self, top, cpu, cell_name, page_size, context_manager, mem_utils, task_utils, rev_to_call, param, run_from_snap, 
-                 backstop, compat32, comp_dict, so_map, reverse_mgr, lgr, backstop_cycles=None):
+                 backstop, comp_dict, so_map, reverse_mgr, lgr, backstop_cycles=None):
         ''' data watch structures reflecting what we are watching '''
         self.rev_to_call = rev_to_call
         self.top = top
@@ -164,7 +164,7 @@ class DataWatch():
         self.mem_utils = mem_utils
         self.task_utils = task_utils
         self.lgr = lgr
-        self.compat32 = compat32
+        self.compat32 = False
         self.page_size = page_size
         self.backstop = backstop
         self.comp_dict = comp_dict
@@ -376,6 +376,7 @@ class DataWatch():
         self.no_reset = None
         self.reset_count = 0
         self.failed_comm_list = []
+        self.compat32 = self.top.compat32()
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
