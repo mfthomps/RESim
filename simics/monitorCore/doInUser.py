@@ -71,21 +71,18 @@ class DoInUser():
                 self.lgr.debug('doInUser mode_changed in user mode, syscall_ret 0x%x do callback %s from cycle 0x%x' % (eax, str(self.callback_list), self.cpu.cycles))
                 SIM_run_alone(self.doCallbacks, None)
                 hap = self.mode_hap
-                SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
                 self.mode_hap = None
+                SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
             else:
                 self.wrong_tid_count += 1
                 if self.wrong_tid_count > 4:
                     self.cpu = cpu
                     self.cpu = cpu
-                    SIM_run_alone(self.suspend, None)
+                    self.lgr.debug('doInUser modeChanged suspend deleted mode hap')
+                    hap = self.mode_hap
+                    self.mode_hap = None
+                    SIM_run_alone(resimHaps.RES_delete_mode_hap, hap)
                     self.context_manager.catchTid(self.tid, self.restart)
-
-    def suspend(self, dumb):
-        if self.mode_hap is not None:
-            RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
-            self.lgr.debug('doInUser suspend deleted mode hap')
-            self.mode_hap = None
 
     def restart(self, dumb):
         self.lgr.debug('doInUser restart')
