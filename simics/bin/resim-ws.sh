@@ -35,11 +35,13 @@ if [ "$1" == "-e" ]; then
 #
 #   Examples
 #
-    cp $RESIM_DIR/simics/examples/cadet/* . 2>/dev/null
-    mkdir -p $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
-    mkdir -p $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
-    cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01  $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
-    cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01.*  $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
+    if [ ! -f $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01 ]; then
+        cp $RESIM_DIR/simics/examples/cadet/* . 2>/dev/null
+        mkdir -p $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
+        mkdir -p $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
+        cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01  $RESIM_IMAGE/cadet01/cadet_fs/usr/sbin
+        cp $RESIM_DIR/simics/examples/cadet/cadet_fs/usr/sbin/cadet01.*  $IDA_ANALYSIS/cadet01/cadet_fs/usr/sbin
+    fi
 fi
 here=`pwd`
 #if [ ! -d ./targets/qsp-x86 ]; then
