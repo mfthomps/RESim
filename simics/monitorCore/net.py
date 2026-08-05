@@ -153,7 +153,8 @@ class SockStruct():
             self.length = mem_utils.readWord32(cpu, params+8)
             self.flags = mem_utils.readWord32(cpu, params+12)
             self.addr = mem_utils.readWord32(cpu, params+4)
-            lgr.debug('sockStruct 32bit fd %d flags 0x%x addr 0x%x' % (self.fd, self.flags, self.addr))
+            if lgr is not None:
+                lgr.debug('sockStruct 32bit fd %d flags 0x%x addr 0x%x' % (self.fd, self.flags, self.addr))
         else:
             self.fd = fd
             #self.addr = mem_utils.readWord32(cpu, params)
