@@ -1079,7 +1079,7 @@ dec21041
 If using a VLAN, select the 82559.  The i82543gc does not properly support VLANs.
 Note the 82559 device changes ethernet names, e.g., ens11 becomes ens11f0 and ens12 becomes ens12f0.
 Also, Simics 7 has trouble with the i82543gc, but seems to work with the 82559.
-Windows XP seems only to work with the dec21041
+Windows XP seems only to work with the dec21041 (not available on Simics 7).
 
 Simics CLI variables are assigned to each computer ethernet link using the convention {\tt \$TARGET\_eth0} where {\tt TARGET}
 is the value of the configuration file section header for that component.  Similarly, connections from the computer to the switches 
@@ -1148,14 +1148,16 @@ computers, e.g., ssh'ing to a driver computer, requires that the simulation be r
 
 \subsection{Installation}
 \label{installation}
-RESim assumes you have installed and are somewhat familiar with Simics.  Versions 4.8, 5 and 6 are supported.
-And the free version of Simics from Intel is also supported.
-It also assumes you have IDA Pro or Ghidra. See the \textit{RESim Remote Access Guide} for information on remote access to RESim
-servers.  RESim can be used without IDA Pro or Ghidra, though you are limited to the command line and don't benefit from
+RESim assumes you have installed and are somewhat familiar with Simics.  Versions  6 and 7 are supported
+as is the free version of Simics 7 from Intel. 
+It also assumes you have IDA Pro or Ghidra. 
+RESim can be used without IDA Pro or Ghidra, though you are limited to the command line and don't benefit from
 function analysis provided by IDA or Ghidra.
 
 Note if you are using an NPS-provided RESim server, this RESim installation will have already been done.  But
 see the IDA Pro installation below for information on installing IDA. 
+See the \textit{RESim Remote Access Guide} for information on remote access to RESim
+servers.  
 
 \begin{itemize}
 \item Get RESim from the git repo:
@@ -1170,6 +1172,7 @@ see the IDA Pro installation below for information on installing IDA.
 \begin{verbatim}
     apt-get install xterm
 \end{verbatim}
+
 \item Define environment variables.  In your {\tt .bashrc}, define the following (place prior to the 
 non-interactive return so they are picked up by ssh):
 \begin{itemize}
@@ -1183,11 +1186,26 @@ non-interactive return so they are picked up by ssh):
 You may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
 wish to download and place in this directory.
 \item IDA\_ANALYSIS Path to where IDA (or Ghidra) will store analysis artifacts, and where RESim will look for them.
+Place this such that the parent directory is the same as the RESIM\_IMAGE path parent directory, e.g.,
+\begin{verbatim}
+    export RESIM_IMAGE=/some/path/to_your/images
+    export RESIM_ANALYSIS=/some/path/to_your/analysis
+\end{verbatim}
+\noindent Consider placing these on a network share to facilitate sharing of images and analysis artifacts.
+
 \end{itemize}
 \item Add \$RESIM\_DIR/simics/bin and fuzz\_bin to your path, e.g. by adding to your .profile,
 \begin{verbatim}
    export RESIM_DIR=[path to your git clone]
    export PATH=$RESIM_DIR/simics/bin:$RESIM_DIR/simics/fuzz_bin:$PATH
+\end{verbatim}
+\item Download the \textit{driver} disk image, which is used to interact with targets from:
+\begin{verbatim}
+   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
+\end{verbatim}
+\noindent should be copied to:
+\begin{verbatim}
+$RESIM_IMAGES/driver/driver_22.disk0.hd_image.craff
 \end{verbatim}
 
 \item For analysis of Windows applications, install the \textit{pev} package to get the readpe function for reading coff headers.
@@ -1196,6 +1214,10 @@ been paged in.   For Ubuntu 22:
 \begin{verbatim}
     apt install -y capstone-tool pip
     pip install capstone
+\end{verbatim}
+\noindent For Ubuntu 24:
+\begin{verbatim}
+    apt install python3-capstone
 \end{verbatim}
 RESim assumes the python bindings are at /usr/local/lib/python3.10/dist-packages.  Set a symlink if needed.
 
@@ -1246,24 +1268,8 @@ This section describes steps for creating and running RESim simulations.
 It is best to start with one of the examples.
 
 \subsubsection{Example systems}
-RESim includes a few examples to help you get familiar with the tool.  
-The simplest example is {\tt cadet01}.  Create this example simulation as follows:
-\begin{itemize}
-\item Create a Simics workspace using the {\tt resim-ws.sh} script usin the {\tt -e} flag to get the cadet example:
-\begin{verbatim}
-mkdir mywork; cd mywork
-    resim-ws.sh -e
-\end{verbatim}
-\item Refer to the information in the file at:
-\begin{verbatim}
-  $RESIM_DIR/simics/workspace/README-cadet.txt
-\end{verbatim}
-\end{itemize}
-
-Another example can be found in
-\begin{verbatim}
-  $RESIM_DIR/simics/examples/network_file_system
-\end{verbatim}
+RESim includes a few examples to help you get familiar with the tool. These are described below in \ref{example-targets}. 
+The simplest example is {\tt CADET01}.  
 
 \subsubsection{Defining your own simulation}
 Steps to define and run your own RESim simulation are listed below.  It is assumed you are familiar with basic Simics concepts and have a
@@ -2956,22 +2962,30 @@ data that was read and would be replaced by injected data.
 \subsection{CADET01 Example}
 Using the {\tt resim-ws.sh -e} command will create a workspace that includes files used in the CADET01 example.
 See the README-cadet01.txt files in {\tt simics/workspace}.
-The example requires two disk images located relative to your {\tt \$RESIM\_IMAGES} directory.  The image from: 
+The example requires two disk images located relative to your {\tt \$RESIM\_IMAGES} directory.  The target image from: 
 \begin{verbatim}
-   https://nps.box.com/s/t88gkonktje8xuer3qnwnl5gl05rhbl5
+   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQC-hSPskpwKRqvVSauYb_l4AU6FLcnA4awKbLYIQL5Pn18?e=9gzkHU
 \end{verbatim}
 \noindent should be copied to:
 \begin{verbatim}
-$RESIM_IMAGES/cadet01/viper.disk.hd_image.craff
+$RESIM_IMAGES/cadet01/cadet.disk0.hd_image.craff
 \end{verbatim}
-And
+And the driver image at
 \begin{verbatim}
-   https://nps.box.com/s/pzdljc8fvijx3nga87bveusgjp7yv4tb
+   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
 \end{verbatim}
 \noindent should be copied to:
 \begin{verbatim}
-$RESIM_IMAGES/driver/driver2.disk.hd_image.craff
+$RESIM_IMAGES/driver/driver_22.disk0.hd_image.craff
 \end{verbatim}
+
+\subsection{Network File Service}
+Another example from the Cyber Grand Challenge can be found at.
+\begin{verbatim}
+  $RESIM_DIR/simics/examples/network_file_system
+\end{verbatim}
+This example requires the target image and driver whose links are above under the CADET01 example.
+Follow its README.
 
 \subsection{Cyber Grand Challenge Services}
 Vulnerable services from the DARPA Cyber Grand Challenge are available as described in the
@@ -4306,11 +4320,11 @@ The paramOffPtr names parameters (starting at 1), so rsp3 would be 7.
 The cadet01 example can serve as a rapid prototyping testbed to explore Simics networking and RESim functions.
 The networking used in the example is described below.
 \begin{itemize}
-\item The driver has address 10.20.200.91 on switch0 via ens11.  
+\item The driver has address 10.20.200.22 on switch0 via ens11.  
 \item The mapdriver.simics script forwards port 4022 to
 port 22 on that interface.  
 \item The driver also has 10.0.0.140 via ens25, which is on the subnet containing the
-"ubuntu" server, which has IP of 10.0.0.91 on ens11.  
+"cadet" server, which has IP of 10.0.0.22 on ens11.  
 \item Everthing goes through switch0.
 \end{itemize}
 
