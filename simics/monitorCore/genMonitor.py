@@ -1418,7 +1418,7 @@ class GenMonitor():
     def debugGroup(self):
         self.debug(group=True)
 
-    def doDebugCmd(self, tid = None):
+    def doDebugCmd(self, tid=None):
         ''' Note, target may not be currently scheduled '''
         cpu, comm, this_tid = self.task_utils[self.target].curThread() 
         if tid is None:
@@ -1427,7 +1427,7 @@ class GenMonitor():
             self.lgr.error('doDebugCmd sees no cpu from curThread.  Giving up.')
             return
         machine_size = self.soMap[self.target].getMachineSize(tid)
-        self.lgr.debug('doDebugCmd for cpu %s arch: %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.compat32(), machine_size))
+        self.lgr.debug('doDebugCmd for cpu %s cpu.architecture %s port will be %d.  Tid is %s compat32 %r machine size %s' % (cpu.name, cpu.architecture, self.gdb_port, tid, self.compat32(tid=tid), machine_size))
         if cpu.architecture == 'arm':
             cmd = 'new-gdb-remote cpu=%s architecture=arm port=%d' % (cpu.name, self.gdb_port)
         elif cpu.architecture == 'arm64':
@@ -1459,7 +1459,7 @@ class GenMonitor():
                 self.lgr.error('doDebugCmd failed to get windows machine type')
                 return None 
 
-        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.compat32():
+        elif self.mem_utils[self.target].WORD_SIZE == 8 and not self.compat32(tid=tid):
             cmd = 'new-gdb-remote cpu=%s architecture=x86-64 port=%d' % (cpu.name, self.gdb_port)
         else:
             cmd = 'new-gdb-remote cpu=%s architecture=x86 port=%d' % (cpu.name, self.gdb_port)
@@ -2089,7 +2089,7 @@ class GenMonitor():
             self.lgr.debug('debugTidList full_path is None, set it')
             self.setPathToProg(tid_list[0])
         if not self.no_gdb and self.bookmarks is None:
-            self.lgr.debug('genMonitor debug call doDebugCmd')
+            self.lgr.debug('genMonitor debugTidList call doDebugCmd with tid_list[0] of %s' % tid_list[0])
             self.doDebugCmd(tid_list[0])
         if self.bookmarks is None:
             self.bookmarks = bookmarkMgr.bookmarkMgr(self, self.context_manager[self.target], self.lgr)
@@ -4765,19 +4765,25 @@ class GenMonitor():
         call = 'write'
         self.call_traces[self.target][call] = self.traceSyscall(callname=call)
 
-    def compat32(self, target=None):
+    def compat32(self, target=None, tid=None):
         ''' return True if running on an x64 and we believe the target process is 32bit '''
         retval = False
         if target is None:
             target = self.target
-        debug_tid, debug_cpu = self.context_manager[target].getDebugTid() 
+        if tid is None:
+            debug_tid, debug_cpu = self.context_manager[target].getDebugTid() 
 
-        if debug_tid is None:
-            cpu, comm, tid = self.task_utils[target].curThread() 
+            if debug_tid is None:
+                cpu, comm, tid = self.task_utils[target].curThread() 
+                self.lgr.debug('compat32 debug_tid is None, got current of %s' % tid)
+            else:
+                cpu = debug_cpu
+                tid = debug_tid
+                comm = self.task_utils[target].getCommFromTid(debug_tid)
+                self.lgr.debug('compat32 debug_tid is %s, comm %s' % (tid, comm))
         else:
-            cpu = debug_cpu
-            tid = debug_tid
-            comm = self.task_utils[target].getCommFromTid(debug_tid)
+            comm = self.task_utils[target].getCommFromTid(tid)
+            cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('compat32 tid:%s (%s) mem_utils.WORD_SIZE %d' % (tid, comm, self.mem_utils[target].WORD_SIZE))
         if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8:
             so_word_size = self.soMap[target].getProgWordSize(comm)
