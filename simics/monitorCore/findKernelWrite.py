@@ -309,7 +309,7 @@ class findKernelWrite():
                 if self.future_count > 100:
                     if self.best_cycle == 0:
                         bm = "eip:0x%x modification of :0x%x occured prior to current origin.?" % (eip, self.addr)
-                        self.bookmarks.setBacktrackBookmark(bm)
+                        self.bookmarks.setBacktrackBookmark(bm, msg="prior to origin?")
                         SIM_break_simulation('revWriteCallback')
                         self.top.skipAndMail()
                         return
@@ -473,6 +473,8 @@ class findKernelWrite():
         #value = self.mem_utils.readWord32(self.cpu, self.addr)
         do_satisfy = False
         data_watch = None
+        bm = None
+        bm_msg = None
         if value is None:
             if self.memory_transaction is None:
                 ida_msg = "Nothing mapped at 0x%x, not paged in?" % self.addr
@@ -484,7 +486,6 @@ class findKernelWrite():
             eip = self.top.getEIP(self.cpu)
             if eip == self.bookmarks.getEIP('_start+1'):
                 ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
-                bm = None
             else:
                 data_str = ''
                 if self.dataWatch is not None:
@@ -500,11 +501,13 @@ class findKernelWrite():
                 if self.memory_transaction.logical_address == self.addr:
                     ida_message = 'Kernel wrote 0x%x to address: 0x%x %s' % (value, self.addr, data_str)
                     bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x %s" % (eip, value, self.addr, data_str)
+                    bm_msg = 'Kernel write to 0x%x' % self.addr
                 else:
                     ida_message = 'Kernel wrote to user space address: 0x%x while writing 0x%x to 0x%x  %s' % (self.addr, value, self.memory_transaction.logical_address, data_str)
                     # MESSAGE used in cadet-test, do not change
                     bm = "eip:0x%x follows kernel write to memory:0x%x while writing 0x%x to 0x%x  %s" % (eip, 
                            self.addr, value, self.memory_transaction.logical_address, data_str)
+                    bm_msg = 'Kernel write to 0x%x' % self.memory_transaction.logical_address
                 syscall_info = self.top.getPrevSyscallInfo()
                 bm = bm + ' '+syscall_info
                 ida_message = ida_message + ' '+syscall_info
@@ -514,7 +517,7 @@ class findKernelWrite():
         if not do_satisfy:                 
         
             if bm is not None:
-                self.bookmarks.setBacktrackBookmark(bm)
+                self.bookmarks.setBacktrackBookmark(bm, msg=bm_msg)
             self.lgr.debug('set ida msg to %s' % ida_message)
             self.context_manager.setIdaMessage(ida_message)
             self.top.backtraceAddr(self.addr, self.cpu.cycles)
@@ -662,15 +665,17 @@ class findKernelWrite():
 
             value = self.mem_utils.readWord32(self.cpu, self.addr)
             eip = self.top.getEIP(self.cpu)
+            bm = None
+            bm_msg = None
             if eip == self.bookmarks.getEIP('_start+1'):
                 ida_message = "Content of 0x%x existed pror to _start+1, perhaps from loader." % self.addr
-                bm = None
             else:
                 ida_message = 'Kernel wrote 0x%x to address: 0x%x' % (value, self.addr)
                 self.lgr.debug('set ida msg to %s' % ida_message)
                 bm = "eip:0x%x follows kernel write of value:0x%x to memory:0x%x" % (eip, value, self.addr)
+                bm_msg = 'Kernel write to 0x%x' % self.addr
             if bm is not None:
-                self.bookmarks.setBacktrackBookmark(bm)
+                self.bookmarks.setBacktrackBookmark(bm, bm_msg)
             self.context_manager.setIdaMessage(ida_message)
             SIM_run_alone(self.cleanup, False)
             self.top.skipAndMail()
@@ -690,6 +695,7 @@ class findKernelWrite():
                 ida_message = "Content of %s came modified prior to enabling reverse." % self.addr
                 self.lgr.debug(ida_msg)
                 bm = "eip:0x%x content of memory:%s modified prior to enabling reverse" % (eip, self.addr)
+                bm_msg = "prior to reverse enable"
                 self.bookmarks.setBacktrackBookmark(bm)
                 self.context_manager.setIdaMessage(ida_message)
                 SIM_run_alone(self.cleanup, False)
@@ -708,7 +714,8 @@ class findKernelWrite():
                     eip = self.top.getEIP(self.cpu)
                     ida_message = "Content of 0x%x resulted from a memory copy from 0x%x, offset %d bytes from start of copy" % (self.addr, copy_addr, offset)
                     bm = "eip:0x%x content of memory:0x%x from memory copy from 0x%x, offset %d bytes from start of copy. %s" % (eip, self.addr, copy_addr, offset, mark.mark.getMsg())
-                    self.bookmarks.setBacktrackBookmark(bm)
+                    bm_msg = "copy"
+                    self.bookmarks.setBacktrackBookmark(bm, msg=bm_msg)
                     self.context_manager.setIdaMessage(ida_message)
                     value = self.mem_utils.readWord32(self.cpu, copy_addr)
                     if value is None:
@@ -755,7 +762,7 @@ class findKernelWrite():
             if self.iter_count > 500:
                 self.lgr.debug('findKernelWrite backOneAlone, cannot track values back beyond %s' % str(instruct))
                 bm = 'eip:0x%x inst:"%s Seems to be iteration, bailing"' % (eip, instruct[1])
-                self.bookmarks.setBacktrackBookmark(bm)
+                self.bookmarks.setBacktrackBookmark(bm, msg='iteration?')
                 SIM_run_alone(self.cleanup, False)
                 self.top.skipAndMail()
                 return
