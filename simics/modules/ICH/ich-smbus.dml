@@ -1,0 +1,772 @@
+/*
+  ich-smbus.dml - SMBus
+
+  This Software is part of Simics. The rights to copy, distribute,
+  modify, or otherwise make use of this Software may be licensed only
+  pursuant to the terms of an applicable license agreement.
+  
+  Copyright 2010-2021 Intel Corporation
+
+*/
+
+dml 1.2;
+
+import "pci/common.dml";
+import "io-memory.dml";
+import "simics/devs/i2c.dml";
+import "simics/model-iface/image.dml";
+import "reset-ports.dml";
+
+parameter limitations = "<ul>"
+    + "<li>I2C read is unimplemented.</li>"
+    + "<li>Block transfer in disabled 32-byte buffer is unimplemented.</li>"
+    + "<li>Host notify is unimplemented.</li>"
+    + "</ul>";
+
+constant smbus_sram_size            = 32;
+
+constant SMBus_Rd                   = 1;
+constant SMBus_Wr                   = 0;
+
+constant SMBus_Cmd_Quick            = 0x0;
+constant SMBus_Cmd_Byte             = 0x1;
+constant SMBus_Cmd_Byte_Data        = 0x2;
+constant SMBus_Cmd_Word_Data        = 0x3;
+constant SMBus_Cmd_Process_Call     = 0x4;
+constant SMBus_Cmd_Block            = 0x5;
+constant SMBus_Cmd_I2C_Read         = 0x6;
+constant SMBus_Cmd_Block_Process    = 0x7;
+
+constant SMBus_Master_St_Idle               = 0x0;
+constant SMBus_Master_St_Started            = 0x1;
+constant SMBus_Master_St_Read_Requested     = 0x2;
+constant SMBus_Master_St_Write_Requested    = 0x3;
+constant SMBus_Master_St_Read_Ack_Requested = 0x4;
+
+constant SMBus_Master_Ev_Cmd_Fired          = 0x1;
+constant SMBus_Master_Ev_Bus_Freed          = 0x2;
+constant SMBus_Master_Ev_Start_Response     = 0x4;
+constant SMBus_Master_Ev_Read_Response      = 0x8;
+constant SMBus_Master_Ev_Ack_Read_Response  = 0x10;
+constant SMBus_Master_Ev_Write_Response     = 0x20;
+
+constant SMBus_Slave_St_Idle                = 0x0;
+constant SMBus_Slave_St_Started             = 0x1;
+constant SMBus_Slave_St_Read                = 0x2;
+constant SMBus_Slave_St_Write               = 0x3;
+
+implement i2c_master {
+    method bus_freed() {
+        log "info", 4: "i2c master IF: SMBus freed";
+        $smbus_func.ma_event = SMBus_Master_Ev_Bus_Freed;
+        inline $smbus_func.proc_cmd_event.post(0.0, NULL);
+    }
+
+    method start_response(i2c_status_t status) {
+        log "info", 4:
+            "i2c master IF: a start response with a status %d",status;
+        $smbus_func.ma_event = SMBus_Master_Ev_Start_Response;
+        $smbus_func.ma_start_res = cast(status, uint8);
+        inline $smbus_func.proc_cmd_event.post(0.0, NULL);
+    }
+
+    method read_response(uint8 value) {
+        log "info", 4:
+            "i2c master IF: a read response with 0x%02x", value;
+        $smbus_func.ma_event = SMBus_Master_Ev_Read_Response;
+        $smbus_func.ma_read_byte = value;
+        inline $smbus_func.proc_cmd_event.post(0.0, NULL);
+    }
+
+    method ack_read_response() {
+        log "info", 4: "i2c master IF: a read response acknowledge";
+        $smbus_func.ma_event = SMBus_Master_Ev_Ack_Read_Response;
+        inline $smbus_func.proc_cmd_event.post(0.0, NULL);
+    }
+
+    method write_response(i2c_status_t status) {
+        log "info", 4:
+            "i2c master IF: a write response with a status %d", status;
+        $smbus_func.ma_event = SMBus_Master_Ev_Write_Response;
+        $smbus_func.ma_write_res = cast(status, uint8);
+        inline $smbus_func.proc_cmd_event.post(0.0, NULL);
+    }
+}
+
+implement i2c_slave {
+    method start_request(uint32 address) {
+        log "info", 4:
+            "i2c slave IF: a start request with an address 0x%x", address;
+        if ((address >> 1) != $smbus_func.rcv_slva) {
+            log "spec_violation", 3:
+                "slave addr 0x%0x is not the addr of SMBus controller 0x%x",
+                (address >> 1), $smbus_func.rcv_slva;
+            $smbus.i2c_link.start_response($dev.obj, I2C_status_noack);
+        } else {
+            if ($smbus_func.sl_state != SMBus_Slave_St_Idle) {
+                log "spec_violation", 3:
+                    "slave state %d is not idle state when a start request",
+                    $smbus_func.sl_state;
+            }
+            $smbus.i2c_link.start_response($dev.obj, I2C_status_success);
+            $smbus_func.sl_state = SMBus_Slave_St_Started;
+        }
+    }
+
+    method read_request() {
+        log "info", 4: "i2c slave IF: a read request";
+        // No data to be read, so always gives 0
+        if ($smbus_func.sl_state != SMBus_Slave_St_Started) {
+            log "spec_violation", 3:
+                "slave state %d is not started when a read request",
+                $smbus_func.sl_state;
+        }
+        $smbus.i2c_link.read_response($dev.obj, 0);
+    }
+
+    method ack_read_request(i2c_status_t ack) {
+        log "info", 4: "i2c slave IF: a ack read request";
+        if ($smbus_func.sl_state != SMBus_Slave_St_Started) {
+            log "spec_violation", 3:
+                "slave state %d is not started when an ack read request",
+                $smbus_func.sl_state;
+        }
+        $smbus.i2c_link.ack_read_response($dev.obj);
+        $smbus_func.sl_state = SMBus_Slave_St_Idle;
+    }
+
+    method write_request(uint8 value) {
+        log "info", 4:
+            "i2c slave IF: a write request with a byte 0x%x", value;
+        if ($smbus_func.sl_state != SMBus_Slave_St_Started) {
+            log "spec_violation", 3:
+                "slave state %d is not started when a write request",
+                $smbus_func.sl_state;
+        }
+        $smbus_func.sl_wr_repeats++;
+        if ($smbus_func.sl_wr_repeats == 1)
+            $smbus_func.slv_data.data_msg0 = value;
+        else {
+            $smbus_func.slv_data.data_msg1 = value;
+            $smbus_func.sl_wr_repeats = 0;
+        }
+        $smbus.i2c_link.write_response($dev.obj, I2C_status_success);
+    }
+
+    method stop(uint8 repeated_start) {
+        log "info", 4:
+            "i2c slave IF: a stop which is %s",
+            (repeated_start == 1) ? "that caused by a repeated start"
+                                  : "a normal stop";
+        $smbus_func.sl_state = SMBus_Slave_St_Idle;
+    }
+}
+
+connect smbus {
+    parameter documentation = "The I2C-bus.";
+    parameter configuration = "required";
+    interface i2c_link {
+        parameter required = true;
+    }
+
+    method validate(conf_object_t *obj) -> (bool valid) {
+        if ($smbus.obj != NULL)
+            $smbus.i2c_link.unregister_slave_address(
+                $dev.obj, $smbus_func.rcv_slva << 1, 0xFFFFFFFE);
+        valid = true;
+    }
+
+    method after_set() {
+        if ($smbus.obj != NULL)
+            $smbus.i2c_link.register_slave_address(
+                $dev.obj, $smbus_func.rcv_slva << 1, 0xFFFFFFFE);
+    }
+}
+
+connect sram_image {
+    parameter documentation = "Image holding the 32-byte SRAM";
+    parameter configuration = "required";
+    interface image;
+}
+
+is pci_device;
+bank pci_config {
+    parameter base_address_registers = ["smbus_sram_bar", "io_bar"];
+
+    register vendor_id  { parameter hard_reset_value = 0x8086; }
+    register command    { parameter hard_reset_value = 0; }
+    register status     { parameter hard_reset_value = 0x0280; }
+    register class_code { parameter hard_reset_value = 0x0C0500; }
+    register smbus_sram_bar @ 0x10 is (memory_base_address_64) {
+        parameter size_bits = 5;
+        parameter map_func = 1;
+
+        field p { parameter hard_reset_value = 0; }
+    }
+    register base_address_2 @ 0x18 is (no_base_address_32);
+    register base_address_3 @ 0x1c is (no_base_address_32);
+    register io_bar         @ 0x20 is (io_base_address) {
+        parameter size_bits = 5;
+        parameter map_func = 1;
+    }
+    register base_address_5 @ 0x24 is (no_base_address_32);
+    register interrupt_pin { parameter hard_reset_value = 0x02; }
+    register host_configuration size 2 @ 0x40 {
+        field I2C_EN     [2:2];
+        field SMB_SMI_EN [1:1];
+        field HST_EN     [0:0];
+    }
+}
+
+bank smbus_func {
+    parameter function = 1;
+    parameter register_size = 1;
+
+    register hst_sts        @ 0x00 "Host Status";
+    register hst_cnt        @ 0x02 "Host Control";
+    register hst_cmd        @ 0x03 "Host Command";
+    register xmit_slva      @ 0x04 "Transmit Slave Address";
+    register hst_d0         @ 0x05 "Host Data 0";
+    register hst_d1         @ 0x06 "Host Data 1";
+    register host_block_db  @ 0x07 "Host Block Data Byte";
+    register pec            @ 0x08 "Packet Error Check";
+    register rcv_slva       @ 0x09 "Receive Slave Address";
+    register slv_data size 2@ 0x0A "Receive Slave Data";
+    register aux_sts        @ 0x0C "Auxiliary Status";
+    register aux_ctl        @ 0x0D "Auxiliary Control";
+    register smlink_pin_ctl @ 0x0E "SMLink Pin Control";
+    register smbus_pin_ctl  @ 0x0F "SMBus Pin Control";
+    register slv_sts        @ 0x10 "Slave Status";
+    register slv_cmd        @ 0x11 "Slave Command";
+    register notify_daddr   @ 0x14 "Notify Device Address";
+    register notify_dlow    @ 0x16 "Notify Data Low Byte";
+    register notify_dhigh   @ 0x17 "Notify Data High Byte";
+
+    // Internal register
+    register ma_state         is (unmapped) 
+                    "SMBus Master IF's State";
+    register ma_event         is (unmapped) 
+                    "SMBus Master IF's Event";
+    register ma_start_res     is (unmapped) 
+                    "SMBus Master IF's Start Result";
+    register ma_read_byte     is (unmapped) 
+                    "SMBus Master IF's Read Byte";
+    register ma_write_res     is (unmapped) 
+                    "SMBus Master IF's Write Result";
+    register ma_start_repeats is (unmapped) 
+                    "SMBus Master IF's Start Repeat Count";
+    register ma_wr_repeats    is (unmapped) 
+                    "SMBus Master IF's Write Repeat Count";
+    register ma_rd_repeats    is (unmapped) 
+                    "SMBus Master IF's Read Repeat Count";
+    register sl_state         is (unmapped) 
+                    "SMBus Slave IF's State";
+    register sl_wr_repeats    is (unmapped) 
+                    "SMBus Slave IF's Write Repeat Count";
+    register sram_rd_ptr      is (unmapped) 
+                    "SRAM Read Pointer in Block Writing";
+    register sram_wr_ptr      is (unmapped) 
+                    "SRAM Write Pointer in Block Reading";
+    register sram_rd_ptr_sw   is (unmapped) 
+                    "SRAM Read Pointer in Software Reading";
+    register sram_wr_ptr_sw   is (unmapped) 
+                    "SRAM Write Pointer in Software Pumping";
+
+    register hst_sts {
+        field BYTE_DONE_STS [7:7] is (write_1_clears);
+        field INUSE_STS     [6:6] is (write_1_clears);
+        field SMBALERT_STS  [5:5] is (write_1_clears);
+        field FAILED        [4:4] is (write_1_clears);
+        field BUS_ERR       [3:3] is (write_1_clears);
+        field DEV_ERR       [2:2] is (write_1_clears);
+        field INTR          [1:1] is (write_1_clears);
+        field HOST_BUSY     [0:0] is (ignore_write);
+        method be_little_busy() {
+            // See 'http://openbios.org/pipermail/linuxbios
+            // /2004-September/009077.html' why this is needed.
+            $HOST_BUSY = 1;
+        }
+        method after_read(memop) {
+            $HOST_BUSY = 0;
+            // mft hack
+            if ($INTR){
+                inline $pci_config.pci_lower_interrupt();
+            }
+        }
+    }
+
+    register hst_cnt {
+        field PEC_EN    [7:7] is (silent_unimplemented);
+        field START     [6:6];
+        field LAST_BYTE [5:5] is (silent_unimplemented);
+        field SMB_CMD   [4:2];
+        field KILL      [1:1] is (silent_unimplemented);
+        field INTREN    [0:0] is (silent_unimplemented);
+
+        method after_write(memop) {
+            if ($START) {
+                local int res;
+
+                $START = 0;
+                if (!$pci_config.host_configuration.HST_EN) {
+                    log "info", 1:
+                        "attempted SMBus operation while HST_EN = 0";
+                    return;
+                }
+                $ma_event = SMBus_Master_Ev_Cmd_Fired;
+                inline $proc_cmd_event.post(0.0, NULL);
+                // mft hack
+                //$INTREN = 0;
+            }
+        }
+
+        method after_read(generic_transaction_t *memop) {
+            $sram_rd_ptr_sw = 0;
+            $sram_wr_ptr_sw = 0;
+            log "info", 4:
+                "internal index pointer to 32-byte buffer is cleared";
+        }
+    }
+
+    register xmit_slva {
+        field ADDRESS [7:1];
+        field RW      [0:0];
+    }
+
+    register slv_data {
+        field data_msg0[7:0]  "Data Message Byte 0";
+        field data_msg1[15:8] "Data Message Byte 1";
+    }
+
+    register host_block_db {
+        method read() -> (val) {
+            local uint8 byte;
+            if ($aux_ctl.E32B == 1) {
+                $sram_image.image.read(&byte, $sram_rd_ptr_sw++, 1);
+                val = byte;
+            } else {
+                val = $this;
+            }
+        }
+
+        method write(val) {
+            local uint8 byte;
+            if ($aux_ctl.E32B == 1) {
+                byte = val;
+                $sram_image.image.write(&byte, $sram_wr_ptr_sw++, 1);
+            } else {
+                $this = val;
+            }
+        }
+    }
+
+    register rcv_slva { parameter hard_reset_value = 0x44; }
+
+    register aux_sts {
+        is silent_unimplemented; // No place to use it, so mark it to SW
+        field STCO  [1] "SMBus TCO Mode";
+        field CRCE  [0] "CRC Error";
+    }
+
+    register aux_ctl {
+        field E32B  [1] "Enable 32-Byte Buffer";
+        field AAC   [0] "Automatically Append CRC";
+    }
+
+    event proc_cmd_event {
+        parameter timebase = "seconds";
+        method event(void *data) {
+            call $process_cmd();
+        }
+    }
+
+    // The action of the SMBus processor in started state
+    method action_in_started() {
+        // Only the event of a start response is allowed
+        if ($ma_event != SMBus_Master_Ev_Start_Response
+            || $ma_start_res != I2C_status_success) {
+            $hst_sts.DEV_ERR = 1;
+            $ma_state = SMBus_Master_St_Idle;
+            if ($ma_event != SMBus_Master_Ev_Start_Response)
+                log "info", 2:
+                    "only the start resp is allowed after a start request";
+            else
+                log "info", 2:
+                    "failed to start a SMBus cycle to address 0x%x for %s",
+                    $xmit_slva.ADDRESS,
+                    ($ma_start_res == I2C_status_noack)
+                        ?  "no such address" : "the bus is busy";
+            return;
+        }
+
+        // Terminate, read the slave or write the slave
+        if ($hst_cnt.SMB_CMD == SMBus_Cmd_Quick) {
+            log "info", 2: "a quick command is finished";
+            assert ($ma_start_repeats == 1);
+            $ma_state = SMBus_Master_St_Idle;
+        } else if ($hst_cnt.SMB_CMD == SMBus_Cmd_Byte) {
+            // Determine the direction of the byte
+            assert ($ma_start_repeats == 1);
+            if ($xmit_slva.RW == SMBus_Wr) {
+                $smbus.i2c_link.write_request($dev.obj, $hst_cmd);
+                $ma_wr_repeats = 1;
+                $ma_state = SMBus_Master_St_Write_Requested;
+            } else {
+                $smbus.i2c_link.read_request($dev.obj);
+                $ma_rd_repeats = 1;
+                $ma_state = SMBus_Master_St_Read_Requested;
+            }
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Byte_Data
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Process_Call
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Block
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Block_Process) {
+            if ($ma_start_repeats == 1) {
+                // Write the command code after the first start
+                log "info", 4:
+                    "send the command code 0x%02x to slave %d",
+                    $hst_cmd, $xmit_slva.ADDRESS;
+                $smbus.i2c_link.write_request($dev.obj, $hst_cmd);
+                $ma_wr_repeats = 1;
+                $ma_state = SMBus_Master_St_Write_Requested;
+                if ($hst_cnt.SMB_CMD == SMBus_Cmd_Block) {
+                    $sram_rd_ptr = 0; // Block transfer always starts at 0
+                    $sram_wr_ptr = 0;
+                }
+            } else if ($ma_start_repeats == 2) {
+                // Read the slave after the second start
+                if ($hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data
+                    || $hst_cnt.SMB_CMD == SMBus_Cmd_Block)
+                    assert ($xmit_slva.RW == SMBus_Rd);
+                $smbus.i2c_link.read_request($dev.obj);
+                $ma_rd_repeats = 1;
+                $ma_state = SMBus_Master_St_Read_Requested;
+                log "info", 4:
+                    "request a byte read from SMBus address 0x%x",
+                    $xmit_slva.ADDRESS;
+            }
+        } else if ($hst_cnt.SMB_CMD == SMBus_Cmd_I2C_Read) {
+            log "info", 2: "I2C read command is not supported*******************************************************************************";
+            if ($ma_start_repeats == 1) {
+                // Write the command code after the first start
+                log "info", 4:
+                    "send the command code 0x%02x to slave %d",
+                    $hst_cmd, $xmit_slva.ADDRESS;
+                $smbus.i2c_link.write_request($dev.obj, $hst_cmd);
+                $ma_wr_repeats = 1;
+                $ma_state = SMBus_Master_St_Write_Requested;
+                $sram_rd_ptr = 0; // Block transfer always starts at 0
+                $sram_wr_ptr = 0;
+            } else if ($ma_start_repeats == 2) {
+                // Read the slave after the second start
+                $smbus.i2c_link.read_request($dev.obj);
+                $ma_rd_repeats = 1;
+                $ma_state = SMBus_Master_St_Read_Requested;
+                log "info", 4:
+                    "request a byte read from SMBus address 0x%x",
+                    $xmit_slva.ADDRESS;
+            }
+        }
+    }
+
+    // action_in_write_requested: the action of the SMBus processor
+    // in write requested state
+    method action_in_write_requested() {
+        local bool restart;
+        local uint8 data;
+        log "info", 4: "action_in_write_requested";
+        // Only the event of write response is allowed
+        if (   $ma_event != SMBus_Master_Ev_Write_Response
+            || $ma_write_res != I2C_status_success) {
+            log "spec_violation", 3:
+                "no or bad write response after a write";
+            $ma_state = SMBus_Master_St_Idle;
+            return;
+        }
+
+        if ($hst_cnt.SMB_CMD == SMBus_Cmd_Byte) {
+            assert ($xmit_slva.RW == SMBus_Wr);
+            log "info", 3: "a byte (write) command is finished";
+            $ma_state = SMBus_Master_St_Idle;
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_I2C_Read ){
+            log "info", 4: "action_in_write_requested I2C_read";
+            // Read a data byte from the slave, turn the direction firstly
+            log "info", 3:
+                "i2c_read repeat a start (read) to address %d", $xmit_slva.ADDRESS;
+            $smbus.i2c_link.start_request(
+                        $dev.obj, ($xmit_slva.ADDRESS << 1) | 1);
+            $ma_state = SMBus_Master_St_Started;
+            $ma_start_repeats = 2;
+
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Byte_Data
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Process_Call
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Block
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Block_Process) {
+            restart = false;
+            if (   $xmit_slva.RW == SMBus_Rd
+                && (   $hst_cnt.SMB_CMD == SMBus_Cmd_Byte_Data
+                    || $hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data
+                    || $hst_cnt.SMB_CMD == SMBus_Cmd_Block))
+                restart = true;
+            if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Process_Call
+                && $ma_wr_repeats == 3)
+                restart = true;
+
+            if (restart) {
+                // Read a data byte from the slave, turn the direction firstly
+                log "info", 3:
+                    "repeat a start (read) to address %d", $xmit_slva.ADDRESS;
+                $smbus.i2c_link.start_request(
+                            $dev.obj, ($xmit_slva.ADDRESS << 1) | 1);
+                $ma_state = SMBus_Master_St_Started;
+                $ma_start_repeats = 2;
+            } else {
+                // Process the block read/write separately
+                if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Block
+                    || $hst_cnt.SMB_CMD == SMBus_Cmd_Block_Process) {
+                    if ($hst_cnt.SMB_CMD == SMBus_Cmd_Block)
+                        assert ($xmit_slva.RW == SMBus_Wr);
+                    if ($ma_wr_repeats == 1) {
+                        // Send the byte count
+                        $smbus.i2c_link.write_request($dev.obj, $hst_d0);
+                        $ma_wr_repeats++;
+                        $ma_state = SMBus_Master_St_Write_Requested;
+                    } else if ($ma_wr_repeats == ($hst_d0 + 2)) {
+                        if ($hst_cnt.SMB_CMD == SMBus_Cmd_Block) {
+                            log "info", 3:
+                                "a block (write %d bytes) command is finished",
+                                $hst_d0;
+                            $ma_state = SMBus_Master_St_Idle;
+                        } else {
+                            log "info", 3:
+                                "the write (%d bytes) part of a %s is finished",
+                                $hst_d0, "block process call cmd";
+                            $smbus.i2c_link.stop($dev.obj);
+                            $smbus.i2c_link.start_request(
+                                $dev.obj, ($xmit_slva.ADDRESS << 1) + SMBus_Rd);
+                            $ma_state = SMBus_Master_St_Started;
+                            $ma_start_repeats++;
+                        }
+                    } else {
+                        // Send the byte one by one,
+                        // the byte comes from the SRAM when the E32B bit
+                        // or from the host block data byte register
+                        // when the E32B bit is cleared
+                        if ($aux_ctl.E32B == 1) {
+                            $sram_image.image.read(&data, $sram_rd_ptr, 1);
+                            $smbus.i2c_link.write_request($dev.obj, data);
+                            $ma_wr_repeats++;
+                            $ma_state = SMBus_Master_St_Write_Requested;
+                            $sram_rd_ptr++;
+                        } else {
+                            assert (0);
+                        }
+                    }
+                    return;
+                }
+
+                // Process the byte command
+                if ($hst_cnt.SMB_CMD == SMBus_Cmd_Byte_Data) {
+                    if ($ma_wr_repeats == 2) {
+                        log "info", 3:
+                            "a byte data (write) command is finished";
+                        $ma_state = SMBus_Master_St_Idle;
+                    } else {
+                        $smbus.i2c_link.write_request($dev.obj, $hst_d0);
+                        $ma_wr_repeats++;
+                        $ma_state = SMBus_Master_St_Write_Requested;
+                        log "info", 4:
+                            "write data byte 0x%02x to SMBus address %d",
+                            $hst_d0, $xmit_slva.ADDRESS;
+                    }
+                    return;
+                }
+
+                // Process the word command
+                if ($ma_wr_repeats == 3) {
+                    log "info", 3:
+                        "a word (write) command is finished";
+                    $ma_state = SMBus_Master_St_Idle;
+                } else {
+                    // Write a data byte to the slave
+                    if ($ma_wr_repeats == 1)
+                        data = $hst_d0;
+                    else if ($ma_wr_repeats == 2)
+                        data = $hst_d1;
+                    $smbus.i2c_link.write_request($dev.obj, data);
+                    $ma_wr_repeats++;
+                    $ma_state = SMBus_Master_St_Write_Requested;
+                    log "info", 4:
+                        "write data byte 0x%02x to SMBus address %d",
+                        data, $xmit_slva.ADDRESS;
+                }
+            }
+        }
+    }
+
+    // action_in_read_ack_requested: the action of SMBus processor when in
+    // the state of ack read requested
+    method action_in_read_ack_requested() {
+        if ($ma_event != SMBus_Master_Ev_Ack_Read_Response) {
+            log "spec_violation", 3:
+                "no ack read response after a ack read request";
+            return;
+        }
+
+        if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Byte
+            || $hst_cnt.SMB_CMD == SMBus_Cmd_Byte_Data) {
+            assert ($xmit_slva.RW == SMBus_Rd);
+            assert ($ma_rd_repeats == 1);
+            $hst_d0 = $ma_read_byte;
+            log "info", 3: "a %s (read) command is finished",
+                ($hst_cnt.SMB_CMD == SMBus_Cmd_Byte) ? "byte" : "byte data";
+            $ma_state = SMBus_Master_St_Idle;
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Process_Call) {
+            if ($ma_rd_repeats == 1) {
+                $hst_d0 = $ma_read_byte;
+                log "info", 3:
+                    "read the second byte from slave %d", $xmit_slva.ADDRESS;
+                $smbus.i2c_link.read_request($dev.obj);
+                $ma_rd_repeats++;
+                $ma_state = SMBus_Master_St_Read_Requested;
+            } else {
+                assert ($ma_rd_repeats == 2);
+                $hst_d1 = $ma_read_byte;
+                if ($hst_cnt.SMB_CMD == SMBus_Cmd_Word_Data)
+                    log "info", 3: "a word (read) command is finished";
+                else if ($hst_cnt.SMB_CMD == SMBus_Cmd_Process_Call)
+                    log "info", 3: "a process call command is finished";
+                $ma_state = SMBus_Master_St_Idle;
+            }
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_I2C_Read){
+            log "info", 4: "action_in_read is i2c_read, would move read bye 0x%x", $ma_read_byte;
+            $ma_state = SMBus_Master_St_Idle;
+            
+        } else if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Block
+                   || $hst_cnt.SMB_CMD == SMBus_Cmd_Block_Process) {
+            // Read the byte one by one from the slave device,
+            // and write the byte to the SRAM when E32B is set,
+            // or to the host block data byte register
+            if ($aux_ctl.E32B == 1) {
+                if ($ma_rd_repeats == 1) {
+                    log "info", 2:
+                        "host d0: %d, read length: %d", $hst_d0, $ma_read_byte;
+                    if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Block_Process
+                        && $ma_read_byte + $hst_d0 > smbus_sram_size) {
+                        // Check the sum of read and write
+                        log "info", 2:
+                            "the sum of wr and rd bytes rollovers maximum 32";
+                        $ma_read_byte = smbus_sram_size - $hst_d0;
+                    }
+                    $hst_d0 = $ma_read_byte;
+                } else {
+                    $sram_image.image.write(&$ma_read_byte, $sram_wr_ptr, 1);
+                    $sram_wr_ptr++;
+                    if ($sram_wr_ptr == $hst_d0) {
+                        if ($hst_cnt.SMB_CMD == SMBus_Cmd_Block)
+                            log "info", 3:
+                                "a block (read) command is finished";
+                        else
+                            log "info", 3:
+                                "the read (%d bytes) part of a %s is finished",
+                                $hst_d0, "block process call cmd";
+                        $ma_state = SMBus_Master_St_Idle;
+                    }
+                    if ($sram_wr_ptr >= smbus_sram_size) {
+                        $hst_sts.BYTE_DONE_STS = 1;
+                        $hst_sts.DEV_ERR = 1;
+                        inline $pci_config.pci_raise_interrupt();
+                        $ma_state = SMBus_Master_St_Idle;
+                        log "info", 2:
+                            "32-byte SRAM is filled, abort the %s command",
+                            ($hst_cnt.SMB_CMD == SMBus_Cmd_Block) ?
+                                "block read" : "block process call";
+                    }
+                }
+                if ($ma_state != SMBus_Master_St_Idle) {
+                    // Read the next byte
+                    $smbus.i2c_link.read_request($dev.obj);
+                    $ma_state = SMBus_Master_St_Read_Requested;
+                    $ma_rd_repeats++;
+                }
+            } else {
+                assert (0);
+            }
+        }
+    }
+
+    // process_cmd: process a system management command in a way
+    // with multiple interactions with the I2C link
+    method process_cmd() {
+        local uint8 byte_1;
+
+        switch ($ma_state) {
+        case SMBus_Master_St_Idle:
+            // Only the event that a command is fired is allowed
+            if ($ma_event != SMBus_Master_Ev_Cmd_Fired) {
+                log "info", 2:
+                    "only the event that a cmd is fired is allowed when idle";
+                break;
+            }
+            byte_1 = $xmit_slva.ADDRESS << 1;
+            if (   $hst_cnt.SMB_CMD == SMBus_Cmd_Quick
+                || $hst_cnt.SMB_CMD == SMBus_Cmd_Byte)
+                byte_1 = byte_1 + $xmit_slva.RW;
+            log "info", 4:
+                "start a %s cycle to the slave address 0x%x",
+                (byte_1 & 0x1) ? "read" : "write", $xmit_slva.ADDRESS;
+            $smbus.i2c_link.start_request($dev.obj, byte_1);
+            $ma_state = SMBus_Master_St_Started;
+            $ma_start_repeats = 1;
+            call $hst_sts.be_little_busy();
+            break;
+
+        case SMBus_Master_St_Started:
+            inline $action_in_started();
+            break;
+
+        case SMBus_Master_St_Read_Requested:
+            // Only the event of read result is allowed
+            if ($ma_event != SMBus_Master_Ev_Read_Response) {
+                log "spec_violation", 3: "no read response after a read";
+                break;
+            }
+
+            // Send the acknowledge of read request to the slave device
+            log "info", 4:
+                "send the ack of read response to slave %d",
+                $xmit_slva.ADDRESS;
+            $smbus.i2c_link.ack_read_request($dev.obj, I2C_status_success);
+            $ma_state = SMBus_Master_St_Read_Ack_Requested;
+            break;
+
+        case SMBus_Master_St_Write_Requested:
+            inline $action_in_write_requested();
+            break;
+
+        case SMBus_Master_St_Read_Ack_Requested:
+            inline $action_in_read_ack_requested();
+            break;
+
+        default:
+            assert (0);
+        }
+
+        if ($ma_state == SMBus_Master_St_Idle) {
+            log "info", 4: "stop this transfer";
+            $smbus.i2c_link.stop($dev.obj);
+            $hst_sts.BYTE_DONE_STS = 1;
+            // mft hack
+            $hst_sts.INTR = 1;
+            inline $pci_config.pci_raise_interrupt();
+        }
+    }
+}
+
+method post_init() {
+    if (!SIM_is_restoring_state($dev.obj)) {
+        call $pci_config.update_all_mappings();
+    }
+}
