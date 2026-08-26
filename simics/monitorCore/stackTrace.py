@@ -1398,7 +1398,7 @@ class StackTrace():
                         else:
                             self.lgr.debug('stackTrace prev_ip was none, cur_fun_name remains %s' % (cur_fun_name))
                         if fun_name is not None:
-                            if ((not self.top.isVxDKM(cpu=self.cpu) and (been_in_main or been_above_clib)) or only_module) and fun_name in dataWatch.mem_funs:
+                            if ((not self.top.isVxDKM(cpu=self.cpu) and (been_in_main or (resimUtils.isClib(fun_name) and been_above_clib))) or only_module) and fun_name in dataWatch.mem_funs:
                                 self.lgr.debug('stackTrace function %s is a dataWatch memsomething, but we were already in main or above clib, so bail on it' % fun_name)
                                 skip_this = True
 
