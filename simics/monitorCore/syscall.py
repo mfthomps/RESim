@@ -2388,7 +2388,7 @@ class Syscall():
             exit_info.retval_addr = frame['param1']
             exit_info.count = frame['param2']
             ida_msg = '%s tid:%s (%s) addr: 0x%x len: 0x%x\n' % (callname, tid, comm, exit_info.retval_addr, exit_info.count)
-        elif callname in ['select','_newselect', 'pselect6']:        
+        elif callname in ['select','_newselect', 'pselect6', 'pselect6_time64']:        
             exit_info.select_info = SelectInfo(frame['param1'], frame['param2'], frame['param3'], frame['param4'], frame['param5'], 
                  cpu, self.mem_utils, self.lgr)
 
