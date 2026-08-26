@@ -61,7 +61,7 @@ mem_funs = ['memcpy','memmove','memcmp','memchr', 'strcpy','strcmp','strncmp', '
             'fwrite', 'IO_do_write', 'getpwnam', 'getspnam', 'xmlStrcmp',
             'xmlGetProp', 'inet_addr', 'inet_ntop', 'inet_pton', 'FreeXMLDoc', 'GetToken', 'xml_element_free', 'xml_element_name', 'xml_element_children_size', 'xmlParseFile', 'xml_parse',
             'xmlParseChunk', 'xmlrpc_base64_decode', 'printf', 'fprintf', 'sprintf', 'vsnprintf', 'vfprintf', 'snprintf', 'asprintf', 'vasprintf', 'fputs', 'syslog', 'getenv', 'regexec', 
-            'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string_chr_append', 'string_chr_push_back',
+            'g_regex_match','g_regex_match_simple', 'string_chr', 'string_std', 'string_basic_char', 'string_basic_std', 'string_win_basic_char', 'string_chr_append', 'string_chr_push_back',
             'basic_istringstream', 'string', 'str', 'ostream_insert', 'regcomp', 
             'replace_chr', 'replace_std', 'replace_iterator', 'replace', 'replace_safe', 'append_chr_n', 'assign_chr', 
             'compare_chr', 'charLookup', 'charLookupX', 'charLookupY', 'output_processor',
@@ -1245,7 +1245,7 @@ class DataWatch():
             self.lgr.debug('dataWatch armNumericStore is str op1 %s op2 %s' % (op1, op2))
             if op1 in ['x0', 'w0']:
                 self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
-                addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 if addr is not None:
                     count = self.mem_utils.wordSize(self.cpu)
                     if next_instruct[1].startswith('strh'):
@@ -1272,7 +1272,7 @@ class DataWatch():
                     ret_reg =  self.mem_utils.getCallRetReg(self.cpu)
                     if self.decode.regIsPart(op1, ret_reg):
                         self.lgr.debug('dataWatch checkNumericStore found %s' % next_instruct[1])
-                        addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                        addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                         if addr is not None:
                             self.lgr.debug('dataWatch checkNumericStore got addr 0x%x' % addr)
                             count = self.mem_utils.wordSize(self.cpu)
@@ -1291,7 +1291,7 @@ class DataWatch():
                          #self.lgr.debug('dataWatch checkNumericStore is mov op1 %s op2 %s' % (op1, op2))
                          ret_reg =  self.mem_utils.getCallRetReg(self.cpu)
                          if self.decode.regIsPart(op2, ret_reg):
-                             addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                             addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                              if addr is not None:
                                  count = self.mem_utils.wordSize(self.cpu)
                                  self.setRange(addr, count, 'fun result')
@@ -2016,6 +2016,8 @@ class DataWatch():
             msg = '%s 0x%x %s' % (self.mem_something.fun, returned_dest, the_string)
             wm = self.watchMarks.markCall(msg, max_len=length, recv_addr=returned_dest, length=length, fd=None)
             self.setRange(returned_dest, self.mem_something.length, watch_mark=wm)
+        elif self.mem_something.fun.startswith('g_regex_match'):
+            wm = self.watchMarks.regexMatch(self.mem_something.src, self.mem_something.the_string, self.mem_something.dest)
         elif self.mem_something.fun in reg_ret_string_copy:
             self.mem_something.dest = self.mem_utils.getRegValue(self.cpu, 'syscall_ret')
             if memUtils.isNull(self.mem_something.length):
@@ -3151,6 +3153,14 @@ class DataWatch():
             src_len = self.mem_utils.readWord32(self.cpu, src_len_addr)
             # stash len in count, will replace with count of moved data (ascii string)
             self.mem_something.length = src_len
+        elif self.mem_something.fun.startswith('g_regex_match'):
+            struct_addr_addr, self.mem_something.src, dumb = self.getCallParams(sp, word_size)
+            if self.mem_something.fun == 'g_regex_match_simple':
+                pattern_addr = struct_addr_addr
+            else:
+                pattern_addr = struct_addr_addr + word_size
+            self.mem_something.dest = self.mem_utils.readAppPtr(self.cpu, pattern_addr, size=word_size) 
+            self.mem_something.the_string = self.mem_utils.readString(self.cpu, self.mem_something.src, 50)
         elif self.mem_something.fun in reg_ret_string_copy:
             self.lgr.debug('%s is a reg_ret_string_copy' % self.mem_something.fun)
             self.mem_something.src, self.mem_something.length, dumb = self.getCallParams(sp, word_size)
@@ -3572,7 +3582,7 @@ class DataWatch():
             self.finish_check_move_hap = None
             return
         self.lgr.debug('dataWatch finishCheckMoveHap dest_op %s' % self.move_stuff.dest_op)
-        dest_addr = self.decode.getAddressFromOperand(self.cpu, self.move_stuff.dest_op, self.lgr)
+        dest_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, self.move_stuff.dest_op, self.lgr)
         adhoc = False
         if self.move_stuff.function is None and our_reg is not None:
             if our_reg.startswith('xmm'):
@@ -3655,14 +3665,8 @@ class DataWatch():
                 self.lgr.debug('dataWatch recordAdHocCopy not byte_swap src 0x%x dest 0x%x size 0x%x' % (src, dest, copy_size))
                 self.setBreakRange()
         else:
-            self.lgr.debug('dataWatch recordAdHocCopy charDevCopy dest 0x%x' % (dest))
-            wm = self.watchMarks.charCopy('read', dest)
-            self.setRange(dest, 1, watch_mark=wm)
+            self.lgr.error('dataWatch recordAdHocCopy src is None')
        
-        #''' TBD breaks something?'''
-        #self.move_cycle = self.cpu.cycles
-        #self.move_cycle_max = self.cpu.cycles+1
-
     class CheckMoveStuff():
         def __init__(self, addr, trans_size, start, length, dest_op, function=None, ip=None, cycle=None):
             self.addr = addr
@@ -3748,7 +3752,7 @@ class DataWatch():
                     next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                     if next_instruct[1].startswith('jmp'):
                         dumb, op1 = self.decode.getOperands(next_instruct[1])
-                        next_ip = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                        next_ip = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                         next_instruct = self.top.disassembleAddress(self.cpu, next_ip)
                         self.lgr.debug('datawatch checkNTOHL, was jump changed next inst is now  0x%x is %s' % (next_ip, next_instruct[1]))
                         
@@ -3767,7 +3771,7 @@ class DataWatch():
                             our_reg = op1
                         else:
                             self.lgr.debug('dataWatch checkNTOHL, maybe op1 is %s' % op1)
-                            dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr, reg_values=reg_values)
+                            dest_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr, reg_values=reg_values)
                             if dest_addr is not None:
                                 self.lgr.debug('checkNTOHL addr found to be 0x%x' % dest_addr)
                                 break_num = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, next_ip, 1, 0)
@@ -3778,7 +3782,7 @@ class DataWatch():
                                 retval = True
                             break
                     elif next_instruct[1].startswith('mov') and self.decode.isReg(op1):
-                        value = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                        value = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                         if value is not None:
                             reg_values[op1] = value
                      
@@ -3823,7 +3827,7 @@ class DataWatch():
         if sign is not None:
             if ',' in op2:
                 op2 = op2.split(',')[1]
-            val = self.decode.getValue(op2, self.cpu)
+            val = self.decode.getValue(op2, self.cpu, self.mem_utils)
             if val is None:
                 self.lgr.error('dataWatch adjustSP could not get value from op2 %s' % op2)
             else:
@@ -3840,17 +3844,17 @@ class DataWatch():
                     self.lgr.debug('dataWatch getMoveDestAddr is in reg list op2 is %s' % op2)
                     for reg in reg_values:
                         self.lgr.debug('dataWatch getMoveDestAddr regvalue %s is 0x%x' % (reg, reg_values[reg]))
-                    dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr, reg_values=reg_values)
+                    dest_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr, reg_values=reg_values)
         elif self.cpu.architecture == 'ppc32':
             if next_instruct[1].startswith('st') and self.decode.isReg(op1) and op1 in our_reg_list: 
                 self.lgr.debug('dataWatch getMoveDestAddr %s' % next_instruct[1])
-                dest_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                dest_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 if dest_addr is not None:
                     self.lgr.debug('dataWatch getMoveDestAddr dest_addr 0x%x' % dest_addr)
         else:
             if next_instruct[1].startswith('mov') and self.decode.isReg(op2) and self.decode.regIsPartList(op2, our_reg_list):
                 self.lgr.debug('dataWatch getMoveDestAddr, maybe op1 is %s' % op1)
-                dest_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                dest_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
         return dest_addr
 
     def loopAdHocMult(self, addr, trans_size, start, length, instruct, reg_set, eip, orig_ip, orig_cycle):
@@ -3954,7 +3958,7 @@ class DataWatch():
             if dest_addr is not None:
                 adhoc = False
                 if next_instruct[1].startswith('mov') and self.decode.regIsPartList(op2, our_reg_list) and 'sp' in op1:
-                    this_sp = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                    this_sp = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                     #self.lgr.debug('dataWatch loopAdHoc push via mov.  Moved to SP value 0x%x,  hack sp because checkPushedData will subtract word size from it' % this_sp)
                     this_sp = this_sp + word_size
                     adhoc = self.checkPushedData(this_sp, our_reg_list, next_instruct, next_ip, addr, trans_size, start, length, recent_instructs, word_size)
@@ -3996,13 +4000,13 @@ class DataWatch():
                 flags = self.testCompare(mn, op1, op2, recent_instructs, next_ip)
             elif next_instruct[1].startswith('mov') and self.decode.isReg(op1):
                 self.lgr.debug('dataWatch loopAdHoc last chance mov or ldr %s' % next_instruct[1])
-                value = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                value = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 if value is not None:
                     self.lgr.debug('dataWatch loopAdHoc %s setting reg_values[%s] to 0x%x' % (next_instruct[1], op1, value))
                     reg_values[op1] = value
             elif next_instruct[1].startswith('ldr') and self.decode.isReg(op1):
                 self.lgr.debug('dataWatch loopAdHoc last chance mov or ldr %s' % next_instruct[1])
-                op_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                op_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 if op_addr is not None:
                     value = self.mem_utils.readPtr(self.cpu, op_addr) 
                     if value is not None:
@@ -4363,7 +4367,7 @@ class DataWatch():
             done_movdqa = False
             next_eip = eip
             next_instruct = instruct
-            src = self.decode.getAddressFromOperand(self.cpu, src_maybe, self.lgr)
+            src = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, src_maybe, self.lgr)
             if src is not None:
                 while not done_movdqa:
                     next_eip = next_eip + next_instruct[0]
@@ -4372,7 +4376,7 @@ class DataWatch():
                         qcount = qcount + 1
                     elif next_instruct[1].startswith('movups'):
                         op2, op1 = self.decode.getOperands(next_instruct[1])
-                        dest = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                        dest = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                         if dest is None:
                             self.lgr.error('dataWatch checkXmmMove failed to get dest from %s' % (next_instruct[1]))
                         else:
@@ -4390,7 +4394,7 @@ class DataWatch():
             bytes_moved = 16 * qcount
             if next_instruct[1].startswith('mov '):
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                remain_src = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                remain_src = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 self.lgr.debug('dataWatch checkXmmMove src 0x%x bytes_moved 0x%x, remain_src 0x%x' % (src, bytes_moved, remain_src))
                 if remain_src == (src+bytes_moved):
                     bytes_moved = bytes_moved + 8
@@ -4554,7 +4558,7 @@ class DataWatch():
             retval = True
         elif instruct[1].startswith('str'):
             op2, op1 = self.decode.getOperands(instruct[1])
-            if self.decode.isReg(op1) and self.decode.getValue(op1, self.cpu, lgr=self.lgr)==0:
+            if self.decode.isReg(op1) and self.decode.getValue(op1, self.cpu, self.mem_utils, lgr=self.lgr)==0:
                 retval = True
         return retval
 
