@@ -644,6 +644,15 @@ class SplitMark():
             retval = retval + ' (0x%x %d bytes) ' % (item_addr, item_len)
         return retval
 
+class RegexMatchMark():
+    def __init__(self, src, the_string, pattern_addr):
+        self.src = src
+        self.the_string = the_string
+        self.pattern_addr = pattern_addr
+    def getMsg(self):
+        retval = 'regex_match 0x%x %s to regx at 0x%x' % (self.src, self.the_string, self.pattern_addr) 
+        return retval
+
 class MscMark():
     def __init__(self, fun, addr, msg_append):
         self.addr = addr
@@ -1445,32 +1454,6 @@ class WatchMarks():
         wm = self.addWatchMark(bm)
         return wm
 
-    def charCopy(self, fun, dest):
-        pm = self.recent_ad_hoc
-        if self.so_map is None:
-            self.so_map = json.loads(self.top.getSOMap(quiet=True))
-            if self.so_map is None:
-                self.lgr.error('watchMarks addWatchMark, so_map is None')
-            else:
-                self.lgr.debug('dataWatch addWatchMark got so_map')
-        if ip is None:
-            ip = self.mem_utils.getRegValue(self.cpu, 'pc')
-        tid = self.top.getTID()
-        if cycles is None:
-            cycles = self.cpu.cycles
-        fname_ret = self.top.getSO(ip, just_name=True)
-        if fname_ret is not None:
-            if self.top.isWindows(target=self.cell_name):
-                fname = ntpath.basename(fname_ret)
-            else:
-                fname = os.path.basename(fname_ret)
-        else:
-            fname = None
-        wm = self.WatchMark(cycles, self.call_cycle, ip, tid, fname, mark)
-        self.mark_list.append(wm)
-        #self.lgr.debug('addWatchMark len now %d' % len(self.mark_list))
-        return wm
-
     def strtok(self, fun, cur_ptr, delim, the_string, retaddr, buf_start):
         sm = StrtokMark(fun, cur_ptr, delim, the_string, retaddr, buf_start)
         wm = self.addWatchMark(sm)
@@ -1490,6 +1473,11 @@ class WatchMarks():
         sm = SplitMark(src, delim, item_list, fun_name)
         self.addWatchMark(sm)
         self.lgr.debug(sm.getMsg())
+
+    def regexMatch(self, src, the_string, pattern_addr):
+        rm = RegexMatchMark(src, the_string, pattern_addr)
+        self.addWatchMark(rm)
+        self.lgr.debug(rm.getMsg())
 
     def mscMark(self, fun, src, msg_append=''):
         fm = MscMark(fun, src, msg_append)
