@@ -592,7 +592,7 @@ class GetKernelParams():
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'fs:' in instruct[1]:
-                prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
+                prefix, addr = decode.getInBrackets(self.cpu, self.mem_utils, instruct[1], self.lgr) 
                 print('got addr %s from %s' % (addr, instruct[1]))
                 addr = int(addr, 16)
                 self.fs_base = self.cpu.ia32_fs_base
@@ -639,7 +639,7 @@ class GetKernelParams():
                         self.lgr.debug('gsFind wrong op1? %s' % op1)
                         continue
 
-                prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
+                prefix, addr = decode.getInBrackets(self.cpu, self.mem_utils, instruct[1], self.lgr) 
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 addr = self.mem_utils.getUnsigned(int(addr, 16))
@@ -2123,7 +2123,7 @@ class GetKernelParams():
         cpl = memUtils.getCPL(self.cpu)
         if self.os_type == 'WINXP':
              self.lgr.debug('is WINXP')
-             winxpParams.WinxpParams(self.param, self.target, lgr=self.lgr)
+             winxpParams.WinxpParams(self.param, self.target, self.mem_utils, lgr=self.lgr)
         elif self.cpu.architecture == 'ppc32':
             self.ppc_kparams.getParams()
         elif cpl != 0:
