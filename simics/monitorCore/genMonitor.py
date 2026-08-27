@@ -731,10 +731,14 @@ class GenMonitor():
                     self.lgr.debug('genMonitor stopHap stopAction will delete hap %s type %s' % (str(hc.hap), str(hc.htype)))
                     RES_hap_delete_callback_id(hc.htype, hc.hap)
                 hc.hap = None
-
-        for bp in stop_action.breakpoints:
-            self.lgr.debug('genMonitor stopHap stopAction delete breakpoint %d' % bp)
-            RES_delete_breakpoint(bp)
+        if not stop_action.reverse_breaks:
+            for bp in stop_action.breakpoints:
+                self.lgr.debug('genMonitor stopHap stopAction delete breakpoint %d' % bp)
+                RES_delete_breakpoint(bp)
+        else:
+            for bp in stop_action.breakpoints:
+                self.lgr.debug('genMonitor stopHap stopAction delete reverse breakpoint %d' % bp)
+                self.reverse_mgr[self.target].SIM_delete_breakpoint(bp)
         del stop_action.breakpoints[:]
 
         if self.stop_hap is not None:
@@ -761,7 +765,7 @@ class GenMonitor():
     def revToWhatever(self, breakpoints, callback, tid=None):
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
         hap_clean = hapCleaner.HapCleaner(cpu)
-        stop_action = hapCleaner.StopAction(hap_clean, breakpoints=breakpoints, tid=tid, prelude=callback)
+        stop_action = hapCleaner.StopAction(hap_clean, breakpoints=breakpoints, tid=tid, prelude=callback, reverse_breaks=True)
         self.stop_hap = self.RES_add_stop_callback(self.stopHap, stop_action)
         self.lgr.debug('revToWhatever, now reverse')
         SIM_run_command('rev')
@@ -835,7 +839,8 @@ class GenMonitor():
                 self.soMap[cell_name] = vxKModules.VxKModules(self, cell_name, cpu, self.mem_utils[cell_name], self.task_utils[cell_name], 
                           self.targetFS[cell_name], self.comp_dict[cell_name], self.lgr)
             else:
-                self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], self.run_from_snap, self.lgr)
+                self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], 
+                    self.reverse_mgr[cell_name], self.run_from_snap, self.lgr)
             if cell_name != 'driver': 
                 self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                        self.task_utils[cell_name], self.context_manager[cell_name], self.soMap[cell_name], self.lgr)
@@ -1468,7 +1473,7 @@ class GenMonitor():
             SIM_run_command(cmd)
         #except simics.SimExc_General:
         except SimExc_General as e:
-            self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % e.toString())
+            self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % str(e))
 
     def setPathToProg(self, tid):
         ''' Find the prog name for the tid, which may diverge from comm due to renaming  NOTE may set self.full_path '''
@@ -2184,7 +2189,8 @@ class GenMonitor():
             #self.lgr.debug('emptying mailbox of <%s>' % self.gdb_mailbox)
             self.gdb_mailbox = None
 
-    def runSkipAndMailAlone(self, cycles): 
+    def runSkipAndMailAlone(self, cycles_quiet): 
+        cycles, quiet = cycles_quiet
         tid, cpu = self.context_manager[self.target].getDebugTid() 
         if cpu is None:
             self.lgr.debug("no cpu in runSkipAndMailAlone")
@@ -2199,7 +2205,7 @@ class GenMonitor():
             if previous > start:
                 count = 0
                 while current != previous:
-                    self.skipToCyle(previous)
+                    self.skipToCyle(previous, quiet=quiet)
                     eip = self.getEIP(cpu)
                     current = cpu.cycles
                     instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -2219,7 +2225,7 @@ class GenMonitor():
         self.gdbMailbox('0x%x' % eip)
         print('Monitor done')
 
-    def skipAndMail(self, cycles=1, restore_debug=True):
+    def skipAndMail(self, cycles=1, restore_debug=True, quiet=None):
         self.lgr.debug('skipAndMail restore_debug %r' % restore_debug)
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         if cpu is None:
@@ -2242,7 +2248,7 @@ class GenMonitor():
             Expect the debugger script to forward one instruction
             '''
             self.lgr.debug('skipAndMail, run it alone')
-            SIM_run_alone(self.runSkipAndMailAlone, cycles)
+            SIM_run_alone(self.runSkipAndMailAlone, (cycles, quiet))
 
         #self.stopTrace()
         if self.coverage is not None:
@@ -2438,14 +2444,18 @@ class GenMonitor():
         self.removeDebugBreaks()
         self.rev_to_call[self.target].doRevToModReg(reg, kernel=kernel)
 
-    def revToAddr(self, address, extra_back=0):
+    def revToAddr(self, address, extra_back=0, quiet=None):
         if self.reverseEnabled():
-            tid, cpu = self.context_manager[self.target].getDebugTid() 
-            self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
-            self.stopTracking()
-            reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
-                           self.reverse_mgr[self.target], self.lgr, extra_back=extra_back)
-            self.lgr.debug('back from reverseToAddr')
+            if not self.reverse_mgr[self.target].atOrigin():
+                tid, cpu = self.context_manager[self.target].getDebugTid() 
+                self.lgr.debug('revToAddr 0x%x, extra_back is %d' % (address, extra_back))
+                self.stopTracking()
+                reverseToAddr.reverseToAddr(address, self.context_manager[self.target], self.task_utils[self.target], self.is_monitor_running, self, cpu, 
+                           self.reverse_mgr[self.target], self.lgr, extra_back=extra_back, quiet=quiet)
+                self.lgr.debug('back from reverseToAddr')
+            else:
+                if not quiet:
+                    print('At origin, cannot reverse.')
         else:
             print('reverse execution disabled')
             self.lgr.debug('reverse execution disabled')
@@ -3918,7 +3928,8 @@ class GenMonitor():
                 for c in accept_call:
                     calls.append(c)
                 # note hack for identifying old arm kernel
-                if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or word_size == 8:
+                #if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or word_size == 8:
+                if (cpu.architecture == 'arm' and not self.param[target].arm_svc) or self.os_type[target]=='LINUX64':
                     calls.remove('socketcall')
                     for scall in net.callname[1:]:
                         #self.lgr.debug('runToIO adding call <%s>' % scall.lower())
@@ -3943,7 +3954,8 @@ class GenMonitor():
                     calls = ['read', 'close', 'ioctl', 'select', 'pselect6', '_newselect', 'poll']
                     for call in net.readcalls:
                         calls.append(call.lower())
-                elif word_size == 8:
+                #elif word_size == 8 or :
+                elif self.os_type[target] == 'LINUX64':
                     self.lgr.debug('runToIO just input wordisize 8') 
                     calls = ['read', 'close', 'ioctl', 'pselect6', 'ppoll']
                     for call in net.readcalls:
@@ -4000,8 +4012,8 @@ class GenMonitor():
                 #SIM_continue(0)
 
     def runToInput(self, fd, linger=False, break_simulation=True, count=1, flist_in=None, ignore_waiting=False, sub_match=None):
-        ''' Track syscalls that consume inputs.  Intended for use by prepInject functions '''
-        ''' Also see runToIO for more general tracking '''
+        ''' Track syscalls that consume inputs.  Intended for use by prepInject functions 
+            Also see runToIO for more general tracking '''
         input_calls = ['read', 'recv', 'recvfrom', 'recvmsg', 'select']
         call_param_list = []
         for call in input_calls:
@@ -4011,15 +4023,15 @@ class GenMonitor():
             call_param_list.append(call_param)
 
         cpu, comm, cur_tid = self.task_utils[self.target].curThread() 
-        word_size = self.soMap[target].getProgWordSize(comm)
-        self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %d sub_match: %s word_size %d' % (fd, cpu.cycles, count, sub_match, word_size))
+        word_size = self.soMap[self.target].getProgWordSize(comm)
+        self.lgr.debug('runToInput on FD %d cycle: 0x%x count: %s sub_match: %s word_size %d' % (fd, cpu.cycles, count, sub_match, word_size))
         calls = ['read', 'socketcall', 'select', '_newselect', 'pselect6']
         compat32 = self.compat32()
-        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or word_size == 8:
+        if (cpu.architecture == 'arm' and not self.param[self.target].arm_svc) or self.os_type[self.target] == 'LINUX64':
             calls.remove('socketcall')
             for scall in net.readcalls:
                 calls.append(scall.lower())
-        if word_size == 8 and not compat32:
+        if (word_size == 8 and not compat32) or self.os_type[self.target] == 'LINUX64':
             calls.remove('recv')
             calls.remove('_newselect')
             calls.remove('select')
@@ -7276,14 +7288,14 @@ class GenMonitor():
     def skipTo(self, cycle):
         self.reverse_mgr[self.target].skipToCycle(cycle)
 
-    def reverse(self):
-        self.reverse_mgr[self.target].reverse()
+    def reverse(self, quiet=None):
+        self.reverse_mgr[self.target].reverse(quiet=quiet)
 
-    def revOne(self):
+    def revOne(self, quiet=None):
         self.lgr.debug('revOne')
         self.context_manager[self.target].disableAll()
         self.context_manager[self.target].setReverseContext()
-        self.reverse_mgr[self.target].revOne()
+        self.reverse_mgr[self.target].revOne(quiet=quiet)
         self.context_manager[self.target].enableAll()
         self.context_manager[self.target].clearReverseContext()
         self.lgr.debug('revOne done')
