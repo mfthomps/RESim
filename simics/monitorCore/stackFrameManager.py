@@ -228,6 +228,7 @@ class StackFrameManager():
         cpu, comm, tid = self.task_utils.curThread() 
         offset = self.soMap.wordSize(tid)
         esp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.lgr.debug('stackFrameManager dumpStack count %d offset 0x%x sp 0x%x' % (count, offset, esp))
         ptr = esp
         fun_mgr = self.top.getFunMgr()
         fh = None
