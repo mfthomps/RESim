@@ -615,7 +615,8 @@ class SharedSyscall():
             elif exit_info.msghdr is not None:
                 #msghdr = net.Msghdr(self.cpu, self.mem_utils, exit_info.retval_addr)
                 msghdr = exit_info.msghdr
-                self.lgr.debug('sharedSyscall %s call msghdr.getIovec' % socket_callname)
+                msghdr.retLength(eax)
+                self.lgr.debug('sharedSyscall %s call msghdr.getIovec eax 0x%x' % (socket_callname, eax))
                 iovec = msghdr.getIovec()
                 if len(iovec) > 0 and iovec[0].base is not None:
                     self.lgr.debug('sharedSyscall %s call getByteArray' % socket_callname)
