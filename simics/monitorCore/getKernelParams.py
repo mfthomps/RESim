@@ -2337,7 +2337,7 @@ class GetKernelParams():
                     our_expr = op2
 
         self.lgr.debug('arm64 our_expr is %s' % our_expr)
-        addr = decodeArm.getAddressFromOperand(self.cpu, our_expr, self.lgr)
+        addr = decodeArm.getAddressFromOperand(self.cpu, self.mem_utils, our_expr, self.lgr)
         addr = addr & 0xffffffffffffffff
         self.param.current_task = addr
         self.lgr.debug('arm64 current_task found at 0x%x' % addr)

@@ -50,7 +50,7 @@ def findRegValue(reg, instruct_history, decode, mem_utils, cpu, lgr):
                 op2, op1 = decode.getOperands(instruct[1])
                 if op1 == reg:
                     lgr.debug('reWatch, findRegValue our reg, getaddr from %s' % op2)
-                    cmp_addr = decode.getAddressFromOperand(cpu, op2, lgr)
+                    cmp_addr = decode.getAddressFromOperand(cpu, self.mem_utils, op2, lgr)
                     if cmp_addr is not None:
                         if instruct[1].startswith('ldrb'):
                             lgr.debug('reWatch, findRegValue got cmp_addr 0x%x' % cmp_addr)

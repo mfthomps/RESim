@@ -821,7 +821,7 @@ class findKernelWrite():
         elif self.decode.modifiesOp0(mn):
             self.lgr.debug('findKernelWrite backOneAlone get operands from %s' % instruct[1])
             op1, op0 = self.decode.getOperands(instruct[1])
-            actual_addr = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
+            actual_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op0, self.lgr)
             if actual_addr is None:
                 self.lgr.error('failed to get op0 address from %s' % instruct[1])
                 return
@@ -908,19 +908,19 @@ class findKernelWrite():
                 self.lgr.debug('findKernelWrite backOneAlone is push reg %s, find mod', op0)
                 self.rev_to_call.doRevToModReg(op0, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
             else:
-                new_address = self.decode.getAddressFromOperand(self.cpu, op0, self.lgr)
+                new_address = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op0, self.lgr)
                 self.lgr.debug('findKernelWrite backOneAlone is push addr 0x%x', new_address)
                 self.top.stopAtKernelWrite(new_address, self.rev_to_call, kernel=self.kernel, prev_buffer=self.prev_buffer)
 
         elif self.cpu.architecture.startswith('arm') and mn.startswith('stm'):
-            reg = self.decode.armSTM(self.cpu, instruct[1], self.addr, self.lgr)
+            reg = self.decode.armSTM(self.cpu, self.mem_utils, instruct[1], self.addr, self.lgr)
             self.lgr.debug('back from armSTM reg: %s cycle 0x%x' % (reg, self.cpu.cycles))
             if reg is not None:
                 rval = self.mem_utils.getRegValue(self.cpu, reg)
                 self.lgr.debug('findKernelWrite backOneAlone is stm... reg %s, find mod to 0x%x' % (reg, rval))
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, kernel=self.kernel)
         elif self.cpu.architecture.startswith('arm') and (mn.startswith('str') or (mn.startswith('stu'))):
-            reg = self.decode.armSTR(self.cpu, instruct[1], self.addr, self.lgr)
+            reg = self.decode.armSTR(self.cpu, self.mem_utils, instruct[1], self.addr, self.lgr)
             if reg is not None:
                 self.lgr.debug('findKernelWrite backOneAlone is str... reg %s, find mod', reg)
                 self.rev_to_call.doRevToModReg(reg, taint=taint, value=self.value, num_bytes = self.num_bytes, offset=offset, kernel=self.kernel)
@@ -969,7 +969,7 @@ class findKernelWrite():
     def ppcMemWrite(self, instruct, taint):
         if instruct[1].startswith('st'):
             op1, op0 = self.decode.getOperands(instruct[1])
-            actual_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+            actual_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
             if actual_addr is None:
                 self.lgr.error('findKernelWRite ppcMemWrite failed to get op1 address from %s' % instruct[1])
                 return

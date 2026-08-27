@@ -155,7 +155,7 @@ def adjustRegInBrackets(s, lgr):
     return retval
 
 
-def getInBrackets(cpu, s, lgr):
+def getInBrackets(cpu, mem_utils, s, lgr):
     cell_name = getTopComponentName(cpu)
     if s is not None and s.find('[') != -1 and s.find(']') != -1:
         #return s.split('[')[0], s.split('[', 1)[1].split(']')[0]
@@ -167,7 +167,8 @@ def getInBrackets(cpu, s, lgr):
             #print 'cell_name: %s first is %s   second is %s' % (cell_name, first, second)
             dum, reg = getInBrackets(cpu, first, lgr)
             #print 'cell_name: %s got reg of %s' % (cell_name, reg)
-            reg_num = cpu.iface.int_register.get_number(reg)
+            #reg_num = cpu.iface.int_register.get_number(reg)
+            reg_num = mem_utils.getRegNum(reg)
             if reg_num is not None:
                 prefix = getSigned(cpu.iface.int_register.read(reg_num))
                 #lgr.debug('cell_name: %s got prefix value of %d' % (cell_name, prefix))
@@ -249,7 +250,7 @@ def regMask(reg):
         mask = 0xffffffffffffffff
     return mask
 
-def getValue(s, cpu, lgr=None, reg_values={}):
+def getValue(s, cpu, mem_utils, lgr=None, reg_values={}):
     retval = None
     #if lgr is not None:
     #    lgr.debug('getValue for %s' % s)
@@ -263,8 +264,8 @@ def getValue(s, cpu, lgr=None, reg_values={}):
         else:
             reg_mask = 0xffffffffffffffff
  
-        v1 = getValue(parts[0], cpu, lgr, reg_values=reg_values) 
-        v2 = getValue(parts[1], cpu, lgr, reg_values=reg_values)
+        v1 = getValue(parts[0], cpu, mem_utils, lgr, reg_values=reg_values) 
+        v2 = getValue(parts[1], cpu, mem_utils, lgr, reg_values=reg_values)
         if v1 is not None and v2 is not None:
             retval = (v1+v2) & reg_mask
             #if lgr is not None:
@@ -273,8 +274,8 @@ def getValue(s, cpu, lgr=None, reg_values={}):
             lgr.debug('decode getValue failed getting values from %s' % s)
     elif '-' in s:
         parts = s.split('-',1)
-        p1val = getValue(parts[0], cpu, lgr, reg_values=reg_values) 
-        p2val = getValue(parts[1], cpu, lgr, reg_values=reg_values)
+        p1val = getValue(parts[0], cpu, mem_utils, lgr, reg_values=reg_values) 
+        p2val = getValue(parts[1], cpu, mem_utils, lgr, reg_values=reg_values)
         retval = p1val - p2val
         #if lgr is not None:
         #    lgr.debug('getValue for %s is - p1 0x%x p2 0x%x' % (s, p1val, p2val))
@@ -283,7 +284,7 @@ def getValue(s, cpu, lgr=None, reg_values={}):
         retval = 1
         parts = s.split('*')
         for p in parts:
-            got_value = getValue(p, cpu, lgr=lgr, reg_values=reg_values) 
+            got_value = getValue(p, cpu, mem_utils, lgr=lgr, reg_values=reg_values) 
             if got_value is not None:
                 retval = retval * got_value
             else:
@@ -294,8 +295,9 @@ def getValue(s, cpu, lgr=None, reg_values={}):
         if s in reg_values:
             retval = reg_values[s]
         else:
-            reg_num = cpu.iface.int_register.get_number(s)
-            retval = cpu.iface.int_register.read(reg_num)
+            #reg_num = cpu.iface.int_register.get_number(s)
+            #retval = cpu.iface.int_register.read(reg_num)
+            retval = mem_utils.getRegValue(cpu, s)
             #if lgr is not None:
             #    lgr.debug('getValue %s is reg, get its value 0x%x' % (s, retval))
     else:
@@ -314,45 +316,14 @@ def getValue(s, cpu, lgr=None, reg_values={}):
         #    lgr.debug('getValue %s is scalar, get its value 0x%x' % (s, retval))
     return retval
 
-        
-def addressFromExpression(cpu, exp, lgr, reg_values={}):
-    #TBD remove not used
-    address = None
-    if isReg(exp):
-        keys = reg_values.keys()
-        lgr.debug('decode addressFromExpression is %s in %s' % (exp, str(keys)))
-        if exp in reg_values:
-            address = reg_values[exp]
-        else: 
-            reg_num = cpu.iface.int_register.get_number(exp)
-            address = cpu.iface.int_register.read(reg_num)
-    else:
-        parts = None
-        if '+' in exp:
-            parts = exp.split('+')
-            address = 0
-            for p in parts:
-                address = address + getValue(p, cpu, lgr)
-        elif '-' in exp: 
-            ''' ever use? TBD '''
-            parts = exp.split('-')
-            address = getValue(parts[0], cpu, lgr) - getValue(parts[1], cpu, lgr)
-        if parts is None:
-            try:
-                address = int(exp, 16)
-            except:
-                lgr.error('could not parse expression %s' % exp)
-        
-    return address
 
-
-def getAddressFromOperand(cpu, operand, lgr, reg_values={}):
-    prefix, bracketed = getInBrackets(cpu, operand, lgr)
+def getAddressFromOperand(cpu, mem_utils, operand, lgr, reg_values={}):
+    prefix, bracketed = getInBrackets(cpu, mem_utils, operand, lgr)
     lgr.debug('decode getAddressFromOperand, bracketed it %s prefix is %s' % (bracketed, prefix))
     address = None
     if bracketed is not None:
         #address = addressFromExpression(cpu, bracketed, lgr, reg_values=reg_values)
-        address = getValue(bracketed, cpu, lgr, reg_values=reg_values)
+        address = getValue(bracketed, cpu, mem_utils, lgr, reg_values=reg_values)
         if address is not None:
             #lgr.debug('bracketed value was %x' % address)
             offset = 0

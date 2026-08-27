@@ -443,14 +443,14 @@ class ExitMaze():
                 op1, op0 = decode.getOperands(instruct[1])
                 self.lgr.debug('extiMaze compareHap operands 1:<%s> 0:<%s>' % (op1, op0))
                 if '[' in op1:
-                    address = decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                    address = decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                     #self.lgr.debug('[ in op1, got address 0x%x' % address)
                     val1 = self.mem_utils.readWord32(self.cpu, address)
                 else:
                     val1 = decode.getValue(op1, self.cpu, self.lgr)
 
                 if '[' in op0:
-                    address = decode.getAddressFromOperand(self.cpu, op0, self.lgr)
+                    address = decode.getAddressFromOperand(self.cpu, self.mem_utils, op0, self.lgr)
                     #self.lgr.debug('[ in op0, got address 0x%x' % address)
                     val0 = self.mem_utils.readWord32(self.cpu, address)
                 else:

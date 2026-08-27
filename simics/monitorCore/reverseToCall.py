@@ -939,7 +939,7 @@ class reverseToCall():
                             #if mn.startswith('ldr') and op1.startswith('[') and op1.endswith(']'):
                             if (mn.startswith('ldr') or mn.startswith('ldu')) and op1.startswith('['):
                                 self.lgr.debug('is ldr op1 is %s' % op1)
-                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
                                     addr = addr + self.offset
@@ -948,7 +948,7 @@ class reverseToCall():
                             elif self.cpu.architecture == 'ppc32' and mn.startswith('l'):
                                 # TBD incomplete by a mile
                                 self.lgr.debug('cycleRegisterMod is ppc l op1 is %s' % op1)
-                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                                 if addr is not None:
                                     retval = RegisterModType(addr, RegisterModType.ADDR)
                                 else:
@@ -956,7 +956,7 @@ class reverseToCall():
                                 
                             elif mn.startswith('mov') and '[' in op1:
                                 self.lgr.debug('is mov op1 is %s' % op1)
-                                addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                                addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                                 addr = addr & self.task_utils.getMemUtils().SIZE_MASK
                                 if addr is not None:
                                     addr = addr + self.offset
@@ -1033,7 +1033,7 @@ class reverseToCall():
                                 self.lgr.debug('cycleRegisterMod armWriteBack, set type to unknown')
                                 retval = RegisterModType(None, RegisterModType.UNKNOWN)
                         elif mn.startswith('ldm') and self.reg in instruct[1] and '{' in instruct[1]:
-                            addr = self.decode.armLDM(self.cpu, instruct[1], self.reg, self.lgr)
+                            addr = self.decode.armLDM(self.cpu, self.mem_utils, instruct[1], self.reg, self.lgr)
                             rval = self.task_utils.getMemUtils().readAppPtr(self.cpu, addr)
                             if addr is None or rval is None:
                                 self.lgr.debug('cycleRegisterMod eip 0x%x cannot get register value from %s' % (eip, instruct[1]))
@@ -1051,7 +1051,7 @@ class reverseToCall():
                             elif addr is not None:
                                 self.prev_reg_val = rval
                                 done = True
-                                pc_addr = self.decode.armLDM(self.cpu, instruct[1], 'pc', self.lgr)
+                                pc_addr = self.decode.armLDM(self.cpu, self.mem_utils, instruct[1], 'pc', self.lgr)
                                 if pc_addr is not None:
                                     #TBD how do we know the instructions are linear?
                                     pc = self.task_utils.getMemUtils().readAppPtr(self.cpu, pc_addr)
@@ -1129,7 +1129,7 @@ class reverseToCall():
     def orValue(self, op1, mn):
         if self.value is not None and mn == 'or':
             if self.num_bytes == 1:
-                address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                address = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
                 if address is not None:
                     value = self.task_utils.getMemUtils().readWord32(self.cpu, address)
                     self.lgr.debug('orValue, address is 0x%x value 0x%x' % (address, value))
@@ -1172,7 +1172,7 @@ class reverseToCall():
     def getOpValue(self, op):
         retval = None
         if '[' in op:
-            address = self.decode.getAddressFromOperand(self.cpu, op, self.lgr)
+            address = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op, self.lgr)
             retval = self.task_utils.getMemUtils().readWord32(self.cpu, address)
         else:
             retval = self.decode.getValue(op, self.cpu, self.lgr)
@@ -1249,7 +1249,7 @@ class reverseToCall():
 
         elif self.decode.isReg(op1) and self.decode.isIndirect(op1):
             self.lgr.debug('followTaintX86, is indrect reg, track %s' % op1)
-            address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+            address = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
             self.bookmarks.setBacktrackBookmark('switch to indirect op1 %s eip:0x%x inst:"%s"' % (op1, eip, instruct[1]))
             self.doRevToModReg(op1, taint=self.taint, kernel=self.kernel)
 
@@ -1258,7 +1258,7 @@ class reverseToCall():
 
         else:
             self.lgr.debug('followTaintX86, see if %s is an address' % op1)
-            address = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+            address = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
             if address is not None:
                 self.lgr.debug('followTaintX86, yes, address is 0x%x' % address)
                 if self.decode.isByteReg(op0) or 'byte ptr' in op1:

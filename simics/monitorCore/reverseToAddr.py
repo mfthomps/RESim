@@ -27,7 +27,7 @@ from simics import *
 from resimHaps import *
 import resimUtils
 class reverseToAddr():
-    def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, reverse_mgr, lgr, extra_back=0):
+    def __init__(self, address, context_manager, task_utils, is_monitor_running, top, cpu, reverse_mgr, lgr, extra_back=0, quiet=None):
         self.top = top
         self.lgr = lgr
         self.context_manager = context_manager
@@ -39,11 +39,12 @@ class reverseToAddr():
         self.cpu = cpu
         self.tid = tid
         self.reverse_mgr = reverse_mgr
+        self.quiet = quiet
         #resim = self.top.getRESimContext()
         #default = self.top.getDefaultContext()
         #self.the_break = SIM_breakpoint(default, Sim_Break_Linear, Sim_Access_Execute, 
         #            address, 1, 0)
-        
+        self.address = address 
         mode = Sim_Access_Execute
         phys_block = cpu.iface.processor_info.logical_to_physical(address, mode)
         if phys_block.address != 0:
@@ -57,20 +58,20 @@ class reverseToAddr():
        
         #self.one_stop_hap = None
         self.context_manager.disableAll()
-        self.lgr.debug('reverseToAddr now call reverse')
-        self.reverse_mgr.reverse(callback=self.stopHap)
+        self.lgr.debug('reverseToAddr now call reverse quiet is %s' % quiet)
+        self.reverse_mgr.reverse(callback=self.stopHap, quiet=quiet)
 
     def goBackAlone(self, dumb):
         backone = self.cpu.cycles - 1 
         #cmd = 'skip-to cycle = %d ' % backone
         #SIM_run_command(cmd)
-        self.lgr.debug('goBackAlone call skipToCycle to 0x%x' % backone)
-        if not self.top.skipToCycle(backone, cpu=self.cpu, disable=True):
+        self.lgr.debug('reverseToAddr goBackAlone call skipToCycle to 0x%x self.quiet is %s' % (backone, self.quiet))
+        if not self.top.skipToCycle(backone, cpu=self.cpu, disable=True, quiet=self.quiet):
             first = self.top.getFirstCycle()
-            self.lgr.error('revToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
+            self.lgr.error('reverseToAddr failed goBackAlone.  cycles is 0x%x first cycle is 0x%x' % (self.cpu.cycles, first))
             self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
         else:
-            self.reverse_mgr.reverse()
+            self.reverse_mgr.reverse(quiet=self.quiet)
 
     def stopHap(self, cpu, one, exception, error_string):
         if self.the_break is None:
@@ -79,9 +80,9 @@ class reverseToAddr():
         cpu, comm, tid  = self.task_utils.curThread()
         eip = self.top.getEIP()
         first = self.top.getFirstCycle()
-        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x first cycle: 0x%x' % (eip, cpu.cycles, first))
+        self.lgr.debug('reverseToAddr stopHap eip: %x cycles: 0x%x first cycle: 0x%x self.quiet %s' % (eip, cpu.cycles, first, self.quiet))
         self.top.RES_delete_stop_hap_run_alone(None, your_stop=True)
-        if cpu.cycles <= first:
+        if cpu.cycles <= first and eip != self.address:
             self.lgr.error('reverseToAddr stopHap eip: %x cycles: 0x%x at first cycle' % (eip, cpu.cycles))
             self.reverse_mgr.SIM_delete_breakpoint(self.the_break)
             self.the_break = None
@@ -98,20 +99,20 @@ class reverseToAddr():
         if cpu.cycles == origin:
             self.lgr.debug('reverseToAddr stopHap hit origin cycle')
             self.context_manager.setIdaMessage('Could not reverse past origin cycle')
-            self.top.skipAndMail()
+            self.top.skipAndMail(quiet=self.quiet)
             return
  
         #self.top.gdbMailbox('0x%x' % eip)
         if self.extra_back > 0:
             self.lgr.debug('stopHap asked to go back extra %d' % self.extra_back)
             self.one_stop_hap = self.top.RES_add_stop_callback(self.backOneStopped, cpu)
-            self.reverse_mgr.revOne()
+            self.reverse_mgr.revOne(quiet=self.quiet)
         else:
             # ignore cycles, unless new ida refresh strategy fails
             self.is_monitor_running.setRunning(False)
             cycles = 1 + self.extra_back
             self.lgr.debug('reverseToAddr stopHap eip: %x skip nd mail to 0x%x' % (eip, cycles))
-            self.top.skipAndMail(cycles)
+            self.top.skipAndMail(cycles, quiet=self.quiet)
 
     def backOneStopped(self, cpu, one, exception, error_string):
         '''
@@ -126,4 +127,4 @@ class reverseToAddr():
         self.top.RES_delete_stop_hap_run_alone(hap)
         self.one_stop_hap = None
         self.is_monitor_running.setRunning(False)
-        self.top.skipAndMail()
+        self.top.skipAndMail(quiet=self.quiet)

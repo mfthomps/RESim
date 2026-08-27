@@ -168,7 +168,7 @@ class FunMgr():
                    if f1 == f2 and f_from == f1:
                        #self.lgr.debug('funMgr inFun NOT IN function, but call_to fun name matches call_fun name (modulo parameter aliases) and all funs in same so, call it good')
                        retval = True
-                elif '::' in call_to_name and call_to_name.endswith(prev_ip_name):
+                elif prev_ip_name is not None and '::' in call_to_name and call_to_name.endswith(prev_ip_name):
                     retval = True
                 else:
                    ''' hack it ok if prev_ip and call_to are in same so file and is called from outside the so '''
@@ -333,7 +333,7 @@ class FunMgr():
                 if op1 == reg:
                     try:
                         #value = int(op2, 16) 
-                        value = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                        value = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                         retval = value
                         self.lgr.debug('funMgr getCallRegValue got address mov to %s 0x%x' % (reg, retval))
                     except:

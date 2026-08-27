@@ -100,7 +100,7 @@ def regIsPartList(reg1, reg2_list):
 def isByteReg(reg):
     return False
 
-def getRegValue(cpu, reg, lgr=None):
+def REMOVETHIS_getRegValue(cpu, reg, lgr=None):
     reg_value = None
     reg_num = None
     if reg.startswith('w'):
@@ -128,7 +128,7 @@ def getRegValue(cpu, reg, lgr=None):
         reg_value = reg_value & 0xffffffff
     return reg_value
 
-def getValue(item, cpu, lgr=None, reg_values=[]):
+def getValue(item, cpu, mem_utils, lgr=None, reg_values=[]):
     item = item.strip()
     value = None
     if lgr is not None:
@@ -137,7 +137,7 @@ def getValue(item, cpu, lgr=None, reg_values=[]):
         if item in reg_values:
             value = reg_values[item]
         else:
-            value = getRegValue(cpu, item, lgr=lgr)
+            value = mem_utils.getRegValue(cpu, item)
         if lgr is not None:
             lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):
@@ -165,7 +165,7 @@ def getValue(item, cpu, lgr=None, reg_values=[]):
     return value 
         
 
-def getAddressFromOperand(cpu, op, lgr, after=False, reg_values=[]):
+def getAddressFromOperand(cpu, mem_utils, op, lgr, after=False, reg_values=[]):
     retval = None
     express = None
     remain = None
@@ -183,7 +183,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False, reg_values=[]):
         value = 0
         parts = express.split(',')
         for p in parts:
-            v = getValue(p.strip(), cpu, lgr=None, reg_values=reg_values) 
+            v = getValue(p.strip(), cpu, mem_utils, lgr=None, reg_values=reg_values) 
             if v is not None:
                 #lgr.debug('getAddressFromOperand adjust value by value 0x%x' % v)
                 value += v
@@ -192,7 +192,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False, reg_values=[]):
                 return None    
         if remain is not None and remain.startswith(','):
             remain = remain[1:]
-            adjust = getValue(remain, cpu, lgr=None, reg_values=reg_values)
+            adjust = getValue(remain, cpu, mem_utils, lgr=None, reg_values=reg_values)
             if adjust is not None:
                 if after:
                     value = value - adjust
@@ -206,7 +206,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False, reg_values=[]):
         if op.endswith('!'):
             op = op[:-1]
         if isReg(op):
-            retval = getValue(op, cpu, reg_values=reg_values)
+            retval = getValue(op, cpu, mem_utils, reg_values=reg_values)
         else:
             lgr.debug('getAddressFromOperand nothing from %s' % op)
     return retval
@@ -229,7 +229,7 @@ def armSTR(cpu, instruct, addr, lgr):
         retval = op0
     return retval
 
-def armSTM(cpu, instruct, addr, lgr):
+def armSTM(cpu, mem_utils, instruct, addr, lgr):
     lgr.debug('armSTM')
     op1, op0 = getOperands(instruct)
     mn = getMn(instruct)
@@ -247,7 +247,7 @@ def armSTM(cpu, instruct, addr, lgr):
         before = 0
         if 'b' in mn:
             before = 1
-        reg_addr = getRegValue(cpu, op0)
+        reg_addr = mem_utils.getRegValue(cpu, op0)
         offset = (addr - reg_addr) * mul
         ''' TBD 64-bit '''
         count = int((offset/4 - before))
@@ -259,7 +259,7 @@ def armSTM(cpu, instruct, addr, lgr):
         retval = regs[count].strip()
     return retval
 
-def armLDM(cpu, instruct, reg, lgr):
+def armLDM(cpu, mem_utils, instruct, reg, lgr):
     ''' return the value of what would be loaded into the reg register, assuming it is part of an LDM instruction '''
     op1, op0 = getOperands(instruct)
     mn = getMn(instruct)
@@ -289,7 +289,7 @@ def armLDM(cpu, instruct, reg, lgr):
             #lgr.debug('armLDM index %d  offset %d' % (index, offset))
             if op0.endswith('!'):
                 op0 = op0[:-1]
-            reg_addr = getRegValue(cpu, op0)
+            reg_addr = mem_utils.getRegValue(cpu, op0)
             retval = reg_addr + (offset * mul)
             #lgr.debug('decodeArm armLDM reg %s, base %s base reg_addr value 0x%x index %d before %d mul %d returning 0x%x' % (reg, op0, reg_addr, index, before, mul, retval))
         else:

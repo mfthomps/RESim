@@ -353,9 +353,9 @@ class ReadReplace():
             op2, op1 = self.decode.getOperands(instruct[1])
             mod_addr = None
             if '[' in op1:
-                mod_addr = self.decode.getAddressFromOperand(self.cpu, op1, self.lgr)
+                mod_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op1, self.lgr)
             elif '[' in op2:
-                mod_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                mod_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
             if mod_addr is None:
                 self.lgr.error('readReplace doReplace readHap failed to get modify address from %s' % instruct[1])
                 return

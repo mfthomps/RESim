@@ -722,6 +722,7 @@ class MemUtils():
                     ''' get the rest ''' 
                     ps = self.v2p(cpu, vaddr+remain_in_page)
                     #self.lgr.debug('first read %s new ps 0x%x' % (first_read, ps))
+                    second_read = ''
                     try:
                         second_read = self.readStringPhys(cpu, ps, maxlen - remain_in_page)
                     except ValueError:
@@ -991,6 +992,14 @@ class MemUtils():
                 elif not arm64_app and reg in self.arm_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
+                    #self.lgr.debug('wtf reg %s in self.arm_regs reg_num %d' % (reg, reg_num))
+                    if reg == 'lr' and reg_num == -1:
+                        # simics7 bug
+                        reg_num = cpu.iface.int_register.get_number('lr_usr')
+                    if reg == 'sp' and (reg_num == -1 or reg_num >50):
+                        # simics7 bug
+                        reg_num = cpu.iface.int_register.get_number('sp_usr')
+                        #self.lgr.debug('wtf simics, try sp_usr? reg_num %d' % reg_num)
                 elif arm64_app and reg in self.arm64_regs:
                     # simply use name of register
                     reg_num = cpu.iface.int_register.get_number(reg)
@@ -1008,7 +1017,7 @@ class MemUtils():
                     # depends.  may be syscall_num, param reg or such.   We don't know if app is 32 or 64 bits.
                     # If in user space then just rely on cpu.in_aarch64.  Otherwise, assume we came in via a syscall
                    # and the esr_el1 reg tells us whether app was 32 or 64.
-                    #self.lgr.debug('getRegValue look for reg %s, if in kernel, expecting via syscall' % reg)
+                    #self.lgr.debug('memUtils getRegValue look for reg %s, if in kernel, expecting via syscall.  arm64_app is %r' % (reg, arm64_app))
                     if reg == 'syscall_num':
                         if arm64_app:
                             reg_num = cpu.iface.int_register.get_number('x8')
@@ -1048,15 +1057,18 @@ class MemUtils():
             if h_l is None:
                 index = int(reg[3:])
                 reg_value = cpu.xmm[index][0]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
+                #self.lgr.debug('memUtils getRegValue xmm register %s index: %d No high/low, just get value of low value 0x%x' % (reg, index, reg_value))
             else:
                 index = int(reg[3:-1])
                 reg_value = cpu.xmm[index][h_l]
-                self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
+                #self.lgr.debug('memUtils getRegValue xmm register %s index: %d h_l %d value 0x%x' % (reg, index, h_l, reg_value))
         else:     
             reg_num = self.getRegNum(cpu, reg)
             if reg_num is not None:
-                reg_value = cpu.iface.int_register.read(reg_num)
+                try:
+                    reg_value = cpu.iface.int_register.read(reg_num)
+                except SimExc_General:
+                    self.lgr.error('memUtils getRegValue bad register number %d for reg %s' % (reg_num, reg))
             else:
                 self.lgr.error('memUtils getRegValue not finding reg %s' % reg)
             if reg_value is not None and mask is not None:

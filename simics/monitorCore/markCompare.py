@@ -67,7 +67,7 @@ class MarkCompare():
         if next_instruct[1].startswith('ldrb'):
             if cmp_instruct[1].startswith('cmp') and our_reg in cmp_instruct[1]:
                 op2, op1 = self.decode.getOperands(next_instruct[1])
-                cmp_addr = self.decode.getAddressFromOperand(self.cpu, op2, self.lgr)
+                cmp_addr = self.decode.getAddressFromOperand(self.cpu, self.mem_utils, op2, self.lgr)
                 self.compare_eip = cmp_eip
                 self.compare_instruction = cmp_instruct[1] 
                 self.cmp_value = self.mem_utils.readByte(self.cpu, cmp_addr) 

@@ -121,13 +121,13 @@ def getRegValue(cpu, reg, lgr=None):
         reg_value = reg_value & 0xffffffff
     return reg_value
 
-def getValue(item, cpu, lgr=None):
+def getValue(item, cpu, mem_utils, lgr=None):
     item = item.strip()
     value = None
     if lgr is not None:
         lgr.debug('getValue for <%s>' % item)
     if isReg(item):
-        value = getRegValue(cpu, item, lgr=lgr)
+        value = mem_utils.getRegValue(cpu, item)
         if lgr is not None:
             lgr.debug('getValue IS A REG <%s>' % item)
     elif item.startswith('#'):
@@ -155,7 +155,7 @@ def getValue(item, cpu, lgr=None):
     return value 
         
 
-def getAddressFromOperand(cpu, op, lgr, after=False):
+def getAddressFromOperand(cpu, mem_utils, op, lgr, after=False):
     retval = None
     express = None
     remain = None
@@ -167,7 +167,7 @@ def getAddressFromOperand(cpu, op, lgr, after=False):
         lgr.debug('decodePPC32 getAddressFromOperand index of ( is %d' % index)
         reg = op[index+1:-1]
         lgr.debug('decodePPC32 getAddressFromOperand reg %s' % reg)
-        reg_value = getValue(reg, cpu)
+        reg_value = getValue(reg, cpu, mem_utils)
         if index != 0:
             express = op[0:index]
             if '0x' in express:
