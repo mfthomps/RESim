@@ -180,6 +180,8 @@ def adjustFunName(fun_name, fun_mgr, lgr):
 
             elif fun.startswith('g_ascii_'):
                 fun = fun[len('g_ascii_'):]
+            elif fun.startswith('g_strrstr'):
+                fun = fun[len('strstr'):]
 
             ''' TBD clean up this hack?'''
             if fun.endswith('destroy') or 'destructor' in fun:
