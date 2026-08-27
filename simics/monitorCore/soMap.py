@@ -96,10 +96,11 @@ class LoadInfo():
             self.end = None
     
 class SOMap():
-    def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, run_from_snap, lgr):
+    def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, reverse_mgr, run_from_snap, lgr):
         self.context_manager = context_manager
         self.task_utils = task_utils
         self.targetFS = targetFS
+        self.reverse_mgr = reverse_mgr
         self.cell_name = cell_name
         self.so_addr_map = {}
         self.so_file_map = {}
@@ -1040,7 +1041,7 @@ class SOMap():
                     start = load_info.addr
                     length = load_info.size
                     end = load_info.end
-                    proc_bp = SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
+                    proc_bp = self.reverse_mgr.SIM_breakpoint(cpu.current_context, Sim_Break_Linear, Sim_Access_Execute, start, length, 0)
                     break_list.append(proc_bp)
                     self.lgr.debug('soMap revToSO lib %s set breaks 0x%x 0x%x' % (fname, start, length))
        else:
