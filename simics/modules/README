@@ -32,14 +32,14 @@ Clean the local workspace using something like:
 
 
 To install the package, go to the parent of the SIMDIR directory and use something like:
-../intel-simics-package-manager-1.17.0/ispm install /eems_images/ubuntu_img/simics6/victron7/simics-pkg-200000-7.0.0-linux64.ispm -y --verbose --trust-insecure-packages
-../intel-simics-package-manager-1.17.0/ispm install /tmp/simics-pkg-200000-7.0.0-linux64.ispm -y --verbose --trust-insecure-packages
+../intel-simics-package-manager-1.18.0/ispm install /tmp/simics-pkg-200000-7.0.0-linux64.ispm -y --verbose --trust-insecure-packages
 
 bin/addon-manager -h
 bin/addon-manager -s /mnt/resim_eems/resim/archive/simics7_wr/install/simics-resim-gdb-7.0.0
+bin/addon-manager -d /mnt/resim_eems/resim/archive/simics7_wr/install/simics-resim-gdb-7.0.0
 
 
 That would over-ride the stock gdb-remote
 
 Uninstall the package:
-   ../intel-simics-package-manager-1.17.0/ispm uninstall 200000-7.0.0
+   ../intel-simics-package-manager-1.18.0/ispm uninstall 200000-7.0.0
