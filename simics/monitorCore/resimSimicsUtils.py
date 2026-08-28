@@ -240,10 +240,11 @@ def transType(op_type):
     return retval
 
 def getDecoder(cpu):
+    retval = None
     if cpu.architecture in ['arm', 'arm64']:
-        decode = decodeArm
+        retval = decodeArm
     if cpu.architecture in ['ppc32']:
-        decode = decodePPC32
+        retval = decodePPC32
     else:
-        decode = decode
-    return decode
+        retval = decode
+    return retval

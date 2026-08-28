@@ -105,7 +105,7 @@ class MarkCompare():
                         test_instruct = SIM_disassemble_address(self.cpu, test_eip, 1, 0)
                         if test_instruct[1].startswith('tst'):
                             test_op2, test_op1 = self.decode.getOperands(test_instruct[1])
-                            test_val = self.decode.getValue(test_op2, self.cpu, None)
+                            test_val = self.decode.getValue(test_op2, self.cpu, self.mem_utils)
                             if test_val is not None:
                                 base_reg = parts[0].strip() 
                                 base_val = self.mem_utils.getRegValue(self.cpu, base_reg) 
@@ -159,7 +159,7 @@ class MarkCompare():
                         break
                     elif instruct[1].startswith('b ') or instruct[1].startswith('jmp '):
                         dumb, op1 = self.decode.getOperands(instruct[1])
-                        value = self.decode.getValue(op1, self.cpu)
+                        value = self.decode.getValue(op1, self.cpu, self.mem_utils)
                         if value is not None:
                             eip = value
                         else:

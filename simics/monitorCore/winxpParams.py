@@ -11,7 +11,7 @@ import resimUtils
 import memUtils
 import decode
 class WinxpParams():
-    def __init__(self, param, target, lgr=None):
+    def __init__(self, param, target, mem_utils, lgr=None):
         ''' Get the cpu name as a variable for future reference '''
         if lgr is None:
             self.lgr = resimUtils.getLogger('WinxpParams', 'logs')
@@ -22,6 +22,7 @@ class WinxpParams():
         proclist = SIM_run_command(cmd)
         self.cpu = SIM_get_object(proclist[0])
         self.target = target
+        self.mem_utils = mem_utils
         self.mode_hap = None
         ''' a memory access hap example '''
         self.bp = None
@@ -554,7 +555,7 @@ class WinxpParams():
             self.lgr.debug('findFS instruct is %s' % instruct[1])
             fs_value = None
             if 'fs:' in instruct[1]:
-                prefix, addr = decode.getInBrackets(self.cpu, instruct[1], self.lgr) 
+                prefix, addr = decode.getInBrackets(self.cpu, self.mem_utils, instruct[1], self.lgr) 
                 print('got addr %s from %s' % (addr, instruct[1]))
                 addr = int(addr, 16)
                 self.fs_base = self.cpu.ia32_fs_base
