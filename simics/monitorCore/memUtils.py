@@ -1193,24 +1193,23 @@ class MemUtils():
             op2, op1 = decode.getOperands(instruct[1])
             this_kernel_offset = int(op2, 16)
             kernel_offset_delta = this_kernel_offset - self.param.rand_kernel_offset
-        else:
+        elif hasattr(self.param, 'msr_176'):
             this_msr_176 = None
             if version.startswith('7'):
                 cmd = 'get-msr %s 0x176' % cpu.name
                 dumb, value = cli.quiet_run_command(cmd)
                 this_msr_176 = int(value,16)
             else:
-                if hasattr(self.param, 'msr_176'):
-                    cmd = '%s.msrs' % cpu.name
-                    dumb, value = cli.quiet_run_command(cmd)
-                    for line in value.splitlines(): 
-                        if 'ia32_sysenter_eip' in line:
-                            mvalue = line.split()[2]
-                            this_msr_176 = int(mvalue, 16)
-                            break
-                    if this_msr_176 is None:
-                        self.lgr.error('failed to get x86 msr 0x176')
-                        self.top.quit() 
+                cmd = '%s.msrs' % cpu.name
+                dumb, value = cli.quiet_run_command(cmd)
+                for line in value.splitlines(): 
+                    if 'ia32_sysenter_eip' in line:
+                        mvalue = line.split()[2]
+                        this_msr_176 = int(mvalue, 16)
+                        break
+                if this_msr_176 is None:
+                    self.lgr.error('failed to get x86 msr 0x176')
+                    self.top.quit() 
             if this_msr_176 is None:
                 self.lgr.debug('memUtils adjustParams x86 no msr 0x176')
             else:
