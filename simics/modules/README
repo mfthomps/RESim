@@ -7,7 +7,7 @@ Use bin/project-setup --copy-module gdb-remote
 Edit source
 gcc 13 or higher to make
 
-Remove the external_connection_attributes registration and function from the modules simics_start.py.
+NO LONGER NEEDED? Remove the external_connection_attributes registration and function from the modules simics_start.py.
 
     For Simics 6
     In your project folder you must create, if it doesn't already exist, a config-user.mk file and add the following line to it, then clean/rebuild your modules.
@@ -18,6 +18,10 @@ Remove the external_connection_attributes registration and function from the mod
 
        The resulting files can be copied to a free Simics7 workspace to create a signed package
 
+
+cmake -DSIMICS_BUILD_ID=mft:7995
+make
+
 Creating packages
 parent of the workspace must have a link to SIMDIR/scripts
 and to SIMDIR/linux64
@@ -26,20 +30,24 @@ use bin/project-packager with no options.  no need for a json or any other file.
 
 Clean the local workspace using something like:
 
-    rm -f linux64/lib/gdb-remote.so
-    rm -fr linux64/lib/python-py3/simmod/gdb_remote
-    rm -fr linux64/obj/modules/gdb_remote
+    rm -fr linux64/obj  linux64/lib modules/gdb-remote
+    
 
 
 To install the package, go to the parent of the SIMDIR directory and use something like:
-../intel-simics-package-manager-1.18.0/ispm install /tmp/simics-pkg-200000-7.0.0-linux64.ispm -y --verbose --trust-insecure-packages
+../intel-simics-package-manager-1.18.0/ispm install $RESIM_DIR/simics/packages/simics-pkg-200000-7.0.0-linux64.ispm -y --install-dir $SIMDIR/../ --verbose --trust-insecure-packages
+../intel-simics-package-manager-1.8.3/ispm --install-dir $SIMDIR/../ install $RESIM_DIR/simics/packages/simics-pkg-200000-6.0.0-linux64.ispm -y --verbose --trust-insecure-packages
 
 bin/addon-manager -h
-bin/addon-manager -s /mnt/resim_eems/resim/archive/simics7_wr/install/simics-resim-gdb-7.0.0
-bin/addon-manager -d /mnt/resim_eems/resim/archive/simics7_wr/install/simics-resim-gdb-7.0.0
-
+bin/addon-manager -b -C -s $SIMDIR/../simics-resim-gdb-7.0.0
+bin/addon-manager -b -C -s $SIMDIR/../simics-resim-gdb-6.0.0
 
 That would over-ride the stock gdb-remote
 
+Remove package
+bin/addon-manager -d $SIMDIR/../simics-resim-gdb-7.0.0
+bin/addon-manager -d $SIMDIR/../simics-resim-gdb-6.0.0
+
+
 Uninstall the package:
-   ../intel-simics-package-manager-1.18.0/ispm uninstall 200000-7.0.0
+   ../intel-simics-package-manager-1.18.0/ispm uninstall 200000-7.0.0 --install-dir $SIMDIR/../
