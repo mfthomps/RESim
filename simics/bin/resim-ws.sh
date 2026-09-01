@@ -25,6 +25,7 @@ if [ "$1" == "-h" ]; then
    echo "   Create a Simics workspace (project) directory and populate it with common RESim files."
    echo "   Use -e to populate the workspace with example ini files and example param files."
 fi
+here=$(pwd)
 $SIMDIR/bin/project-setup  || exit
 cp $RESIM_DIR/simics/workspace/driver-script.sh .
 cp $RESIM_DIR/simics/workspace/authorized_keys .
@@ -54,5 +55,19 @@ if [ ! -d ./targets/x58-ich10 ]; then
 else
     cd targets/x58-ich10
     ln -s $RESIM_DIR/simics/simicsScripts/targets/x58-ich10/images
+fi
+cd $here
+sim7="simics-7"
+if [[ "$SIMDIR" == *"$sim7"* ]]; then 
+    #
+    # Add the RESim gdb-remote
+    #
+    if [[ -d "$SIMDIR/../simics-resim-gdb-7.0.0" ]]; then
+       bin/addon-manager -b -C -s $SIMDIR/../simics-resim-gdb-7.0.0
+    fi
+else
+    if [[ -d "$SIMDIR/../simics-resim-gdb-6.0.0" ]]; then
+        bin/addon-manager -b -C -s $SIMDIR/../simics-resim-gdb-6.0.0
+    fi
 fi
 echo "Workspace setup at $here."
