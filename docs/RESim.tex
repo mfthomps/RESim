@@ -1177,7 +1177,7 @@ servers.
 non-interactive return so they are picked up by ssh):
 \begin{itemize}
 \item RESIM\_DIR  Path to your git clone.
-\item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}
+\item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}.  
 \item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
 \item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
@@ -1199,6 +1199,18 @@ Place this such that the parent directory is the same as the RESIM\_IMAGE path p
    export RESIM_DIR=[path to your git clone]
    export PATH=$RESIM_DIR/simics/bin:$RESIM_DIR/simics/fuzz_bin:$PATH
 \end{verbatim}
+
+\item Install the RESim gdb-remote package which is needed to support with Ghidra.
+Use the Intel Simics Package Manager that you used to install Simics as follows:
+For Simics 7:
+\begin{verbatim}
+./intel-simics-package-manager-1.18.0/ispm install $RESIM_DIR/simics/packages/simics-pkg-200000-7.0.0-linux64.ispm -y --install-dir $SIMDIR/../  --verbose --trust-insecure-packages
+\end{verbatim}
+For Simics 6:
+\begin{verbatim}
+./intel-simics-package-manager-1.8.3/ispm install $RESIM_DIR/simics/packages/simics-pkg-200000-6.0.0-linux64.ispm -y --install-dir $SIMDIR --verbose --trust-insecure-packages
+\end{verbatim}
+
 \item Download the \textit{driver} disk image, which is used to interact with targets from:
 \begin{verbatim}
    https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
