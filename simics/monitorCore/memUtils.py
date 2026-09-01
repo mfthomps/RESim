@@ -1200,21 +1200,22 @@ class MemUtils():
                 dumb, value = cli.quiet_run_command(cmd)
                 this_msr_176 = int(value,16)
             else:
-                cmd = '%s.msrs' % cpu.name
-                dumb, value = cli.quiet_run_command(cmd)
-                for line in value.splitlines(): 
-                    if 'ia32_sysenter_eip' in line:
-                        mvalue = line.split()[2]
-                        this_msr_176 = int(mvalue, 16)
-                        break
+                if hasattr(self.param, 'msr_176'):
+                    cmd = '%s.msrs' % cpu.name
+                    dumb, value = cli.quiet_run_command(cmd)
+                    for line in value.splitlines(): 
+                        if 'ia32_sysenter_eip' in line:
+                            mvalue = line.split()[2]
+                            this_msr_176 = int(mvalue, 16)
+                            break
+                    if this_msr_176 is None:
+                        self.lgr.error('failed to get x86 msr 0x176')
+                        self.top.quit() 
             if this_msr_176 is None:
-                self.lgr.error('failed to get x86 msr 0x176')
-                self.top.quit() 
-            kernel_offset_delta = this_msr_176 - self.param.msr_176
-            self.lgr.debug('memUtils adjustParam x86, this_msr_176 is 0x%x param.msr_176 0x%x kernel_offset_delta 0x%x' % (this_msr_176, self.param.msr_176, kernel_offset_delta))
-            if False and kernel_offset_delta == 0:
-                self.lgr.debug('memUtils adjustParam x86, kernel_offset_delta was zero, leaving msr_offset as False')
+                self.lgr.debug('memUtils adjustParams x86 no msr 0x176')
             else:
+                kernel_offset_delta = this_msr_176 - self.param.msr_176
+                self.lgr.debug('memUtils adjustParam x86, this_msr_176 is 0x%x param.msr_176 0x%x kernel_offset_delta 0x%x' % (this_msr_176, self.param.msr_176, kernel_offset_delta))
                 msr_offset = True
                 self.lgr.debug('memUtils adjustParam x86, param msr_176 is 0x%x this one 0x%x kernel_offset_delta 0x%x' % (self.param.msr_176, this_msr_176,
                     kernel_offset_delta))
@@ -1322,7 +1323,7 @@ class MemUtils():
                         self.lgr.debug('memUtils adjustParam syscall_jump kernel offset adjusted to 0x%x' % self.param.syscall_jump)
                     #else:
                     #    self.lgr.debug('memUtils adjustParam leaving syscall_jump because using msr?')
-                if self.param.syscall64_jump is not None:
+                if hasattr(self.param, 'syscall64_jump') and self.param.syscall64_jump is not None:
                     self.lgr.debug('memUtils adjustParam syscall_jump was 0x%x' % self.param.syscall64_jump)
                     self.param.syscall_jump = self.param.syscall64_jump - delta
                     self.lgr.debug('memUtils adjustParam syscall64_jump adjusted to 0x%x' % self.param.syscall64_jump)
