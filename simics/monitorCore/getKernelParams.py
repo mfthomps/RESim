@@ -119,6 +119,8 @@ def computeESIJumpTable(begin, cpu, word_size, lgr):
                 jmp_eip = int(instruct[1].strip().split()[1], 16)
                 jmp_instruct = SIM_disassemble_address(cpu, jmp_eip, 1, 0)
                 lgr.debug('\t\tgot je to eip  0x%x that instruct is %s' % (jmp_eip, jmp_instruct[1]))
+                if not jmp_instruct[1].startswith('call'):
+                    continue
                 call_to_eip = int(jmp_instruct[1].strip().split()[1], 16)
                 if current_call in call_map:
                     print('************** after je already has current_call 0x%x' % current_call)

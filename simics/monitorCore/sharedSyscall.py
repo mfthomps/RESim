@@ -1309,7 +1309,10 @@ class SharedSyscall():
         elif callname == 'gettimeofday': 
             if exit_info.retval_addr is not None:
                 result = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-                trace_msg = trace_msg+('result: 0x%x\n' % (result))
+                if result is not None:
+                    trace_msg = trace_msg+('result: 0x%x\n' % (result))
+                else:
+                    trace_msg = trace_msg+('failed to read from 0x%x' % exit_info.retval_addr)
                 timer_syscall = self.top.getSyscall(self.cell_name, 'gettimeofday')
                 if timer_syscall is not None:
                     timer_syscall.checkTimeLoop('gettimeofday', tid)
@@ -1322,7 +1325,10 @@ class SharedSyscall():
                 self.lgr.debug('timer_syscall is None')
             if exit_info.retval_addr != 0:
                 wstatus = self.mem_utils.readWord32(self.cpu, exit_info.retval_addr)
-                trace_msg = trace_msg+('eax: 0x%x wstatus: 0x%x\n' % (eax, wstatus))
+                if wstatus is not None:
+                    trace_msg = trace_msg+('eax: 0x%x wstatus: 0x%x\n' % (eax, wstatus))
+                else:
+                    trace_msg = trace_msg+(' failed to read from addr 0x%x' % exit_info.retval_addr)
             else:
                 trace_msg = trace_msg+('eax: 0x%x wstatus addr was none\n' % (eax))
             self.lgr.debug(trace_msg)
