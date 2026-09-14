@@ -1,0 +1,23 @@
+README for creating new Linux targets.
+
+Start the new-target.ini which uses the cadet01/ubuntu24 image, and
+login with mike/mike.  Add an ip address :
+
+   ip addr add 10.0.0.140/24 dev ens25
+   ip link set ens25 up
+
+And from simics
+   run-script real-net.simics
+
+You can the scp files to the new target server 
+   scp -P 4022 somefile localhost:/some/place
+
+Alternately, you can use the simics-agent and the sample driver-script.sh
+to move files onto the target and set the target's IP address.
+   Uncomment the PRE_INIT_SCRIPT entry in the new-target.ini
+   Revise the driver-script.sh to move the files you wish to move
+
+
+When done, use the save-persistent-state and bin/checkpoint-merge to create a new
+craff for your target.
+
