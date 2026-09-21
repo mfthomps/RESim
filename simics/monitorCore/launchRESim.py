@@ -269,6 +269,7 @@ class LaunchRESim():
                 RESIM_TARGET = value
             elif name == 'DRIVER_WAIT' and (value.lower() == 'true' or value.lower() == 'yes'):
                 print('DRIVER WILL WAIT')
+                lgr.debug('DRIVER WILL WAIT')
                 DRIVER_WAIT = True
             elif name == 'CONFIG_COMMAND':
                 config_command = value
@@ -278,6 +279,7 @@ class LaunchRESim():
                 run_command(cmd)
             #print('assigned %s to %s' % (name, value))
 
+        lgr.debug('DRIVER_WAIT is %r' % DRIVER_WAIT)
         CREATE_RESIM_PARAMS = os.getenv('CREATE_RESIM_PARAMS')
         ''' hack around simics bug generating rafts of x11 traffic '''
         resim_display = os.getenv('RESIM_DISPLAY')
@@ -359,7 +361,7 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
-                while not done and not DRIVER_WAIT and not RESIM_TARGET.lower() == 'none':
+                while not done and not DRIVER_WAIT and not RESIM_TARGET.lower() == 'none' and (CREATE_RESIM_PARAMS is None or CREATE_RESIM_PARAMS.upper() != 'YES'):
                     #print('***RUN SOME **')
                     #run_command('c 50000000000')
                     run_command('c 500000000')
@@ -432,6 +434,7 @@ class LaunchRESim():
         if MONITOR is None or MONITOR.lower() != 'no':
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
+                    lgr.debug('Will Create RESim parameters')
                     gkp = getKernelParams.GetKernelParams(conf, self.comp_dict, RUN_FROM_SNAP, arg, int_t, output_modes)
                 else:
                     print('genMonitor for target %s' % RESIM_TARGET)
@@ -479,11 +482,11 @@ class LaunchRESim():
             did_net_create = False
 
             # use section name as hostname, except for old arm and arm5.
-            if platform in ['arm', 'arm5']:
+            #if platform in ['arm', 'arm5']:
+            if platform is not None and platform.startswith('arm') and not script.endswith('fvp.simics'):
                 ''' special handling for arm platforms to get host name set properly '''
                 params = params+' default_system_info=%s' % self.comp_dict[section]['$host_name']
                 params = params+' board_name=%s' % self.comp_dict[section]['$host_name']
-                
                 for name in self.comp_dict[section]:
                     if name.startswith('$'):
                         value = self.comp_dict[section][name]
@@ -499,6 +502,7 @@ class LaunchRESim():
                         cmd = '%s=%s' % (name, value)
                         run_command(cmd)
             else:
+                # x86 and arm fvp
                 run_command('$host_name=%s' % section)
                 if self.SIMICS_VER > '7.57.0':
                     lgr.debug('Setting x86QSP3 for %s' % section)
@@ -568,6 +572,13 @@ class LaunchRESim():
                     else:
                         lgr.error('Did not know what to do with INTERACT_SCRIPT %s' % interact)
                         return
+                elif name == 'PRE_INIT_SCRIPT':
+                    pre_init = self.comp_dict[section][name]
+                    #if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES' and pre_init is not None:
+                    if pre_init is not None:
+                       print('run pre_init_script %s doing from launch.' % pre_init)
+                       cmd = 'run-command-file %s' % pre_init
+                       run_command(cmd)
             PRE_INIT_SCRIPT = os.getenv('PRE_INIT_SCRIPT')
             if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES' and PRE_INIT_SCRIPT is not None:
                 print('Will create resim params, run pre_init_script %s' % PRE_INIT_SCRIPT)
