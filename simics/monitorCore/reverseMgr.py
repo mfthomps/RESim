@@ -1332,7 +1332,7 @@ class ReverseMgr():
         SIM_break_simulation('')
 
     def deltaStopHap(self, param, one, exception, error_string):
-        self.lgr.debug('reverseMgr deltaStopHap')
+        #self.lgr.debug('reverseMgr deltaStopHap')
         if self.stop_hap is None:
             return
         #self.lgr.debug('reverseMgr deltaStopHap do what?')
