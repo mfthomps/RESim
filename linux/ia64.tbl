@@ -312,3 +312,15 @@
 311	process_vm_writev	sys_process_vm_writev	mm/process_vm_access.c
 312	kcmp	sys_kcmp	kernel/kcmp.c
 313	finit_module	sys_finit_module	kernel/module.c
+424	pidfd_send_signal	man/ cs/	0x1a8	int pidfd	int sig	siginfo_t *info	unsigned int flags	-	-
+425	io_uring_setup	man/ cs/	0x1a9	u32 entries	struct io_uring_params *p	-	-	-	-
+426	io_uring_enter	man/ cs/	0x1aa	unsigned int fd	u32 to_submit	u32 min_complete	u32 flags	const void *argp	size_t argsz
+427	io_uring_register	man/ cs/	0x1ab	unsigned int fd	unsigned int op	void *arg	unsigned int nr_args	-	-
+428	open_tree	man/ cs/	0x1ac	int dfd	const char *path	unsigned flags	-	-	-
+429	move_mount	man/ cs/	0x1ad	int from_dfd	const char *from_path	int to_dfd	const char *to_path	unsigned int ms_flags	-
+430	fsopen	man/ cs/	0x1ae	const char *fs_name	unsigned int flags	-	-	-	-
+431	fsconfig	man/ cs/	0x1af	int fs_fd	unsigned int cmd	const char *key	const void *value	int aux	-
+432	fsmount	man/ cs/	0x1b0	int fs_fd	unsigned int flags	unsigned int ms_flags	-	-	-
+433	fspick	man/ cs/	0x1b1	int dfd	const char *path	unsigned int flags	-	-	-
+434	pidfd_open	man/ cs/	0x1b2	pid_t pid	unsigned int flags	-	-	-	-
+435	clone3	man/ cs/	0x1b3	struct clone_args *uargs	size_t size	-	-	-	-
