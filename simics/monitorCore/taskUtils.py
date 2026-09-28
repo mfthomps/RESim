@@ -1467,3 +1467,8 @@ class TaskUtils():
 
     def commMatch(self, comm1, comm2):
         return self.comm_map.commMatch(comm1, comm2)
+
+    def hackProgName(self, tid, new_prog):
+        if tid in self.exec_addrs:
+            self.lgr.debug('taskUtils hackProgName for tid:%s to %s, e.g., due to RunApp/AppRun...' % (tid, new_prog))
+            self.exec_addrs[tid].prog_name = new_prog
