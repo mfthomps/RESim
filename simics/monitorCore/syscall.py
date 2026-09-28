@@ -1152,6 +1152,12 @@ class Syscall():
                 if '/' in cp.match_param:
                     ''' compare full path '''
                     base = prog_string
+                    if base.startswith('/tmp/.mount') and cp.match_param.startswith('/tmp/mount'):
+                        newbase = '/tmp/mount/'+os.path.basename(prog_string)
+                        self.lgr.debug('syscall checkExecve special case for runApp convention, changing prog from %s to %s' % (base, newbase))
+                        base = newbase
+                        prog_string = newbase
+                        self.task_utils.hackProgName(tid, newbase)
                 else:
                     base = os.path.basename(prog_string)
                 #self.lgr.debug('checkExecve base %s against %s' % (base, cp.match_param))
@@ -1277,6 +1283,7 @@ class Syscall():
             self.doTrace(ida_msg, tid)
         if self.traceProcs is not None:
             self.traceProcs.setName(tid, prog_string, arg_string)
+        self.soMap.recordExecve(prog_string, tid)
 
         if self.top.trackingThreads() or self.soMap.hasSOWatch(prog_string):
             self.lgr.debug('recordExecve tracking threads or has so watch, record new program info.')
@@ -1976,12 +1983,14 @@ class Syscall():
             # check for use of dmod openReplace fd
             self.checkReadParams(callname, exit_info, tid, comm, frame)
         elif callname in ['clone', 'clone3']:        
+            flags_string = None
             if callname == 'clone':
                 flags = frame['param1']
+                flags_string = resimUtils.decodeCloneFlags(flags)
                 child_stack = frame['param2']
                 # HACK store child stack addr as fname_addr
                 exit_info.fname_addr = child_stack
-                ida_msg = '%s tid:%s (%s) flags:0x%x child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags, 
+                ida_msg = '%s tid:%s (%s) flags:%s child_stack: 0x%x ptid: 0x%x ctid: 0x%x iregs: 0x%x' % (callname, tid, comm, flags_string, 
                     child_stack, frame['param3'], frame['param4'], frame['param5'])
                 #./include/linux/sched.h:#define CLONE_FILES	0x00000400	/* set if open files shared between processes */
                 if not flags & 0x00000400 and self.name == 'runToIO':
@@ -2010,6 +2019,7 @@ class Syscall():
                 if hackit:
                     hack_stack = stack + stack_size
                     exit_info.msc = (hack_stack, tls)
+            exit_info.flags = flags_string
             # in case child returns first
             self.sharedSyscall.addPendingCloneComm(comm, exit_info)
             self.context_manager.setIdaMessage(ida_msg)
@@ -3076,7 +3086,7 @@ class Syscall():
            # tracing all
            tracing_all = True
            callname = self.task_utils.syscallName(callnum, compat32)
-           self.lgr.debug('syscallHap tid:%s traceAll callnum 0x%x name %s param1 0x%x cycle: 0x%x' % (tid, callnum, callname, frame['param1'], self.cpu.cycles))
+           self.lgr.debug('syscallHap tid:%s traceAll callnum 0x%x name %s param1 0x%x compat32:%r cycle: 0x%x' % (tid, callnum, callname, frame['param1'], compat32, self.cpu.cycles))
            if self.record_fd and (callname not in record_fd_list or comm in skip_proc_list):
                self.lgr.debug('syscallHap not in record_fd list: %s' % callname)
                return
@@ -3205,7 +3215,16 @@ class Syscall():
                 ida_msg = '%s tid:%s (%s)' % (callname, tid, comm)
             self.lgr.debug('syscallHap %s exit of tid:%s callname %s stop_on_exit: %r' % (self.name, tid, callname, self.top.getStopOnExit(target=self.cell_name)))
             if callname == 'exit_group':
-                self.handleExit(tid, ida_msg, exit_group=True)
+                retain_so = False
+                if self.traceProcs is not None: 
+                    retain_so = not self.traceProcs.threadsAllClones(tid)
+                    self.lgr.debug('syscallHap handleExit exit_group retain_so is %r' % retain_so)
+                    if self.soMap is not None and retain_so:
+                        # refactor somap so we find the surviving tids
+                        remaining = self.traceProcs.getRemaining(tid)
+                        self.soMap.refactorTids(tid, remaining)
+                        self.context_manager.refactorDebug(tid, remaining)
+                self.handleExit(tid, ida_msg, exit_group=True, retain_so=retain_so)
             elif callname == 'tgkill' and sig == 6:
                 self.handleExit(tid, ida_msg, killed=True)
             else:
@@ -3353,6 +3372,7 @@ class Syscall():
                 if self.top.hasPendingPageFault(tid):
                     self.lgr.debug('syscall handleExit %s HAD pending fault, do something!' % tid)
                 self.context_manager.checkExitCallback()
+            self.top.flushTrace()
 
 
     def getBinders(self):
