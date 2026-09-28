@@ -147,6 +147,7 @@ import stupidClose
 import cycleCallback
 import watchMalloc
 import record32BitEnter
+import auxVector
 
 #import fsMgr
 import json
@@ -707,6 +708,8 @@ class GenMonitor():
             SIM_run_alone(self.stopHapAlone, stop_action)
 
     def stopHapAlone(self, stop_action):
+        ''' Used for too many conditions.  One of which is returning to user space following an execve, which would
+            be the loader in Linux '''
         if stop_action is None or stop_action.hap_clean is None:
             print('stopHap error, stop_action None?')
             self.lgr.error('stopHapAlone error, stop_action None?')
@@ -793,6 +796,7 @@ class GenMonitor():
         run_to_mode_change.run2Kernel(cpu, flist=flist)
 
     def run2User(self, cpu, flist=None, want_tid=None):
+        self.lgr.debug('run2User')
         run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid)
 
@@ -840,7 +844,7 @@ class GenMonitor():
                           self.targetFS[cell_name], self.comp_dict[cell_name], self.lgr)
             else:
                 self.soMap[cell_name] = soMap.SOMap(self, cell_name, cell, cpu, self.context_manager[cell_name], self.task_utils[cell_name], self.targetFS[cell_name], 
-                    self.reverse_mgr[cell_name], self.run_from_snap, self.lgr)
+                    self.reverse_mgr[cell_name], self.traceProcs[cell_name], self.run_from_snap, self.lgr)
             if cell_name != 'driver': 
                 self.page_faults[cell_name] = pageFaultGen.PageFaultGen(self, cell_name, self.param[cell_name], self.cell_config, self.mem_utils[cell_name], 
                        self.task_utils[cell_name], self.context_manager[cell_name], self.soMap[cell_name], self.lgr)
@@ -1560,7 +1564,7 @@ class GenMonitor():
 
                 if self.track_threads is not None:
                     # cheesy hack of setting dict to None if we don't want to track threads
-                    self.lgr.debug('genMonitor debug call trackThreads becuase the hack is not None')
+                    self.lgr.debug('genMonitor debug call trackThreads because the hack is not None')
                     self.trackThreads()
                     ''' By default, no longer watch for new SO files '''
                     self.track_threads[self.target].stopSOTrack()
@@ -1693,6 +1697,7 @@ class GenMonitor():
         jumper_file = os.getenv('EXECUTION_JUMPERS')
         if jumper_file is not None:
             self.lgr.error('Please remove EXECUTION_JUMPERS from ENV section.  Place them in target sections.')
+            self.quit()
 
         self.loadJumpersTarget(self.target)
 
@@ -1831,11 +1836,12 @@ class GenMonitor():
             SIM_continue(0)
    
     def execToText(self, flist=None):
-        ''' assuming we are in an exec system call, run until execution enters the
-            the .text section per the elf header in the file that was execed.'''
+        ''' Assuming we have returned to user space from an exec system call, run until execution enters the
+            the .text section per the elf header in the file that was execed.  But if dynamically loaded...
+        '''
         cpu, comm, tid  = self.task_utils[self.target].curThread()
         prog_name, dumb = self.task_utils[self.target].getProgName(tid) 
-        self.lgr.debug('execToText debug set exit_group break')
+        self.lgr.debug('execToText debug set exit_group break prog_name %s' % prog_name)
         self.debugExitHap()
                        
         if self.targetFS[self.target] is not None:
@@ -1845,14 +1851,28 @@ class GenMonitor():
             if full_path is None:
                 self.lgr.warning('execToText failed to get full_path for %s' % prog_name)
             else:
-                prog_info = self.soMap[self.target].addText(full_path, prog_name, tid)
-                if prog_info is not None:
-                    if prog_info.addr is None:
-                        self.lgr.debug('execToText found file %s, but address is None? Assume dynamic' % full_path)
+                load_info = self.soMap[self.target].addText(full_path, prog_name, tid)
+                if load_info is not None:
+                    if load_info.addr is None:
+                        self.lgr.debug('execToText found load_info for %s, but address is None? Assume dynamic' % full_path)
                         #stopFunction.allFuns(flist)
                         #return
+                        aux_vector = auxVector.AuxVector(cpu, self.mem_utils[self.target], self.lgr)
+                        entry_at = aux_vector.getValue(auxVector.AT_ENTRY)
+                        if entry_at is not None:
+                            text_offset = self.soMap[self.target].getTextOffset(prog_name)
+                            text_size = self.soMap[self.target].getTextSize(prog_name)
+                            if text_offset is not None:
+                                image_base = entry_at - text_offset
+                                self.lgr.debug('execToText found entry_at 0x%x and image base of 0x%x' % (entry_at, image_base))
+                                load_info.addr = image_base
+                                text_end = entry_at + text_size
+                                load_info.end = text_end
+                                load_info.text_start= entry_at
+                            else:
+                                self.lgr.error('execToText failed to get text_offset for %s' % prog_name)
                     else:
-                        self.lgr.debug('execToText %s 0x%x - 0x%x' % (prog_name, prog_info.addr, prog_info.end))
+                        self.lgr.debug('execToText %s text 0x%x - 0x%x' % (prog_name, entry_at, text_end))
                     self.runToText(flist, this_tid=True)
                     return
                 else:
@@ -1860,7 +1880,7 @@ class GenMonitor():
                     self.toUser(flist)
                     return
         self.lgr.debug('execToText no information about the text segment')
-        ''' If here, then no info about the text segment '''
+        # If here, then no info about the text segment 
         if flist is not None:
             stopFunction.allFuns(flist)
         
@@ -3164,6 +3184,7 @@ class GenMonitor():
         self.toExecve(any_exec=True, run=False, linger=True) 
 
     def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False, run=True, linger=False):
+        self.lgr.debug('toExecve')
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
             params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
@@ -3504,6 +3525,7 @@ class GenMonitor():
             tid, cpu = self.context_manager[self.target].getDebugTid() 
         if load_info is None:
             print('No text load info for current process?')
+            self.lgr.debug('No text load info for current process?')
             return
         loader_load_info = None
         if load_info.interp is not None:
@@ -3511,20 +3533,13 @@ class GenMonitor():
             loader_load_info = self.soMap[self.target].addLoader(tid, load_info.interp, ip)
 
         if load_info.addr is not None:
-            start = load_info.addr
-            end = load_info.end
-            count = end - start
-            self.lgr.debug('runToText range 0x%x 0x%x' % (start, end))
+            # just run to the entry
+            start = load_info.text_start
+            #end = load_info.end
+            count = 1
+            self.lgr.debug('runToText entry 0x%x' % (start))
         else:
-            if loader_load_info is not None:
-                # assume dynamic load.  Set break on zero to start of loader
-                start = 0
-                count = loader_load_info.addr 
-                count = loader_load_info.addr - 0x1abc0
-                self.lgr.error('runToText dynamic load break on range 0x%x 0x%x tid:%s lingering debug ???' % (start, count, tid))
-            else:
-                self.lgr.error('runToText dynamic load but no load info for the loader itself')
-                return
+            self.lgr.error('runToText but no load_info?')
             
         self.context_manager[self.target].watchTasks()
         if flist is not None and self.listHasDebug(flist):
@@ -4797,7 +4812,7 @@ class GenMonitor():
             comm = self.task_utils[target].getCommFromTid(tid)
             cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('compat32 tid:%s (%s) mem_utils.WORD_SIZE %d' % (tid, comm, self.mem_utils[target].WORD_SIZE))
-        if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8:
+        if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8 and comm is not None:
             so_word_size = self.soMap[target].getProgWordSize(comm)
             self.lgr.debug('compat32 so_word_size %s' % so_word_size)
             if so_word_size is not None:
@@ -4807,6 +4822,7 @@ class GenMonitor():
                 mode = self.task_utils[self.target].getExecMode()
                 if mode == 3:
                     retval= True
+        self.lgr.debug('compat32 returning %r' % retval)
         return retval
 
     def readString(self, addr, size=256):
@@ -5121,7 +5137,17 @@ class GenMonitor():
        
     
     def addProc(self, tid, leader_tid, comm, clone=False):    
-        self.traceProcs[self.target].addProc(tid, leader_tid, comm=comm, clone=clone)
+        clone_thread = True
+        if clone:
+            exit_info = self.sharedSyscall[self.target].getExitInfo(leader_tid, comm, 'clone')
+            if exit_info is not None:
+                if exit_info.flags is not None and 'CLONE_THREAD' not in exit_info.flags:
+                    self.lgr.debug('addProc clone_thread set false')
+                    clone_thread = False
+            else:
+                self.lgr.debug('addProc clone but no exit_info for tid %s' % (tid))
+            
+        self.traceProcs[self.target].addProc(tid, leader_tid, comm=comm, clone=clone, clone_thread=clone_thread)
 
     def traceInject(self, dfile):
         ''' DEPRECATED, remove '''
@@ -5393,7 +5419,8 @@ class GenMonitor():
 
     def pageInfo(self, addr, quiet=False, cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        if cr3 is None and addr >= self.param[self.target].kernel_base:
+        cpl = memUtils.getCPL(cpu)
+        if cr3 is None and addr >= self.param[self.target].kernel_base and cpl > 0:
             use_cr3 = self.mem_utils[self.target].getKernelSavedCR3()
             if use_cr3 is not None:
                 self.lgr.debug('pageInfo using saved kernel cr3 of 0x%x' % use_cr3)
@@ -6464,9 +6491,11 @@ class GenMonitor():
         if jumper_file is not None:
             self.jumper_dict[target].loadJumpers(jumper_file)
             print('Loaded jumpers from %s' % jumper_file)
+            self.lgr.debug('Loaded jumpers from %s' % jumper_file)
         if reg_set_file is not None:
             self.jumper_dict[target].loadJumpers(reg_set_file, is_reg_set=True)
             print('Loaded jumpers from %s' % jumper_file)
+            self.lgr.debug('Loaded jumpers from %s' % jumper_file)
 
     def getSyscallEntry(self, callname):
         retval = None
