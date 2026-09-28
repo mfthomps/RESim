@@ -191,6 +191,10 @@ class TrackThreads():
         ''' callback from doInUser when new exec returns to user space '''
         cpu, comm, tid = self.task_utils.curThread() 
         self.lgr.debug('trackThreads, addSO, tid:%s back from execve via doInUser callback.  comm now %s was %s' % (tid, comm, self.cur_comm))
+        if comm != self.cur_comm and self.context_manager.isDebuggingComm(self.cur_comm):
+            self.lgr.debug('trackThreads addSO debugging comm %s paved over by execve of %s' % (self.cur_comm, comm))
+            print('**** Debugging tid:%s comm %s replaced by execve of %s ****' % (tid, self.cur_comm, comm))
+
         if self.sharedSyscall.isPendingExecve(tid):
             self.lgr.error('trackThreads, addSO, unexpected pending execve for tid:%s' % tid)
         if comm == self.cur_comm:
@@ -274,7 +278,7 @@ class TrackThreads():
             else:
                 call_list.append('CreateUserProcess')
         else:
-            call_list = ['open', 'openat', 'mmap']
+            call_list = ['open', 'openat', 'mmap', 'clone', 'clone3']
             if self.mem_utils.WORD_SIZE == 4 or compat32: 
                 self.lgr.debug('TrackThreads trackSO adding mmap2')
                 call_list.append('mmap2')
