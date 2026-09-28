@@ -862,13 +862,14 @@ class WinDLLMap():
                 self.lgr.warning('winDLL getMachineSize pid:%s missing machine field' % pid) 
         elif pid is not None:
             find_comm = self.task_utils.getCommFromTid(tid)
-            #self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (find_comm, tid))
-            num_bytes = self.findSize(find_comm) 
-            if num_bytes is None:
-                #self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
-                pass
-            else:
-                retval = num_bytes * 8
+            self.lgr.debug('winDLLMap getMachineSize comm %s for tid %s' % (find_comm, tid))
+            if find_comm is not None:
+                num_bytes = self.findSize(find_comm) 
+                if num_bytes is None:
+                    #self.lgr.debug('winDLL getMachineSize pid:%s has no text' % pid) 
+                    pass
+                else:
+                    retval = num_bytes * 8
         else:
             self.lgr.error('winDLL getMachineSize with pid of None')
        
