@@ -468,8 +468,15 @@ class MemUtils():
                     retval = phys_block.address
                 except:
                     self.lgr.debug('memUtils v2pKaddr arm64 logical_to_physical failed on 0x%x' % v)
+        elif cpl == 0:
+            try:
+                phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
+                retval = phys_block.address
+            except:
+                self.lgr.debug('memUtils v2pKaddr cpl 0 logical_to_physical failed on 0x%x' % v)
         else:
             ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3)
+            #ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
             #if self.kernel_saved_cr3 is not None:
             #    self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
             # a mode of 3 is 32 bit mode
@@ -491,7 +498,7 @@ class MemUtils():
                                 self.lgr.debug('memUtils v2pKaddr after change of cr3, got retval 0x%x' % retval)
                     else: 
                         retval = None
-                        #self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
+                        self.lgr.debug('memUtils v2pKaddr  cpl %d exec_mode_word_size %d failed getting page info for 0x%x' % (cpl, exec_mode_word_size, v)) 
                         reg_num = cpu.iface.int_register.get_number("cr3")
                         current_cr3 = cpu.iface.int_register.read(reg_num)
                         if current_cr3 is None:
