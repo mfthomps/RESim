@@ -353,6 +353,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
         ''' determine if PAE being used '''
         addr_extend = memUtils.testBit(cr4, 5)
         #print('addr_extend is %d' % addr_extend)
+        self.lgr.debug('findPageTable addr_extend is %d' % addr_extend)
         if addr_extend == 0:
             ''' 
             Traditional page table.  
@@ -400,7 +401,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
             #lgr.debug('phys addr is 0x%x' % paddr)
             return ptable_info
         else:
-            #lgr.debug('call findPageTableExtend')
+            lgr.debug('call findPageTableExtend')
             return findPageTableExtended(cpu, addr, lgr, use_sld)
 
 def findPageTableExtended(cpu, addr, lgr, use_sld=None):
@@ -500,19 +501,19 @@ def get40(cpu, addr, lgr):
         nx = memUtils.testBit(value, 63) 
     return retval, present, page_size, nx
 
-def findPageTableIA32E(cpu, addr, lgr, force_cr3=None): 
+def findPageTableIA32EOLD(cpu, addr, lgr, force_cr3=None): 
     '''
     IA32E: CR3 is base address of the PML4 table, which is 512 entries, of 64bits per entry.  
     Bits 47:39 of an address select the entry in the PML4 table.
     '''
     ptable_info = PtableInfo(cpu)
-    #lgr.debug('findPageTableIA32E addr 0x%x' % addr)
+    lgr.debug('findPageTableIA32E addr 0x%x' % addr)
     if force_cr3 is None:
         reg_num = cpu.iface.int_register.get_number("cr3")
         cr3 = cpu.iface.int_register.read(reg_num)
         pml4_entry = memUtils.bitRange(addr, 39, 47)
         cr3_40 = memUtils.bitRange(cr3, 12, 50) << 12
-        #lgr.debug('cr3 read from reg 0x%x  cr3_40 0x%x  pl4_entry %d' % (cr3, cr3_40, pml4_entry))
+        lgr.debug('cr3 read from reg 0x%x  cr3_40 0x%x  pl4_entry %d' % (cr3, cr3_40, pml4_entry))
     else:
         cr3 = force_cr3
         pml4_entry = memUtils.bitRange(addr, 39, 47)
@@ -520,23 +521,23 @@ def findPageTableIA32E(cpu, addr, lgr, force_cr3=None):
         #lgr.debug('cr3 passed as forced_cr3 0x%x  cr3_40 0x%x  pl4_entry %d' % (cr3, cr3_40, pml4_entry))
 
     dir_ptr_base_addr = (pml4_entry * 8) + cr3_40
-    #lgr.debug('dir_ptr_base_addr 0x%x' % dir_ptr_base_addr)
+    lgr.debug('dir_ptr_base_addr 0x%x' % dir_ptr_base_addr)
 
     dir_ptr_base, present, page_size, nx = get40(cpu, dir_ptr_base_addr, lgr)
-    #lgr.debug('dir_ptr_base is 0x%x present %d page_size 0x%x' % (dir_ptr_base, present, page_size))
+    lgr.debug('dir_ptr_base is 0x%x present %d page_size 0x%x' % (dir_ptr_base, present, page_size))
 
     dir_ptr_entry = memUtils.bitRange(addr, 30, 38)
-    #lgr.debug('dir_ptr_entry is %d' % dir_ptr_entry)
+    lgr.debug('dir_ptr_entry is %d' % dir_ptr_entry)
 
     if dir_ptr_base is None:
         return ptable_info
 
     dir_base_addr = dir_ptr_base + (dir_ptr_entry * 8)
-    #lgr.debug('dir_base_addr 0x%x' % dir_base_addr)
+    lgr.debug('dir_base_addr 0x%x' % dir_base_addr)
     ptable_info.pdir_addr = dir_base_addr
 
     dir_base, present, page_size, nx = get40(cpu, dir_base_addr, lgr)                
-    #lgr.debug('dir_base 0x%x present %d page_size 0x%x' % (dir_base, present, page_size))
+    lgr.debug('dir_base 0x%x present %d page_size 0x%x' % (dir_base, present, page_size))
     if dir_base == 0 or dir_base is None:
         return ptable_info
     else:
@@ -771,3 +772,88 @@ def findPageTableArmV8OLD(cpu, va, lgr, force_cr3=None, use_sld=None, kernel=Fal
     if phys is not None:
         ptable_info.page_exists = True
     return ptable_info
+
+def findPageTableIA32E(cpu, vaddr, lgr, force_cr3=None): 
+    ptable_info = PtableInfo(cpu)
+    #lgr.debug('findPageTableIA32E addr 0x%x' % vaddr)
+    if force_cr3 is None:
+        reg_num = cpu.iface.int_register.get_number("cr3")
+        cr3 = cpu.iface.int_register.read(reg_num)
+        #lgr.debug('findPageTableIA32E using cr3 from register 0x%x' % cr3)
+    else:
+        cr3 = force_cr3
+        #lgr.debug('findPageTableIA32E using forced cr3 0x%x' % cr3)
+    # Bitmask constants
+    PAGE_OFFSET_MASK = 0xFFF
+    ENTRY_ADDR_MASK  = 0x000FFFFFFFFFF000  # Extract base frame (bits 12 to 51)
+    PRESENT_BIT      = 0x1
+    LARGE_PAGE_BIT   = 0x80                 # Bit 7 (PS - Page Size)
+
+    # Extract Page Table Indices from the Virtual Address
+    pml4_idx = (vaddr >> 39) & 0x1FF
+    pdpt_idx = (vaddr >> 30) & 0x1FF
+    pd_idx   = (vaddr >> 21) & 0x1FF
+    pt_idx   = (vaddr >> 12) & 0x1FF
+    offset   = vaddr & PAGE_OFFSET_MASK
+
+    # Step 1: Base physical address of PML4 from CR3
+    pml4_base = cr3 & ENTRY_ADDR_MASK
+
+    # Step 2: Read PML4 Entry
+    val = pml4_base + (pml4_idx * 8)
+    pml4e = readPhysMemory(cpu, val, 8, lgr)
+    if not (pml4e & PRESENT_BIT):
+        #lgr.debug("Page Fault: PML4 entry not present (P=0)")
+        return ptable_info
+
+    # Step 3: Read PDPT Entry
+    pdpt_base = pml4e & ENTRY_ADDR_MASK
+    val = pdpt_base + (pdpt_idx * 8)
+    pdpte = readPhysMemory(cpu, val, 8, lgr)
+    ptable_info.pdir_addr = pdpte
+    if not (pdpte & PRESENT_BIT):
+        #lgr.debug("Page Fault: PDPT entry not present (P=0)")
+        return ptable_info
+
+    # Check for 1 GiB Large Page
+    if pdpte & LARGE_PAGE_BIT:
+        phys_base = pdpte & 0x000FFFFFFFFC0000  # 1 GiB page alignment
+        ptable_info.phys_addr =  phys_base + (vaddr & 0x3FFFFFFF)
+        #lgr.debug('1 MiB Large Page got 0x%x' % ptable_info.phys_addr)
+        ptable_info.page_exists = True
+        return ptable_info
+
+    # Step 4: Read PD Entry
+    pd_base = pdpte & ENTRY_ADDR_MASK
+    val = pd_base + (pd_idx * 8)
+    pde = readPhysMemory(cpu, val, 8, lgr)
+    ptable_info.ptable_addr = pde
+    if not (pde & PRESENT_BIT):
+        #lgr.debug("Page Fault: PD entry not present (P=0)")
+        return ptable_info
+
+    # Check for 2 MiB Large Page
+    if pde & LARGE_PAGE_BIT:
+        phys_base = pde & 0x000FFFFFFFE00000  # 2 MiB page alignment
+        ptable_info.phys_addr = phys_base + (vaddr & 0x1FFFFF)
+        #lgr.debug('2 MiB Large Page got 0x%x' % ptable_info.phys_addr)
+        ptable_info.page_exists = True
+        return ptable_info
+
+    # Step 5: Read PT Entry
+    pt_base = pde & ENTRY_ADDR_MASK
+    val = pt_base + (pt_idx * 8)
+    pte = readPhysMemory(cpu, val, 8, lgr)
+    ptable_info.entry = pte
+    if not (pte & PRESENT_BIT):
+        #lgr.debug("Page Fault: PT entry not present (P=0)")
+        return ptable_info
+    else:
+        ptable_info.page_exists = True
+    ptable_info.writable = memUtils.testBit(pte, 1)
+    # Step 6: Construct Final Physical Address (4 KiB page)
+    phys_page_base = pte & ENTRY_ADDR_MASK
+    ptable_info.phys_addr = phys_page_base + offset
+    #lgr.debug('got 0x%x' % ptable_info.phys_addr)
+    return ptable_info
+
