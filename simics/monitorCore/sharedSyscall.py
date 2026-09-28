@@ -897,8 +897,11 @@ class SharedSyscall():
                     self.top.doInUser(self.hackArm64For32, exit_info)
                     
                 return
-          
-            self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax %d' % (tid, eax))
+            if 'CLONE_THREAD' in exit_info.flags:
+                clone_thread = True
+            else:
+                clone_thread = False 
+            self.lgr.debug('sharedSyscall handleExit is clone tid %s  eax %d clone_thread %r' % (tid, eax, clone_thread))
             if eax > 20000:
                 #SIM_break_simulation('confused clone')
                 return False
@@ -918,7 +921,7 @@ class SharedSyscall():
                     self.top.recordStackBase(eax, exit_info.fname_addr)
             else:
                 self.lgr.debug('sharedSyscall exitHap clone fname_addr is None, cannot call recordStackBase')
-            if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True):
+            if  tid in self.trace_procs and self.traceProcs.addProc(eax, tid, clone=True, clone_thread=clone_thread):
                 trace_msg = trace_msg+('(tracing), new tid:%s\n' % (eax))
                 #self.lgr.debug('exitHap clone called addProc for eax:0x%x parent %s' % (eax, tid))
                 self.traceProcs.copyOpen(tid, eax)
@@ -2035,3 +2038,19 @@ class SharedSyscall():
     def addPendingCloneComm(self, comm, exit_info):
         self.lgr.debug('sharedSyscall addPendingCloneComm for comm %s exit_info.tid:%s' % (comm, exit_info.tid))
         self.pending_clone_comm[comm] = exit_info
+
+    def getExitInfo(self, tid, comm, name):
+        retval = None
+        self.lgr.debug('sharedSyscall getExitInfo tid:%s comm %s name %s' % (tid, comm, name))
+        if tid in self.exit_info:
+            if name in self.exit_info[tid]:
+                retval = self.exit_info[tid][name]
+            elif name == 'clone' and 'clone3' in self.exit_info[tid]:
+                retval = self.exit_info[tid]['clone3']
+            elif comm in self.pending_clone_comm:
+                retval = self.pending_clone_comm[comm] 
+            else:
+                self.lgr.debug('sharedSyscall getExitInfo tid:%s has no entry for name %s' % (tid, name))
+        elif comm in self.pending_clone_comm:
+            retval = self.pending_clone_comm[comm] 
+        return retval
