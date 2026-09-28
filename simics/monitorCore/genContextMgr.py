@@ -831,6 +831,7 @@ class GenContextMgr():
 
         self.alterWatches(new_addr, prev_task, tid)
         if add_task:
+            self.lgr.debug('contectManager changedThread call addProc for clone tid:%s leader: %s' % (tid, leader_tid))
             self.top.addProc(tid, leader_tid, comm, clone=True)
             self.watchExit(new_addr, tid, immediate=False)
             # TBD do we need this?  results in a mode hap and recording stack at start of execve?
@@ -1854,3 +1855,19 @@ class GenContextMgr():
         if tid in self.my_clones:
             self.lgr.debug('contextManager nameChanged, remove tid:%s from my_clones.  If it does an execve, we are hosed' % tid)
             del self.my_clones[tid]
+
+    def refactorDebug(self, tid, remaining):
+        ''' tid may not be the debugging tid, but if so, replace it with the new leader '''
+        if len(remaining) > 0:
+            new_leader = remaining[0]
+            self.lgr.debug('contextManager refactorDebug tid:%s new_leader: %s' % (tid, new_leader))
+            if self.debugging_tid == tid:
+                self.debugging_tid = new_leader
+            if self.debugging_tid_saved == tid:
+                self.debugging_tid_saved = new_leader
+
+    def isDebuggingComm(self, comm):
+        if comm in self.debugging_comm:
+            return True
+        else:
+            return False
