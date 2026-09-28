@@ -2,17 +2,19 @@
 import pickle
 import os
 class Pinfo():
-    def __init__(self, tid, clone=None, parent=None):
+    def __init__(self, tid, clone=None, parent=None, clone_thread=True):
         self.tid = tid
         self.prog = None
         self.args = None
         self.clone = clone
+        # if CLONE_THREAD flag was present on a clone
+        self.clone_thread = clone_thread
         self.parent = parent
         self.children = []
         self.files = {}
         self.rpipe = {}
         self.wpipe = {}
-        ''' dict of lists of FDs for sockets indexed by their address, file name, etc. '''
+        # dict of lists of FDs for sockets indexed by their address, file name, etc. 
         self.sockets = {}
         self.ftype = None
 
@@ -64,7 +66,7 @@ class TraceProcs():
             else:
                 self.latest_tid_instance = proc_pickle['latest_tid_instance']
             self.init_proc_list = proc_pickle['init_proc_list']
-            self.lgr.debug('traceProcs %s loaded %d tids' % (self.cell_name, len(self.plist)))
+            self.lgr.debug('traceProcs loadPickle %s loaded %d tids' % (self.cell_name, len(self.plist)))
 
     def pickleit(self, name):
         proc_file = os.path.join('./', name, self.cell_name, 'traceProcs.pickle')
@@ -76,7 +78,7 @@ class TraceProcs():
         proc_pickle['latest_tid_instance'] = self.latest_tid_instance
         proc_pickle['init_proc_list'] = self.init_proc_list
         pickle.dump( proc_pickle, open( proc_file, "wb" ) )
-        self.lgr.debug('traceProcs pickleit to %s ' % (proc_file))
+        self.lgr.debug('traceProcs pickleit %d threads to %s ' % (len(self.plist), proc_file))
 
     def tidExists(self, tid):
         if str(tid) in self.plist:
@@ -135,7 +137,7 @@ class TraceProcs():
         self.socket_handle[tid] = self.socket_handle[tid]+1
         return self.socket_handle[tid]
 
-    def addProc(self, tid, parent, clone=False, comm=None):
+    def addProc(self, tid, parent, clone=False, comm=None, clone_thread=True):
         ''' TBD fix this, handle reuse of TIDs'''
         if tid == 0:
             return False
@@ -150,14 +152,14 @@ class TraceProcs():
             if tid not in self.init_proc_list:
                 self.lgr.debug('traceProc addProc, tid:%s already in plist parent: %s' % (tid, parent))
             return False
-        self.lgr.debug('traceProc addProc tid:%s  parent %s  plist now %d' % (tid, parent, len(self.plist)))
+        self.lgr.debug('traceProc addProc tid:%s  parent %s  plist now %d clone: %r clone_thread: %r' % (tid, parent, len(self.plist), clone, clone_thread))
         if parent is not None:
             if parent not in self.plist:
                 self.lgr.debug('No parent %s yet for tid:%s, add it.' % (parent, tid)) 
                 parent_pinfo = Pinfo(parent)
                 self.plist[parent] = parent_pinfo 
             self.plist[parent].children.append(tid)
-        newproc = Pinfo(tid, clone=clone, parent=parent)
+        newproc = Pinfo(tid, clone=clone, parent=parent, clone_thread=clone_thread)
         self.plist[tid] = newproc 
         #self.lgr.debug('procTrace addProc tid:%s parent:%s clone: %r comm: %s' % (tid, parent, clone, comm))
         if clone:
@@ -513,8 +515,54 @@ class TraceProcs():
         self.lgr.debug('traceProcs cleanProcs start with %d tids, task utils gave %d' % (len(self.plist), len(tid_list)))
         tmp_list = list(self.plist.keys())
         for p in tmp_list:
+            if '-' in p:
+                p = p.split('-')[0]
             if p not in tid_list:
                 self.plist.pop(p, None)
+                self.lgr.debug('traceProc cleanProcs plist entry <%s> not in tid_list, removing' % p)
+            else:
+                pass
         self.lgr.debug('traceProcs cleanProcs end with %d tids' % len(self.plist))
-      
+
+    def threadsAllClones(self, tid):
+        '''  do all clones of the given thread have clone_thread set on the clone call? '''
+        retval = True
+        if tid in self.plist:
+            self.lgr.debug('traceProcs threadsAllClones tid:%s' % tid)
+            for child_tid in self.plist[tid].children:
+                if child_tid in self.plist:
+                    self.lgr.debug('traceProcs threadsAllClones child tid:%s clone_thread %r' % (child_tid, self.plist[child_tid].clone_thread))
+                if child_tid in self.plist and self.plist[child_tid].clone and not self.plist[child_tid].clone_thread:
+                    retval = False
+                    break
+        else:
+            self.lgr.debug('traceProcs threadsAllClones tid:%s not in plist' % tid)
+        return retval
+
+    def getRemaining(self, tid):
+        retval = []
+        if tid in self.plist:
+            self.lgr.debug('traceProcs getRemaining tid:%s' % tid)
+            for child_tid in self.plist[tid].children:
+                if child_tid in self.plist:
+                    self.lgr.debug('traceProcs getRemaining child tid:%s clone_thread %r' % (child_tid, self.plist[child_tid].clone_thread))
+                if child_tid in self.plist and self.plist[child_tid].clone and not self.plist[child_tid].clone_thread:
+                    retval.append(child_tid)
+        else:
+            self.lgr.debug('traceProcs getRemaining tid:%s not in plist' % tid)
+        return retval
+     
+    def getParent(self, tid):
+        retval = None
+        if tid in self.plist:
+            parent = self.plist[tid].parent
+            #self.lgr.debug('traceProcs getParent for %s got %s' % (tid, parent))
+            if parent is not None and '-' in parent and parent in self.plist:
+                retval =  self.plist[parent].parent
+                #self.lgr.debug('traceProcs getParent was dead parent %s its parent was %s' % (tid, retval))
+            else:
+                retval = parent
+        else:  
+            self.lgr.debug('traceProcs getParent tid:%s not in plist' % tid)
+        return retval
                 
