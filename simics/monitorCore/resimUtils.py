@@ -1004,29 +1004,29 @@ def decodeCloneFlags(flags):
     Based on Linux clone(2) system call definitions.
     """
     CLONE_FLAGS = {
-        0x00000100: "CLONE_VM (Share memory space)",
-        0x00000200: "CLONE_FS (Share filesystem information)",
-        0x00000400: "CLONE_FILES (Share open file descriptors)",
-        0x00000800: "CLONE_SIGHAND (Share signal handlers)",
-        0x00001000: "CLONE_PTRACE (Continue tracing child)",
-        0x00002000: "CLONE_VFORK (Call parent until child exec/exit)",
-        0x00004000: "CLONE_PARENT (Set child parent to caller's parent)",
-        0x00008000: "CLONE_THREAD (Same thread group)",
-        0x00010000: "CLONE_NEWNS (New mount namespace)",
-        0x00020000: "CLONE_SYSVSEM (Share System V SEM_UNDO)",
-        0x00040000: "CLONE_SETTLS (Create new TLS)",
-        0x00080000: "CLONE_PARENT_SETTID (Set TID in parent)",
-        0x00100000: "CLONE_CHILD_CLEARTID (Clear TID in child)",
+        0x00000100: "CLONE_VM",
+        0x00000200: "CLONE_FS",
+        0x00000400: "CLONE_FILES",
+        0x00000800: "CLONE_SIGHAND",
+        0x00001000: "CLONE_PTRACE",
+        0x00002000: "CLONE_VFORK",
+        0x00004000: "CLONE_PARENT",
+        0x00008000: "CLONE_THREAD",
+        0x00010000: "CLONE_NEWNS",
+        0x00020000: "CLONE_SYSVSEM",
+        0x00040000: "CLONE_SETTLS",
+        0x00080000: "CLONE_PARENT_SETTID",
+        0x00100000: "CLONE_CHILD_CLEARTID",
         0x00200000: "CLONE_DETACHED (Unused)",
-        0x00400000: "CLONE_UNTRACED (Do not let tracing force PTRACE)",
-        0x00800000: "CLONE_CHILD_SETTID (Set TID in child)",
-        0x01000000: "CLONE_NEWCGROUP (New cgroup namespace)",
-        0x02000000: "CLONE_NEWUTS (New UTS namespace)",
-        0x04000000: "CLONE_NEWIPC (New IPC namespace)",
-        0x08000000: "CLONE_NEWUSER (New user namespace)",
-        0x10000000: "CLONE_NEWPID (New PID namespace)",
-        0x20000000: "CLONE_NEWNET (New network namespace)",
-        0x40000000: "CLONE_IO (Share I/O context)",
+        0x00400000: "CLONE_UNTRACED",
+        0x00800000: "CLONE_CHILD_SETTID",
+        0x01000000: "CLONE_NEWCGROUP",
+        0x02000000: "CLONE_NEWUTS",
+        0x04000000: "CLONE_NEWIPC",
+        0x08000000: "CLONE_NEWUSER",
+        0x10000000: "CLONE_NEWPID",
+        0x20000000: "CLONE_NEWNET",
+        0x40000000: "CLONE_IO"
     }
 
     active_flags = []
@@ -1159,3 +1159,4 @@ def decodePollEvents(events_mask):
         matched_flags.append(f"UNKNOWN_FLAGS ({hex(unknown_bits)})")
 
     return matched_flags
+
