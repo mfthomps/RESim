@@ -552,8 +552,13 @@ class GetKernelParams():
             ''' The point of going forward is to let us reverse'''
             SIM_continue(self.gs_cycles)
             self.lgr.debug('gsEnableReverse back from continue, now call gsFindAlone')
+            self.skip_to_mgr.skipToTest(self.gs_start_cycle)
             got_it = self.gsFindAlone()
+            #print('remove this too')
+            #return
             if not got_it:
+ 
+                self.skip_to_mgr.skipToTest(self.gs_start_cycle)
                 self.gsFindAlone(any_reg=True)
             self.lgr.debug('gsEnableReverse back from gsFindAlone')
 
@@ -613,18 +618,25 @@ class GetKernelParams():
             self.lgr.error('fsFindAlone failed to find fs: instruction')
 
     def gsFindAlone(self, any_reg=False):
+        # use bp.memory.break 0x0 0xffffffffffffffff substr = "gs:"
+        # when enhancing for newer kernel.
         retval = False
-        self.lgr.debug('gsFindAlone, gs_cycles is %d' % self.gs_cycles)
+        self.lgr.debug('gsFindAlone, gs_cycles is %d current cycle 0x%x' % (self.gs_cycles, self.cpu.cycles))
         did_offset = []
+        #print('remove this')
+        #return
+        already = False
+        rip_relative = False
         for i in range(1,self.gs_cycles):
             want = self.gs_start_cycle + i
-            self.skip_to_mgr.skipToTest(want)
+            #self.skip_to_mgr.skipToTest(want)
+            dumb, dumb2 = cli.quiet_run_command('si')
             eip = self.mem_utils.getRegValue(self.cpu, 'eip')
             instruct = my_SIM_disassemble_address(self.cpu, eip, 1, 0)
             if 'gs:' in instruct[1]:
                 mn = decode.getMn(instruct[1])
                 op2, op1 = decode.getOperands(instruct[1])
-                self.lgr.debug('eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (eip, instruct[1], mn, op2, op1)) 
+                self.lgr.debug('i %d eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (i, eip, instruct[1], mn, op2, op1)) 
                 print('eip: 0x%x %s, mn: %s op2: <%s> op1: <%s>' % (eip, instruct[1], mn, op2, op1)) 
 
 
@@ -635,30 +647,44 @@ class GetKernelParams():
                 else:
                     if mn != 'mov':
                         continue
-                    if 'rip' in instruct[1] or 'rsp' in instruct[1]:
+                    if 'rip' in instruct[1] and op1 == 'rbx': 
+                        if already:
+                            self.lgr.debug('pcpu_hot instruct %s' % instruct[1])
+                            rip_relative = True
+                        else:
+                            already = True
+                            continue
+                    elif 'rip' in instruct[1] or 'rsp' in instruct[1]:
                         continue
-                    if (not any_reg and not op1.startswith('ra')):
+                    elif (not any_reg and not op1.startswith('ra')):
                         self.lgr.debug('gsFind wrong op1? %s' % op1)
                         continue
 
                 prefix, addr = decode.getInBrackets(self.cpu, self.mem_utils, instruct[1], self.lgr) 
                 print('gsFind alone eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
                 self.lgr.debug('gsFind eip: 0x%x got addr %s from %s' % (eip, addr, instruct[1]))
-                addr = self.mem_utils.getUnsigned(int(addr, 16))
+                if 'rip+' in addr:
+                    addr_part_s = addr.split('+')[1]
+                    addr_part = int(addr_part_s, 16) & 0xffffffffffffffff
+                    rip = (self.mem_utils.getRegValue(self.cpu, 'rip')+instruct[0]) & 0xffffffffffffffff
+                    addr = (rip + addr_part) & 0xffffffffffffffff
+                    self.lgr.debug('gsFind deref rip: 0x%x got addr 0x%x from %s' % (rip, addr, instruct[1]))
+                else:
+                    addr = self.mem_utils.getUnsigned(int(addr, 16))
                 if not self.isWindows() and addr < 0x1000:
-                    self.lgr.debug('gs offset looks dicey, skip this 0x%x' % addr)
+                    self.lgr.debug('gs offset looks dicey, skip this 0x%x i was %d' % (addr, i))
                     continue
 
                 did_offset.append(addr)
                 self.gs_base = self.cpu.ia32_gs_base
                 self.param.current_task_gs  = True
                 self.param.gs_base = self.gs_base
+                # MISLEADING name.  current_task here is relative to the GS base.
                 self.param.current_task = addr
-                self.lgr.debug('gs_base: 0x%x current_task is 0x%x kernel_base 0x%x ' % (self.gs_base, self.param.current_task, self.param.kernel_base))
-                va = self.gs_base + self.param.current_task
-                self.lgr.debug('va is 0x%x' % va)
+                self.lgr.debug('gs_base: 0x%x addr from instruction is 0x%x kernel_base 0x%x ' % (self.gs_base, addr, self.param.kernel_base))
+                va = (self.gs_base + addr) & 0xffffffffffffffff
+                self.lgr.debug('current_task va is 0x%x' % va)
                 phys = self.mem_utils.v2p(self.cpu, va)
-                #phys = (self.gs_base + self.param.current_task)-self.param.kernel_base
                 self.lgr.debug('phys of current_task is 0x%x' % phys)
                 cur_task = SIM_read_phys_memory(self.cpu, phys, self.mem_utils.WORD_SIZE)
                 if not self.isWindows() and cur_task < 0x10000:
@@ -666,6 +692,7 @@ class GetKernelParams():
                     continue
 
                 self.current_task_phys = phys
+                self.lgr.debug('self.current_task_phys is 0x%x' % self.current_task_phys)
                 self.reverse_mgr.disableReverse()
                 retval = True
                 if self.os_type == 'WIN7':
