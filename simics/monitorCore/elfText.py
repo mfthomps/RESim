@@ -24,7 +24,7 @@ class Text():
 
 def getRelocate(path, lgr, ida_funs):
     cmd = 'readelf -r %s -W' % path
-    lgr.debug('getRelocate %s' % path)
+    lgr.debug('elfText getRelocate %s' % path)
     proc1 = subprocess.Popen(shlex.split(cmd),stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     output = proc1.communicate()
     retval = {}
@@ -34,7 +34,7 @@ def getRelocate(path, lgr, ida_funs):
             try:
                 addr = int(parts[3], 16)
             except:
-                #lgr.debug('getRelocate nothing from %s' % line)
+                #lgr.debug('elfText getRelocate nothing from %s' % line)
                 continue
             if addr == 0:
                 addr = int(parts[0], 16)
@@ -48,7 +48,7 @@ def getRelocate(path, lgr, ida_funs):
                 retval[addr] = fun_name_dm
         else:
             pass
-            #lgr.debug('getRelocate not 5 %s' % line)
+            #lgr.debug('elfText getRelocate not 5 %s' % line)
     return retval
 
 def getText(path, lgr):
@@ -88,25 +88,25 @@ def getText(path, lgr):
             continue
         if line.strip().startswith('Class:'): 
             if 'ELF64' in line:
-                word_size = 4
+                word_size = 8
             continue
         if line.strip().startswith('Type:') and 'DYN' in line:
             is_dyn = True
             continue
         if line.strip().startswith('Machine:') and 'AArch64' in line:
-            lgr.debug('Is AArch64')
+            lgr.debug('elfText Is AArch64')
             is_aarch64 = True
             word_size = 8
             continue
         if line.strip().startswith('Entry point'):
             if lgr is not None:
-                lgr.debug('is Entry point')
+                lgr.debug('elfText is Entry point')
             
             parts = line.strip().split()
             if is_dyn:
                 offset = int(parts[3], 16)
                 if lgr is not None:
-                    lgr.debug('Entry point, is dynamic setting offset to 0x%x' % offset)
+                    lgr.debug('elfText Entry point, is dynamic setting offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
             continue
@@ -119,7 +119,7 @@ def getText(path, lgr):
             size = int(parts[3], 16)
             if lgr is not None:
                 lgr.debug('readelf not is_dyn got LOAD offset 0x%x' % offset)
-                lgr.debug('from line %s' % line)
+                lgr.debug('elfText from line %s' % line)
         elif line.startswith('LOAD') and is_dyn and is_aarch64 and ' E ' in line:
         #elif addr is None and line.startswith('LOAD') and is_dyn and is_aarch64: 
             #print('using line %s' % line)
@@ -131,15 +131,15 @@ def getText(path, lgr):
                 offset = int(parts[2], 16)
             this_size = int(parts[4], 16)
             if lgr is not None:
-                lgr.debug('readelf got LOAD offset 0x%x this_size 0x%x' % (offset, this_size))
+                lgr.debug('elfText readelf got LOAD offset 0x%x this_size 0x%x' % (offset, this_size))
                 lgr.debug('from line %s' % line)
             if this_size != 0:
                 size = this_size
-                lgr.debug('got size now 0x%x' % size)
+                lgr.debug('elfText got size now 0x%x' % size)
             else:
-                lgr.debug('ignoring this size, using old size 0x%x' % size)
+                lgr.debug('elfText ignoring this size, using old size 0x%x' % size)
         elif line.startswith('LOAD') and is_dyn and not is_aarch64 and ' E ' in line:
-            lgr.debug('found load in line %s' % line)
+            lgr.debug('elfText found load in line %s' % line)
             # not quite, but better
             if size is None:
                 size = 0
@@ -147,15 +147,15 @@ def getText(path, lgr):
             addr_start = int(parts[2], 16)
             mem_size = int(parts[3], 16)
             this_size = addr_start + mem_size
-            lgr.debug('not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
+            lgr.debug('elfText not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
             if this_size != 0:
                 size = this_size
-                lgr.debug('got size now 0x%x' % size)
+                lgr.debug('elfText got size now 0x%x' % size)
             else:
-                lgr.debug('ignoring this size, using old size 0x%x' % size)
+                lgr.debug('elfText ignoring this size, using old size 0x%x' % size)
             if offset is None or offset == 0:
                 offset = int(parts[2], 16)
-                lgr.debug('got offset 0x%x' % offset)
+                lgr.debug('elfText got offset 0x%x' % offset)
             
         ''' section numbering has whitespace '''
         hack = line[4:]
@@ -167,9 +167,12 @@ def getText(path, lgr):
             pass
         else: 
             if parts[0].strip() == '.text':
-                addr = int(parts[2], 16)
-                #print('sees .text set addr to 0x%x' % addr)
-                lgr.debug('sees .text set addr to 0x%x' % addr)
+                if not is_dyn:
+                    addr = int(parts[2], 16)
+                    #print('sees .text set addr to 0x%x' % addr)
+                    lgr.debug('elfText sees .text set addr to 0x%x' % addr)
+                else:
+                    lgr.debug('elfText sees .text leave addr unset, but set offset and size')
                 offset = int(parts[3], 16)
                 size = int(parts[4], 16)
             elif parts[0].strip() == '.plt':
