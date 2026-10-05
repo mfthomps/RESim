@@ -542,7 +542,7 @@ class SOMap():
             if elf_info is not None:
                 self.lgr.debug('soMap addLoader tid:%s prog %s  text_offset 0x%x' % (tid, prog, elf_info.text_offset))
                 self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                     elf_info.plt_offset, elf_info.plt_size, prog)
+                     elf_info.plt_offset, elf_info.plt_size, prog, word_size=elf_info.word_size)
             else:
                 self.lgr.error('soMap addLoader no elf info from %s' % prog)
                 return
@@ -593,7 +593,7 @@ class SOMap():
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                         elf_info.plt_offset, elf_info.plt_size, full_path, interp=elf_info.interp)
+                         elf_info.plt_offset, elf_info.plt_size, full_path, interp=elf_info.interp, word_size=elf_info.word_size)
                     self.lgr.debug('soMap addSo tid:%s added prog_info for prog %s' % (tid, prog))
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
