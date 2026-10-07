@@ -96,7 +96,7 @@ class WinCallExit():
             return False
         if exit_info is None:
             ''' TBD why does this get called, windows and linux?'''
-            self.lgr.debug('winCallExit handleExit cell %s tid:%s exit_info is None' % (self.cell_name, tid))
+            #self.lgr.debug('winCallExit handleExit cell %s tid:%s exit_info is None' % (self.cell_name, tid))
             return False
         if tid == 0:
             self.lgr.debug('winCallExit handleExit cell %s tid is zero' % (self.cell_name))
@@ -211,6 +211,8 @@ class WinCallExit():
                         self.tid_sockets[tid][fd] = socket_type
                         self.lgr.debug('winCallExit CreateFile Endpoint set tid_sockets[%s][0x%x] to socket type %d' % (tid, fd, socket_type))
                     elif exit_info.fname.endswith('AsyncConnectHlp'):
+                        if tid not in self.tid_sockets:
+                            self.tid_sockets[tid] = {}
                         self.tid_sockets[tid][fd] = 0xbaabaa
                         self.lgr.debug('winCallExit CreateFile set tid_sockets[%s][0x%x] to Async' % (tid, fd))
                     self.openCallParams(exit_info)
@@ -248,6 +250,7 @@ class WinCallExit():
 
         elif callname == 'CreateSection':
             fd = exit_info.old_fd
+            self.lgr.debug('winCallExit CreateSection fd: 0x%x' % fd)
             if fd is not None:
                 if self.os_type == 'WINXP':
                     section_handle_addr = exit_info.frame['param1']
@@ -306,8 +309,10 @@ class WinCallExit():
 
         elif callname in ['AlpcSendWaitReceivePort']:
             got_count = self.mem_utils.readWord16(self.cpu, exit_info.retval_addr)
-            if exit_info.count is not None:
+            if got_count is not None:
                 trace_msg = trace_msg+' returned count: 0x%x' % got_count
+            else:
+                self.lgr.debug('winCallExit tid:%s (%s) %s got_count is None from retval_addr 0x%x' % (tid, comm, callname, exit_info.retval_addr))
             
         elif callname in ['QueryValueKey', 'EnumerateValueKey']: 
             timer_syscall = self.top.getSyscall(self.cell_name, 'QueryValueKey')
