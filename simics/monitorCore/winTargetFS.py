@@ -115,7 +115,8 @@ class TargetFS():
                 if lgr is not None:
                     lgr.error('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
                 else:
-                    print('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
+                    #print('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
+                    self.lgr.debug('winTargetFS bad assumption about program base names?, %s already in cache as %s' % (ret_base, self.cache[ret_base]))
         return retval
 
     def checkExecDict(self, path, lgr=None):
