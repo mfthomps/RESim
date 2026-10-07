@@ -590,8 +590,8 @@ class SOMap():
 
             full_path = self.targetFS.getFull(prog, lgr=self.lgr)
             self.lgr.debug('soMap addSO tid %s prog %s full %s' % (tid, prog, full_path))
-            local_path = full_path[len(self.root_prefix):]
             if full_path is not None and prog not in self.prog_info:
+                local_path = full_path[len(self.root_prefix):]
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
