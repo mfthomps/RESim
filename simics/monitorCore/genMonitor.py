@@ -106,6 +106,7 @@ import injectToWM
 import traceMarks
 import userBreak
 import magicOrigin
+# for RES_add_stop_callback...
 from resimHaps import *
 import reverseTrack
 import jumpers
@@ -379,6 +380,7 @@ class GenMonitor():
         self.SIMICS_VER = resimSimicsUtils.version()
         # for diagnostics
         self.pending_stop_hap = None
+        self.pending_stop_hap_num = None
 
         # used in runToCycle
         self.cycle_event_callback = {}
@@ -746,8 +748,9 @@ class GenMonitor():
 
         if self.stop_hap is not None:
             self.lgr.debug('genMonitor stopHap will delete hap %s' % str(self.stop_hap))
-            self.RES_delete_stop_hap(self.stop_hap)
+            hap = self.stop_hap
             self.stop_hap = None
+            self.RES_delete_stop_hap(hap)
         ''' check functions in list '''
         self.lgr.debug('stopHap compat32 is %r now run actions %s wrong_tid %r' % (self.compat32(), stop_action.listFuns(), wrong_tid))
         stop_action.run(wrong_tid=wrong_tid)
@@ -1480,7 +1483,7 @@ class GenMonitor():
             self.lgr.debug('doDebugCmd new-gdb-remote failed, likely running runTrack? %s' % str(e))
 
     def setPathToProg(self, tid):
-        ''' Find the prog name for the tid, which may diverge from comm due to renaming  NOTE may set self.full_path '''
+        ''' Find the full path and prog name for the tid, which may diverge from comm due to renaming  NOTE may set self.full_path '''
         local_path = self.soMap[self.target].getLocalPath(tid)
         if local_path is None:
             prog_name = self.getProgName(tid)
@@ -1489,8 +1492,10 @@ class GenMonitor():
                 self.full_path = full_path
                 self.lgr.debug('setPathToProg tid:%s set full_path to %s' % (tid, full_path))
         else:
-            self.full_path = local_path
-            self.lgr.debug('setPathToProg tid:%s set full_path to local path gotten from SO map %s' % (tid, local_path))
+            root_prefix = self.comp_dict[self.target]['RESIM_ROOT_PREFIX']
+            self.lgr.debug('setPathToProg root_prefix %s  local_path %s' % (root_prefix, local_path[1:]))
+            self.full_path = os.path.join(root_prefix, local_path[1:])
+            self.lgr.debug('setPathToProg tid:%s set full_path to local path gotten from SO map %s appended to root prefix' % (tid, self.full_path))
 
     def debug(self, group=False):
         '''
@@ -1872,7 +1877,7 @@ class GenMonitor():
                             else:
                                 self.lgr.error('execToText failed to get text_offset for %s' % prog_name)
                     else:
-                        self.lgr.debug('execToText %s text 0x%x - 0x%x' % (prog_name, entry_at, text_end))
+                        self.lgr.debug('execToText %s text 0x%x - 0x%x' % (prog_name, load_info.text_start, load_info.end))
                     self.runToText(flist, this_tid=True)
                     return
                 else:
@@ -3591,8 +3596,9 @@ class GenMonitor():
             self.context_manager[self.target].genDeleteHap(self.proc_hap)
             self.proc_hap = None
         if self.stop_hap is not None:
-            self.RES_delete_stop_hap(self.stop_hap)
+            hap = self.stop_hap
             self.stop_hap = None
+            self.RES_delete_stop_hap(hap)
         self.lgr.debug('undoDebug done')
             
 
@@ -3894,6 +3900,7 @@ class GenMonitor():
         # default, may change based on SO prog entry once we get the comm
         word_size = self.mem_utils[target].wordSize(target_cpu)
         compat32 = self.compat32(target=target)
+        self.checkOnlyIgnore()
         if word_size == 8 and compat32:
             word_size = 4
         self.lgr.debug('runToIO word_size %d compat32 %r' % (word_size, compat32))
@@ -6368,16 +6375,15 @@ class GenMonitor():
     def stopStepN(self, dumb, one, exception, error_string):
         if self.stop_hap is not None:
             self.lgr.debug('stopStepN delete stop_hap %d' % self.stop_hap)
-            self.RES_delete_stop_hap(self.stop_hap)
+            hap = self.stop_hap
             self.stop_hap = None
+            self.RES_delete_stop_hap(hap)
             self.lgr.debug('stopStepN call skipAndMail')
             self.skipAndMail()
 
     def stepN(self, n):
         ''' Used by runToSyscall to step out of kernel. '''
         self.lgr.debug('stepN %d' % n)
-        flist = [self.skipAndMail]
-        f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
         self.stop_hap = self.RES_add_stop_callback(self.stopStepN, None)
         cmd = 'c %d' % n
         SIM_run_alone(SIM_run_command, cmd)
@@ -6856,11 +6862,15 @@ class GenMonitor():
         self.lgr.debug('ignoreProgList') 
         retval = False
         if 'SKIP_PROGS' in self.comp_dict[self.target]: 
-            sfile = self.comp_dict[self.target]['SKIP_PROGS']
-            retval = self.context_manager[self.target].loadIgnoreList(sfile)
-            if retval:
-                print('Loaded list of programs to ignore from %s' % sfile)
-                self.lgr.debug('ignoreProgList Loaded list of programs to ignore from %s' % sfile)
+            if 'ONLY_PROGS' in self.comp_dict[self.target]:
+                self.lgr.debug('ignoreProgList WILL ignore request to ignore becuase ONLY_PROGS is set')
+                print('WILL ignore SKIP_PROGS because ONLY_PROGS is set')
+            else:
+                sfile = self.comp_dict[self.target]['SKIP_PROGS']
+                retval = self.context_manager[self.target].loadIgnoreList(sfile)
+                if retval:
+                    print('Loaded list of programs to ignore from %s' % sfile)
+                    self.lgr.debug('ignoreProgList Loaded list of programs to ignore from %s' % sfile)
         return retval
 
     def ignoreThreadList(self):
@@ -6874,11 +6884,14 @@ class GenMonitor():
 
     def onlyProgList(self):
         retval = False
+        self.lgr.debug('onlyProgList')
         if 'ONLY_PROGS' in self.comp_dict[self.target]: 
             sfile = self.comp_dict[self.target]['ONLY_PROGS']
+            self.lgr.debug('onlyProgList ONLY_PROGS is %s' % sfile)
             retval = self.context_manager[self.target].loadOnlyList(sfile)
             if retval:
                 print('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
+                self.lgr.debug('Loaded list of programs to watch from %s (all others will be ignored).' % sfile)
         return retval
 
     def getCompDict(self, target, item):
@@ -7412,6 +7425,7 @@ class GenMonitor():
     def RES_delete_stop_hap(self, hap, your_stop=False):
         self.lgr.debug('RES_delete_stop_hap hap %s your_stop %r' % (str(hap), your_stop))
         self.pending_stop_hap = None
+        self.pending_stop_hap_num = None
         if hap is None and your_stop:
             self.lgr.debug('RES_delete_stop_hap haps was none, set to our stop_hap %s' % str(self.stop_hap))
             hap = self.stop_hap
@@ -7423,6 +7437,7 @@ class GenMonitor():
     def RES_delete_stop_hap_run_alone(self, hap, your_stop=False):
         # race condition of 2 stop haps existing?
         self.pending_stop_hap = None
+        self.pending_stop_hap_num = None
         self.lgr.debug('RES_delete_stop_hap_run_alone hap: %s your_stop: %r' % (str(hap), your_stop))
         if hap is None and your_stop:
             hap = self.stop_hap
@@ -7432,16 +7447,26 @@ class GenMonitor():
             self.stop_hap = None
 
     def RES_has_pending_stop(self):
-        return self.pending_stop_hap 
+        return self.pending_stop_hap_num
 
-    def RES_add_stop_callback(self, callback, param, your_stop=False):
+    def is_pending_stop(self):
+        if self.pending_stop_hap is not None:
+            print('%s' % str(self.pending_stop_hap))
+        else:
+            print('None')
+
+    def RES_add_stop_callback(self, callback, param, your_stop=False, check_exists=False):
         retval = None
         if self.pending_stop_hap is not None:
-            self.lgr.error('RES_add_stop_callback called for %s, but already pending stop with callback %s!' % (str(callback), str(self.pending_stop_hap)))
-            self.quit()
+            if not check_exists or self.pending_stop_hap != callback:
+                self.lgr.error('RES_add_stop_callback called for %s, but already pending stop with callback %s!' % (str(callback), str(self.pending_stop_hap)))
+                self.quit()
+            else:
+                self.lgr.debug('RES_add_stop_callback called for %s, already pending stop with callback %s told to ignore' % (str(callback), str(self.pending_stop_hap)))
         else:
             retval = SIM_hap_add_callback('Core_Simulation_Stopped', callback, param)
             self.pending_stop_hap = callback
+            self.pending_stop_hap_num = retval
             self.lgr.debug('RES_add_stop_callback for %s your_stop %r' % (str(callback), your_stop))
             if your_stop:
                 self.stop_hap = retval
