@@ -353,7 +353,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
         ''' determine if PAE being used '''
         addr_extend = memUtils.testBit(cr4, 5)
         #print('addr_extend is %d' % addr_extend)
-        self.lgr.debug('findPageTable addr_extend is %d' % addr_extend)
+        lgr.debug('findPageTable addr_extend is %d' % addr_extend)
         if addr_extend == 0:
             ''' 
             Traditional page table.  
@@ -802,16 +802,17 @@ def findPageTableIA32E(cpu, vaddr, lgr, force_cr3=None):
     # Step 2: Read PML4 Entry
     val = pml4_base + (pml4_idx * 8)
     pml4e = readPhysMemory(cpu, val, 8, lgr)
-    if not (pml4e & PRESENT_BIT):
+    if pml4e is None or not (pml4e & PRESENT_BIT):
         #lgr.debug("Page Fault: PML4 entry not present (P=0)")
         return ptable_info
 
     # Step 3: Read PDPT Entry
     pdpt_base = pml4e & ENTRY_ADDR_MASK
     val = pdpt_base + (pdpt_idx * 8)
+    #lgr.debug('pdpt_base 0x%x val 0x%x' % (pdpt_base, val))
     pdpte = readPhysMemory(cpu, val, 8, lgr)
-    ptable_info.pdir_addr = pdpte
-    if not (pdpte & PRESENT_BIT):
+    ptable_info.pdir_addr = val
+    if pdpte is None or not (pdpte & PRESENT_BIT):
         #lgr.debug("Page Fault: PDPT entry not present (P=0)")
         return ptable_info
 
@@ -826,8 +827,9 @@ def findPageTableIA32E(cpu, vaddr, lgr, force_cr3=None):
     # Step 4: Read PD Entry
     pd_base = pdpte & ENTRY_ADDR_MASK
     val = pd_base + (pd_idx * 8)
+    #lgr.debug('pd_base 0x%x val 0x%x' % (pd_base, val))
     pde = readPhysMemory(cpu, val, 8, lgr)
-    ptable_info.ptable_addr = pde
+    ptable_info.ptable_addr = val
     if not (pde & PRESENT_BIT):
         #lgr.debug("Page Fault: PD entry not present (P=0)")
         return ptable_info
@@ -843,6 +845,8 @@ def findPageTableIA32E(cpu, vaddr, lgr, force_cr3=None):
     # Step 5: Read PT Entry
     pt_base = pde & ENTRY_ADDR_MASK
     val = pt_base + (pt_idx * 8)
+    #lgr.debug('pt_base 0x%x val 0x%x' % (pt_base, val))
+    ptable_info.page_base_addr = val
     pte = readPhysMemory(cpu, val, 8, lgr)
     ptable_info.entry = pte
     if not (pte & PRESENT_BIT):
