@@ -133,7 +133,7 @@ class Win7CallParams():
                 self.starting_pid_list = self.task_utils.getPidList()
                 
 
-        self.reverse_to_call = self.top.isReverseExecutionEnabled()
+        self.reverse_to_call = self.top.reverseEnabled()
         self.rev_entry_break = None
         self.rev_entry_hap = None
         self.rev_stop_hap = None

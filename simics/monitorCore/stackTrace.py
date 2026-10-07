@@ -1719,7 +1719,7 @@ class StackTrace():
                                ret_addr=return_addr, ret_to_addr=addr_of_ret_addr)
         adjust_sp = self.addFrame(frame)
         ret_sp = stack_ptr + adjust_sp
-        self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x ret_sp: 0x%x called_fun_name %s frame: %s' % (msg, adjust_sp, ret_sp, called_fun_name, frame.dumpString()))
+        #self.lgr.debug('stackTrace genFrame %s -- adjust: 0x%x ret_sp: 0x%x called_fun_name %s frame: %s' % (msg, adjust_sp, ret_sp, called_fun_name, frame.dumpString()))
         return frame, ret_sp
 
     def addFrame(self, frame):
@@ -1738,7 +1738,7 @@ class StackTrace():
                 fun_of_ip = self.fun_mgr.getFunName(frame.ip)
                 frame.fun_of_ip = fun_of_ip
                 frame.fun_addr_of_ip = self.fun_mgr.getFun(frame.ip)
-                self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
+                #self.lgr.debug('stackTrace addFrame set fun_of_ip to %s frame.ip 0x%x' % (fun_of_ip, frame.ip))
 
                 if self.isCall(frame.instruct):
                     parts = frame.instruct.split()
@@ -1759,13 +1759,13 @@ class StackTrace():
                                     frame.instruct = '%s %s' % (self.callmn, fun)                     
                                     frame.fun_name = fun 
                         if self.decode.isReg(parts[1]):
-                            self.lgr.debug('stackTrace addFrame call to reg %s' % parts[1])
+                            #self.lgr.debug('stackTrace addFrame call to reg %s' % parts[1])
                             call_reg = self.fun_mgr.getBlr(frame.ip)
                             if call_reg is not None:
                                 frame.instruct = '%s %s' % (self.callmn, call_reg)
                                 frame.fun_name = call_reg
                             elif len(self.frames) > 1:
-                                self.lgr.debug('stackTrace addFrame previous fname is %s fun of ip %s' % (self.frames[-1].fname, self.frames[1].fun_of_ip))
+                                #self.lgr.debug('stackTrace addFrame previous fname is %s fun of ip %s' % (self.frames[-1].fname, self.frames[1].fun_of_ip))
                                 if resimUtils.isClib(self.frames[-1].fname) and not resimUtils.isClib(frame.fname):
                                     frame.instruct = '%s %s' % (self.callmn, self.frames[-1].fun_of_ip)
                                     frame.fun_name = self.frames[1].fun_of_ip
@@ -1798,7 +1798,7 @@ class StackTrace():
                     self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d ARM confusion, see addFrame' % (frame.fun_of_ip, adjust))
                 else:
                     adjust = self.fun_mgr.stackAdjust(frame.fun_of_ip)
-                    self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
+                    #self.lgr.debug('stackTrace addFrame get adjust for fun %s got %d' % (frame.fun_of_ip, adjust))
                 self.frames.append(frame)
                 #self.lgr.debug('stackTrace addFrame %s' % frame.dumpString())
                 self.prev_frame_sp = frame.sp

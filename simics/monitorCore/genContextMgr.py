@@ -727,7 +727,7 @@ class GenContextMgr():
             if pid is not None and thread_id is not None and thread_id != 0:
                 tid = '%d-%d' % (pid, thread_id)
             else:
-                self.lgr.debug('contextManager bad pid %s or thread_id %s' % (pid, thread_id))
+                #self.lgr.debug('contextManager bad pid %s or thread_id %s' % (pid, thread_id))
                 return
         else:
            proc_addr = new_addr

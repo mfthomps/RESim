@@ -206,6 +206,8 @@ class WinDLLMap():
             return int(tid)
 
     def addFile(self, fname, fd, tid):
+        if fname.endswith('.nls'):
+            return
         pid = self.pidFromTID(tid)
         self.lgr.debug('winDLL addFile tid:%s fd:0x%x fname: %s' % (tid, fd, fname))
         if pid not in self.open_files:
@@ -231,7 +233,7 @@ class WinDLLMap():
 
         self.open_files[pid][fd] = dll_info
 
-    def addText(self, fname, tid, addr, size, machine, image_base, text_offset, local_path):
+    def addText(self, fname, tid, addr, size, machine, image_base, text_offset, full_path):
         pid = self.pidFromTID(tid)
         dll_info = DLLInfo(pid, fname, None)
         dll_info.load_addr = addr
@@ -239,6 +241,7 @@ class WinDLLMap():
         dll_info.size = size
         dll_info.machine = machine
         dll_info.image_base = image_base
+        local_path = full_path[len(self.root_prefix):]
         dll_info.local_path = local_path
         if pid not in self.section_map:
             self.section_map[pid] = {}
@@ -307,9 +310,9 @@ class WinDLLMap():
                                 #
                                 #  Pending processes. Below is not for DLLs
                                 #
-                                eproc = self.task_utils.getCurThreadRec()
+                                ethread = self.task_utils.getCurThreadRec()
                                 full_path = self.top.getFullPath(fname=pp)
-                                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, self.lgr)
                                 self.addText(pp, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
                                             win_prog_info.image_base, win_prog_info.text_offset, full_path)
                                 if win_prog_info.text_size is None:
@@ -328,18 +331,18 @@ class WinDLLMap():
                     if pid not in self.text:
                         #self.getText(tid)
                         self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText' % pid)
-                        eproc = self.task_utils.getCurThreadRec()
+                        ethread = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
                         full_path = self.top.getFullPath(fname=prog_name)
                         #self.top.setFullPath(full_path)
-                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, self.lgr)
                         if win_prog_info is None:
                             self.lgr.error('WinDLLMap mapSection got None for win_prog_info for path %s' % full_path)
                         self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
                     elif self.text[pid].load_addr is None:
-                        eproc = self.task_utils.getCurThreadRec()
+                        ethread = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
-                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, prog_name, self.lgr)
+                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, prog_name, self.lgr)
                         if text_load_addr is not None:
                             self.text[pid].load_addr = text_load_addr
                             self.lgr.debug('WinDLLMap mapSection got load_addr 0x%x for text for pid %s' % (text_load_addr, pid))
@@ -616,7 +619,7 @@ class WinDLLMap():
                 break 
         return retval
 
-    def getImageBase(self, in_fname, pid=None):
+    def getImageBase(self, in_fname, pid=None, is_so=False):
         retval = None
         if pid is None:
             for pid in self.section_map:
@@ -745,7 +748,8 @@ class WinDLLMap():
                 section.image_base = image_base
                 section.text_offset = text_offset
                 section.size = size
-                section.local_path = full_path
+                local_path = full_path[len(self.root_prefix):]
+                section.local_path = local_path
           
             else:
                 image_base = section.image_base
@@ -804,19 +808,27 @@ class WinDLLMap():
         return ret_json
 
     def wordSize(self, tid=None):
+       ''' tid given to indicate we are interested in application vs kernel '''
        # TBD clean this up
        retval = None
        if tid is None:
            retval = self.mem_utils.wordSize(self.cpu)
        else:
-           retval = None
-           ms = self.getMachineSize(tid)
-           if ms == 32:
-               retval = 4
-           elif ms  == 64:
+           eproc = self.task_utils.getCurProcRec()
+           # TBD offset of WoW pointer in EPROCESS for Win7 sp2..
+           wow_addr = eproc + 0x320
+           value = self.mem_utils.readWord(self.cpu, wow_addr)
+           if value == 0:
                retval = 8
-           elif ms is None:
-               retval = self.mem_utils.wordSize(self.cpu)
+           else:
+               retval = 4
+           #ms = self.getMachineSize(tid)
+           #if ms == 32:
+           #    retval = 4
+           #elif ms  == 64:
+           #    retval = 8
+           #elif ms is None:
+           #    retval = self.mem_utils.wordSize(self.cpu)
        return retval
 
     def findSize(self, find_comm):
@@ -928,8 +940,8 @@ class WinDLLMap():
         if pid in self.text:
             dll_info = self.text[pid]
             if dll_info.load_addr is None:
-                eproc = self.task_utils.getCurThreadRec()
-                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, eproc, comm, self.lgr)
+                ethread = self.task_utils.getCurThreadRec()
+                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, comm, self.lgr)
                 dll_info.load_addr = text_load_addr
                 if dll_info.load_addr is None:
                     self.lgr.debug('winDLL getLoadInfo load_addr None for text[%s] %s' % (pid, dll_info.fname))

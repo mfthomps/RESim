@@ -36,12 +36,47 @@ def addrFilter(line, find):
 def rmPhys(line):
     line = re.sub(r"<p.*>", "", line)
     return line
+
+def rmAddresses(line):
+    if '0x' in line:
+        line = re.sub(r'0x[0-9a-fA-F]+', '0x', line)
+    elif 'push ' in line:
+        parts = line.split()
+        try:
+            dumb = int(parts[1].strip())
+            line = 'push some_addr'
+        except:
+            pass
+    return line
+
 class getter():
     def __init__(self, fname):
         fh = open(fname)
         self.lines = fh.readlines()
         self.index = 0
+        self.prev_line = None
 
+    def getIndex(self):
+        return self.index
+
+    def getPrevLine(self):
+        return self.prev_line
+
+    def justInstructs(self):
+        retval = None
+        while retval is None:
+            line = self.lines[self.index]
+            if not line.startswith('inst:'):
+                #print('index %d line %s' % (self.index, line))
+                self.index += 1
+                if self.index > len(self.lines):
+                    print('out of lines')
+                    break 
+            else:
+                retval = rmAddresses(line[106:])
+                self.index += 1
+                self.prev_line = line
+        return retval
         
     def nextLine(self):
 
@@ -80,15 +115,24 @@ class getter():
     def getIndex(self):
         return self.index
 
-def main():
-    parser = argparse.ArgumentParser(prog='diffTrace', description='Show differences in 2 instruction traces')
-    parser.add_argument('trace1', action='store', help='The first trace file.')
-    parser.add_argument('trace2', action='store', help='The second trace file.')
-    parser.add_argument('-i', '--ignore', action='store', type=int, default=0, help='Number of differences to ignore.')
-    parser.add_argument('-d', '--divergence', action='store_true', help='Only look for instruction difference.')
-    parser.add_argument('-a', '--instruction_addr_filter', action='store', help='Only look for instruction addresses matching this pattern.')
-    args = parser.parse_args()
+def justInstructs(args):
+    get1 = getter(args.trace1)
+    get2 = getter(args.trace2)
+    line1 = ''
+    done = False
+    while not done:
+        line1 = get1.justInstructs()
+        line2 = get2.justInstructs()
+        if line1 is None or line2 is None:
+            print('got None from get..justInstructs')
+        if line1 != line2:
+            prev1 = get1.getPrevLine()
+            prev2 = get2.getPrevLine()
+            print('prev1 %s' % prev1)
+            print('prev2 %s' % prev2)
+            break
 
+def doDiffs(args):
     get1 = getter(args.trace1)
     line1 = ''
     while not line1.startswith('inst:'):
@@ -122,6 +166,8 @@ def main():
             if line2 is None:
                 print('No more lines in second file')
                 break
+            if args.no_addr:
+                args.divergence = True
             if args.divergence:
                 #print('is divert')
                 line1 = rmPhys(line1)
@@ -146,6 +192,20 @@ def main():
         v, p = getVP(last_match_ins)    
         count = instruct_list.count(v)
         print('Last matching instruction: %s, executed %d times'  % (last_match_ins.strip(), count))
+
+def main():
+    parser = argparse.ArgumentParser(prog='diffTrace', description='Show differences in 2 instruction traces')
+    parser.add_argument('trace1', action='store', help='The first trace file.')
+    parser.add_argument('trace2', action='store', help='The second trace file.')
+    parser.add_argument('-i', '--ignore', action='store', type=int, default=0, help='Number of differences to ignore.')
+    parser.add_argument('-d', '--divergence', action='store_true', help='Only look for instruction difference.')
+    parser.add_argument('-x', '--no_addr', action='store_true', help='Only look for instruction difference and ignore addresses.')
+    parser.add_argument('-a', '--instruction_addr_filter', action='store', help='Only look for instruction addresses matching this pattern.')
+    args = parser.parse_args()
+    if args.no_addr:
+        justInstructs(args)
+    else:
+        doDiffs(args)
 
 if __name__ == '__main__':
     sys.exit(main())
