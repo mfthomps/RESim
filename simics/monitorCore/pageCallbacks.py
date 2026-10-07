@@ -54,8 +54,9 @@ class PageCallbacks():
     def setCallback(self, addr, callback, name=None, use_pid=None, writable=True):
         mapped = False
         if use_pid is None:
-            self.lgr.debug('pageCallbacks setCallback for 0x%x' % addr)
-            pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
+            table_base = self.getTableBase(use_pid)
+            self.lgr.debug('pageCallbacks setCallback for 0x%x use_pid is None table_base 0x%x' % (addr, table_base))
+            pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
             if pt.phys_addr is not None:
                 if writable and not pt.writable:
                     self.lgr.debug('pageCallbacks setCallback, 0x%x mapped to 0x%x but cow' % (addr, pt.phys_addr))
@@ -81,20 +82,24 @@ class PageCallbacks():
             else:
                 callback(addr, name)
 
-    def setTableHaps(self, addr, use_pid=None, writable=True):
+    def getTableBase(self, use_pid):
         table_base = None
-        cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
-        self.lgr.debug('pageCallbacks setTableHaps for 0x%x tid:%s (%s)' % (addr, tid, comm))
-        if use_pid is not None:
-            if self.top.isWindows():
-                table_base = self.mem_utils.getWindowsTableBase(self.cpu, use_pid)
-            else: 
-                table_base = self.mem_utils.getLinuxTableBase(self.cpu, use_pid)
-            if table_base is not None:
-                self.lgr.debug('pageCallbacks setTableHaps for pid %s table_base is 0x%x' % (use_pid, table_base))
-            else:
-                self.lgr.debug('pageCallbacks setTableHaps for pid %s failed to get table_base' % use_pid)
-                #return
+        if use_pid is None:
+            cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
+        else:
+            tid = use_pid
+        if self.top.isWindows():
+            table_base = self.mem_utils.getWindowsTableBase(self.cpu, tid)
+        else: 
+            table_base = self.mem_utils.getLinuxTableBase(self.cpu, tid)
+        if table_base is not None:
+            self.lgr.debug('pageCallbacks getTableBase for tid %s table_base is 0x%x' % (tid, table_base))
+        else:
+            self.lgr.debug('pageCallbacks getTableBase for tid %s failed to get table_base' % tid)
+        return table_base 
+
+    def setTableHaps(self, addr, use_pid=None, writable=True):
+        table_base = self.getTableBase(use_pid)
         pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
         if pt is None:
             self.lgr.error('pageCallbacks setTableHaps  no page table info found for address 0x%x' % (addr))
@@ -202,8 +207,10 @@ class PageCallbacks():
                 prev_bp = None
                 got_one = False
                 redo_addrs = []
+
+                table_base = self.getTableBase(use_pid)
                 for addr in self.missing_tables[physical]:
-                    pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value)
+                    pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value, force_cr3=table_base)
                     if pt.phys_addr is None or pt.phys_addr == 0:
                         self.lgr.debug('pageCallbacks tableUpdated pt still not set for 0x%x, page table addr is 0x%x' % (addr, pt.ptable_addr))
                         redo_addrs.append(addr)
@@ -427,11 +434,12 @@ class PageCallbacks():
             if op_type is Sim_Trans_Store:
                 value = memUtils.memoryValue(self.cpu, memory)
                 #self.lgr.debug('pageHap value is 0x%x' % value)
+            table_base = self.getTableBase(use_pid)
             for addr in self.missing_pages[memory.physical_address]:
                 # TBD this was broken.  Not sure if it is now fixed
                 #offset = memUtils.bitRange(pdir_entry, 0, 19)
                 #addr = value + offset
-                pt = pageUtils.findPageTable(self.cpu, addr, self.lgr)
+                pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, force_cr3=table_base)
                 phys_addr = pt.phys_addr
                 if phys_addr is None:
                     self.lgr.error('pageCallbacks pageHap got none for addr ofr addr 0x%x.  broken' % addr) 
