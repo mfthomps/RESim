@@ -1872,7 +1872,7 @@ class GenMonitor():
                             else:
                                 self.lgr.error('execToText failed to get text_offset for %s' % prog_name)
                     else:
-                        self.lgr.debug('execToText %s text 0x%x - 0x%x' % (prog_name, entry_at, text_end))
+                        self.lgr.debug('execToText %s text 0x%x - 0x%x' % (prog_name, load_info.text_start, load_info.end))
                     self.runToText(flist, this_tid=True)
                     return
                 else:
