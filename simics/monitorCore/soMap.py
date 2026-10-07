@@ -405,7 +405,6 @@ class SOMap():
                         #TBD replace with aux vector?
                         load_addr = self.prog_info[prog].text_start - self.prog_info[prog].text_offset
                         self.lgr.debug('soMap addText text_offset 0x%x' % self.prog_info[prog].text_offset)
-                        self.load_info[tid].end = self.prog_info[prog].text_end
                         load_text_start = self.prog_info[prog].text_start
                         load_text_end = self.prog_info[prog].text_end
                     if load_addr is not None:
