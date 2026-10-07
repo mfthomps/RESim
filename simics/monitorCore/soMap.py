@@ -449,6 +449,8 @@ class SOMap():
     def addProgInfo(self, prog, path):
         elf_info = elfText.getText(path, self.lgr)
         if elf_info is not None:
+            if path.startswith(self.root_prefix):
+                path = path[len(self.root_prefix):]
             self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                    elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp, word_size=elf_info.word_size)
             interp = elf_info.interp
@@ -589,11 +591,12 @@ class SOMap():
 
             full_path = self.targetFS.getFull(prog, lgr=self.lgr)
             self.lgr.debug('soMap addSO tid %s prog %s full %s' % (tid, prog, full_path))
+            local_path = full_path[len(self.root_prefix):]
             if full_path is not None and prog not in self.prog_info:
                 elf_info = elfText.getText(full_path, self.lgr)
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
-                         elf_info.plt_offset, elf_info.plt_size, full_path, interp=elf_info.interp, word_size=elf_info.word_size)
+                         elf_info.plt_offset, elf_info.plt_size, local_path, interp=elf_info.interp, word_size=elf_info.word_size)
                     self.lgr.debug('soMap addSo tid:%s added prog_info for prog %s' % (tid, prog))
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
