@@ -829,7 +829,7 @@ class DataWatch():
             NOTE: also force-called on return from memsomething.
         '''
         eip = memory.logical_address
-        self.lgr.debug('stackBufHap eip 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
+        self.lgr.debug('dataWatch stackBufHap eip 0x%x cycle: 0x%x' % (eip, self.cpu.cycles))
         if eip in self.stack_buf_hap:
             self.context_manager.genDeleteHap(self.stack_buf_hap[eip])
             self.lgr.debug('stackBufHap deleted stack_buf_hap[0x%x] %d' % (eip, self.stack_buf_hap[eip]))
@@ -841,6 +841,8 @@ class DataWatch():
             if new_sp is not None:
                 self.lgr.debug('dataWatch stackBufHap adjusted sp to 0x%x' % new_sp)
                 sp = new_sp
+            else:
+                self.lgr.debug('dataWatch stackBufHap sp 0x%x' % (sp))
 
             ret_to = self.getReturnAddr()
             replace_index = []
@@ -859,8 +861,8 @@ class DataWatch():
                         self.lgr.debug('dataWatch stackBufHap  index start[%d] is None' % (range_index))
                         continue
   
-                   if self.start[range_index] <= sp:
-                        self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x' % (range_index, self.start[range_index]))
+                   if self.start[range_index] < sp:
+                        self.lgr.debug('dataWatch stackBufHap remove watch for index %d starting 0x%x length 0x%x' % (range_index, self.start[range_index], self.length[range_index]))
                         hap = self.read_hap[range_index]
                         self.context_manager.genDeleteHap(hap, immediate=False)
                         self.read_hap[range_index] = None
@@ -4565,6 +4567,9 @@ class DataWatch():
     def checkRep(self, instruct, addr, buf_start):
         # look for rep or repe type instruction
         retval = None
+        two_bytes = False
+        if self.top.isWindows(target=self.cell_name):
+            two_bytes = True 
         if instruct[1].startswith('repe cmpsb') or instruct[1].startswith('repe cmpsd'):
             esi = self.mem_utils.getRegValue(self.cpu, 'esi')
             edi = self.mem_utils.getRegValue(self.cpu, 'edi')
@@ -4574,9 +4579,9 @@ class DataWatch():
             buf_start = self.findRange(edi)
             if buf_start is None:
                 buf_start = self.findRange(esi)
-                wm = self.watchMarks.compare(instruct[1], esi, edi, count, buf_start)
+                wm = self.watchMarks.compare(instruct[1], esi, edi, count, buf_start, two_bytes=two_bytes)
             else:
-                wm = self.watchMarks.compare(instruct[1], edi, esi, count, buf_start)
+                wm = self.watchMarks.compare(instruct[1], edi, esi, count, buf_start, two_bytes=two_bytes)
             retval = wm.mark.getMsg()
         elif instruct[1].startswith('rep movsb') or instruct[1].startswith('rep movsd'):
             esi = self.mem_utils.getRegValue(self.cpu, 'esi')
@@ -4740,9 +4745,14 @@ class DataWatch():
         if self.read_hap[index] is None:
             self.lgr.debug('dataWatch readHap for index %d is None bail' % index)
             return
+        phys = None
+        if addr == 0:
+            phys = memory.physical_address
+            self.lgr.debug('dataWatch readHap for index %d logical address zero, phys is 0x%x' % (index, phys))
 
         op_type = SIM_get_mem_op_type(memory)
         eip = self.top.getEIP(self.cpu)
+        self.lgr.debug('dataWatch readHap addr 0x%x op_type %d eip 0x%x' % (addr, op_type, eip))
         #if self.cpu.cycles == 0x3de4883da:
         #    SIM_break_simulation('remove this')
         #    return
@@ -4818,9 +4828,9 @@ class DataWatch():
         cpl = memUtils.getCPL(self.cpu)
 
         if cpl > 0:
-            if addr == 0:
+            if addr == 0 and (phys is None or phys == 0) :
                 self.lgr.error('readHap memory logical address zero???, index %d' % index)
-                SIM_break_simulation('remove this')
+                #SIM_break_simulation('remove this')
         else:
             if addr is None:
                 self.lgr.debug('dataWatch readHap in kernel, addr None, compute offset. index %d size %d' % (index, size))
