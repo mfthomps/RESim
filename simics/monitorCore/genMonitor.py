@@ -1061,8 +1061,9 @@ class GenMonitor():
                     self.lgr.debug('doInit Current task for %s not yet defined, continue' % cell_name)
                     done = False
                 elif cur_task_rec == -1:
-                    self.lgr.error('debugging')
-                    self.quit()
+                    self.lgr.debug('doInit Current task for %s read as -1, continue' % cell_name)
+                    #self.quit()
+                    done = False
                 else:
                     tid = self.mem_utils[cell_name].readWord32(cpu, cur_task_rec + self.param[cell_name].ts_pid)
                     if tid is None:
