@@ -832,8 +832,12 @@ class Syscall():
                 if call == 'mmap':
                     callnum = self.task_utils.syscallNumber('mmap2', compat32, arm64_app=arm64_app)
                 if callnum is not None and callnum < 0:
-                    self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
-                    return None, None
+                    if call == 'clone3':
+                        self.lgr.debug('Syscall setComputeBreaks skipping clone3, no call number')
+                        continue
+                    else:
+                        self.lgr.error('Syscall setComputeBreaks bad call number %d for call <%s>' % (callnum, call))
+                        return None, None
             entry = self.task_utils.getSyscallEntry(callnum, compat32, arm64_app=arm64_app)
             #phys = self.mem_utils.v2p(cpu, entry)
             #proc_break = self.context_manager.genBreakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys, 1, 0)
