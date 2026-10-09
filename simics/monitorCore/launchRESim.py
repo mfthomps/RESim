@@ -431,7 +431,7 @@ class LaunchRESim():
         Either launch monitor, or generate kernel parameter file depending on CREATE_RESIM_PARAMS
         '''
         MONITOR = os.getenv('MONITOR')
-        if MONITOR is None or MONITOR.lower() != 'no':
+        if resimUtils.yesNoTrueFalse(MONITOR, default=True): 
             if RESIM_TARGET.lower() != 'none':
                 if CREATE_RESIM_PARAMS is not None and CREATE_RESIM_PARAMS.upper() == 'YES':
                     lgr.debug('Will Create RESim parameters')
