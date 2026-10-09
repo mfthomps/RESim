@@ -791,7 +791,7 @@ def getKeyValue(item):
         value = parts[1].strip()
     return key, value
 
-def yesNoTrueFalse(item):
+def yesNoTrueFalse(item, default=False):
     if item is not None:
         item = item.lower()
         if item in ['yes', 'true']:
@@ -799,7 +799,7 @@ def yesNoTrueFalse(item):
         else:
             return False 
     else:
-        return False 
+        return default 
 
 def isSO(prog):
     prog = prog.lower()
