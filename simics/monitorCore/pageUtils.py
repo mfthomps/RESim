@@ -353,7 +353,7 @@ def findPageTable(cpu, addr, lgr, use_sld=None, force_cr3=None, kernel=False, do
         ''' determine if PAE being used '''
         addr_extend = memUtils.testBit(cr4, 5)
         #print('addr_extend is %d' % addr_extend)
-        lgr.debug('findPageTable addr_extend is %d' % addr_extend)
+        #lgr.debug('findPageTable addr_extend is %d' % addr_extend)
         if addr_extend == 0:
             ''' 
             Traditional page table.  
