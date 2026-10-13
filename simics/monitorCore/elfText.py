@@ -6,6 +6,7 @@ import subprocess
 import resimUtils
 class Text():
     def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp, word_size):
+        # mostly bs and confusing.  text_start may be the plt.  Address of "LOAD... R E" for so executables
         self.text_start = address
         self.text_offset = offset
         self.text_size = size
@@ -77,6 +78,7 @@ def getText(path, lgr):
     is_aarch64 = False
     interp = None
     word_size = 4
+    is_so = False
  
     line_list = out[0].decode("utf-8").splitlines()
     line_iterator = iter(line_list) 
@@ -92,6 +94,8 @@ def getText(path, lgr):
             continue
         if line.strip().startswith('Type:') and 'DYN' in line:
             is_dyn = True
+            if 'Shared object' in line:
+                is_so = True
             continue
         if line.strip().startswith('Machine:') and 'AArch64' in line:
             lgr.debug('elfText Is AArch64')
@@ -103,7 +107,7 @@ def getText(path, lgr):
                 lgr.debug('elfText is Entry point')
             
             parts = line.strip().split()
-            if is_dyn:
+            if is_dyn and not is_so:
                 offset = int(parts[3], 16)
                 if lgr is not None:
                     lgr.debug('elfText Entry point, is dynamic setting offset to 0x%x' % offset)
@@ -145,17 +149,22 @@ def getText(path, lgr):
                 size = 0
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
-            mem_size = int(parts[3], 16)
-            this_size = addr_start + mem_size
-            lgr.debug('elfText not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
-            if this_size != 0:
-                size = this_size
-                lgr.debug('elfText got size now 0x%x' % size)
+            mem_size = int(parts[4], 16)
+            if not is_so:
+                # TBD seems stupid
+                this_size = addr_start + mem_size
+                lgr.debug('elfText not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
+                if this_size != 0:
+                    size = this_size
+                    lgr.debug('elfText got size now 0x%x' % size)
+                else:
+                    lgr.debug('elfText ignoring this size, using old size 0x%x' % size)
+                if offset is None or offset == 0:
+                    offset = int(parts[2], 16)
+                    lgr.debug('elfText got offset 0x%x' % offset)
             else:
-                lgr.debug('elfText ignoring this size, using old size 0x%x' % size)
-            if offset is None or offset == 0:
-                offset = int(parts[2], 16)
-                lgr.debug('elfText got offset 0x%x' % offset)
+                offset = addr_start
+                size = mem_size
             
         ''' section numbering has whitespace '''
         hack = line[4:]
