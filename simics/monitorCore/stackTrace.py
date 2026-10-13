@@ -171,15 +171,20 @@ class StackTrace():
             if self.isCall(instruct[1]):
                 if self.cpu.architecture == 'ppc32' and instruct[1].startswith('bctrl'):
                     self.recent_bctrl = eip
-                    self.lgr.debug('stackTrace followCall is bctrl at 0x%x' % (eip))
+                    #self.lgr.debug('stackTrace followCall is bctrl at 0x%x' % (eip))
                 retval = eip
         else:
             fun_addr = self.fun_mgr.getFun(return_to)
             #self.lgr.debug('stackTrace followCall return_to 0x%x' % return_to)
             if fun_addr is not None:
-                retval = self.disassembler.getPrevInstruction(return_to, fun_addr)
-                #self.lgr.debug('stackTrace followCall return_to 0x%x back from disassembler with %s' % (return_to, retval))
+                prev_instruct_addr = self.disassembler.getPrevInstruction(return_to, fun_addr)
+                if prev_instruct_addr is not None:
+                    instruct = self.disassemble(prev_instruct_addr)
+                    if self.isCall(instruct[1]):
+                        retval = prev_instruct_addr
+                        self.lgr.debug('stackTrace followCall return_to 0x%x back from disassembler with %s' % (return_to, retval))
             else:
+                # OFTEN WRONG
                 eip = return_to - 2
                 #self.lgr.debug('followCall no function found for return_to is 0x%x  ip 0x%x' % (return_to, eip))
                 # TBD use instruction length to confirm it is a true call
@@ -807,7 +812,7 @@ class StackTrace():
                 continue
             self.lgr.debug('stackTrace findReturnFromCall ptr 0x%x val 0x%x  limit 0x%x' % (ptr, val, limit))    
             if self.soMap.isCode(val, self.tid):
-                self.lgr.debug('stackTrace findReturnFromCall is code val 0x%x ptr was 0x%x' % (val, ptr))
+                self.lgr.debug('stackTrace findReturnFromCall is code val 0x%x ptr was 0x%x, call followCall with val' % (val, ptr))
                 call_ip = self.followCall(val)
                 if call_ip is not None:
                     fname = self.soMap.getSOFileFull(call_ip)
