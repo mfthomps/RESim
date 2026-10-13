@@ -200,6 +200,20 @@ class SOMap():
                 else:
                     self.prog_info = so_pickle['prog_info']
                     self.lgr.debug('soMap loadPickle version %d has proper elf info, load %d prog_info from pickle' % (version, len(self.prog_info)))
+                    # TBD lost data?  always do this to update elf data?
+                    for tid in self.so_addr_map:
+                        for prog in self.so_addr_map[tid]:
+                            prog = self.pathAlias(tid, prog)
+                            if prog not in self.prog_info:
+                                self.lgr.debug('soMapLoadPickle prog %s not in prog_info, add it' % prog)
+                                if prog.startswith('/'):
+                                    use_prog = prog[1:]
+                                else:
+                                    use_prog = prog
+                                prog_path = os.path.join(self.root_prefix, use_prog)
+                                self.addProgInfo(prog, prog_path)
+
+
                 if version < 24:
                     self.lgr.debug('version less than 24')
                     for prog in self.prog_info:
@@ -456,16 +470,16 @@ class SOMap():
             self.lgr.debug('soMap addProgInfo prog info %s %s' % (prog, self.prog_info[prog].toString()))
             if self.prog_info[prog].text_start is None:
                 if self.prog_info[prog].text_size is not None:
-                    eip = self.top.getEIP(self.cpu)
-                    mem_utils = self.task_utils.getMemUtils()
-                    if mem_utils.isKernel(eip):
-                        eip = mem_utils.getKReturnAddr(self.cpu)
-                        if eip is None:
-                            self.lgr.error('soMap addProgInfo no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
-                            return
-                        self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
-                    else:
-                        self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip is 0x%x' % eip)
+                    #eip = self.top.getEIP(self.cpu)
+                    #mem_utils = self.task_utils.getMemUtils()
+                    #if mem_utils.isKernel(eip):
+                    #    eip = mem_utils.getKReturnAddr(self.cpu)
+                    #    if eip is None:
+                    #        self.lgr.error('soMap addProgInfo no text start, assume dynamic but eip is in kernel and getting return addr is TBD')
+                    #        return
+                    #    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip based on kernel return addr is 0x%x' % eip)
+                    #else:
+                    #    self.lgr.debug('soMap addProgInfo no text start, assume dynamic eip is 0x%x' % eip)
                     self.prog_info[prog].text_start = 0
                     self.prog_info[prog].text_end = self.prog_info[prog].text_size - 1
                     self.prog_info[prog].setDynamic()
@@ -488,7 +502,7 @@ class SOMap():
         if tid in self.text_prog:
             prog = self.text_prog[tid]
             if prog.startswith('/tmp/mount'):
-               self.lgr.debug('soMap pathAlias prog %s is appRun' % prog)
+               #self.lgr.debug('soMap pathAlias prog %s is appRun' % prog)
                app_run = True
                if fpath.startswith('/tmp/.mount') and app_run:
                    retval = '/tmp/mount/lib/' + os.path.basename(fpath)
@@ -522,9 +536,15 @@ class SOMap():
             # TBD can we finally get rid of old style paths?
             #if full_path is None:
             #    full_path = self.targetFS.getFull(fpath, lgr=self.lgr)
+            text_addr = locate
+            if fpath in self.prog_info:
+                text_addr = locate - self.prog_info[fpath].text_offset
+                self.lgr.debug('soMap setFunMgr path %s adjusted locate by text_offset 0x%x' % (fpath, self.prog_info[fpath].text_offset))
+            else:
+                self.lgr.debug('soMap setFunMgr no prog_info for %s' % fpath)
             if full_path is not None:
                 full_path = full_path+'.funs'
-                self.fun_mgr.add(full_path, locate)
+                self.fun_mgr.add(full_path, text_addr)
     
     def addLoader(self, tid_in, prog, addr):
         load_info = None
@@ -596,7 +616,7 @@ class SOMap():
                 if elf_info is not None:
                     self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                          elf_info.plt_offset, elf_info.plt_size, local_path, interp=elf_info.interp, word_size=elf_info.word_size)
-                    self.lgr.debug('soMap addSo tid:%s added prog_info for prog %s' % (tid, prog))
+                    self.lgr.debug('soMap addSo tid:%s added prog_info for prog %s %s' % (tid, prog, self.prog_info[prog].toString()))
                 else:
                     self.lgr.debug('soMap addSo no elf info from %s' % prog)
 
@@ -610,7 +630,9 @@ class SOMap():
             if self.fun_mgr is not None and full_path is not None:
                 full_path = self.pathAlias(tid, full_path)
                 analysis_path = self.getAnalysisPath(full_path)
-                self.fun_mgr.add(analysis_path, addr)
+                load_addr = addr - elf_info.text_offset
+                self.lgr.debug('soMap addSO tid:%s passing load_addr 0x%x to fun_mgr add' % load_addr)
+                self.fun_mgr.add(analysis_path, load_addr)
 
             self.checkSOWatch(addr, prog)
 
@@ -1106,7 +1128,7 @@ class SOMap():
         #self.lgr.debug('soMap getLoadAddr loadAddr %s tid %s' % (in_fname, tid))
         retval = None
         ret_size = None
-        prog = self.fullProg(in_fname)
+        prog = self.fullProg(in_fname, tid_in=tid)
         if prog is None:
             self.lgr.error('soMap getLoadAddr got no prog for %s' % in_fname)
             return None, None
@@ -1164,6 +1186,8 @@ class SOMap():
                     retval = self.prog_info[prog].text_offset
         else:
             self.lgr.debug('soMap getImageBase not in prog_info: %s' % prog)
+            for p in self.prog_info:
+                self.lgr.debug('\tprog %s' % p)
 
         return retval
 
@@ -1269,7 +1293,7 @@ class SOMap():
             self.lgr.debug('soMap getLoadInfo tid:%s not in text_prog' % tid)
         return load_info
 
-    def fullProg(self, prog_in):
+    def fullProg(self, prog_in, tid_in=None):
         # if the given prog_in is a basename, use a prog_base_map to return the full path
         prog = None
         if prog_in is not None and '/' not in prog_in:
@@ -1288,29 +1312,28 @@ class SOMap():
                 prog = prog_in[len(self.root_prefix):]
             else:
                 prog = prog_in
+        if prog is not None:
+            if tid_in is None:
+                cpu, comm, tid = self.task_utils.curThread() 
+            else:
+                tid = tid_in
+            tid = self.getSOTid(tid)
+            prog = self.pathAlias(tid, prog)
         return prog
 
     def getLoadOffset(self, prog_in, tid=None):
         retval = None
-        prog = self.fullProg(prog_in)
+        prog = self.fullProg(prog_in, tid_in=tid)
         if prog is None:
             self.lgr.error('soMap getLoadOffset got None from fullProg for %s' % prog_in)
             return None
         if tid is None:
             cpu, comm, tid = self.task_utils.curThread() 
         tid = self.getSOTid(tid)
-        #if tid in self.text_prog:
-        #    self.lgr.debug('soMap getLoadOffset tid is %s len prog_start %d prog_in %s prog %s text_prog %s' % (tid, len(self.prog_start), prog_in, prog, self.text_prog[tid]))
-        #else:
-        #    self.lgr.debug('soMap getLoadOffset tid is %s not in text_prog' % (tid))
-        #if tid in self.prog_start:
-        #   self.lgr.debug('soMap getLoadOffset tid %s in prog_start and text_prog[tid] is %s' % (tid, self.text_prog[tid]))
-        #   
-        #else:
-        #   self.lgr.debug('soMap getLoadOffset tid %s not in prog_start' % tid)
-        maybe_image_base = self.getImageBase(prog_in)
-        maybe_load_addr = self.getLoadAddr(prog_in)
-        if tid in self.text_prog and tid in self.load_info and self.text_prog[tid] == prog_in:
+        prog = self.pathAlias(tid, prog)
+        maybe_image_base = self.getImageBase(prog)
+        maybe_load_addr = self.getLoadAddr(prog)
+        if tid in self.text_prog and tid in self.load_info and self.text_prog[tid] == prog:
             load_addr = self.load_info[tid].addr
             if prog in self.prog_info:
                 if self.prog_info[prog].text_start > 0:
