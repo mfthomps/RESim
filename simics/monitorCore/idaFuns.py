@@ -11,6 +11,13 @@ def rmPrefix(fun):
     #    fun = fun[1:]
     return fun
 
+class FileAddrs():
+    def __init__(self, fname):
+        self.fname = fname
+        self.start = None
+        self.end = None
+        self.fun_list = []
+
 class IDAFuns():
 
     def __init__(self, path, lgr, offset=0):
@@ -24,6 +31,8 @@ class IDAFuns():
         self.mangle = {}
         self.unwind = {}
         self.fun_cache = None
+        self.fname_addrs = {}
+        self.recent_fname_addrs = []
         if path.endswith('funs'):
             mpath = path[:-4]+'mangle' 
             if os.path.isfile(mpath):
@@ -44,6 +53,8 @@ class IDAFuns():
                 #lgr.debug('no unwind file at %s' % upath)
                 pass
         if os.path.isfile(path):
+            filename = os.path.basename(path[:-5])
+            this_file_addrs = FileAddrs(filename)
             with open(path) as fh:
                 jfuns = json.load(fh)
                 self.lgr.debug('idaFuns read funs from %s, offset is 0x%x' % (path, offset))
@@ -67,12 +78,24 @@ class IDAFuns():
                         for frange in fun_rec['ranges']:
                             frange['start'] = frange['start'] + offset 
                             frange['end'] = frange['end'] + offset 
+                            if this_file_addrs.start is None:
+                                this_file_addrs.start = frange['start']
+                            this_file_addrs.end = frange['end']
                     else:
                         fun_rec['start'] = adjusted
                         fun_rec['end'] = fun_rec['end'] + offset
+                        if this_file_addrs.start is None:
+                            this_file_addrs.start = adjusted
+                            this_file_addrs.end = fun_rec['end']
+                        elif fun_rec['end'] > this_file_addrs.end:
+                            this_file_addrs.end = fun_rec['end']
+                    this_file_addrs.fun_list.append(fun)
+                    
                     ''' index by load address to avoid collisions '''
                     self.funs[fun] = fun_rec
                 self.did_paths.append(path[:-5])
+                if this_file_addrs.start is not None:
+                    self.fname_addrs[filename] = this_file_addrs
         self.lgr.debug('idaFuns loaded %d funs' % len(self.funs))
 
     def getFunPath(self, path):
@@ -92,7 +115,7 @@ class IDAFuns():
         return fun_path
             
     def add(self, path, offset):
-        self.lgr.debug('idaFuns add path %s did_paths is %s' % (path, str(self.did_paths)))
+        self.lgr.debug('idaFuns add path %s offset 0x%x' % (path, offset))
         if path is None or path in self.did_paths or path[:-5] in self.did_paths:
             return
         else:
@@ -116,6 +139,7 @@ class IDAFuns():
         if os.path.isfile(funfile):
             with open(funfile) as fh:
                 fname = os.path.basename(funfile)[:-5]
+                this_file_addrs = FileAddrs(fname)
                 self.have_funs_for.append(fname)
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x fname %s' % (path, offset, fname))
                 newfuns = json.load(fh) 
@@ -129,13 +153,25 @@ class IDAFuns():
                     if 'ranges' in newfuns[f]:
                         self.funs[fun]['ranges'] = []
                         for frange in newfuns[f]['ranges']:
+                            orig_start = frange['start']
                             frange['start'] = frange['start']+offset
                             frange['end'] = frange['end']+offset
                             self.funs[fun]['ranges'].append(frange)
+                            if this_file_addrs.start is None:
+                                self.lgr.debug('idaFuns add is ranges fname %s first fun is 0x%x orig_start 0x%x offset 0x%x' % (fname, fun, orig_start, offset))
+                                this_file_addrs.start = frange['start']
+                            this_file_addrs.end = frange['end']
                         
                     else:
                         self.funs[fun]['start'] = fun
                         self.funs[fun]['end'] = newfuns[f]['end']+offset
+                        if this_file_addrs.start is None:
+                            this_file_addrs.start = fun
+                            this_file_addrs.end = self.funs[fun]['end']
+                            self.lgr.debug('idaFuns add fname %s first fun is 0x%x' % (fname, fun))
+                        elif self.funs[fun]['end'] > this_file_addrs.end:
+                            this_file_addrs.end = self.funs[fun]['end']
+                    this_file_addrs.fun_list.append(fun)
                     fun_name = newfuns[f]['name']
                     fun_name = rmPrefix(fun_name)
                     self.funs[fun]['name'] = fun_name
@@ -154,6 +190,8 @@ class IDAFuns():
                    
                     #self.lgr.debug('idaFun add %s was %s %x %x   now %x %x %x' % (newfuns[f]['name'], f, newfuns[f]['start'], newfuns[f]['end'], fun, self.funs[fun]['start'], self.funs[fun]['end']))
 
+                if this_file_addrs.start is not None:
+                    self.fname_addrs[fname] = this_file_addrs
         else:
             self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
             pass
@@ -216,15 +254,45 @@ class IDAFuns():
                 return True
         return retval
 
+    def getFunByGroup(self, ip):
+        retval = None
+        group = self.getFnameAddrs(ip)
+        if group is not None:
+            prev = None
+            for addr in group.fun_list:
+                if addr > ip:
+                    if prev is None:
+                        self.lgr.error('idaFuns getFunByGroup prev is None, first fun 0x%x greater than ip 0x%x' % (addr, ip))
+                        return None
+                    else:
+                        #self.lgr.debug('idaFuns getFunByGroup found group prev is 0x%x, ip 0x%x greater than fun 0x%x' % (prev, ip , addr))
+                        retval = prev
+                        break
+                else:
+                    prev = addr
+        else:
+            self.lgr.debug('idaFuns getFunByGroup no group found for ip 0x%x' % ip)
+            pass
+        return retval
+
     def getFun(self, ip):
         ''' Returns the loaded function address of the fuction containing a given ip '''
+        #self.lgr.debug('idaFuns getFun 0x%x' % ip)
         if self.fun_cache is not None and self.isInFun(ip, self.fun_cache):
             return self.fun_cache
         if ip is not None:
-            for fun in self.funs:
-                if self.isInFun(ip, fun):
-                    self.fun_cache = fun
-                    return fun
+            fun = self.getFunByGroup(ip)
+            if fun is None:
+                self.lgr.debug('idaFuns getFun failed to find fun for ip 0x%x, do not bother with brute force search' % ip)
+                pass
+                
+                #for fun in self.funs:
+                #    if self.isInFun(ip, fun):
+                #        self.fun_cache = fun
+                #        return fun
+                #self.lgr.debug('idaFuns getFun failed to find fun for ip 0x%x, while using the full search' % ip)
+            else:
+                return fun
         else:
             self.lgr.error('idaFuns getFun called with ip of None')
         return None
@@ -300,7 +368,7 @@ class IDAFuns():
         for fun in self.funs:
             if self.funs[fun]['name'] == fun_name:
                 if 'ranges' in self.funs[fun]:
-                    size = self.funs[fun]['ranges'][0]['start'] - self.funs[fun]['ranges'][0]['end']
+                    size = self.funs[fun]['ranges'][0]['end'] - self.funs[fun]['ranges'][0]['start']
                     print('fun entry 0x%x size %d' % (fun, size))
                 else:
                     size = self.funs[fun]['end'] - self.funs[fun]['start'] 
@@ -388,3 +456,24 @@ class IDAFuns():
         else:
             self.lgr.debug('idaFuns isWrapperFor fun1 %s not in funs' % fun1)
         return retval 
+
+    def getRecentFnameAddrs(self, addr):
+        retval = None
+        for faddrs in self.recent_fname_addrs:
+            if addr >= faddrs.start and addr <= faddrs.end:
+                retval = faddrs
+                break
+        return retval
+
+    def getFnameAddrs(self, addr):
+        retval = None
+        for fname in self.fname_addrs:
+            if self.fname_addrs[fname].start is None:
+                self.lgr.error('idaFuns getFnameAddrs fname %s has no start' % fname)
+                return None
+            #self.lgr.debug('idaFuns getFnameAddrs 0x%x try fname %s with start 0x%x end 0x%x' % (addr, fname, self.fname_addrs[fname].start, self.fname_addrs[fname].end))
+            if addr >= self.fname_addrs[fname].start and addr <= self.fname_addrs[fname].end:
+                #self.lgr.debug('idaFuns getFnameAddrs 0x%x got fname %s with start 0x%x end 0x%x' % (addr, fname, self.fname_addrs[fname].start, self.fname_addrs[fname].end))
+                retval = self.fname_addrs[fname]
+                break
+        return retval
