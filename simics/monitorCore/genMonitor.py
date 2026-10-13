@@ -6963,7 +6963,7 @@ class GenMonitor():
         print('Cutting links to real networks')
         if self.target in self.magic_origin:
             self.magic_origin[self.target].deleteMagicHap() 
-        resimSimicsUtils.cutRealWorld()
+        resimSimicsUtils.cutRealWorld(lgr=self.lgr)
         # Note setting run means the call to resetOrigin will not return until simulation stops again.
         self.resetOrigin(run=run)
 
@@ -7546,6 +7546,19 @@ class GenMonitor():
         target = self.cell_config.cellFromCPU(cpu)
         if self.track_threads is not None and target in self.track_threads:
             self.track_threads[target].pauseTrack(pause)
+
+    def getPrevInstruction(self, addr):
+        cpu = self.cell_config.cpuFromCell(self.target)
+        fun_addr = self.fun_mgr.getFun(addr)
+        if fun_addr is not None:
+            self.lgr.debug('getPrevInstruction for addr 0x%x fun_addr is 0x%x' % (addr, fun_addr))
+            prev = self.disassemble_instruct[self.target].getPrevInstruction(addr, fun_addr)
+            if prev is not None:
+                print('Instruction address prior to 0x%x is 0x%x' % (addr, prev))
+            else:
+                print('Failed')
+        else:
+            print('No function found for 0x%x' % addr)
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
