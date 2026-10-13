@@ -119,6 +119,8 @@ class FunMgr():
  
     ''' TBD extend linux soMap to pass load addr '''
     def add(self, path, start, offset=0, text_offset=0, alias=None):
+        # overloaded used for program and so, linux and windows
+        # linux only uses start
         comm = self.getComm()
         self.lgr.debug('funMgr add path %s' % path)
         if path is None:
@@ -349,8 +351,9 @@ class FunMgr():
     def getFunNameFromInstruction(self, instruct, eip, recent_instructs=[], check_reg=False):
         ''' get the called function address and its name, if known '''
         # TBD duplicates much of resolveCall.  merge?
-        #self.lgr.debug('funMgr getFunNameFromInstruct insturct: %s' % instruct[1])
+        #self.lgr.debug('funMgr getFunNameFromInstruct eip: 0x%x instruct: %s' % (eip, instruct[1]))
         if self.cpu.architecture != 'arm' and instruct[1].startswith('jmp dword'):
+            # Special case for wrapper 
             parts = instruct[1].split()
             addrbrack = parts[3].strip()
             addr = resimUtils.hexInt(addrbrack[1:-1])
@@ -371,7 +374,6 @@ class FunMgr():
             parts = instruct[1].split()
             call_addr = None
             fun = None
-            self.lgr.debug('funMgr getFunNameFromInstruction for %s' % instruct[1])
             if parts[-1].strip().endswith(']'):
                 #self.lgr.debug('funMgr getFunNameFromInstruction is bracket %s' % instruct[1])
                 call_addr, fun = self.indirectCall(instruct, eip)
