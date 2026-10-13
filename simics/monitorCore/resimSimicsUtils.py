@@ -139,7 +139,7 @@ def serviceNodeConnected(name, lgr=None):
                 break
         return retval
 
-def cutRealWorld():
+def cutRealWorld(lgr=None):
     driver_service_node = 'driver_service_node'
     dhcp_service_node = 'dhcp_service_node'
     cmd = 'disconnect-real-network'
@@ -149,8 +149,11 @@ def cutRealWorld():
     cmd = 'switch1.disconnect-real-network'
     SIM_run_command(cmd)
     disconnectServiceNode(driver_service_node)
+    if lgr is not None:
+        lgr.debug('resimSimicsUtils cutRealWorld back from disconnects and disconnectServiceNode for driver')
     try:
         disconnectServiceNode(dhcp_service_node)
+        lgr.debug('resimSimicsUtils cutRealWorld back from disconnectServiceNode for dhcp')
     except:
         pass
 
