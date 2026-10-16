@@ -71,29 +71,13 @@ class TraceMalloc():
 
     def mallocHap(self, dumb, context, break_num, memory):
         if self.malloc_hap is not None:
-            cpu, comm, tid = self.task_utils.curThread() 
+            dumb, comm, tid = self.task_utils.curThread() 
             self.lgr.debug('TraceMalloc mallocHap tid:%s' % tid)
             if self.comm is not None and self.comm != comm:
                 return
-            if cpu.architecture == 'arm':
-                size = self.mem_utils.getRegValue(self.cpu, 'r0') 
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'arm64':
-                size = self.mem_utils.getRegValue(self.cpu, 'x0') 
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'ppc32':
-                size = self.mem_utils.getRegValue(self.cpu, 'r3') 
-                self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            else:
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                ret_addr = self.mem_utils.readPtr(self.cpu, sp)
-                size = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
-                #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
-            if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec('malloc', tid, size, cpu.cycles)
+            size, dumb1, dumb2, ret_addr = self.getCallParams() 
+            if not self.top.isLibc(ret_addr, target_cpu=self.cpu,other_ok=True) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
+                malloc_rec = self.MallocRec('malloc', tid, size, self.cpu.cycles)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
             else:
@@ -101,33 +85,13 @@ class TraceMalloc():
                 self.lgr.debug('TraceMalloc mallocHap ret_addr 0x%x is CLIB, skip it cycle 0x%x fun: %s' % (ret_addr, self.cpu.cycles, fun))
     def callocHap(self, dumb, context, break_num, memory):
         if self.calloc_hap is not None:
-            cpu, comm, tid = self.task_utils.curThread() 
+            dumb, comm, tid = self.task_utils.curThread() 
             self.lgr.debug('TraceMalloc callocHap tid:%s' % tid)
             if self.comm is not None and self.comm != comm:
                 return
-            if cpu.architecture == 'arm':
-                nmemb = self.mem_utils.getRegValue(self.cpu, 'r0') 
-                size = self.mem_utils.getRegValue(self.cpu, 'r1') * nmemb
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'arm64':
-                nmemb = self.mem_utils.getRegValue(self.cpu, 'x0') 
-                size = self.mem_utils.getRegValue(self.cpu, 'x1') * nmemb
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'ppc32':
-                nmemb = self.mem_utils.getRegValue(self.cpu, 'r3') 
-                size = self.mem_utils.getRegValue(self.cpu, 'r4') * nmemb
-                self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            else:
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                ret_addr = self.mem_utils.readPtr(self.cpu, sp)
-                nmemb = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
-                size = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE) * nmemb
-                #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
-            if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec('calloc', tid, size, cpu.cycles)
+            nmemb, size, dumb2, ret_addr = self.getCallParams() 
+            if not self.top.isLibc(ret_addr, target_cpu=self.cpu, other_ok=True) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
+                malloc_rec = self.MallocRec('calloc', tid, size, self.cpu.cycles)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
             else:
@@ -135,34 +99,14 @@ class TraceMalloc():
 
     def reallocHap(self, dumb, context, break_num, memory):
         if self.realloc_hap is not None:
-            cpu, comm, tid = self.task_utils.curThread() 
+            dumb, comm, tid = self.task_utils.curThread() 
             self.lgr.debug('TraceMalloc reallocHap tid:%s' % tid)
             ptr = None
             if self.comm is not None and self.comm != comm:
                 return
-            if cpu.architecture == 'arm':
-                ptr = self.mem_utils.getRegValue(self.cpu, 'r0') 
-                size = self.mem_utils.getRegValue(self.cpu, 'r1') 
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'arm64':
-                ptr = self.mem_utils.getRegValue(self.cpu, 'x0') 
-                size = self.mem_utils.getRegValue(self.cpu, 'x1') 
-                #self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            elif cpu.architecture == 'ppc32':
-                ptr = self.mem_utils.getRegValue(self.cpu, 'r3') 
-                size = self.mem_utils.getRegValue(self.cpu, 'r4') 
-                self.lgr.debug('malloc size %d' % size)
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            else:
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                ret_addr = self.mem_utils.readPtr(self.cpu, sp)
-                ptr = self.mem_utils.readWord32(self.cpu, sp+self.mem_utils.WORD_SIZE)
-                size = self.mem_utils.readWord32(self.cpu, sp+2*self.mem_utils.WORD_SIZE)
-                #self.lgr.debug('TraceMalloc mallocHap malloc size %d ret_addr 0x%x cycle 0x%x' % (size, ret_addr, self.cpu.cycles))
-            if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                malloc_rec = self.MallocRec('realloc', tid, size, cpu.cycles, realloc_ptr=ptr)
+            ptr, size, dumb1, ret_addr = self.getCallParams() 
+            if not self.top.isLibc(ret_addr, target_cpu=self.cpu, other_ok=True) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
+                malloc_rec = self.MallocRec('realloc', tid, size, self.cpu.cycles, realloc_ptr=ptr)
                 malloc_ret_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_addr, 1, 0)
                 self.malloc_hap_ret = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.mallocEndHap, malloc_rec, malloc_ret_break, 'malloc_end')
                 if ptr in self.current_malloc:
@@ -172,27 +116,9 @@ class TraceMalloc():
 
     def freeHap(self, dumb, context, break_num, memory):
         if self.free_hap is not None:
-            cpu, comm, tid = self.task_utils.curThread() 
+            dumb, comm, tid = self.task_utils.curThread() 
             #self.lgr.debug('TraceMalloc freeHap tid:%s cycle 0x%x' % (tid, self.cpu.cycles))
-            if cpu.architecture == 'arm':
-                addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-                #self.lgr.debug('free addr 0x%x' % addr)
-            elif cpu.architecture == 'arm64':
-                addr = self.mem_utils.getRegValue(self.cpu, 'x0') 
-                ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
-            else:
-                sp = self.mem_utils.getRegValue(self.cpu, 'sp')
-                addr = self.mem_utils.readPtr(self.cpu, sp+self.mem_utils.WORD_SIZE)
-                ret_addr = self.mem_utils.readPtr(self.cpu, sp)
-                #self.lgr.debug('free addr 0x%x' % addr)
-            if not self.top.isLibc(ret_addr, target_cpu=self.cpu) and self.top.getSO(ret_addr, target_cpu=self.cpu) is not None:
-                self.dataWatch.recordFree(addr)
-                if self.trace_mgr is not None:
-                    msg = 'free 0x%x tid:%s (%s)' % (addr, tid, comm)
-                    self.trace_mgr.write(msg)
-                if self.callback is not None:
-                    self.callback('free', addr)
+            addr, dumb1, dumb2, ret_addr = self.getCallParams() 
             if addr in self.current_malloc:
                 del self.current_malloc[addr] 
                 self.lgr.debug('TraceMalloc freeHap ********* freed 0x%x' % addr)
@@ -203,20 +129,20 @@ class TraceMalloc():
 
     def mallocEndHap(self, malloc_rec, context, break_num, memory):
         if self.malloc_hap_ret is not None:
-            cpu, comm, tid = self.task_utils.curThread() 
+            dumb, comm, tid = self.task_utils.curThread() 
             self.lgr.debug('TraceMalloc mallocEndHap tid:%s cycle 0x%x' % (tid, self.cpu.cycles))
-            if cpu.architecture == 'arm':
+            if self.cpu.architecture == 'arm':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
-            elif cpu.architecture == 'arm64':
+            elif self.cpu.architecture == 'arm64':
                 addr = self.mem_utils.getRegValue(self.cpu, 'x0') 
                 #self.lgr.debug('malloc addr 0x%x' % addr)
-            elif cpu.architecture == 'ppc32':
+            elif self.cpu.architecture == 'ppc32':
                 addr = self.mem_utils.getRegValue(self.cpu, 'r3') 
                 self.lgr.debug('TraceMalloc mallocEndHap addr 0x%x' % addr)
             else:
                 addr = self.mem_utils.getRegValue(self.cpu, 'eax') 
-                #self.lgr.debug('TraceMalloc mallocEndHap addr 0x%x, size: %d' % (addr, malloc_rec.size))
+                self.lgr.debug('TraceMalloc mallocEndHap addr 0x%x, size: %d' % (addr, malloc_rec.size))
             malloc_rec.addr = addr
             self.malloc_list.append(malloc_rec)
             self.current_malloc[addr] = malloc_rec
@@ -254,3 +180,53 @@ class TraceMalloc():
             jlist.append(jrec)
         with open('/tmp/alloc.json', 'w') as fh:
             fh.write(json.dumps(jlist))
+
+    def getCallParams(self, word_size=None):
+        if word_size is None:
+            word_size = self.mem_utils.wordSize(self.cpu)
+        retval1 = None
+        retval2 = None
+        retval3 = None
+        if self.cpu.architecture.startswith('arm'):
+            if self.cpu.architecture == 'arm64' and self.mem_utils.arm64App(self.cpu):
+                retval1 = self.mem_utils.getRegValue(self.cpu, 'x0')
+                retval2 = self.mem_utils.getRegValue(self.cpu, 'x1')
+                retval3 = self.mem_utils.getRegValue(self.cpu, 'x2')
+            else:
+                retval1 = self.mem_utils.getRegValue(self.cpu, 'r0')
+                retval2 = self.mem_utils.getRegValue(self.cpu, 'r1')
+                retval3 = self.mem_utils.getRegValue(self.cpu, 'r2')
+        elif self.cpu.architecture == 'ppc32':
+                retval1 = self.mem_utils.getRegValue(self.cpu, 'r3')
+                retval2 = self.mem_utils.getRegValue(self.cpu, 'r4')
+                retval3 = self.mem_utils.getRegValue(self.cpu, 'r5')
+        elif self.top.isWindows(cpu=self.cpu) and word_size == 8:
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'rcx')
+            retval2 = self.mem_utils.getRegValue(self.cpu, 'rdx')
+            retval3 = self.mem_utils.getRegValue(self.cpu, 'r8')
+        #elif self.top.isWindows(target=self.cell_name) and not force_sp:
+        #    retval1 = self.mem_utils.getRegValue(self.cpu, 'eax')
+        #    retval2 = self.mem_utils.getRegValue(self.cpu, 'ebx')
+        #    retval3 = self.mem_utils.getRegValue(self.cpu, 'ecx')
+        elif word_size == 8:
+            retval1 = self.mem_utils.getRegValue(self.cpu, 'rdi')
+            retval2 = self.mem_utils.getRegValue(self.cpu, 'rsi')
+            retval3 = self.mem_utils.getRegValue(self.cpu, 'rdx')
+        else:
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            retval1 = self.mem_utils.readAppPtr(self.cpu, sp, size=word_size)
+            retval2 = self.mem_utils.readAppPtr(self.cpu, sp+word_size, size=word_size)
+            retval3 = self.mem_utils.readAppPtr(self.cpu, sp+2*word_size, size=word_size)
+
+        if self.cpu.architecture == 'arm':
+            ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
+        elif self.cpu.architecture == 'arm64':
+            ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
+        elif self.cpu.architecture == 'ppc32':
+            ret_addr = self.mem_utils.getRegValue(self.cpu, 'lr') 
+        else:
+            sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+            ret_addr = self.mem_utils.readPtr(self.cpu, sp)
+
+        return retval1, retval2, retval3, ret_addr
+
