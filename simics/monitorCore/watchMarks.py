@@ -865,7 +865,7 @@ class WatchMarks():
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
  
-    def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None, byte_swap=False): 
+    def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None, byte_swap=False, one_to_two=False, two_to_one=False): 
         if ip is None and cycles is not None:
             self.lgr.error('watchMarks dataRead cycles given but not ip')
         elif ip is None:
@@ -896,11 +896,17 @@ class WatchMarks():
                 
                 #if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
                 
+                if pm is not None and pm.mark.end_addr is not None: 
+                    self.lgr.debug('watchMarks previous ad_hoc addr 0x%x pm.mark.end_addr 0x%x' % (addr, pm.mark.end_addr))
                 if pm is not None and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
                     self.lgr.debug('watchMarks previous ad_hoc had end addr one greater than addr')
                     skip_this = False
                     if dest is not None:
                         cur_len = pm.mark.getSize()
+                        if one_to_two:
+                            cur_len = cur_len * 2
+                        elif two_to_one:
+                            cur_len = cur_len >> 1
                         # TBD track down this off by one error
                         if trans_size != 16 and trans_size != 1:
                             ok_dest = pm.mark.dest + cur_len + 1
