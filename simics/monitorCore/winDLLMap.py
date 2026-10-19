@@ -657,7 +657,7 @@ class WinDLLMap():
                     #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
                     if addr_in >= section.load_addr and addr_in <= end:
                         retval = (fname, section.load_addr, end)
-                        #break 
+                        break 
         return retval
 
     def getCodeSections(self, tid):
