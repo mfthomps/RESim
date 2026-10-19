@@ -236,7 +236,7 @@ def transType(op_type):
         retval = 'store'
     elif op_type == Sim_Trans_Instr_Fetch:
         retval = 'instr_fetch'
-    elif op_type == Sim_Trans_Pefetch:
+    elif op_type == Sim_Trans_Prefetch:
         retval = 'instr_prefetch'
     elif op_type == Sim_Trans_Cache:
         retval = 'instr_cache'
