@@ -207,10 +207,10 @@ class FunMgr():
         fun = None
         if addr is not None:
             if comm in self.relocate_funs and addr in self.relocate_funs[comm]:
-                self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
+                #self.lgr.debug('funMgr funFromAddr 0x%x in relocate' % addr)
                 fun = self.relocate_funs[comm][addr]
             elif comm in self.ida_funs:
-                self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
+                #self.lgr.debug('funMgr funFromAddr 0x%x not in relocate' % addr)
                 fun = self.ida_funs[comm].getFunName(addr)
             else:
                 self.lgr.debug('funMgr funFromAddr 0x%x comm %s not in ida_funs' % (addr, comm))
@@ -666,7 +666,7 @@ class FunMgr():
                 
     def isWrapperFor(self, fun1, fun2):
         retval = False
-        self.lgr.debug('funMgr isWrapperFor %s %s' % (fun1, fun2))
+        #self.lgr.debug('funMgr isWrapperFor %s %s' % (fun1, fun2))
         comm = self.getComm()
         if comm in self.ida_funs:
             retval = self.ida_funs[comm].isWrapperFor(fun1, fun2)
