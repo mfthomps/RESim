@@ -536,8 +536,7 @@ class MemUtils():
             except:
                 self.lgr.debug('memUtils v2pUserAddr logical_to_physical failed on 0x%x' % v)
         elif cpl > 0  and not self.top.hasUserPageTable(cpu) and use_pid is not None:
-            if do_log:
-                self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
+            self.lgr.warning('memUtils v2pUserAddr user address 0x%x from user space for other pid %s, BUT NO usePageTable data. IGNORE PID' % (v, use_pid))
             try:
                 phys_block = cpu.iface.processor_info.logical_to_physical(v, Sim_Access_Read)
                 retval = phys_block.address
