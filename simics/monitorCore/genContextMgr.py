@@ -107,7 +107,7 @@ class GenHap():
         #self.lgr.debug('GenHap alone set hap_handle %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
         #          self.name, str(bs.break_num), str(be.break_num), 
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
-        self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
+        self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bs.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
         #self.lgr.debug('GenHap alone set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
         #          str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
         #          bs.addr, be.addr, str(bs.handle), str(be.handle)))
@@ -132,7 +132,7 @@ class GenHap():
                 #self.lgr.debug('GenHap set hap_handle %s assigned name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           self.name, str(bs.break_num), str(be.break_num), 
                 #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
-                self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bp.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
+                self.hap_num = RES_hap_add_callback_obj_range(self.hap_type, bs.cell, 0, self.callback, self.parameter, bs.break_num, be.break_num)
                 #self.lgr.debug('GenHap set hap_handle %s assigned hap %s name: %s on range %s %s (0x%x 0x%x) break handles %s %s' % (str(self.handle), 
                 #           str(self.hap_num), self.name, str(bs.break_num), str(be.break_num), 
                 #           bs.addr, be.addr, str(bs.handle), str(be.handle)))
