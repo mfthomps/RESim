@@ -88,7 +88,7 @@ class Disassemble():
             md = self.md32
             max_instructs = (addr - fun_addr)
         else:
-            self.lgr.debug('disassemble getPrevInstruction word size 8')
+            #self.lgr.debug('disassemble getPrevInstruction word size 8')
             md = self.md64
             max_instructs = int((addr - fun_addr) / 2)
         if md is None:
@@ -130,13 +130,15 @@ class Disassemble():
                 self.lgr.debug('\t%s' % item)
         if retval is None:
             # could be odd data on stack that would fall in this function
-            self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
+            #self.lgr.debug('disassemble getPrevInstruction failed to find address 0x%x in function 0x%x after %d instructions' % (addr, fun_addr, max_instructs))
+            pass
         else:
-            self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
+            #self.lgr.debug('disassemble getPrevInstruction prev instruct was at 0x%x' % retval) 
+            pass
         return retval
 
-    def getProgBytes(self, addr):
-        fname, load_addr, end = self.so_map.getSOInfo(addr)
+    def getProgBytes(self, addr, fname=None):
+        fname, load_addr, end = self.so_map.getSOInfo(addr, fname=fname)
         tid = self.top.getTID()
         tid = self.so_map.getSOTid(tid)
         if fname is not None:
@@ -159,7 +161,7 @@ class Disassemble():
             pass
         return fname, load_addr, end 
 
-    def getDisassemble(self, addr, force=False):
+    def getDisassemble(self, addr, force=False, fname=None):
         ''' NOT right for windows '''
         retval = None
         if self.so_map.wordSize() == 4:
@@ -167,12 +169,13 @@ class Disassemble():
         else:
             md = self.md64
         instruct = SIM_disassemble_address(self.cpu, addr, 1, 0)
-        if force or (md is not None and 'illegal memory mapping' in instruct[1]):
+        #if force or (md is not None and 'illegal memory mapping' in instruct[1]):
+        if force or (md is not None and 'not mapped' in instruct[1]):
             #if 'illegal memory mapping' in instruct[1]:
             #    self.lgr.debug('disassemble getDisassemble 0x%x is not mapped' % addr)
             #else:
             #    self.lgr.debug('disassemble getDisassemble force for addr 0x%x' % addr)
-            fname, load_addr, end = self.getProgBytes(addr)
+            fname, load_addr, end = self.getProgBytes(addr, fname=fname)
             if fname not in self.prog_bytes:
                 retval = instruct
             else:
