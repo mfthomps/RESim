@@ -363,7 +363,7 @@ class GenMonitor():
 
         self.trace_buffers = {}
 
-        self.resim_version = 26
+        self.resim_version = 27
         self.snap_version = 0
 
         self.report_crash = None
@@ -1602,19 +1602,22 @@ class GenMonitor():
                         if self.isWindows():
                             image_base = self.soMap[self.target].getImageBase(prog_name)
                             offset = load_info.addr - image_base
-                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset=offset)
                         elif self.isVxDKM():
                             module_info = self.soMap[self.target].getModuleInfo(prog_name)
                             offset = module_info.addr
-                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset=offset)
                         else:
                             if self.soMap[self.target].isDynamic(prog_name):
-                                image_base = self.soMap[self.target].getImageBase(prog_name)
-                                offset = load_info.addr - image_base
-                                self.lgr.debug('debug is dynamic, use load address as offset 0x%x image_base 0x%x' % (offset, image_base))
+                                #image_base = self.soMap[self.target].getImageBase(prog_name)
+                                #offset = load_info.addr - image_base
+                                #self.lgr.debug('debug is dynamic, use load address as offset 0x%x image_base 0x%x' % (offset, image_base))
+                                text_offset = self.soMap[self.target].getTextOffset(prog_name)
+                                offset = load_info.text_start - text_offset
+                                self.lgr.debug('debug is dynamic, use text offset 0x%x' % offset)
                             else:
                                 offset = 0
-                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset)
+                            self.fun_mgr.getIDAFuns(self.full_path, root_prefix, offset=offset)
                         ''' TBD alter stackTrace to use this and buid it out'''
                         #self.context_manager[self.target].recordText(elf_info.address, elf_info.address+elf_info.size)
                         self.lgr.debug('ropCop instance for %s' % self.target)
@@ -1641,7 +1644,7 @@ class GenMonitor():
                                 full_path = self.targetFS[self.target].getFull(libpython, self.lgr)
                                 self.lgr.debug('debug, python got full path %s' % full_path)
                                 self.lgr.debug('debug, python call getIDAFuns')
-                                self.fun_mgr.getIDAFuns(full_path, root_prefix, load_offset)
+                                self.fun_mgr.getIDAFuns(full_path, root_prefix, offset=load_offset)
                                 self.lgr.debug('debug, python back from getIDAFuns')
                             
                         else:
@@ -4218,8 +4221,9 @@ class GenMonitor():
     def stackTrace(self, verbose=False, in_tid=None, use_cache=True, stop_after_clib=False):
         self.stackFrameManager[self.target].stackTrace(verbose=verbose, in_tid=in_tid, use_cache=use_cache, stop_after_clib=stop_after_clib)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False):
-        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, skip_recurse=skip_recurse, stop_after_clib=stop_after_clib)
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False, optimize=0):
+        return self.stackFrameManager[self.target].getStackTraceQuiet(max_frames=max_frames, max_bytes=max_bytes, 
+                       skip_recurse=skip_recurse, stop_after_clib=stop_after_clib, optimize=optimize)
 
     def getStackTrace(self):
         return self.stackFrameManager[self.target].getStackTrace()
@@ -4895,7 +4899,7 @@ class GenMonitor():
 
     def trackIO(self, fd, origin_reset=False, callback=None, run_fun=None, max_marks=None, count=1, 
                 quiet=False, mark_logs=False, kbuf=False, call_list=None, run=True, commence=None, 
-                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None, track_malloc=False):
+                offset=None, length=None, commence_offset=0, track_calls=False, backstop_cycles=None, no_reset=None, track_malloc=False, force_logical=False):
         if fd == -1:
             ida_msg = self.getIdaMessage()
             fd_string = resimUtils.getTokenValue(ida_msg, 'new_fd:')
@@ -4958,7 +4962,8 @@ class GenMonitor():
                 self.dataWatch[self.target], self.lgr)
             self.lgr.debug('trackIO using kbuffer')
 
-        self.dataWatch[self.target].trackIO(fd, done_callback, self.compat32(), max_marks, quiet=quiet, offset=offset, length=length, backstop_cycles=backstop_cycles)
+        self.dataWatch[self.target].trackIO(fd, done_callback, self.compat32(), max_marks, quiet=quiet, 
+              offset=offset, length=length, backstop_cycles=backstop_cycles, force_logical=force_logical)
         self.lgr.debug('trackIO back from dataWatch, now run to IO')
         if track_malloc:
             self.traceMalloc()
@@ -5099,6 +5104,7 @@ class GenMonitor():
             if self.injectIOInstance is not None:
                 self.injectIOInstance.delCallHap()
             self.track_finished = True
+            self.stackFrameManager[self.target].clearCache()
 
     def goToWatchMark(self, index):
         return self.goToDataMark(index)
@@ -5374,6 +5380,7 @@ class GenMonitor():
         ''' Reverse execution until a different library is entered, or main text is returned to '''
         cpu = self.cell_config.cpuFromCell(self.target)
         eip = self.mem_utils[self.target].getRegValue(cpu, 'eip')
+        self.lgr.debug('revToOther eip 0x%x' % eip)
 
         if self.isWindows():
             self.lgr.error('revToOther not yet on windows')
@@ -6623,19 +6630,19 @@ class GenMonitor():
 
     def getFun(self, addr):
         #fname = self.fun_mgr.getFunName(addr)
+        so = self.soMap[self.target].getSOInfo(addr)
         if self.fun_mgr is None:
             print('No function manager yet, are you debugging?')
             return
         fun_name = self.fun_mgr.funFromAddr(addr)
         if fun_name is not None:
             entry = self.fun_mgr.getFunEntry(fun_name)
-            print('Function for address 0x%x is %s, entry 0x%x' % (addr, fun_name, entry))
+            print('Function for address 0x%x is %s, entry 0x%x file %s' % (addr, fun_name, entry, so))
         elif self.isVxDKM():
             fun_name = self.task_utils[self.target].getGlobalSym(addr)
             print('Function for address 0x%x is VxWorks symbol %s' % (addr, fun_name))
             
         if fun_name is None:
-            so = self.soMap[self.target].getSOInfo(addr)
             if so is not None:
                 print('No function for 0x%x (perhaps no analysis?).  Program is %s' % (addr, so))
             else:
@@ -7235,12 +7242,12 @@ class GenMonitor():
         else:
             self.loop_n[self.target].go()
 
-    def isLibc(self, addr, target_cpu=None):
+    def isLibc(self, addr, target_cpu=None, other_ok=False):
         if target_cpu is None:
             target = self.target
         else:
             target = self.cell_config.cellFromCPU(target_cpu)
-        return self.soMap[target].isLibc(addr)
+        return self.soMap[target].isLibc(addr, other_ok=other_ok)
 
     def spotFuzz(self, fuzz_addr, break_at, data_length=4, reg=None, fail_break=None):
         self.rmDebugWarnHap()
@@ -7262,9 +7269,9 @@ class GenMonitor():
             cpu = self.cell_config.cpuFromCell(self.target)
         return self.disassembleAddress(cpu, addr, force=force)
 
-    def disassembleAddress(self, cpu, addr, force=False):
+    def disassembleAddress(self, cpu, addr, force=False, fname=None):
         target = self.cell_config.cellFromCPU(cpu)
-        return self.disassemble_instruct[target].getDisassemble(addr, force=force)
+        return self.disassemble_instruct[target].getDisassemble(addr, force=force, fname=fname)
 
     def traceFuns(self):
         self.fun_mgr.traceFuns()
