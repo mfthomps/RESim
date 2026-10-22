@@ -33,6 +33,9 @@ class IDAFuns():
         self.fun_cache = None
         self.fname_addrs = {}
         self.recent_fname_addrs = []
+        # optimization
+        self.last_fail_addr = 0
+        self.max_group_addr = 0
         if path.endswith('funs'):
             mpath = path[:-4]+'mangle' 
             if os.path.isfile(mpath):
@@ -96,6 +99,9 @@ class IDAFuns():
                 self.did_paths.append(path[:-5])
                 if this_file_addrs.start is not None:
                     self.fname_addrs[filename] = this_file_addrs
+                    self.lgr.debug('idaFuns done loaded fname_addrs for %s' % filename)
+                else:
+                    self.lgr.debug('idaFuns done but this_file_addrs.start is None')
         self.lgr.debug('idaFuns loaded %d funs' % len(self.funs))
 
     def getFunPath(self, path):
@@ -192,6 +198,8 @@ class IDAFuns():
 
                 if this_file_addrs.start is not None:
                     self.fname_addrs[fname] = this_file_addrs
+                    if this_file_addrs.end > self.max_group_addr:
+                        self.max_group_addr = this_file_addrs.end
         else:
             self.lgr.debug('IDAFuns NOTHING at %s' % funfile)
             pass
@@ -271,7 +279,7 @@ class IDAFuns():
                 else:
                     prev = addr
         else:
-            self.lgr.debug('idaFuns getFunByGroup no group found for ip 0x%x' % ip)
+            #self.lgr.debug('idaFuns getFunByGroup no group found for ip 0x%x' % ip)
             pass
         return retval
 
@@ -283,7 +291,7 @@ class IDAFuns():
         if ip is not None:
             fun = self.getFunByGroup(ip)
             if fun is None:
-                self.lgr.debug('idaFuns getFun failed to find fun for ip 0x%x, do not bother with brute force search' % ip)
+                #self.lgr.debug('idaFuns getFun failed to find fun for ip 0x%x, do not bother with brute force search' % ip)
                 pass
                 
                 #for fun in self.funs:
@@ -466,6 +474,10 @@ class IDAFuns():
         return retval
 
     def getFnameAddrs(self, addr):
+        if addr == self.last_fail_addr:
+            return None
+        if self.max_group_addr is not None and addr > self.max_group_addr:
+            return None
         retval = None
         for fname in self.fname_addrs:
             if self.fname_addrs[fname].start is None:
@@ -476,4 +488,8 @@ class IDAFuns():
                 #self.lgr.debug('idaFuns getFnameAddrs 0x%x got fname %s with start 0x%x end 0x%x' % (addr, fname, self.fname_addrs[fname].start, self.fname_addrs[fname].end))
                 retval = self.fname_addrs[fname]
                 break
+        if retval is None:
+            #self.lgr.debug('idaFuns getFnameAddrrs failed on 0x%x' % addr)   
+            self.last_fail_addr = addr
         return retval
+
