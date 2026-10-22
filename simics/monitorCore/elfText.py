@@ -94,6 +94,7 @@ def getText(path, lgr):
             continue
         if line.strip().startswith('Type:') and 'DYN' in line:
             is_dyn = True
+            lgr.debug('elfText is dynamic')
             if 'Shared object' in line:
                 is_so = True
             continue
@@ -110,7 +111,7 @@ def getText(path, lgr):
             if is_dyn and not is_so:
                 offset = int(parts[3], 16)
                 if lgr is not None:
-                    lgr.debug('elfText Entry point, is dynamic setting offset to 0x%x' % offset)
+                    lgr.debug('elfText Entry point, is dynamic offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
             continue
@@ -150,7 +151,7 @@ def getText(path, lgr):
             parts = line.strip().split()
             addr_start = int(parts[2], 16)
             mem_size = int(parts[4], 16)
-            if not is_so:
+            if not is_so and not is_dyn:
                 # TBD seems stupid
                 this_size = addr_start + mem_size
                 lgr.debug('elfText not is_aarch64 got this_size 0x%x offset %s' % (this_size, str(offset)))
@@ -163,7 +164,10 @@ def getText(path, lgr):
                     offset = int(parts[2], 16)
                     lgr.debug('elfText got offset 0x%x' % offset)
             else:
-                offset = addr_start
+                if offset is None:
+                   offset = addr_start
+                else:
+                   lgr.debug('elfText using existing offset of 0x%x' % offset)
                 size = mem_size
             
         ''' section numbering has whitespace '''
@@ -179,11 +183,11 @@ def getText(path, lgr):
                 if not is_dyn:
                     addr = int(parts[2], 16)
                     #print('sees .text set addr to 0x%x' % addr)
-                    lgr.debug('elfText sees .text set addr to 0x%x' % addr)
+                    lgr.debug('elfText sees .text not dyn set addr to 0x%x' % addr)
+                    offset = int(parts[3], 16)
+                    size = int(parts[4], 16)
                 else:
-                    lgr.debug('elfText sees .text leave addr unset, but set offset and size')
-                offset = int(parts[3], 16)
-                size = int(parts[4], 16)
+                    lgr.debug('elfText sees .text but is dynamic leave addr, offset and size unset')
             elif parts[0].strip() == '.plt':
                 plt_addr = int(parts[2], 16)
                 plt_offset = int(parts[3], 16)
