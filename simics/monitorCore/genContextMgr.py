@@ -116,8 +116,12 @@ class GenHap():
         ''' NOTE: different calls to SIM_brekapoint below '''
         if len(self.breakpoint_list) > 1:
             # TBD remove breakpoint ranges. Simics has no way to ensure sequential bp's
+            prev_bp = None
             for bp in self.breakpoint_list:
                 bp.break_num = SIM_breakpoint(bp.cell, bp.addr_type, bp.mode, bp.addr, bp.length, bp.flags)
+                if prev_bp is not None and (bp.break_num != prev_bp+1):
+                     self.lgr.error('GenHap range of breakpoints but they are NOT sequential prev_bp %d new %d' % (prev_bp, bp.break_num))
+                prev_bp = bp.break_num
                 if bp.prefix is not None:
                     resimSimicsUtils.setBreakpointPrefix(self.conf, bp.break_num, bp.prefix)
                     #command = 'set-prefix %d "%s"' % (bp.break_num, bp.prefix)
@@ -418,6 +422,8 @@ class GenContextMgr():
                 if immediate:
                     hap.clear(None)
                 else:
+                    # can we disable from a hap???
+                    hap.disable()
                     SIM_run_alone(hap.clear, None)
                 #self.lgr.debug('num breaks in hap %d is %d' % (hap_handle, len(hap.breakpoint_list)))
                 for bp in hap.breakpoint_list:
@@ -446,11 +452,14 @@ class GenContextMgr():
         return retval
 
     def genHapRange(self, hap_type, callback, parameter, handle_start, handle_end, name=None, disable_forward=True):
+        '''
+        DO NOT USE if you can help it.  NO way to ensure breakpoints are sequential in Simics
+        '''
         #self.lgr.debug('genHapRange break_handle %d %d' % (handle_start, handle_end))
         bp_start = None
         bp_list = []
         for bp in self.breakpoints:
-            if bp.handle >= handle_start:
+            if bp.handle >= handle_start and bp.handle <= handle_end:
                 bp_list.append(bp)
             if bp.handle == handle_end:
                 hap_handle = self.nextHapHandle()
