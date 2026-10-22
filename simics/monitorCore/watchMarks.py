@@ -88,20 +88,20 @@ class SetMark():
         return self.msg
 
 class DataMark():
-    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None, byte_swap=None, ip=None):
+    def __init__(self, addr, start, length, mark_compare, trans_size, lgr, modify=False, ad_hoc=False, dest=None, sp=None, note=None, value=None, byte_swap=None, ip=None, push=False):
         self.lgr = lgr
         self.addr = addr
-        ''' offset into the buffer starting at start '''
+        #''' offset into the buffer starting at start '''
         if addr is not None:
             self.offset = addr - start
         else:
             self.offset = None
-        ''' start is the start of the accessed buffer '''
+        #''' start is the start of the accessed buffer '''
         self.start = start
-        ''' length of the accessed buffer (NOT length of ad-hoc move!)'''
+        #''' length of the accessed buffer (NOT length of ad-hoc move!)'''
         self.length = length
         self.mark_compare = mark_compare
-        ''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
+        #''' only used if multiple iterations, or ad-hoc data copy.  reflects the last address read from.'''
         if ad_hoc:
             self.end_addr = addr+trans_size-1
             size = self.end_addr - self.addr + 1
@@ -117,9 +117,8 @@ class DataMark():
         self.sp = sp
         self.note = note
         self.value = value
-        if byte_swap is not None:
-            self.byte_swap = byte_swap
-        ''' keep value after a reset '''
+        self.byte_swap = byte_swap
+        #''' keep value after a reset '''
         self.was_ad_hoc = False
         self.ad_hoc_ip_list = []
         #self.lgr.debug('DataMark addr 0x%x start 0x%x length %d, offset %d' % (addr, start, length, self.offset))
@@ -127,6 +126,11 @@ class DataMark():
             self.ad_hoc_ip_list.append(ip)
         self.loop_instruct = None
         self.loop_compares = None
+        self.last_push_dest = None
+        if push:
+            self.last_push_src = addr
+        else:
+            self.last_push_src = None
 
     def getMsg(self):
         if self.start is None:
@@ -864,6 +868,123 @@ class WatchMarks():
         self.addWatchMark(dm)
         ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
         self.lgr.debug('watchMarks memoryMod 0x%x msg:<%s> -- Appended, len of mark_list now %d' % (ip, dm.getMsg(), len(self.mark_list)))
+
+    def checkPushCopy(self, addr, dest, trans_size, start, length, mark_compare, ip):
+        # look for ad-hoc copies.  First look for copy/push/copy sequence:
+        #   copy real_source => sreg
+        #   push sreg => stackbuf
+        #   call fu
+        #       copy stackbuf => dest
+        #
+        #  Once we establish a pushCopy, there will be no mark pushMarks, so this only sees one push
+        #  Subsequent calls to pushMark will instead see the standing ad-hoc mark.
+        #  And subsequent calls to dataMark will call this routine and see the recent push addresses
+        wm = None
+        pm = self.mark_list[-1]
+        if isinstance(pm.mark, PushMark):
+            self.lgr.debug('watchMarks checkPushCopy previous is PushMark, addr: 0x%x mark.addr 0x%x mark.dest 0x%x len of mark list %d' % (addr, pm.mark.addr, pm.mark.dest, len(self.mark_list)))
+            if pm.mark.dest == addr:
+                # first push/copy.  remove the push mark and establish a new ad-hoc data mark 
+                self.mark_list.pop()
+                sp, base = self.getStackBase(dest)
+                sp = self.isStackBuf(dest)
+                #self.lgr.debug('sp is %s' % str(sp))
+                dm = DataMark(pm.mark.addr, pm.mark.start, pm.mark.length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, push=True)
+                self.lgr.debug('watchMarks checkPushCopy popped push off mark_list len back down to %d and now add new mark %s' % (len(self.mark_list), dm.getMsg()))
+                wm = self.addWatchMark(dm)
+                self.recent_ad_hoc = wm
+                retval = True
+            else:
+                self.lgr.debug('watchMarks checkPushCopy previous dest 0x%x not equal to addr 0x%x' % (pm.mark.dest, addr))
+
+        elif isinstance(pm.mark, DataMark) and pm.mark.last_push_dest is not None:
+            self.lgr.debug('watchMarks checkPushCopy is push DataMark, addr: 0x%x mark.addr 0x%x mark.dest 0x%x last_push_dest 0x%x' % (addr, pm.mark.addr, 
+                 pm.mark.dest, pm.mark.last_push_dest))
+            if addr == pm.mark.last_push_dest:
+                cur_len = pm.mark.getSize()
+                self.lgr.debug('watchMarks checkPushCopy addr matches last_push_dest cur_len 0x%x mark.dest is 0x%x' % (cur_len, pm.mark.dest))
+                end_addr = pm.mark.end_addr + trans_size - 1
+                pm.mark.addrRange(end_addr, ip=ip)
+                pm.cycle = self.cpu.cycles
+                pm.ip = ip
+                wm = pm
+            else:
+                self.lgr.debug('watchMarks checkPushCopy addr 0x%x does not match last_push_dest 0x%x' % (addr, pm.mark.last_push_dest))
+                
+        return wm
+
+    def checkMemRegMem(self, addr, start, length, trans_size, dest, mark_compare, ip, byte_swap, one_to_two, two_to_one):
+        pm = self.recent_ad_hoc
+        create_new = True   
+        
+        if pm is not None and pm.mark.end_addr is not None: 
+            self.lgr.debug('watchMarks previous ad_hoc addr 0x%x pm.mark.end_addr 0x%x' % (addr, pm.mark.end_addr))
+        if pm is not None and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
+            self.lgr.debug('watchMarks previous ad_hoc had end addr one greater than addr')
+            skip_this = False
+            if dest is not None:
+                cur_len = pm.mark.getSize()
+                if one_to_two:
+                    cur_len = cur_len * 2
+                elif two_to_one:
+                    cur_len = cur_len >> 1
+                # TBD track down this off by one error
+                if trans_size != 16 and trans_size != 1 and not two_to_one:
+                    ok_dest = pm.mark.dest + cur_len + 1
+                else:
+                    ok_dest = pm.mark.dest + cur_len 
+                self.lgr.debug('watchMarks dataRead addr: 0x%x dest: 0x%x previous_dest: 0x%x  prev_addr: 0x%x cur_len (pm.getSize()) 0x%x  ok_dest would be 0x%x trans_size %d' % (addr, 
+                              dest, pm.mark.dest, pm.mark.addr, cur_len, ok_dest, trans_size))
+                if dest != ok_dest:
+                    ''' does it look like a copy of 2-byte chars to string of 1byte chars '''
+                    skip_this = True
+                    ok_off = (dest - pm.mark.dest) + 1
+                    if trans_size == 2 and dest == (ok_dest-ok_off): 
+                        second_byte = self.mem_utils.readByte(self.cpu, addr+1)
+                        #self.lgr.debug('watchMarks dataRead byte at addr+1 is 0x%x' % second_byte)
+                        if second_byte == 0:
+                            skip_this = False
+            else:
+                self.lgr.debug('watchMarks dest is None')
+            if not skip_this:
+                end_addr = addr + trans_size - 1
+                self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
+                pm.mark.addrRange(end_addr, ip=ip)
+                pm.cycle = self.cpu.cycles
+                pm.ip = ip
+                create_new = False
+        elif pm is not None and pm.mark.end_addr is not None and (addr+trans_size) == (pm.mark.addr):
+            self.lgr.debug('watchMarks previous ad_hoc had addr one greather than end of new copy -- extend range backwards')
+            skip_this = False
+            if dest is not None:
+                self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
+                cur_len = pm.mark.end_addr - pm.mark.addr
+                ok_dest = pm.mark.dest - trans_size
+                self.lgr.debug('watchMarks dataRead trans_size 0x%x  ok_dest would be 0x%x' % (trans_size, ok_dest))
+                if dest != ok_dest:
+                    skip_this = True
+            else:
+                self.lgr.debug('watchMarks dest is None')
+            if not skip_this:
+                self.lgr.debug('watchMarks dataRead extend range backward from addr 0x%x to 0x%x' % (pm.mark.addr, addr))
+                pm.mark.addrRangeBackward(addr, ip=ip)
+                pm.mark.dest = dest
+                pm.cycle = self.cpu.cycles
+                pm.ip = ip
+                create_new = False
+                self.lgr.debug('watchMarks extend backward, now mark %s' % pm.mark.getMsg())
+        if create_new:
+            self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x mark_list len %d' % (addr, start, length, dest, trans_size, self.cpu.cycles, len(self.mark_list)))
+            sp, base = self.getStackBase(dest)
+            sp = self.isStackBuf(dest)
+            #self.lgr.debug('sp is %s' % str(sp))
+            dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, byte_swap=byte_swap)
+            self.lgr.debug('watchMarks new mark %s' % dm.getMsg())
+            wm = self.addWatchMark(dm)
+            self.recent_ad_hoc = wm
+        else:
+            wm = pm
+        return wm
  
     def dataRead(self, addr, start, length, trans_size, ad_hoc=False, dest=None, note=None, ip=None, cycles=None, byte_swap=False, one_to_two=False, two_to_one=False): 
         if ip is None and cycles is not None:
@@ -873,7 +994,7 @@ class WatchMarks():
         wm = None
         # start with an empty one so toString does not die
         mark_compare = self.getCmp(None, None)
-        ''' TBD generalize for loops that make multiple refs? '''
+        #''' TBD generalize for loops that make multiple refs? '''
         if ip not in self.prev_ip and not ad_hoc and not note:
             value = self.mem_utils.readBytes(self.cpu, addr, trans_size)
             if value is None:
@@ -882,7 +1003,7 @@ class WatchMarks():
             mark_compare = self.getCmp(addr, trans_size)
             dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, value=int.from_bytes(value, byteorder='little', signed=False), ip=ip)
             wm = self.addWatchMark(dm, ip=ip, cycles=cycles)
-            ''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
+            #''' DO NOT DELETE THIS LOG ENTRY, used in testing '''
             self.lgr.debug('watchMarks dataRead ip: 0x%x %s appended, cycle: 0x%x len of mark_list now %d' % (ip, dm.getMsg(), self.cpu.cycles, len(self.mark_list)))
             self.prev_ip = []
         elif ad_hoc:
@@ -891,76 +1012,9 @@ class WatchMarks():
                 self.lgr.debug('watchMarks dataRead ad_hoc eip 0x%x ' % (ip))
             if len(self.mark_list) > 0:
                 #pm = self.mark_list[-1]
-                pm = self.recent_ad_hoc
-                create_new = True   
-                
-                #if isinstance(pm.mark, DataMark) and pm.mark.ad_hoc and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                
-                if pm is not None and pm.mark.end_addr is not None: 
-                    self.lgr.debug('watchMarks previous ad_hoc addr 0x%x pm.mark.end_addr 0x%x' % (addr, pm.mark.end_addr))
-                if pm is not None and pm.mark.end_addr is not None and addr == (pm.mark.end_addr+1):
-                    self.lgr.debug('watchMarks previous ad_hoc had end addr one greater than addr')
-                    skip_this = False
-                    if dest is not None:
-                        cur_len = pm.mark.getSize()
-                        if one_to_two:
-                            cur_len = cur_len * 2
-                        elif two_to_one:
-                            cur_len = cur_len >> 1
-                        # TBD track down this off by one error
-                        if trans_size != 16 and trans_size != 1:
-                            ok_dest = pm.mark.dest + cur_len + 1
-                        else:
-                            ok_dest = pm.mark.dest + cur_len 
-                        self.lgr.debug('watchMarks dataRead addr: 0x%x dest: 0x%x previous_dest: 0x%x  prev_addr: 0x%x cur_len (pm.getSize()) 0x%x  ok_dest would be 0x%x trans_size %d' % (addr, 
-                                      dest, pm.mark.dest, pm.mark.addr, cur_len, ok_dest, trans_size))
-                        if dest != ok_dest:
-                            ''' does it look like a copy of 2-byte chars to string of 1byte chars '''
-                            skip_this = True
-                            ok_off = (dest - pm.mark.dest) + 1
-                            if trans_size == 2 and dest == (ok_dest-ok_off): 
-                                second_byte = self.mem_utils.readByte(self.cpu, addr+1)
-                                #self.lgr.debug('watchMarks dataRead byte at addr+1 is 0x%x' % second_byte)
-                                if second_byte == 0:
-                                    skip_this = False
-                    else:
-                        self.lgr.debug('watchMarks dest is None')
-                    if not skip_this:
-                        end_addr = addr + trans_size - 1
-                        self.lgr.debug('watchMarks dataRead extend range for add 0x%x to 0x%x' % (addr, end_addr))
-                        pm.mark.addrRange(end_addr, ip=ip)
-                        pm.cycle = self.cpu.cycles
-                        pm.ip = ip
-                        create_new = False
-                elif pm is not None and pm.mark.end_addr is not None and (addr+trans_size) == (pm.mark.addr):
-                    self.lgr.debug('watchMarks previous ad_hoc had addr one greather than end of new copy -- extend range backwards')
-                    skip_this = False
-                    if dest is not None:
-                        self.lgr.debug('watchMarks dataRead dest 0x%x previous mark dest is 0x%x, prev mark addr 0x%x' % (dest, pm.mark.dest, pm.mark.addr))
-                        cur_len = pm.mark.end_addr - pm.mark.addr
-                        ok_dest = pm.mark.dest - trans_size
-                        self.lgr.debug('watchMarks dataRead trans_size 0x%x  ok_dest would be 0x%x' % (trans_size, ok_dest))
-                        if dest != ok_dest:
-                            skip_this = True
-                    else:
-                        self.lgr.debug('watchMarks dest is None')
-                    if not skip_this:
-                        self.lgr.debug('watchMarks dataRead extend range backward from addr 0x%x to 0x%x' % (pm.mark.addr, addr))
-                        pm.mark.addrRangeBackward(addr, ip=ip)
-                        pm.mark.dest = dest
-                        pm.cycle = self.cpu.cycles
-                        pm.ip = ip
-                        create_new = False
-                        self.lgr.debug('watchMarks extend backward, now mark %s' % pm.mark.getMsg())
-                if create_new:
-                    self.lgr.debug('watchMarks create new ad hoc data mark for read from 0x%x, ref buffer start 0x%x, len %d dest 0x%x, trans size %d cycle 0x%x mark_list len %d' % (addr, start, length, dest, trans_size, self.cpu.cycles, len(self.mark_list)))
-                    sp, base = self.getStackBase(dest)
-                    sp = self.isStackBuf(dest)
-                    #self.lgr.debug('sp is %s' % str(sp))
-                    dm = DataMark(addr, start, length, mark_compare, trans_size, self.lgr, ad_hoc=True, dest=dest, sp=sp, byte_swap=byte_swap)
-                    self.lgr.debug('watchMarks new mark %s' % dm.getMsg())
-                    wm = self.addWatchMark(dm)
-                    self.recent_ad_hoc = wm
+                wm = self.checkPushCopy(addr, dest, trans_size, start, length, mark_compare, ip)
+                if wm is None:
+                    wm = self.checkMemRegMem(addr, start, length, trans_size, dest, mark_compare, ip, byte_swap, one_to_two, two_to_one)
             else:
                 self.lgr.warning('watchMarks dataRead, ad_hoc but empty mark list')
         elif note is not None:
@@ -1383,9 +1437,28 @@ class WatchMarks():
         lm = LogMark(s, prefix)
         self.addWatchMark(lm, cycles=mark_cycle)
 
-    def pushMark(self, src, dest, buf_start, length, ip):
-        pm = PushMark(src, dest, buf_start, length, ip, self.mem_utils.wordSize(self.cpu))
-        wm = self.addWatchMark(pm)
+    def pushMark(self, src, dest, buf_start, length, ip, trans_size):
+        wm = None
+        # Is this push following an ad-hoc move that itself followed a push
+        #   push source => stackbuf
+        #   call fu
+        #       copy stackbuf => dest
+        #       ret
+        #   push ...
+        prev_mark = self.mark_list[-1]
+        skip_mark = False
+        if isinstance(prev_mark.mark, DataMark) and prev_mark.mark.ad_hoc and prev_mark.mark.last_push_src is not None: 
+            self.lgr.debug('watchMarks pushMark previous ad_hoc that had a last_push_src of 0x%x. had end_addr of 0x%x.  pass src 0x%x dest 0x%x' % (prev_mark.mark.last_push_src, 
+                  prev_mark.mark.end_addr, src, dest))
+            if prev_mark.mark.end_addr is not None and src == (prev_mark.mark.end_addr+1):
+                self.lgr.debug('watchMarks pushMark previous ad_hoc had end addr one greater than addr set last_push_src to 0x%x and last_push_dest to 0x%x' % (src, dest, ))
+                prev_mark.mark.last_push_src = src
+                prev_mark.mark.last_push_dest = dest
+                skip_mark = True
+        if not skip_mark:
+            self.lgr.debug('watchMarks pushMark for src 0x%x dest 0x%x' % (src, dest))
+            pm = PushMark(src, dest, buf_start, length, ip, trans_size)
+            wm = self.addWatchMark(pm)
         return wm
 
     def pushTestMark(self, fun, addr, ip):
@@ -1623,6 +1696,9 @@ class WatchMarks():
 
     def getMarks(self):
         return self.mark_list
+
+    def getPrevMark(self):
+        return self.mark_list[-1]
 
     def findMarkIp(self, ip):
         retval = None
