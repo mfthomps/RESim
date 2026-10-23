@@ -61,7 +61,8 @@ class IDAFuns():
             with open(path) as fh:
                 jfuns = json.load(fh)
                 self.lgr.debug('idaFuns read funs from %s, offset is 0x%x' % (path, offset))
-                for sfun in jfuns:
+                tmp_list = list(jfuns.keys())
+                for sfun in sorted(tmp_list):
                     fun_addr = int(sfun)
                     fun_rec = jfuns[sfun]
                     fun_name = fun_rec['name']
@@ -149,7 +150,8 @@ class IDAFuns():
                 self.have_funs_for.append(fname)
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x fname %s' % (path, offset, fname))
                 newfuns = json.load(fh) 
-                for f in newfuns:
+                tmp_list = list(nefuns.keys())
+                for f in sorted(tmp_list):
                     fun_int = int(f)
                     fun = fun_int + offset
                     if fun in self.funs:
