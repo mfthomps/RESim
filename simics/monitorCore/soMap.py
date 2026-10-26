@@ -670,7 +670,7 @@ class SOMap():
                 full_path = self.pathAlias(tid, full_path)
                 analysis_path = self.getAnalysisPath(full_path)
                 load_addr = addr - elf_info.text_offset
-                self.lgr.debug('soMap addSO tid:%s passing load_addr 0x%x to fun_mgr add' % load_addr)
+                self.lgr.debug('soMap addSO tid:%s passing load_addr 0x%x to fun_mgr add' % (tid, load_addr))
                 self.fun_mgr.add(analysis_path, load_addr)
 
             self.checkSOWatch(addr, prog)
@@ -680,15 +680,13 @@ class SOMap():
             self.lgr.debug('soMap listSO tid %s in so_file_map' % tid)
             for load_info in self.so_file_map[tid]:
                 prog = self.so_file_map[tid][load_info]
-                if filter is None or filter in prog:
+                if filter is None or filter in prog or filter==tid:
                     print('tid:%s  0x%x - 0x%x   %s' % (tid, load_info.addr, load_info.end, prog))
         for tid in self.text_prog:
-            if filter is None or filter in self.text_prog[tid]:
-                if tid in self.load_info and self.prog_start[tid] is not None:
-                    print('tid:%s  0x%x - 0x%x   %s' % (tid, self.load_info[tid].text_start, self.load_info[tid].end, self.text_prog[tid]))
-                else:
-                    #print('tid:%s  no text found' % tid)
-                    pass
+            if tid in self.load_info and self.load_info[tid] is not None:
+                if filter is None or filter in self.text_prog[tid] or filter==tid:
+                    if self.load_info[tid].text_start is not None:
+                        print('tid:%s  0x%x - 0x%x   %s' % (tid, self.load_info[tid].text_start, self.load_info[tid].end, self.text_prog[tid]))
          
     def findSOPath(self, starts, tid=None):
         retval = None
@@ -728,7 +726,7 @@ class SOMap():
                 prog = self.text_prog[tid]
                 offset = self.prog_info[prog].text_offset
                 size = self.prog_info[prog].text_size
-                print('0x%x - 0x%x 0x%x 0x%x  %s' % (self.load_info[tid].text_start, self.load_info[tid].end, offset, size, prog))
+                print('0mx%x - 0x%x 0x%x 0x%x  %s' % (self.load_info[tid].text_start, self.load_info[tid].end, offset, size, prog))
             else:
                 print('tid:%s not in text sections' % tid)
                 self.lgr.debug('showSO tid:%s not in text sections' % tid)
