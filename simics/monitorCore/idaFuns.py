@@ -150,7 +150,7 @@ class IDAFuns():
                 self.have_funs_for.append(fname)
                 self.lgr.debug('IDAFuns add for path %s offset 0x%x fname %s' % (path, offset, fname))
                 newfuns = json.load(fh) 
-                tmp_list = list(nefuns.keys())
+                tmp_list = list(newfuns.keys())
                 for f in sorted(tmp_list):
                     fun_int = int(f)
                     fun = fun_int + offset
