@@ -612,8 +612,9 @@ class PageFaultGen():
                 self.lgr.debug('pageFaultGen watchPageFaults both ARM entries, set break at at arm64 entry 0x%x and arm_entry 0x%x current_context %s' % (self.param.arm64_entry, 
                       self.param.arm_entry, self.cpu.current_context))
                 proc_break = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm64_entry, self.mem_utils.WORD_SIZE, 0)
+                self.fault_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, name='watchPageFaults')
                 proc_break2 = self.context_manager.genBreakpoint(use_context, Sim_Break_Linear, Sim_Access_Execute, self.param.arm_entry, self.mem_utils.WORD_SIZE, 0)
-                self.fault_hap = self.context_manager.genHapRange("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break, proc_break2, name='watchPageFaults')
+                self.fault_hap2 = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.pageFaultHap, compat32, proc_break2, name='watchPageFaults')
             else:
                 if self.param.arm64_entry is not None:
                     self.lgr.debug('pageFaultGen watchPageFaults set break at at arm64 entry 0x%x current_context %s' % (self.param.arm64_entry, self.cpu.current_context))
