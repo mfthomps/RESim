@@ -458,7 +458,6 @@ class SOMap():
                     self.top.pauseThreadTrack(self.cpu, True)
                     self.do_in_user = doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
-                    self.lgr.debug('wtf load_addr %s size %s')
                     retval = LoadInfo(load_addr, size, interp=self.prog_info[prog].interp)
                     retval.text_start = load_text_start
                     retval.end = load_text_end
@@ -603,7 +602,10 @@ class SOMap():
             else:
                 self.lgr.error('soMap addLoader no elf info from %s' % prog)
                 return
-            load_addr = addr -  elf_info.text_offset
+            if hasattr(elf_info, 'entry') and elf_info.entry is not None:
+                load_addr = addr -  elf_info.entry
+            else:
+                load_addr = addr -  elf_info.text_offset
             self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
             load_size = elf_info.text_size + elf_info.text_offset
             load_info = LoadInfo(load_addr, load_size)
