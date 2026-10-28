@@ -4,7 +4,8 @@ PROG_NAME_OFFSET=None
 # offset within ETHREAD of thread id
 THREAD_ID_OFFSET = 0x4e8
 # offset within EPROCESS of thread head
-THREAD_HEAD = 0x5e0
+# could be 0x470; 0x488; 0x498 or 0x5e0
+THREAD_HEAD = 0x488
 # offset of head within ETHREAD
 THREAD_NEXT = 0x4e0
 # offset within EPROCESS of count of active threads
