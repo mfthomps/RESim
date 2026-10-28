@@ -1,0 +1,3 @@
+ieles fll.confor setting up a Simics host for RESim.
+no-iptable-bridge.sh and  99-bridge-firewall.conf are used for configuring a real network bridge.  The latter should
+go into /etc/sysctl.d
