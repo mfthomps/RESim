@@ -540,7 +540,7 @@ class GenMonitor():
             word_size = 4
             if 'OS_TYPE' in comp_dict[cell_name]:
                 self.os_type[cell_name] = comp_dict[cell_name]['OS_TYPE']
-                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name].startswith('WIN7'):
+                if self.os_type[cell_name] == 'LINUX64' or self.os_type[cell_name] in ['WIN7', 'WIN10']:
                     word_size = 8
                 self.lgr.debug('Cell %s os type %s' % (cell_name, self.os_type[cell_name]))
 

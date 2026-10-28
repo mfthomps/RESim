@@ -1,12 +1,18 @@
 class WinKParams():
     def __init__(self, os_type):
         self.param_version = 11
-        if os_type == 'WIN7':
+        if os_type in ['WIN7']:
+            kernel_base = 0xffff000000000000
+            self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
+        elif os_type in ['WIN10']:
+            # TBD too low?
             kernel_base = 0xffff000000000000
             self.kernel_base = kernel_base & 0xFFFFFFFFFFFFFFFF
         elif os_type == 'WINXP':
             kernel_base = 0x80000000
             self.kernel_base = kernel_base & 0xFFFFFFFF
+        else:
+            print('ERROR unknown os type %s for WinKParams' % os_type)
         self.current_task = None
         self.current_thread_offset = None
         self.proc_ptr = None

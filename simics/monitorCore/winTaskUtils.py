@@ -38,6 +38,11 @@ import w7Params
 import taskUtils
 import winSocket
 import commMap
+import sys
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'windows'))
+import win10_offsets
+import win7_offsets
 THREAD_STATE_INITIALIZED = 0
 THREAD_STATE_READY = 1
 THREAD_STATE_RUNNING = 2
@@ -55,17 +60,7 @@ class TaskStruct():
         self.state = 0
 
 class WinTaskUtils():
-    # These are based on build 6.1
-    # offset within ETHREAD of thread id
-    THREAD_ID_OFFSET = 0x3c0
-    # offset within EPROCESS of thread head
-    THREAD_HEAD = 0x308
-    # offset of head within ETHREAD
-    THREAD_NEXT = 0x428
-    # offset within EPROCESS of count of active threads
-    ACTIVE_THREADS = 0x328
-    THREAD_STATE = 0x164
-    PEB_ADDR = 0x338
+    # Offset for win7 are based on build 6.1
     def __init__(self, top, cpu, cell_name, param, mem_utils, run_from_snap, os_type, lgr, root_prefix=None):
         self.top = top
         self.cpu = cpu
@@ -86,6 +81,20 @@ class WinTaskUtils():
             self.THREAD_NEXT = param.thread_prev 
             self.ACTIVE_THREADS = param.count_offset
             self.THREAD_ID_OFFSET = param.thread_id_offset
+        elif os_type == 'WIN7':
+            self.THREAD_ID_OFFSET = win7_offsets.THREAD_ID_OFFSET 
+            self.THREAD_HEAD = win7_offsets.THREAD_HEAD 
+            self.THREAD_NEXT = win7_offsets.THREAD_NEXT 
+            self.ACTIVE_THREADS = win7_offsets.ACTIVE_THREADS 
+            self.THREAD_STATE = win7_offsets.THREAD_STATE 
+            self.PEB_ADDR = win7_offsets.PEB_ADDR 
+        elif os_type == 'WIN10':
+            self.THREAD_ID_OFFSET = win10_offsets.THREAD_ID_OFFSET 
+            self.THREAD_HEAD = win10_offsets.THREAD_HEAD 
+            self.THREAD_NEXT = win10_offsets.THREAD_NEXT 
+            self.ACTIVE_THREADS = win10_offsets.ACTIVE_THREADS 
+            self.THREAD_STATE = win10_offsets.THREAD_STATE 
+            self.PEB_ADDR = win10_offsets.PEB_ADDR 
 
         self.program_map = {}
         self.exit_cycles = 0
@@ -102,10 +111,12 @@ class WinTaskUtils():
             self.lgr.debug('winTaskUtils using call mapfile from %s' % mapfile)
         elif self.os_type == 'WIN7':
             mapfile = os.path.join(resim_dir, 'windows', 'win7.json')
+        elif self.os_type == 'WIN10':
+            mapfile = os.path.join(resim_dir, 'windows', 'win10.json')
         elif self.os_type == 'WINXP':
             mapfile = os.path.join(resim_dir, 'windows', 'winxp.json')
         else:
-            self.lgr.error('winTaskUtsil unknown os type %s' % self.os_type)
+            self.lgr.error('winTaskUtils unknown os type %s' % self.os_type)
             return
         if os.path.isfile(mapfile):
             cm = json.load(open(mapfile))     
@@ -121,6 +132,8 @@ class WinTaskUtils():
         self.gui_call_num_map = {}
         if self.os_type == 'WIN7':
             guimapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
+        if self.os_type == 'WIN10':
+            guimapfile = os.path.join(resim_dir, 'windows', 'win10GUI.json')
         elif self.os_type == 'WINXP':
             guimapfile = os.path.join(resim_dir, 'windows', 'winxpGUI.json')
         else:
@@ -688,26 +701,26 @@ class WinTaskUtils():
         done = False
         got = []
         task_ptr = task_ptr_in
-        #self.lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, self.param.ts_pid))
+        self.lgr.debug('winTaskUtils walk task_ptr 0x%x offset 0x%x ts_pid: 0x%x' % (task_ptr, offset, self.param.ts_pid))
         prev_pid = None
         while not done:
             # TBD this breaks, why was it here?
             #if prev_pid != 4:
             if True:
                 pid_ptr = self.mem_utils.getUnsigned(task_ptr + self.param.ts_pid)
-                #self.lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
+                self.lgr.debug('winTaskUtils walk got pid_ptr 0x%x from task_ptr 0x%x plus ts_pid' % (pid_ptr, task_ptr))
                 pid = self.mem_utils.readWord(self.cpu, pid_ptr)
                 if pid is not None:
                     got.append(task_ptr)
-                    #self.lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
+                    self.lgr.debug('winTaskUtils walk got pid %d from task_ptr 0x%x' % (pid, task_ptr))
                 else:
-                    #self.lgr.debug('winTaskUtils got no pid for pid_ptr 0x%x' % pid_ptr)
+                    self.lgr.debug('winTaskUtils got no pid for pid_ptr 0x%x' % pid_ptr)
                     #print('got no pid for pid_ptr 0x%x' % pid_ptr)
                     break
             else:
                 pid = None
             task_next = self.mem_utils.getUnsigned(task_ptr + offset)
-            #self.lgr.debug('read from task_next 0x%x' % task_next)
+            self.lgr.debug('read from task_next 0x%x' % task_next)
             val = self.mem_utils.readWord(self.cpu, task_next)
             if val is None:
                 #self.lgr.debug('died on task_next 0x%x' % task_next)
@@ -715,15 +728,18 @@ class WinTaskUtils():
             else:
                 next_head = self.mem_utils.getUnsigned(val)
             
-            task_ptr = next_head - self.param.ts_prev
+            if self.os_type == 'WIN10':
+                task_ptr = next_head - self.param.ts_next
+            else:
+                task_ptr = next_head - self.param.ts_prev
             task_ptr = self.mem_utils.getUnsigned(task_ptr)
-            #self.lgr.debug('winTaskUtils got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
+            self.lgr.debug('winTaskUtils got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
             if task_ptr in got:
                 #print('already got task_ptr 0x%x' % task_ptr)
-                #self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
+                self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
                 break
             prev_pid = pid               
-        #self.lgr.debug('walk return')
+        self.lgr.debug('walk return')
         return got
 
     def getTaskList(self):
@@ -872,7 +888,7 @@ class WinTaskUtils():
             thread_head_addr = ts+self.THREAD_HEAD
             thread_head = self.mem_utils.readPtr(self.cpu, thread_head_addr)
             rec_start = thread_head - self.THREAD_NEXT
-            self.lgr.debug('tidDictFromProcRec ts: 0x%x thread_head 0x%x rec_start %x' % (ts, thread_head, rec_start))
+            self.lgr.debug('tidDictFromProcRec ts: 0x%x thread_head 0x%x rec_start %x THREAD_HEAD 0x%x' % (ts, thread_head, rec_start, self.THREAD_HEAD))
             threads = self.findThreads(cur_thread=rec_start)
         return threads
 

@@ -51,6 +51,10 @@ import w7Params
 import winxpParams
 import winKParams
 import syscallNumbers
+import sys
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'windows'))
+import win10_offsets
 def my_SIM_disassemble_address(cpu, pc, logical, sub_instruct):
         instruct = SIM_disassemble_address(cpu, pc, logical, sub_instruct)
         if False and 'cluster' in cpu.name:
@@ -216,7 +220,7 @@ class GetKernelParams():
         if self.os_type is None:
             self.os_type = 'LINUX32'
         self.word_size = 4
-        if self.os_type == 'LINUX64' or self.os_type == 'WIN7':
+        if self.os_type == 'LINUX64' or self.os_type in ['WIN7', 'WIN10']:
             self.word_size = 8
   
         print('using target of %s, os type: %s, word size %d' % (self.target, self.os_type, self.word_size))
@@ -249,7 +253,7 @@ class GetKernelParams():
                     self.lgr.warning('Will look for 32bit x86 kernel entry int 64bit kernel.  WARNING unless there are lots of 32 bit apps running this may not coverge.')
                     self.lgr.warning('Consider using the record32BitEntry function.')
                     self.want_x86_32 = True
-        if self.os_type in ['WIN7', 'WINXP']:
+        if self.os_type in ['WIN7', 'WINXP', 'WIN10']:
             self.param = winKParams.WinKParams(self.os_type)
             self.lgr.debug('GetKernelParams kernel_base is 0x%x' % self.param.kernel_base)
         else:
@@ -695,7 +699,7 @@ class GetKernelParams():
                 self.lgr.debug('self.current_task_phys is 0x%x' % self.current_task_phys)
                 self.reverse_mgr.disableReverse()
                 retval = True
-                if self.os_type == 'WIN7':
+                if self.os_type in ['WIN7', 'WIN10']:
                     next_eip = eip + instruct[0]
                     next_instruct = my_SIM_disassemble_address(self.cpu, next_eip, 1, 0)
                     next_mn = decode.getMn(next_instruct[1])
@@ -888,13 +892,25 @@ class GetKernelParams():
         self.task_hap = None
         self.stop_hap = None
 
-    def win7StopHap(self, dumb, one, exception, error_string):
+    def winStopHap(self, dumb, one, exception, error_string):
         self.lgr.debug('win7StopHap')
         SIM_run_alone(self.rmTaskStopAlone, None)
-        SIM_run_alone(self.getWin7Params, None)
+        SIM_run_alone(self.getWinParams, None)
 
-    def getWin7Params(self, dumb):
-        w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.current_task_phys, self.lgr)
+
+    def getWinParams(self, dumb):
+        if self.os_type == 'WIN7':
+            w7Params.findParams(self.cpu, self.mem_utils, self.win7_tasks, self.param, self.current_task_phys, self.lgr)
+        elif self.os_type == 'WIN10':
+            self.param.ts_comm = win10_offsets.ts_comm
+            self.param.proc_ptr = win10_offsets.proc_ptr
+            self.param.ts_pid = win10_offsets.ts_pid
+            self.param.ts_next = win10_offsets.ts_next
+            self.param.ts_prev = win10_offsets.ts_prev
+            # offset of user space page table base (cr3)
+            self.param.page_table = win10_offsets.page_table
+            # TBD meltdown mitigation pagte table directory
+            
         if self.param.ts_pid is not None:
             print('got pid %d' % self.param.ts_pid)
         else:
@@ -945,7 +961,7 @@ class GetKernelParams():
         pcell = self.cpu.physical_memory
         self.task_break = SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, self.current_task_phys, self.mem_utils.WORD_SIZE, 0)
         self.task_hap = SIM_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThreadWin7, self.cpu, self.task_break)
-        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.win7StopHap, None)
+        self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.winStopHap, None)
         self.continueAhead()
 
     def findSwapper(self):
@@ -1432,7 +1448,7 @@ class GetKernelParams():
             else:
                 ''' armv8 page fault entry is same as syscall entry, call it done'''
                 self.saveParam()
-        elif self.os_type == 'WIN7':
+        elif self.os_type in ['WIN7', 'WIN10']:
             # looks like  cs:0xfffff800034f1e1d p:0x0034f1e1d  movsx r11,dword ptr [r10+rax*4]
             #             cs:0xfffff800034f1e24 p:0x0034f1e24  sar r11,4
             #             cs:0xfffff800034f1e28 p:0x0034f1e28  add r10,r11
@@ -1599,7 +1615,7 @@ class GetKernelParams():
 
     def computeDoStop(self, compat32, third, forth, memory):
         # entered via break at kernel entry address
-        if self.cpu.architecture != 'arm' and self.os_type == 'WIN7':
+        if self.cpu.architecture != 'arm' and self.os_type in ['WIN7', 'WIN10']:
             rax = self.mem_utils.getRegValue(self.cpu, 'rax')
             ''' TBD handle different windows syscall jump tables '''
             if rax > 500:
@@ -1933,7 +1949,7 @@ class GetKernelParams():
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.entryStopHapARM, None)
         elif self.cpu.architecture == 'ppc32':
             self.lgr.error('checkKernelEntry not expected for for ppc32')
-        elif self.os_type == 'WIN7':
+        elif self.os_type in ['WIN7', 'WIN10']:
             self.entry_mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.entryModeChangedWin, False)
             self.stop_hap = SIM_hap_add_callback("Core_Simulation_Stopped", self.entryStopHapWin, None)
         else:
@@ -1955,12 +1971,18 @@ class GetKernelParams():
         self.param.printParams()
         print('Param file stored in %s current_task was 0x%x' % (fname, self.param.current_task))
         if self.run_from_snap is not None:
-             pfile = os.path.join(self.run_from_snap, 'phys.pickle')
+             #pfile = os.path.join(self.run_from_snap, 'phys.pickle')
+             pfile = os.path.join(self.run_from_snap, self.target, 'phys_current_task.pickle')
+             try:
+                 os.mkdir(os.path.dirname(pfile))
+             except:
+                 pass
              prec = {}
              prec['current_task_phys'] = self.current_task_phys
              prec['saved_cr3_phys'] = self.win7_saved_cr3_phys
              pickle.dump(prec, open(pfile, 'wb'))
              print('current task phys addr written to %s' % pfile)
+             self.lgr.debug('current task phys addr 0x%x cr3_phys %s written to %s' % (self.current_task_phys, self.win7_saved_cr3_phys, pfile))
         if self.quit:
              SIM_run_command('quit')
 
