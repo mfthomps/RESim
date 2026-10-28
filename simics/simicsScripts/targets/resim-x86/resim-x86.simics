@@ -1,5 +1,5 @@
 decl {
-! Script that boots Clear Linux image with UEFI.
+! Script that boots Clear Linux script without UEFI (uses bios)
  
  params from "resim-x86.include"
   # Do not expose all advanced options to the end user
@@ -14,7 +14,8 @@ decl {
   default create_usb_tablet = TRUE
 
 # params from "qsp-uefi.include"
-#  except enable_efi
+ params from "%simics%/targets/qsp-x86/qsp-uefi.include"
+  except enable_efi
 
  params from "%simics%/targets/qsp-x86/rw-state.include"
   except system
