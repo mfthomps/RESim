@@ -1194,6 +1194,9 @@ class GenContextMgr():
         if tid == '1':
             self.lgr.debug('contextManager watchTasks, tid is 1, ignore')
             return
+        if tid is None:
+            self.lgr.debug('contextManager watchTasks, tid is None, ignore')
+            return
         if self.task_break is None:
             self.setTaskHap()
         self.watching_tasks = True

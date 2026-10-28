@@ -683,6 +683,8 @@ def findPageTableArmV8(cpu, va, lgr, do_log=False):
             if do_log:
                 lgr.debug(f"[+] Found Block Mapping (Huge Page) at Level {level}!")
                 lgr.debug(f"[+] VA 0x{va:x} -> PA 0x{phys_addr:x}")
+            ptable_info.page_exists = True
+            ptable_info.phys_addr = phys_addr
             return ptable_info
 
         # Step into next lower table structure using bits [47:12] of the descriptor

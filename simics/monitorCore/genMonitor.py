@@ -4824,7 +4824,7 @@ class GenMonitor():
             comm = self.task_utils[target].getCommFromTid(tid)
             cpu = self.cell_config.cpuFromCell(target)
         self.lgr.debug('compat32 tid:%s (%s) mem_utils.WORD_SIZE %d' % (tid, comm, self.mem_utils[target].WORD_SIZE))
-        if cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8 and comm is not None:
+        if cpu is not None and cpu.architecture.startswith('x86') and self.mem_utils[target].WORD_SIZE == 8 and comm is not None:
             so_word_size = self.soMap[target].getProgWordSize(comm)
             self.lgr.debug('compat32 so_word_size %s' % so_word_size)
             if so_word_size is not None:

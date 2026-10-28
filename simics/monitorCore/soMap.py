@@ -97,13 +97,14 @@ class LoadInfo():
             self.end = None
     def toString(self):
         if self.addr is None:
-            retval = 'addr is None, size %s text_start %s' % (str(self.size), str(self.text_start))
+            retval = 'addr is None, size %s text_start %s interp: %s' % (str(self.size), str(self.text_start), self.interp)
         elif self.size is None:
-            retval = 'addr 0x%x size None text_start is None' % (self.addr)
+            retval = 'addr 0x%x size None text_start is None interp %s' % (self.addr, self.interp)
         elif self.text_start is None:
-            retval = 'addr 0x%x size 0x%x text_start is None' % (self.addr, self.size)
+            retval = 'addr 0x%x size 0x%x text_start is None interp %s' % (self.addr, self.size, self.interp)
         else:
-            retval = 'addr 0x%x size 0x%x text_start 0x%x' % (self.addr, self.size, self.text_start)
+            retval = 'addr 0x%x size 0x%x text_start 0x%x interp: %s' % (self.addr, self.size, self.text_start, self.interp)
+        return retval
     
 class SOMap():
     def __init__(self, top, cell_name, cell, cpu, context_manager, task_utils, targetFS, reverse_mgr, traceProcs, run_from_snap, lgr):
@@ -410,7 +411,6 @@ class SOMap():
                 self.lgr.warning('soMap addText collision on program base name %s adding %s, replace old with new' % (prog_basename, prog))
                 self.prog_base_map[prog_basename] = prog
         eip = None
-        interp = None 
         skip_this = False
         if prog not in self.prog_info:
             self.addProgInfo(prog, path)
@@ -454,11 +454,11 @@ class SOMap():
                     #self.checkSOWatch(load_addr, prog)
                     self.pending_execve[prog] = load_addr
                     mem_utils = self.task_utils.getMemUtils()
-                    self.lgr.debug('soMap addText do execve handling in user mode via doInUser for prog %s' % prog)
+                    self.lgr.debug('soMap addText do execve handling in user mode via doInUser for prog %s prog_info %s' % (prog, self.prog_info[prog].toString()))
                     self.top.pauseThreadTrack(self.cpu, True)
                     self.do_in_user = doInUser.DoInUser(self.top, self.cpu, self.pendingExecve, prog, self.task_utils, mem_utils, self.context_manager, self.lgr, tid=tid)
                     size = self.prog_info[prog].text_size + self.prog_info[prog].text_offset
-                    retval = LoadInfo(load_addr, size, interp=interp)
+                    retval = LoadInfo(load_addr, size, interp=self.prog_info[prog].interp)
                     retval.text_start = load_text_start
                     retval.end = load_text_end
                     #load_key = '%s-%s' % (tid, prog)
@@ -490,7 +490,6 @@ class SOMap():
                 path = path[len(self.root_prefix):]
             self.prog_info[prog] = ProgInfo(elf_info.text_start, elf_info.text_size, elf_info.text_offset, elf_info.plt_addr, 
                    elf_info.plt_offset, elf_info.plt_size, path, interp=elf_info.interp, word_size=elf_info.word_size)
-            interp = elf_info.interp
             self.lgr.debug('soMap addProgInfo prog info %s %s' % (prog, self.prog_info[prog].toString()))
             if self.prog_info[prog].text_start is None:
                 if self.prog_info[prog].text_size is not None:
@@ -603,7 +602,10 @@ class SOMap():
             else:
                 self.lgr.error('soMap addLoader no elf info from %s' % prog)
                 return
-            load_addr = addr -  elf_info.text_offset
+            if hasattr(elf_info, 'entry') and elf_info.entry is not None:
+                load_addr = addr -  elf_info.entry
+            else:
+                load_addr = addr -  elf_info.text_offset
             self.lgr.debug('soMap addLoader tid:%s prog %s load_addr 0x%x size 0x%x' % (tid, prog, load_addr, elf_info.text_size))
             load_size = elf_info.text_size + elf_info.text_offset
             load_info = LoadInfo(load_addr, load_size)
@@ -670,7 +672,7 @@ class SOMap():
                 full_path = self.pathAlias(tid, full_path)
                 analysis_path = self.getAnalysisPath(full_path)
                 load_addr = addr - elf_info.text_offset
-                self.lgr.debug('soMap addSO tid:%s passing load_addr 0x%x to fun_mgr add' % load_addr)
+                self.lgr.debug('soMap addSO tid:%s passing load_addr 0x%x to fun_mgr add' % (tid, load_addr))
                 self.fun_mgr.add(analysis_path, load_addr)
 
             self.checkSOWatch(addr, prog)
@@ -680,15 +682,13 @@ class SOMap():
             self.lgr.debug('soMap listSO tid %s in so_file_map' % tid)
             for load_info in self.so_file_map[tid]:
                 prog = self.so_file_map[tid][load_info]
-                if filter is None or filter in prog:
+                if filter is None or filter in prog or filter==tid:
                     print('tid:%s  0x%x - 0x%x   %s' % (tid, load_info.addr, load_info.end, prog))
         for tid in self.text_prog:
-            if filter is None or filter in self.text_prog[tid]:
-                if tid in self.load_info and self.prog_start[tid] is not None:
-                    print('tid:%s  0x%x - 0x%x   %s' % (tid, self.load_info[tid].text_start, self.load_info[tid].end, self.text_prog[tid]))
-                else:
-                    #print('tid:%s  no text found' % tid)
-                    pass
+            if tid in self.load_info and self.load_info[tid] is not None:
+                if filter is None or filter in self.text_prog[tid] or filter==tid:
+                    if self.load_info[tid].text_start is not None:
+                        print('tid:%s  0x%x - 0x%x   %s' % (tid, self.load_info[tid].text_start, self.load_info[tid].end, self.text_prog[tid]))
          
     def findSOPath(self, starts, tid=None):
         retval = None
@@ -728,7 +728,7 @@ class SOMap():
                 prog = self.text_prog[tid]
                 offset = self.prog_info[prog].text_offset
                 size = self.prog_info[prog].text_size
-                print('0x%x - 0x%x 0x%x 0x%x  %s' % (self.load_info[tid].text_start, self.load_info[tid].end, offset, size, prog))
+                print('0mx%x - 0x%x 0x%x 0x%x  %s' % (self.load_info[tid].text_start, self.load_info[tid].end, offset, size, prog))
             else:
                 print('tid:%s not in text sections' % tid)
                 self.lgr.debug('showSO tid:%s not in text sections' % tid)
@@ -1343,15 +1343,24 @@ class SOMap():
             #load_key = '%s-%s' % (tid, prog)
             load_key = tid
             if load_key in self.load_info:
-                self.lgr.debug('soMap getLoadInfo self.load_info has entry for key %s' % load_key)
-                load_info = self.load_info[load_key]
+                if self.load_info[load_key] is None:
+                    if prog in self.prog_info:
+                        size = self.prog_info[prog].text_size
+                        load_info = LoadInfo(None, size, interp=self.prog_info[prog].interp)
+                        self.lgr.debug('soMap getLoadInfo tid:%s load_info for tid is None but prog %s in prog_info.  load info is %s' % (tid, prog, load_info.toString()))
+                    else:
+                        self.lgr.debug('soMap getLoadInfo tid:%s load_info for tid is None and prog %s not in prog_info.  load info is %s' % (tid, prog))
+                else:
+                    load_info = self.load_info[load_key]
+                    self.lgr.debug('soMap getLoadInfo self.load_info has entry for key %s  %s' % (load_key, load_info.toString()))
             elif tid in self.load_info and self.load_info[tid] is not None:
                 size = self.load_info[tid].end - self.load_info[tid].text_start + 1 
                 load_info = LoadInfo(self.load_info[tid].text_start, size, interp=self.prog_info[prog].interp)
+                self.lgr.debug('soMap getLoadInfo tid:%s in load_info %s' % (tid, load_info.toString()))
             elif prog in self.prog_info:
-                self.lgr.debug('soMap getLoadInfo tid:%s not in prog_start, prog_end' % tid)
                 size = self.prog_info[prog].text_size
                 load_info = LoadInfo(None, size, interp=self.prog_info[prog].interp)
+                self.lgr.debug('soMap getLoadInfo tid:%s not in load_info but prog %s in prog_info.  load info is %s' % (tid, prog, load_info.toString()))
         else:
             self.lgr.debug('soMap getLoadInfo tid:%s not in text_prog' % tid)
         return load_info

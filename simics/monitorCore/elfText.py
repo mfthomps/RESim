@@ -5,7 +5,7 @@ import shlex
 import subprocess
 import resimUtils
 class Text():
-    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp, word_size):
+    def __init__(self, address, offset, size, plt_addr, plt_offset, plt_size, interp, word_size, entry):
         # mostly bs and confusing.  text_start may be the plt.  Address of "LOAD... R E" for so executables
         self.text_start = address
         self.text_offset = offset
@@ -15,6 +15,7 @@ class Text():
         self.plt_size = plt_size
         self.interp = interp
         self.word_size = word_size
+        self.entry = entry
 
     def toString(self):
         if self.text_start is not None:
@@ -79,7 +80,7 @@ def getText(path, lgr):
     interp = None
     word_size = 4
     is_so = False
- 
+    entry = None 
     line_list = out[0].decode("utf-8").splitlines()
     line_iterator = iter(line_list) 
     for line in line_iterator:
@@ -110,10 +111,12 @@ def getText(path, lgr):
             parts = line.strip().split()
             if is_dyn and not is_so:
                 offset = int(parts[3], 16)
+                entry = offset
                 if lgr is not None:
                     lgr.debug('elfText Entry point, is dynamic offset to 0x%x' % offset)
             elif is_aarch64:
                 addr = int(parts[3], 16)
+                entry = addr
             continue
         if '[Requesting program interpreter' in line:
             parts = line.strip().split()
@@ -196,7 +199,7 @@ def getText(path, lgr):
                 pass
             #lgr.debug('elfText got start 0x%x offset 0x%x' % (addr, offset))
     if addr is not None or is_dyn or is_aarch64:
-        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp, word_size)
+        retval = Text(addr, offset, size, plt_addr, plt_offset, plt_size, interp, word_size, entry)
    
     return retval
 

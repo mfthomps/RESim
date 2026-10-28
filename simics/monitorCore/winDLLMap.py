@@ -643,21 +643,32 @@ class WinDLLMap():
                     break
         return retval
    
-    def getSOInfo(self, addr_in):
+    def getSOInfo(self, addr_in, fname=None):
         retval = None, None, None
         cpu, comm, tid = self.task_utils.curThread() 
         pid = self.pidFromTID(tid)
         if pid is None:
             return retval
-        if pid in self.section_map:
-            for fname in self.section_map[pid]:
+        if fname is not None: 
+            if fname in self.section_map[pid]:
                 section = self.section_map[pid][fname]
                 if section.size is not None:
                     end = section.load_addr+section.size - 1
                     #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
                     if addr_in >= section.load_addr and addr_in <= end:
                         retval = (fname, section.load_addr, end)
-                        break 
+            else:
+                self.lgr.error('winDLL getSOInfo given fname %s not in section_map map for pid:%s' % (fname, pid))
+        else:
+            if pid in self.section_map:
+                for fname in self.section_map[pid]:
+                    section = self.section_map[pid][fname]
+                    if section.size is not None:
+                        end = section.load_addr+section.size - 1
+                        #self.lgr.debug('winDLL getSOInfo section fname %s addr 0x%x end 0x%x  addr_in 0x%x map_fname %s' % (section.fname, section.load_addr, end, addr_in, fname))
+                        if addr_in >= section.load_addr and addr_in <= end:
+                            retval = (fname, section.load_addr, end)
+                            break 
         return retval
 
     def getCodeSections(self, tid):
@@ -1050,3 +1061,9 @@ class WinDLLMap():
 
     def getProgWordSize(self, prog): 
         return 8
+
+    def pathAlias(self, tid, fname):
+        return fname
+
+    def getTextOffset(self, prog_in):
+        return 0
