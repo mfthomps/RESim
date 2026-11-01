@@ -2,6 +2,11 @@ import ntpath
 import os
 import subprocess
 import shlex
+import sys
+resim_dir = os.getenv('RESIM_DIR')
+sys.path.append(os.path.join(resim_dir, 'windows'))
+import win10_offsets
+import win7_offsets
 try:
     from resimHaps import *
     from simics import *
@@ -9,7 +14,6 @@ except:
     # if loaded from script like findBNT.py
     pass
 
-PEB_ADDR = 0x338
 class WinProgInfo():
     def __init__(self, load_addr, text_offset, text_size, machine, image_base):
         self.load_addr = load_addr
@@ -41,10 +45,13 @@ def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
     text_size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
     return WinProgInfo(load_address, text_offset, text_size, machine, image_base)
 
-def getLoadAddress(cpu, mem_utils, eproc, prog, lgr):
+def getLoadAddress(cpu, mem_utils, eproc, prog, os_type, lgr):
         retval = None
-        ''' TBD put in params! '''
-        peb_addr = eproc+PEB_ADDR
+        if os_type == 'WIN10':
+            peb_offset = win10_offsets.PEB_ADDR
+        else:
+            peb_offset = win7_offsets.PEB_ADDR
+        peb_addr = eproc+peb_offset
         lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x prog %s' % (eproc, peb_addr, prog))
         peb = mem_utils.readPtr(cpu, peb_addr)
         if peb is not None:
