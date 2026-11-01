@@ -1058,9 +1058,9 @@ class WinTaskUtils():
             thread_id_dict[thread_id] = thread
         return thread_id_dict
 
-    def findThreadIDOffset(self):
+    def findThreadIDOffset(self, thread_head=None, thread_list_entry_offset=None):
         thread_rec = self.getCurThreadRec()
-        thread_list = self.walkProcessThreads(thread_rec)
+        thread_list = self.walkProcessThreads(thread_rec, thread_head=thread_head, thread_list_entry_offset=thread_list_entry_offset)
         offset = 0x200
         best_offset = None
         best_offset_max = 0xffffffff
@@ -1077,13 +1077,13 @@ class WinTaskUtils():
                 if value < smallest:
                     smallest = value
                 found.append(value)
-            if len(found) == len(addr_list):
-                print('offset 0x%x gives unique values min 0x%x max 0x%x' % (offset, smallest, greatest))
+            if len(found) == len(thread_list):
+                #print('offset 0x%x gives unique values min 0x%x max 0x%x' % (offset, smallest, greatest))
                 if smallest == 0 and greatest < best_offset_max:
                     best_offset = offset
                     best_offset_max = greatest
             offset = offset + 4    
-        print('Best offset is 0x%x' % best_offset)
+        #print('Best offset is 0x%x' % best_offset)
         return best_offset
                
     def findThreadsFromProcXP(self, proc):
@@ -1304,20 +1304,25 @@ class WinTaskUtils():
         self.task_ptr_before_lost = task_rec
         self.lgr.debug('winTaskUtils switchedToUnknown saving curProc as 0x%x and task_rec as 0x%x' % (cur, task_rec))
 
-    def findThreadListEntryOffset(self, cur_proc):
-        thread_head = self.THREAD_HEAD 
+    def findThreadListEntryOffset(self, thread_head=None):
+        if thread_head is None:
+            thread_head = self.THREAD_HEAD 
+        cur_thread = self.getCurThreadRec()
+        cur_proc = self.getThreadPrec(cur_thread)
+     
         thread_list_head_addr = cur_proc + thread_head
         head_flink = self.mem_utils.readPtr(self.cpu, thread_list_head_addr)
-        print('head_flink 0x%x from thread_list_addr 0x%x thread_head 0x%x' % (head_flink, thread_list_head_addr, thread_head))
+        #print('head_flink 0x%x from thread_list_addr 0x%x thread_head 0x%x' % (head_flink, thread_list_head_addr, thread_head))
         offset = 0x200
         for i in range(2000):
             thread_addr = head_flink - offset
             prec = self.getThreadPrec(thread_addr)
             if prec == cur_proc:
-                print('prec 0x%x entry_offset 0x%x' % (prec, offset)) 
+                #print('prec 0x%x entry_offset 0x%x' % (prec, offset)) 
                 thread_list_entry_offset = offset
                 break
             offset = offset + 4
+        return offset
 
     def firstThreadFromProc(self, proc_rec):
         thread_head = self.THREAD_HEAD 
@@ -1328,12 +1333,14 @@ class WinTaskUtils():
         first_thread = head_flink - thread_list_entry_offset
         return first_thread
 
-    def walkProcessThreads(self, some_thread):
+    def walkProcessThreads(self, some_thread, thread_head=None, thread_list_entry_offset=None):
         '''
         Walk a thread list of some thread
         '''
-        thread_head = self.THREAD_HEAD 
-        thread_list_entry_offset = self.THREAD_NEXT
+        if thread_head is None:
+            thread_head = self.THREAD_HEAD 
+        if thread_list_entry_offset is None:
+            thread_list_entry_offset = self.THREAD_NEXT
         ethread_addresses = []
         first_thread = some_thread
         
@@ -1357,7 +1364,7 @@ class WinTaskUtils():
             current_entry_addr = next_entry_addr
         return ethread_addresses
 
-    def find_thread_head_offset(self, eprocess_addr, ethread_addr):
+    def findThreadHeadOffset(self, eprocess_addr, ethread_addr):
         """
         Finds the THREAD_HEAD offset within EPROCESS given a known ETHREAD and thread_list_entry_offset.
         
@@ -1410,3 +1417,14 @@ class WinTaskUtils():
                 break
         print('Failed to find THREAD_HEAD') 
         return None
+
+    def findSomeOffsets(self):
+        cur_thread = self.getCurThreadRec()
+        cur_proc = self.getThreadPrec(cur_thread)
+        thread_head = self.findThreadHeadOffset(cur_proc, cur_thread)
+        print('Assuming a threads EPROCESS is found at ethread offset of 0x%x:' % self.param.proc_ptr)
+        print('\tthread_head is 0x%x' % thread_head)
+        thread_list_entry_offset = self.findThreadListEntryOffset(thread_head=thread_head)
+        print('\tthread_list_entry_offset is 0x%x' % thread_list_entry_offset)
+        thread_id_offset = self.findThreadIDOffset(thread_head=thread_head, thread_list_entry_offset=thread_list_entry_offset)
+        print('\tthread_id_offset is 0x%x' % thread_id_offset)
