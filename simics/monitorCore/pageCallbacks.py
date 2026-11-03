@@ -53,6 +53,7 @@ class PageCallbacks():
 
     def setCallback(self, addr, callback, name=None, use_pid=None, writable=True):
         mapped = False
+        self.lgr.debug('pageCallbacks setCallback for 0x%x use_pid: %s' % (addr, use_pid))
         if use_pid is None:
             table_base = self.getTableBase(use_pid)
             self.lgr.debug('pageCallbacks setCallback for 0x%x use_pid is None table_base 0x%x' % (addr, table_base))
@@ -180,7 +181,7 @@ class PageCallbacks():
         physical = memory.physical_address
         self.lgr.debug('pageCallbacks tableHap phys 0x%x len %d  type %s' % (physical, length, type_name))
         if break_num in self.missing_haps:
-            if op_type is Sim_Trans_Store:
+            if op_type == Sim_Trans_Store:
                 mem_trans = self.MyMemTrans(self.cpu, memory)
                 self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 self.rmTableHap(break_num)
@@ -199,7 +200,7 @@ class PageCallbacks():
             physical = mem_trans.physical
             self.lgr.debug('pageCallbacks tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
             #if length == 4 and self.cpu.architecture == 'arm':
-            if op_type is Sim_Trans_Store:
+            if op_type == Sim_Trans_Store:
                 value = mem_trans.value
                 if value == 0:
                     #self.lgr.debug('tableHap value is zero')
@@ -240,7 +241,7 @@ class PageCallbacks():
             #self.lgr.debug('pageCallbacks pageBaseHap already has a mode_hap, bail')
             return
         op_type = SIM_get_mem_op_type(memory)
-        if op_type is not Sim_Trans_Store:
+        if op_type != Sim_Trans_Store:
             return
         if memory.physical_address == 0:
             return
@@ -330,7 +331,7 @@ class PageCallbacks():
         physical = memory.physical_address
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
         self.lgr.debug('pageCa.lbacks pageBaseHap phys 0x%x len %d  type %s tid:%s (%s) cycle: 0x%x' % (physical, length, type_name, tid, comm, cpu.cycles))
-        if op_type is Sim_Trans_Store:
+        if op_type == Sim_Trans_Store:
             ''' Remove the hap and break.  They will be recreated at the end of this call chain unless all associated addresses are mapped. '''
             self.rmTableHap(break_num)
             ''' Set a mode hap so we recheck page entries after kernel finishes its mappings. '''
@@ -391,7 +392,7 @@ class PageCallbacks():
         physical = mem_trans.physical
         self.lgr.debug('pageBaseUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_page_bases[physical])))
         #if length == 4 and self.cpu.architecture == 'arm':
-        if op_type is Sim_Trans_Store:
+        if op_type == Sim_Trans_Store:
             value = mem_trans.value
             if value == 0:
                 #self.lgr.debug('tableHap value is zero')
@@ -431,7 +432,7 @@ class PageCallbacks():
                 return
 
             #self.lgr.debug('pageHap phys 0x%x len %d  type %s' % (physical, length, type_name))
-            if op_type is Sim_Trans_Store:
+            if op_type == Sim_Trans_Store:
                 value = memUtils.memoryValue(self.cpu, memory)
                 #self.lgr.debug('pageHap value is 0x%x' % value)
             table_base = self.getTableBase(use_pid)
@@ -462,7 +463,7 @@ class PageCallbacks():
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
             self.physical = memory.physical_address
             self.tid = tid
-            if self.op_type is Sim_Trans_Store:
+            if self.op_type == Sim_Trans_Store:
                 self.value = memUtils.memoryValue(cpu, memory)
             else:
                 self.value = None
