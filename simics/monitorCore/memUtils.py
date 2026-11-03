@@ -446,7 +446,7 @@ class MemUtils():
         return table_base
 
     def v2pKaddr(self, cpu, v, use_pid=None, do_log=False):
-        self.lgr.debug('memUtils v2pKaddr v: 0x%x' % v) 
+        #self.lgr.debug('memUtils v2pKaddr v: 0x%x' % v) 
         retval = None
         cpl = getCPL(cpu)
         if cpu.architecture == 'arm':
@@ -472,7 +472,7 @@ class MemUtils():
         else:
             # ALWAYS use page table, regardless of mode because we may be at a mode change
             #self.lgr.debug('memUtils v2pKaddr cpl %d' % cpl)
-            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3, do_log=True)
+            ptable_info = pageUtils.findPageTable(cpu, v, self.lgr, force_cr3=self.kernel_saved_cr3, do_log=False)
             #ptable_info = pageUtils.findPageTable(cpu, v, self.lgr)
             #if self.kernel_saved_cr3 is not None:
             #    self.lgr.debug('memUtils v2pKaddr ptable fu cpl %d phys addr for 0x%x kernel_saved_cr3 0x%x' % (cpl, v, self.kernel_saved_cr3))
@@ -1151,6 +1151,29 @@ class MemUtils():
         else:
             return 'rip'
 
+    def adjustParamWin10(self, cpu):
+        ''' TBD should also use ia32_start for Linux x86 64? '''
+        param_gs_base = self.param.gs_base
+        new_gs_base = cpu.ia32_gs_base
+        self.param.gs_base = new_gs_base
+        mem_delta = param_gs_base - new_gs_base
+        #self.param.syscall_jump = self.param.syscall_jump + mem_delta 
+        #self.lgr.debug('memUtils adjustParamWin10 current ia32_gs_base 0x%x  param value 0x%x changed syscall_jump to 0x%x using delta 0x%x' % (new_gs_base, 
+        #        param_gs_base, self.param.syscall_jump, mem_delta))
+        self.lgr.debug('memUtils adjustParamWin10 current ia32_gs_base 0x%x  param value 0x%x mem_delta 0x%x' % (new_gs_base, 
+                param_gs_base, mem_delta))
+        cmd = 'get-msr cpu=%s name=%s' % (cpu.name, 'ia32_lstar')
+        dumb, value = cli.quiet_run_command(cmd)
+        this_msr_lstar = int(value,16)
+        delta = this_msr_lstar - self.param.sysenter
+        self.param.sysenter = self.param.sysenter + delta 
+        self.param.sysret64 = self.param.sysret64 + delta 
+        # syscall_compute not used
+        self.param.syscall_compute = self.param.syscall_compute + delta 
+        self.param.syscall_jump = self.param.syscall_jump + delta 
+        self.param.page_fault = self.param.page_fault + delta 
+        self.lgr.debug('memUtils adjustParamWin10 msr_lstart is 0x%x adjusted kernel entry/exit by delta 0x%x sysenter now 0x%xx syscall_jump now 0x%x' % (this_msr_lstar, delta, self.param.sysenter, self.param.syscall_jump))
+       
     def adjustParam(self, cpu):
         '''
         Modify params values to reflect the delta between the recorded fs/gs base and the current one.
@@ -1161,7 +1184,9 @@ class MemUtils():
             return
         if cpu.architecture.startswith('ppc32'):
             return
-
+        if self.os_type == 'WIN10':
+            self.adjustParamWin10(cpu)
+            return
         if self.WORD_SIZE == 4:
             if self.param.fs_base is None:
                 self.lgr.debug('memUtils adjustParam no fs_base in parms, bail')
@@ -1379,6 +1404,7 @@ class MemUtils():
                 self.lgr.debug('memUtils getCurrentTask current ia32_gs_base 0x%x  param value 0x%x' % (new_xs_base, param_xs_base))
             if param_xs_base is None: 
                 if retval is None:
+                    self.lgr.debug('memUtils getCurrentTask param_xs_base is None as is retval')
                     cur_ptr = self.getCurrentTaskX86(cpu)
                     retval = cur_ptr
             else:
