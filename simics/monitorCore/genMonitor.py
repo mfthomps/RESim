@@ -798,13 +798,13 @@ class GenMonitor():
         run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         run_to_mode_change.run2Kernel(cpu, flist=flist)
 
-    def run2User(self, cpu, flist=None, want_tid=None):
+    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False):
         self.lgr.debug('run2User')
         run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
-        run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid)
+        run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid, any_tid=any_tid)
 
     def finishInit(self, cell_name):
-        
+            ''' Finish initializing a cell, assuming we have gotten to a state having at least an initial process. '''    
             if cell_name not in self.param or cell_name not in self.targetFS: 
                 return
             cpu = self.cell_config.cpuFromCell(cell_name)
@@ -1138,7 +1138,7 @@ class GenMonitor():
                 #   return
             else: 
                 self.lgr.debug('doInit done, call runScripts')
-        self.runScripts()
+                self.runScripts()
 
     def kernelCodeHap(self, cpu, the_obj, the_break, memory):
         eip = self.getEIP(cpu)
@@ -1762,6 +1762,11 @@ class GenMonitor():
                 return
             print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x SP: 0x%x code file: %s eproc: 0x%x ethread: 0x%x' % (cpu.name, context,
                    cpl, tid, comm, eip, sp, so_file, cur_proc_rec, cur_thread_rec))
+            #self.task_utils[self.target].walk_process_threads(cur_proc_rec)
+            #self.task_utils[self.target].findThreads()
+            #offset=self.task_utils[self.target].find_thread_head_offset(cur_proc_rec, cur_thread_rec)
+            #print('THREAD_HEAD 0x%x' % offset)
+            #self.task_utils[self.target].findSomeOffsets()
         elif self.isVxDKM(): 
             print('cpu.name is %s context: %s PL: %d tid: %s(%s) EIP: 0x%x SP: 0x%x code file: %s' % (cpu.name, context,
                    cpl, tid, comm, eip, sp, so_file))
@@ -2156,14 +2161,14 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, flist=None, want_tid=None):
+    def toUser(self, flist=None, want_tid=None, any_tid=False):
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('toUser want_tid %s cycle: 0x%x' % (want_tid, cpu.cycles))
         if self.isVxDKM(cpu=cpu):
             self.vxKMonitor[self.target].toModule()
         else:
-            self.run2User(cpu, flist, want_tid=want_tid)
+            self.run2User(cpu, flist, want_tid=want_tid, any_tid=any_tid)
 
     def runToUserSpace(self, dumb=None):
         self.lgr.debug('runToUserSpace')
@@ -4793,7 +4798,7 @@ class GenMonitor():
        
     def v2p(self, addr, use_pid=None, force_cr3=None):
         cpu = self.cell_config.cpuFromCell(self.target)
-        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid, force_cr3=force_cr3, do_log=True)
+        value = self.mem_utils[self.target].v2p(cpu, addr, use_pid=use_pid, force_cr3=force_cr3, do_log=False)
         if value is not None:
             print('0x%x' % value)
         else:
@@ -5451,7 +5456,7 @@ class GenMonitor():
             kernel = False
         else:
             kernel = True
-        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3, kernel=kernel, do_log=True)
+        ptable_info = pageUtils.findPageTable(cpu, addr, self.lgr, force_cr3=use_cr3, kernel=kernel, do_log=False)
         if not quiet:
             print(ptable_info.valueString())
         cpu = self.cell_config.cpuFromCell(self.target)
