@@ -38,10 +38,10 @@ class Text():
         self.text_size = size
         self.text_offset = offset
 
-def getWinProgInfo(cpu, mem_utils, eproc, full_path, lgr):
+def getWinProgInfo(cpu, mem_utils, eproc, full_path, os_type, lgr):
     load_address = None
     if eproc is not None:
-        load_address = getLoadAddress(cpu, mem_utils, eproc, full_path, lgr)
+        load_address = getLoadAddress(cpu, mem_utils, eproc, full_path, os_type, lgr)
     text_size, machine, image_base, text_offset = getSizeAndMachine(full_path, lgr)
     return WinProgInfo(load_address, text_offset, text_size, machine, image_base)
 
