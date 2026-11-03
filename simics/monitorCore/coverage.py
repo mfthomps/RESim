@@ -508,7 +508,7 @@ class Coverage():
             self.type_name = SIM_get_mem_op_type_name(self.op_type)
             self.physical = memory.physical_address
             self.tid = tid
-            if self.op_type is Sim_Trans_Store:
+            if self.op_type == Sim_Trans_Store:
                 self.value = memUtils.memoryValue(cpu, memory)
             else:
                 self.value = None
@@ -535,14 +535,14 @@ class Coverage():
         if break_num in self.missing_haps:
             tid = self.top.getTID(target=self.cell_name)
             if length == 4:
-                if op_type is Sim_Trans_Store:
+                if op_type == Sim_Trans_Store:
                     mem_trans = self.MyMemTrans(self.cpu, memory, tid)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
                     self.lgr.error('coverage tableHap size 4 op_type is not store')
             else:
                 #self.lgr.error('coverage tableHap for 64 bits not yet handled')
-                if op_type is Sim_Trans_Store:
+                if op_type == Sim_Trans_Store:
                     mem_trans = self.MyMemTrans(self.cpu, memory, tid)
                     self.mode_hap = SIM_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, mem_trans)
                 else:
@@ -565,7 +565,7 @@ class Coverage():
             self.lgr.debug('tableUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_tables[physical])))
             #if length == 4 and self.cpu.architecture == 'arm':
             if True or length == 4:
-                if op_type is Sim_Trans_Store:
+                if op_type == Sim_Trans_Store:
                     value = mem_trans.value
                     if value == 0:
                         #self.lgr.debug('tableHap value is zero')
@@ -1567,7 +1567,7 @@ class Coverage():
             #self.lgr.debug('coverage pageBaseHap already has a mode_hap, bail')
             return
         op_type = SIM_get_mem_op_type(memory)
-        if op_type is not Sim_Trans_Store:
+        if op_type != Sim_Trans_Store:
             return
         if memory.physical_address == 0:
             return
