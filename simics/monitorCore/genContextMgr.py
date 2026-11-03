@@ -5,6 +5,7 @@ import resimSimicsUtils
 import os
 import memUtils
 import resimUtils
+import shlex
 from taskUtils import COMM_SIZE
 '''
 Track task context and set/remove beakpoints & haps accordingly.  Currently recognises two contexts:
@@ -292,6 +293,8 @@ class GenContextMgr():
         self.ignore_tids = [] 
 
         self.only_progs = [] 
+          
+        self.no_watch_exit = []
 
         self.ignore_threads = []
 
@@ -670,8 +673,8 @@ class GenContextMgr():
                 self.restoreDefaultContext()
                 if len(self.watch_for_prog) > 0:
                     self.checkFirstSchedule(new_addr, tid, comm)
-                if tid not in self.task_rec_bp or self.task_rec_bp[tid] is None:
-                    #self.lgr.debug('contextManager is in only_prog, watch exit for tid: %s' % tid)
+                if (tid not in self.task_rec_bp or self.task_rec_bp[tid] is None) and comm not in self.no_watch_exit:
+                    self.lgr.debug('contextManager %s is in only_prog, watch exit for tid: %s' % (comm, tid))
                     self.watchExit(tid=tid, immediate=False)
                 #self.lgr.debug('restore default context for tid:%s comm %s' % (tid, comm))
             
@@ -1415,9 +1418,7 @@ class GenContextMgr():
 
     def watchExit(self, rec=None, tid=None, immediate=True):
         retval = True
-        ''' set breakpoint on task record that points to this (or the given) tid '''
-        # TBD This asssume all threads die together.  On windows we assume the EPROCESS record is removed
-        # and in Linux we assume the group leader is removed.
+        ''' set breakpoint on task record that points to this (or the given) tid. return true if a breakpoint is set.  On windows we watch the thread records. '''
         self.lgr.debug('contextManager watchExit tid:%s' % tid)
         cur_tid  = self.task_utils.curTID()
         if tid is None and cur_tid == '1':
@@ -1434,6 +1435,7 @@ class GenContextMgr():
         if rec is None:
             self.lgr.debug('contextManager watchExit failed to get list_addr tid:%s cur_tid %s ' % (tid, cur_tid))
             return False
+        # will be thread list ptr for Windows
         list_addr = self.task_utils.getTaskListPtr(rec)
         if list_addr is None:
             ''' suspect the thread is in the kernel, e.g., on a syscall, and has not yet been formally scheduled, and thus
@@ -1459,8 +1461,8 @@ class GenContextMgr():
             ''' Use physical so it works with an Only list '''
             list_addr_phys = self.mem_utils.v2p(self.cpu, list_addr)
             self.task_rec_bp[tid] = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Write, list_addr_phys, self.mem_utils.WORD_SIZE, 0)
-            #self.lgr.debug('genContext Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
-            #       watch_comm, tid, list_addr, list_addr_phys, cell))
+            self.lgr.debug('genContext watchExit Watching next record of tid:%s (%s) for death of tid:%s break on 0x%x (phys 0x%x) context: %s' % (watch_tid, 
+                   watch_comm, tid, list_addr, list_addr_phys, cell))
             if immediate:
                 self.watchTaskHapAlone(tid)
             else:
@@ -1643,7 +1645,9 @@ class GenContextMgr():
             self.lgr.debug('contextManager ignoreProg %s' % comm)
             self.setTaskHap()
 
-    def onlyProg(self, prog):
+    def onlyProg(self, in_line):
+        parts = shlex.split(in_line)
+        prog = parts[0]
         comm = os.path.basename(prog)[:self.task_utils.commSize()]
         self.comm_prog_map[comm]=prog
         if comm not in self.only_progs:
@@ -1656,6 +1660,11 @@ class GenContextMgr():
                     ''' watch for first schedule of this in case we are just tracing and not using debugProc '''
                     self.lgr.debug('contextManager onlyProg will watch for first schedule of %s' % comm)
                     self.callWhenFirstScheduled(comm, self.recordProcessText)
+        if len(parts) > 1:
+            for item in parts[1:]:
+                if item.lower().strip() == 'no_watch_exit':
+                    self.no_watch_exit.append(comm)
+                    self.lgr.debug('contextManager onlyProg will not watch for exit of threads for %s' % comm)
 
     def getIgnoredProgs(self):
             return list(self.ignore_progs)
@@ -1814,7 +1823,8 @@ class GenContextMgr():
             full_path = self.top.getFullPath(prog)
             self.lgr.debug('contextManager recordProcessText full path %s' % full_path)
             if self.top.isWindows(target = self.cell_name):  
-                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, self.lgr)
+                os_type = self.top.osType(target=self.cell_name)
+                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, eproc, full_path, os_type, self.lgr)
                 self.soMap.addText(prog, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
                         win_prog_info.image_base, win_prog_info.text_offset)
             else:
