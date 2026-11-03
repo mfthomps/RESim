@@ -1469,7 +1469,7 @@ class GetKernelParams():
                 if not self.mem_utils.isKernel(rip):
                     self.lgr.error('stepCompute returned to user space rip 0x%X  kernel_base 0x%x' % (rip, self.param.kernel_base))
                     return
-                ''' TBD tenuous '''
+                # TBD tenuous.  but the other_ptr2stack_prefix logic still works with WIN10. 
                 if instruct[1].startswith(ptr2stack_prefix):
                     last = instruct[1].split()[-1].strip()
                     content = last.split('[', 1)[1].split(']')[0]
