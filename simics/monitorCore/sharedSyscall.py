@@ -758,6 +758,9 @@ class SharedSyscall():
                 did_exit = self.handleExit(None, tid, comm)
         if did_exit:
             self.lgr.debug('sharedSyscall exitHap remove exitHap for %s' % tid)
+            if tid in self.exit_names:
+                del self.exit_names[tid]
+
             self.rmExitHap(tid)
             if self.callback is not None:
                 self.lgr.debug('sharedSyscall exitHap call callback (dataWatch kernelReturnHap?)')
@@ -1753,9 +1756,9 @@ class SharedSyscall():
     def getExitList(self, name):
         exit_info_list = {}
         for tid in self.exit_info: 
-            self.lgr.debug('sharedSyscall getExistList tid:%s' % tid)
+            self.lgr.debug('sharedSyscall getExitList tid:%s' % tid)
             for name in self.exit_info[tid]:
-                self.lgr.debug('sharedSyscall getExistList name %s' % name)
+                self.lgr.debug('sharedSyscall getExitList name %s' % name)
                 if name in self.exit_info[tid]:
                     exit_info_list[tid] = self.exit_info[tid][name].frame
                     exit_info_list[tid]['syscall_num'] = self.exit_info[tid][name].callnum
