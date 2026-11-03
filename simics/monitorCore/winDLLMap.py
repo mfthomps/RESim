@@ -280,13 +280,13 @@ class WinDLLMap():
     def mapSection(self, tid, section_handle, load_addr, size):
         # map a section into the section_map
         pid = self.pidFromTID(tid)
-        self.lgr.debug('WinDLL mapSection tid: %s section_handle 0x%x' % (tid, section_handle))
+        self.lgr.debug('WinDLL mapSection tid:%s section_handle 0x%x' % (tid, section_handle))
         os_type = self.top.osType(target=self.cell_name)
         if pid in self.sections:
             if section_handle in self.sections[pid]:
                 if self.isNew(self.sections[pid][section_handle], pid):
                     self.sections[pid][section_handle].addLoadAddress(load_addr, size)
-                    self.lgr.debug('WinDLL mapSection tid: %s did load address to 0x%x for %s' % (tid, load_addr, self.sections[pid][section_handle].fname))
+                    self.lgr.debug('WinDLL mapSection tid:%s did load address to 0x%x for %s' % (tid, load_addr, self.sections[pid][section_handle].fname))
                     #self.findLoadAddr(pid, load_addr)
                     section_copy = DLLInfo.copy(self.sections[pid][section_handle])
                     if pid not in self.section_map:
@@ -329,25 +329,29 @@ class WinDLLMap():
                         if rm_pp is not None:
                             self.pending_procs.remove(rm_pp)
 
-                    # TBD is pending_procs necessary?  Why not always add text if missing for pid?
-                    if pid not in self.text:
-                        #self.getText(tid)
-                        self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText' % pid)
-                        ethread = self.task_utils.getCurThreadRec()
-                        prog_name = self.top.getProgName(tid)
-                        full_path = self.top.getFullPath(fname=prog_name)
-                        #self.top.setFullPath(full_path)
-                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, os_type, self.lgr)
-                        if win_prog_info is None:
-                            self.lgr.error('WinDLLMap mapSection got None for win_prog_info for path %s' % full_path)
-                        self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
-                    elif self.text[pid].load_addr is None:
-                        ethread = self.task_utils.getCurThreadRec()
-                        prog_name = self.top.getProgName(tid)
-                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, prog_name, self.top.osType(target=self.cell_name), self.lgr)
-                        if text_load_addr is not None:
-                            self.text[pid].load_addr = text_load_addr
-                            self.lgr.debug('WinDLLMap mapSection got load_addr 0x%x for text for pid %s' % (text_load_addr, pid))
+                    # TBD is pending_procs necessary?  Why not always add text if missing for pid?  Because sometimes we just track DLL loading
+                    # and not the program itself, e.g., for jumpers.
+                    # Is this not redundant with above?
+                    #prog_name = self.findPendingProg(comm)
+                    if False and prog_name is not None: 
+                        if pid not in self.text:
+                            #self.getText(tid)
+                            ethread = self.task_utils.getCurThreadRec()
+                            #prog_name = self.top.getProgName(tid)
+                            self.lgr.debug('WinDLLMap mapSection pid %d not yet in self.text, call addText prog_name from top is %s' % (pid, prog_name))
+                            full_path = self.top.getFullPath(fname=prog_name)
+                            #self.top.setFullPath(full_path)
+                            win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, os_type, self.lgr)
+                            if win_prog_info is None:
+                                self.lgr.error('WinDLLMap mapSection got None for win_prog_info for path %s' % full_path)
+                            self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
+                        elif self.text[pid].load_addr is None:
+                            ethread = self.task_utils.getCurThreadRec()
+                            #prog_name = self.top.getProgName(tid)
+                            text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, prog_name, self.top.osType(target=self.cell_name), self.lgr)
+                            if text_load_addr is not None:
+                                self.text[pid].load_addr = text_load_addr
+                                self.lgr.debug('WinDLLMap mapSection got load_addr 0x%x for text for pid %s' % (text_load_addr, pid))
 
                     self.lgr.debug('WinDLLMap mapSection for pid %s, len for pid now %d' % (pid, len(self.section_map[pid])))
                     ''' See if we are looking for this SO, e.g., to disable tracing when in it '''
