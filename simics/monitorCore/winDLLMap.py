@@ -213,7 +213,8 @@ class WinDLLMap():
         if pid not in self.open_files:
             self.open_files[pid] = {}
         full_path = self.top.getFullPath(fname=fname)
-        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, None, full_path, self.lgr)
+        os_type = self.top.osType(target=self.cell_name)
+        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, None, full_path, os_type, self.lgr)
 
         dll_info = DLLInfo(pid, fname, fd)
         dll_info.load_addr = win_prog_info.load_addr
@@ -280,6 +281,7 @@ class WinDLLMap():
         # map a section into the section_map
         pid = self.pidFromTID(tid)
         self.lgr.debug('WinDLL mapSection tid: %s section_handle 0x%x' % (tid, section_handle))
+        os_type = self.top.osType(target=self.cell_name)
         if pid in self.sections:
             if section_handle in self.sections[pid]:
                 if self.isNew(self.sections[pid][section_handle], pid):
@@ -312,7 +314,7 @@ class WinDLLMap():
                                 #
                                 ethread = self.task_utils.getCurThreadRec()
                                 full_path = self.top.getFullPath(fname=pp)
-                                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, self.lgr)
+                                win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, os_type, self.lgr)
                                 self.addText(pp, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, 
                                             win_prog_info.image_base, win_prog_info.text_offset, full_path)
                                 if win_prog_info.text_size is None:
@@ -335,14 +337,14 @@ class WinDLLMap():
                         prog_name = self.top.getProgName(tid)
                         full_path = self.top.getFullPath(fname=prog_name)
                         #self.top.setFullPath(full_path)
-                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, self.lgr)
+                        win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, ethread, full_path, os_type, self.lgr)
                         if win_prog_info is None:
                             self.lgr.error('WinDLLMap mapSection got None for win_prog_info for path %s' % full_path)
                         self.addText(prog_name, tid, win_prog_info.load_addr, win_prog_info.text_size, win_prog_info.machine, win_prog_info.image_base, win_prog_info.text_offset, full_path)
                     elif self.text[pid].load_addr is None:
                         ethread = self.task_utils.getCurThreadRec()
                         prog_name = self.top.getProgName(tid)
-                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, prog_name, self.lgr)
+                        text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, prog_name, self.top.osType(target=self.cell_name), self.lgr)
                         if text_load_addr is not None:
                             self.text[pid].load_addr = text_load_addr
                             self.lgr.debug('WinDLLMap mapSection got load_addr 0x%x for text for pid %s' % (text_load_addr, pid))
@@ -600,6 +602,7 @@ class WinDLLMap():
         if pid not in self.section_map:
             self.lgr.error('winDLL getImageBaseForPid, no section map for pid %d' % pid)
             return retval
+        os_type = self.top.osType(target=self.cell_name)
         for fname in self.section_map[pid]:
             #self.lgr.debug('compare %s to %s' % (ntpath.basename(in_fname).lower(), ntpath.basename(fname).lower()))
             if ntpath.basename(in_fname).lower() == ntpath.basename(fname).lower():
@@ -607,7 +610,7 @@ class WinDLLMap():
                 self.lgr.debug('winDLL getImageBaseForPid got %s' % in_fname)
                 if section.image_base is None:
                     full_path = self.top.getFullPath(fname=fname)
-                    win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, None, full_path, self.lgr)
+                    win_prog_info = winProg.getWinProgInfo(self.cpu, self.mem_utils, None, full_path, os_type, self.lgr)
                     if win_prog_info is not None:
                         section.image_base = win_prog_info.image_base
                         section.size = win_prog_info.text_size
@@ -952,7 +955,7 @@ class WinDLLMap():
             dll_info = self.text[pid]
             if dll_info.load_addr is None:
                 ethread = self.task_utils.getCurThreadRec()
-                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, comm, self.lgr)
+                text_load_addr = winProg.getLoadAddress(self.cpu, self.mem_utils, ethread, comm, self.top.osType(target=self.cell_name), self.lgr)
                 dll_info.load_addr = text_load_addr
                 if dll_info.load_addr is None:
                     self.lgr.debug('winDLL getLoadInfo load_addr None for text[%s] %s' % (pid, dll_info.fname))
