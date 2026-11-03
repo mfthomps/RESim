@@ -481,11 +481,11 @@ class TaskUtils():
                     stack.append((hack_val, False))
                     #self.lgr.debug('appending group next 0x%x' % hack_val)
     
-            if x is True:
+            if x == True:
                 task.in_main_list = True
                 if task.next:
                     stack.append((task.next, True))
-            elif x is False:
+            elif x == False:
                 pass
             else:
                 task.in_sibling_list = x
