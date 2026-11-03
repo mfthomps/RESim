@@ -63,7 +63,7 @@ class RunToModeChange():
                     else:
                         fun_item.fun(fun_item.args)
 
-    def run2User(self, cpu, flist=None, want_tid=None):
+    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False):
         cpl = memUtils.getCPL(cpu)
         self.flist = flist
         if cpl == 0:
@@ -75,7 +75,7 @@ class RunToModeChange():
                     want_tid = str(want_tid)
                     self.lgr.debug('runToModeChange run2User has want_tid of %s' % want_tid)
                     self.tid_list = [want_tid]
-                else:
+                elif not any_tid:
                     self.tid_list = self.context_manager.getThreadTids()
                     if len(self.tid_list) == 0:
                         self.tid_list.append(tid)
@@ -130,7 +130,7 @@ class RunToModeChange():
         dumb, comm, this_tid = self.task_utils.curThread() 
         ''' note may both be None due to failure of getProc '''
         bail = False
-        if this_tid not in tid_list:
+        if tid_list is not None and len(tid_list) > 0 and this_tid not in tid_list:
             ''' or just want may be None if debugging some windows dead zone '''
             #if want_tid is None and this_tid is not None:
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
