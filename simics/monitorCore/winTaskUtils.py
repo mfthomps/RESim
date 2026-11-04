@@ -132,11 +132,12 @@ class WinTaskUtils():
         self.gui_call_num_map = {}
         if self.os_type == 'WIN7':
             guimapfile = os.path.join(resim_dir, 'windows', 'win7GUI.json')
-        if self.os_type == 'WIN10':
+        elif self.os_type == 'WIN10':
             guimapfile = os.path.join(resim_dir, 'windows', 'win10GUI.json')
         elif self.os_type == 'WINXP':
             guimapfile = os.path.join(resim_dir, 'windows', 'winxpGUI.json')
         else:
+            self.lgr.error('WinTaskUtils unknow os type %s' % self.os_type)
             return
         if os.path.isfile(guimapfile):
             cm = json.load(open(guimapfile))     
@@ -171,12 +172,15 @@ class WinTaskUtils():
             phys_current_task_file = os.path.join('./', run_from_snap, cell_name, 'phys_current_task.pickle')
             if os.path.isfile(phys_current_task_file):
                 value = pickle.load( open(phys_current_task_file, 'rb') ) 
+                self.lgr.debug('winTaskUtils loaded %s' % phys_current_task_file)
                 if type(value) is int:
+                    self.lgr.debug('winTaskUtils value is int')
                     self.phys_current_task = value
                     self.savePhysCR3Addr()
                     if self.phys_saved_cr3 is not None:
                             self.lgr.debug('winTaskUtils, cell %s snapshot lacked saved cr3, use value computed from param saved_cr3 0x%x to 0x%x' % (self.cell_name, self.param.saved_cr3, self.phys_saved_cr3))
                 else:
+                    self.lgr.debug('winTaskUtils value is not int')
                     self.phys_current_task = value['current_task_phys']
                     if 'saved_cr3_phys' in value:
                         self.phys_saved_cr3 = value['saved_cr3_phys']
