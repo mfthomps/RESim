@@ -1,6 +1,37 @@
+'''
+ * This software was created by United States Government employees
+ * and may not be copyrighted.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,
+ * INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+'''
 from simics import *
 import cli
 import resimSimicsUtils
+import os
+import json
+'''
+    Trace instructions, storing results in /tmp/$USER/fname.
+    Will also record shared object map for the current process
+    for post-processing filtering of low-level libs and trap handling. 
+'''
 class InstructTrace():
     def __init__(self, top, lgr, fname, all_proc=False, kernel=False, watch_threads=False, just_tid=None, just_kernel=False, all_cores=False, just_comm=None):
         self.top = top
@@ -24,7 +55,7 @@ class InstructTrace():
             self.use_new_tracer = False
         if self.use_new_tracer:
             tracer_name = 'my_tracer'
-            file = '/tmp/'+fname
+            file = self.getOutFile(fname)
             if all_cores:
                 parent_name = self.top.getTopComponentName(cpu)
                 cmd = 'new-tracer-tool name=%s file=%s parent=%s' % (tracer_name, file, parent_name)
@@ -43,7 +74,7 @@ class InstructTrace():
         print('tracer is %s' % tracer_name)
         
         if not self.use_new_tracer:
-            tfile = '/tmp/%s' % fname
+            file = self.getOutFile(fname)
             #cmd = 'output-file-start %s' % tfile
             cmd = 'start-command-line-capture %s' % tfile
             #cmd = '%s->file=%s' % (tracer_name, tfile)
@@ -59,7 +90,6 @@ class InstructTrace():
                 self.lgr.debug('InstructTrace cpl is zero at start, stop')
                 self.stop()
         self.lgr.debug('InstructTrace starting with tid:%s, watch_threads: %r' % (tid, watch_threads))
-        print('going south')
 
     def start(self,dumb=None):
         tid = self.top.getTID()
@@ -120,3 +150,19 @@ class InstructTrace():
                 self.lgr.debug('instructTrace out of  kernel, stop trace')
                 SIM_run_alone(self.stop, None)
 
+    def getOutFile(self, fname):
+        user = os.getenv('USER')
+        tmpdir = os.path.join('/tmp', user, 'instruct_traces', fname)
+        try:
+            os.makedirs(tmpdir)
+        except: 
+            pass
+
+        outfile = os.path.join(tmpdir, fname+'.intrace')
+        print('trace will be written to %s' % outfile)
+        so_json = self.top.getSOMap(quiet=True)
+        out_json = os.path.join(tmpdir, 'somap.json')
+        with open(out_json, 'w') as fh:
+            fh.write(so_json)
+
+        return outfile
