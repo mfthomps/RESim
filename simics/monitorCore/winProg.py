@@ -200,7 +200,7 @@ class WinProg():
         ''' We might be in the new process '''
         if self.cur_task_hap is None:
             return
-        #self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
+        self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
         tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
         self.context_manager.newProg(prog_string, tid)
@@ -246,11 +246,12 @@ class WinProg():
     def runToText(self, want_tid):
         self.lgr.debug('winProg runToText want_tid %s' % want_tid)
         eproc = self.task_utils.getCurProcRec()
+        os_type = self.top.osType(target=self.cell_name)
         if self.top.osType(self.cell_name) == 'WINXP': 
             load_addr = 0x400000 
             self.lgr.debug('winProg runToText is XP assume load addr 0x%x' % load_addr)
         else: 
-            load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.prog_string, self.lgr)
+            load_addr = getLoadAddress(self.cpu, self.mem_utils, eproc, self.prog_string, os_type, self.lgr)
             if load_addr is None:
                 self.lgr.error('winprog failed to get load addess for %s' % want_tid)
                 return
