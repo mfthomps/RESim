@@ -38,6 +38,7 @@ class RunToModeChange():
         self.lgr = lgr
         # stored for suspending mode hap until tid scheduled as an optimization.  Otherwise can take a long time
         self.tid_list = None
+        self.user_comm = None
         self.cpu = None
         self.flist = None
         self.wrong_tid_count = 0
@@ -63,11 +64,13 @@ class RunToModeChange():
                     else:
                         fun_item.fun(fun_item.args)
 
-    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False):
+    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False, user_comm=None):
         cpl = memUtils.getCPL(cpu)
         self.flist = flist
         if cpl == 0:
-            if self.tid_list is None:
+            if user_comm is not None:
+                self.user_comm = user_comm
+            elif self.tid_list is None:
                 tid = self.task_utils.curTID() 
                 self.lgr.debug('runToModeChange run2User want_tid %s tid:%s' % (want_tid, tid))
                 ''' use debug process if defined, otherwise default to current process '''
@@ -130,7 +133,11 @@ class RunToModeChange():
         dumb, comm, this_tid = self.task_utils.curThread() 
         ''' note may both be None due to failure of getProc '''
         bail = False
-        if tid_list is not None and len(tid_list) > 0 and this_tid not in tid_list:
+        if self.user_comm is not None:
+            if comm != self.user_comm:
+                bail = True
+                #self.lgr.debug('runToModeChange modeChanged want user_comm %s but this is %s, bail' % (self.user_comm, comm))
+        elif tid_list is not None and len(tid_list) > 0 and this_tid not in tid_list:
             ''' or just want may be None if debugging some windows dead zone '''
             #if want_tid is None and this_tid is not None:
             #    SIM_break_simulation('mode changed, tid was None, now is not none.')
@@ -175,5 +182,5 @@ class RunToModeChange():
 
     def restart(self, dumb):
         self.lgr.debug('runToModeChange restart')
-        self.run2User(cpu = self.cpu, flist=self.flist)
+        self.run2User(cpu = self.cpu, flist=self.flist, user_comm=self.user_comm)
 
