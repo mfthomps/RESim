@@ -2776,7 +2776,7 @@ class Syscall():
              a break in the simulation
         '''
         if self.stop_hap is not None:
-            self.top.notRunning()
+            self.top.notRunning(quiet=True)
             for param in self.rm_param_queue: 
                 self.rmCallParamName(param)
             self.lgr.debug('syscall stopHap removed %d queued call params' % len(self.rm_param_queue))
