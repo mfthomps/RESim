@@ -233,7 +233,7 @@ class WinDelay():
         ''' Invoked when the count address is written to '''
         if self.count_write_hap is None or self.context_manager.isReverseContext():
             return
-        if not self.did_exit and self.hack_count < 1:
+        if not self.did_exit and self.hack_count < 1 and memory.size <= 8:
             return_count = memUtils.memoryValue(self.cpu, memory)
             self.lgr.debug('winDelay writeCountHap tid:%s skipping first kernel write to count address, value is 0x%x.  TBD if always needed.' % (self.tid, return_count))
             self.hack_count = self.hack_count + 1
