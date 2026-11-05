@@ -395,7 +395,7 @@ class WinSyscall():
             if self.mem_utils.isKernel(rax):
                 # this is just an assumption.  TBD better way to determine if the call is internel, e.g., FlushKey resulting in WriteFile
                 self.lgr.debug('winSyscall syscallHap tid:%s rax 0x%x is kernel, assume internal kernel use of syscall' % (tid, rax))
-                SIM_break_simulation('remove this')
+                #SIM_break_simulation('remove this')
                 return
         else:
             # TBD not yet handled
@@ -638,15 +638,22 @@ class WinSyscall():
                     if self.name != 'traceAll':
                         return
                 else:
-                    if self.stop_on_call and not self.linger:
-                        self.lgr.debug('syscall syscallParse %s, runToCall call matched, breaking simulation' % callname)
-                        SIM_break_simulation(callname)
-                        self.top.rmSyscall(call_param.name)
-                    else:
-                        syscall.addParam(exit_info, call_param)
-                        self.lgr.debug('syscall syscallParse %s, runToCall, call match linger or not stop_on_call, added call_param' % alter_callname)
-                    if self.stop_on_call:
-                        do_stop_from_call = True
+                    skip_this = False
+                    if call_param.nth is not None:
+                        call_param.count = call_param.count + 1
+                        self.lgr.debug('winSyscall syscallParse %s call_param.count %s call_param.nth %s' % (callname, str(call_param.count), str(call_param.nth)))
+                        if call_param.count < call_param.nth:
+                            skip_this = True
+                    if not skip_this:
+                        if self.stop_on_call and not self.linger:
+                            self.lgr.debug('winSyscall syscallParse syscallParse %s, runToCall call matched, breaking simulation' % callname)
+                            SIM_break_simulation(callname)
+                            self.top.rmSyscall(call_param.name)
+                        else:
+                            syscall.addParam(exit_info, call_param)
+                            self.lgr.debug('winSyscall syscallParse syscallParse %s, runToCall, call match linger or not stop_on_call, added call_param' % alter_callname)
+                        if self.stop_on_call:
+                            do_stop_from_call = True
 
         frame_string = taskUtils.stringFromFrame(frame)
         self.lgr.debug(frame_string)
@@ -1564,7 +1571,9 @@ class WinSyscall():
                             retval = False
                             self.top.rmSyscall('toCreateProc')
                             self.lgr.debug('checkProg CreateUserProc of %s call runToUserSpace' % prog_string)
-                            SIM_run_alone(self.top.runToUserSpace, None)
+                            comm_size = self.task_utils.commSize()
+                            want_comm = ntpath.basename(prog_string)[:comm_size]
+                            SIM_run_alone(self.top.runToUserSpace, want_comm)
                             
                         else:
                             self.lgr.debug('checkProg CreateUserProc of %s call toNewProc' % prog_string)
@@ -1602,11 +1611,13 @@ class WinSyscall():
         self.lgr.debug('winSyscall stopHap')
         top_had_hap = None
         if self.stop_hap is None:
+            self.top.notRunning(quiet=True)
             top_had_hap = self.top.RES_has_pending_stop()
             if top_had_hap is not None:
                 self.lgr.debug('winSyscall stopHap top had stop hap %s, use it?  broken' % top_had_hap) 
                 self.stop_hap = top_had_hap
         if self.stop_hap is not None or top_had_hap is not None:
+            self.top.notRunning(quiet=True)
             if self.stop_hap is not None:
                 self.lgr.debug('winSyscall stopHap will delete stop_hap %s' % str(self.stop_hap))
                 hap = self.stop_hap
