@@ -52,18 +52,18 @@ def getLoadAddress(cpu, mem_utils, eproc, prog, os_type, lgr):
         else:
             peb_offset = win7_offsets.PEB_ADDR
         peb_addr = eproc+peb_offset
-        lgr.debug('winProg getLoadAddress eproc 0x%x pep_addr 0x%x prog %s' % (eproc, peb_addr, prog))
+        lgr.debug('winProg getLoadAddress eproc 0x%x peb_offset 0x%x peb_addr 0x%x prog %s' % (eproc, peb_offset, peb_addr, prog))
         peb = mem_utils.readPtr(cpu, peb_addr)
         if peb is not None:
             image_load_addr_addr = peb + 0x10
-            lgr.debug('winProg getLoadAddress pep 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
+            lgr.debug('winProg getLoadAddress peb 0x%x addr_addr 0x%x' % (peb, image_load_addr_addr))
             retval = mem_utils.readWord(cpu, image_load_addr_addr)
             if retval is None:
                 lgr.debug('winProg getLoadAddress got None reading 0x%x' % image_load_addr_addr)
             else:
                 lgr.debug('winProg getLoadAddress got load addr 0x%x reading 0x%x' % (retval, image_load_addr_addr))
         else:
-            lgr.error('winProg getLoadAddress pep read as None')
+            lgr.error('winProg getLoadAddress peb read as None')
         return retval
 
 def getSizeAndMachine(full_path, lgr):
@@ -108,6 +108,7 @@ def getSizeAndMachine(full_path, lgr):
                 elif 'Machine' in line:
                     parts = line.split()
                     machine = parts[2]
+                    lgr.debug('winProg getSizeAndMachine machine: %s' % machine)
             if size is None:
                 lgr.error('winProg getSizeAndMachine failed to get size for path %s' % full_path)
     else:
@@ -170,7 +171,7 @@ def getRelocate(full_path, lgr):
                     
 
 class WinProg():
-    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, so_map, stop_action, param, lgr):
+    def __init__(self, top, cpu, cell_name, mem_utils, task_utils, context_manager, so_map, stop_action, call_param, lgr):
         self.top = top
         self.cpu = cpu
         self.cell_name = cell_name
@@ -179,7 +180,7 @@ class WinProg():
         self.task_utils = task_utils
         self.so_map = so_map
         self.context_manager = context_manager
-        self.param = param
+        self.call_param = call_param
         self.stop_action = stop_action
         self.prog_string = None
         self.text_hap = None
@@ -200,7 +201,7 @@ class WinProg():
         ''' We might be in the new process '''
         if self.cur_task_hap is None:
             return
-        self.lgr.debug('winProg toNewProcHap for proc %s' % prog_string)
+        #self.lgr.debug('winProg toNewProcHap for proc %s modify of value at phys_current_tasks' % prog_string)
         cur_thread = SIM_get_mem_op_value_le(memory)
         tid, comm = self.task_utils.getTidCommFromThreadRec(cur_thread)
         self.context_manager.newProg(prog_string, tid)
@@ -244,6 +245,7 @@ class WinProg():
         RES_hap_delete_callback_id("Core_Mode_Change", self.mode_hap)
 
     def runToText(self, want_tid):
+        ''' Run to the main text segment, unless the self.call_param has a 'not_to_text' flag '''
         self.lgr.debug('winProg runToText want_tid %s' % want_tid)
         eproc = self.task_utils.getCurProcRec()
         os_type = self.top.osType(target=self.cell_name)
@@ -270,11 +272,15 @@ class WinProg():
         text_addr = load_addr + text_offset
         self.lgr.debug('winProg runToText got size 0x%x' % size)
         self.so_map.addText(self.prog_string, want_tid, load_addr, size, machine, image_base, text_offset, full_path)
-        self.top.trackThreads()
-        proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
-        want_pid = want_tid.split('-')[0]
-        self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
-        self.lgr.debug('winProg runToText set break at 0x%x size 0x%x context %s' % (text_addr, size, self.cpu.current_context))
+        if 'not_to_text' not in self.call_param.param_flags:
+            self.top.trackThreads()
+            proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, text_addr, size, 0)
+            want_pid = want_tid.split('-')[0]
+            self.text_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.textHap, want_pid, proc_break, 'text_hap')
+            self.lgr.debug('winProg runToText set break at 0x%x size 0x%x context %s' % (text_addr, size, self.cpu.current_context))
+        else:
+            self.lgr.debug('winProg runToText not_to_text flag found, stop here')
+            self.top.stopAndGo(self.debugNoText)
 
     def findText(self, want_tid, one, old, new):
         if self.mode_hap is None:
@@ -286,6 +292,14 @@ class WinProg():
         self.lgr.debug('winProg findText tid %s' % this_tid)
         SIM_run_alone(self.rmFindTextHap, None)
         SIM_run_alone(self.runToText, want_tid)
+
+    def debugNoText(self, dumb=None):
+        cpu, comm, this_tid = self.task_utils.curThread() 
+        sp = self.mem_utils.getRegValue(self.cpu, 'sp')
+        self.lgr.debug('winProg debugNoText record stack base tid:%s sp 0x%x' % (this_tid, sp))
+        self.top.recordStackBase(this_tid, sp)
+        self.lgr.debug('winProg debugNoText call stopAndGo')
+        self.debugAlone()
 
     def rmHapAlone(self, param_name):
         self.top.rmSyscall(param_name, context = self.context_manager.getDefaultContextName())
