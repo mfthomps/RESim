@@ -47,7 +47,7 @@ ignore_sp_for_calls = ['ReadFile', 'WriteFile', 'RECV', 'RECV_DATAGRAM', 'SEND',
 watch_stack_params = 6
 class Win7CallParams():
     def __init__(self, top, cpu, cell, cell_name, mem_utils, task_utils, context_manager, current_task_phys, 
-                 param, lgr, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False):
+                 param, lgr, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False, delay=False):
         self.top = top
         self.lgr = lgr
         self.param = param
@@ -66,6 +66,7 @@ class Win7CallParams():
         self.only_call_num = None
         self.only_proc = only_proc
         self.track_params = track_params
+        self.delay = delay
 
         self.os_type = top.getTargetEnv('OS_TYPE', target=cell_name)
         self.user_break = None
@@ -277,14 +278,18 @@ class Win7CallParams():
 
     def setReverseBreaks(self):
         ''' Set a breakpoint on the sysenter, set a stop hap and reverse'''
+        self.top.jumperDisable(target=self.cell_name)
+        self.top.stopWatchTasks()
         if self.do_context_switch:
             self.cpu.current_context = self.resim_context
         self.lgr.debug('win7CallParams setReverseBreaks on 0x%x current context %s' % (self.param.sysenter, self.cpu.current_context))
         self.rev_entry_break = SIM_breakpoint(self.resim_context, Sim_Break_Linear, Sim_Access_Execute, self.param.sysenter, 1, 0)
         self.rev_stop_hap = RES_hap_add_callback("Core_Simulation_Stopped", self.stoppedAtSyscall, None)
         dumb, comm, tid = self.task_utils.curThread()
-        self.lgr.debug('setReverseBreaks do reverse comm %s tid:%s' % (comm, tid))
-        SIM_run_command('reverse')
+        self.lgr.debug('win7CallParams setReverseBreaks do reverse comm %s tid:%s' % (comm, tid))
+        # TBD will not work with Simics 7
+        #SIM_run_command('reverse')
+        print('remove this')
 
     def stoppedAtSyscall(self, stop_action, one, exception, error_string):
         ''' Should be stopped at the entry to the kernel'''
@@ -297,6 +302,8 @@ class Win7CallParams():
                 rip = self.mem_utils.getRegValue(self.cpu, 'rip')
                 self.lgr.debug('win7CallParams stoppedAtSyscall tid:%s (%s) rip: 0x%x' % (tid,comm,rip))
                 SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
+        else:
+            self.lgr.debug('win7CallPrams stoppedAtSyscall but this_tid:%s not tid:%s' % (self.this_tid, tid))
 
     def getCallName(self, call_num, computed=False):
         call_name = self.task_utils.syscallName(call_num)
@@ -326,20 +333,20 @@ class Win7CallParams():
         if self.this_tid is not None and tid != self.this_tid:
             return
 
-        self.lgr.debug('oneCallHap only: %s tid:%s (%s)' % (self.only, tid, comm))
+        self.lgr.debug('oneCallHap only: %s tid:%s (%s) cycle: 0x%x' % (self.only, tid, comm, self.cpu.cycles))
         if self.only in ignore_sp_for_calls:
             ignore_sp = True
         else:
             ignore_sp = False
 
+        call_name = self.getCallName(self.only_call_num, computed=True)
         if self.reverse_to_call:
             ''' Initiate a chain to cause simulation to reverse to the system call
                 so that we can gather all parameter references '''
-            call_name = self.getCallName(self.only_call_num, computed=True)
             if call_name == self.only:
-                self.lgr.debug('oneCallHap call stopAndGo to reverseToCall')
+                self.lgr.debug('oneCallHap syscall matches self.only call stopAndGo to reverseToCall')
                 self.top.stopAndGo(self.reverseToSyscall)
-        else:
+        elif call_name == self.only:
             self.lgr.error('win7CallParams oneCallHap will not see references to pointers in stack!')
             gs_base = self.cpu.ia32_gs_base
             ptr2stack = gs_base+0x6008
@@ -496,11 +503,14 @@ class Win7CallParams():
         self.lgr.debug('exitTrackHap')
         ''' Hit when exiting kernel from call whose parameters were tracked '''
         if self.exit_hap is not None:
-            self.lgr.debug('exitTrackHap, return to default context and remove exit hap')
+            self.lgr.debug('exitTrackHap, return to default context and remove exit hap (unless delay)')
             SIM_run_alone(self.stopWatchExit, self.exit_hap)
             self.exit_hap = None
-
-        self.rmUserBreaks()   
+ 
+        if not self.delay:
+            self.rmUserBreaks()   
+        else:
+            self.lgr.debug('win7CallParams exitTrackHap, delay so do not call rmUserBreaks')
 
         #params = self.param_ref_tracker.toString()
         #print(params)
@@ -536,7 +546,10 @@ class Win7CallParams():
             if self.one_entry is not None:
                 SIM_break_simulation('exitTrackHap rax 0x%x' % rax)
                 if self.reverse_to_call:
-                    self.doBreaks()
+                    if not self.delay:
+                        self.doBreaks()
+                    else:
+                        self.lgr.debug('win7CallParams delay set, syscall breaks not set.')
             elif self.only is not None:
                 SIM_break_simulation('Done with parameter track of %s results in logs/call_params.log' % self.only)
             else:
@@ -591,9 +604,9 @@ class Win7CallParams():
     def stopWatchExit(self, exit_hap):
         self.lgr.debug('win7CallParams stopWatchExit')
         if self.one_entry is not None:
-            if self.do_context_switch:
+            if self.do_context_switch and not self.delay:
                 self.cpu.current_context = self.default_context
-                self.lgr.debug('stopWatchExit cpu reset to %s'  % str(self.cpu.current_context))
+                self.lgr.debug('stopWatchExit cpu context reset to %s'  % str(self.cpu.current_context))
             SIM_hap_delete_callback_id("Core_Breakpoint_Memop", exit_hap)
             if self.exit_break is not None:
                 SIM_delete_breakpoint(self.exit_break)
@@ -605,7 +618,7 @@ class Win7CallParams():
         if self.user_hap is None:
             return
         dumb, comm, tid = self.task_utils.curThread()
-        self.lgr.debug('win7CallParams userReadHap tid:%s tid_in: %s' % (tid, tid_in))
+        #self.lgr.debug('win7CallParams userReadHap tid:%s tid_in: %s' % (tid, tid_in))
         if tid != tid_in:
             pid = tid.split('-')[0]    
             if self.only == 'CreateUserProcess' and pid not in self.starting_pid_list:
@@ -614,7 +627,8 @@ class Win7CallParams():
                 return
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
-            self.lgr.error('userReadHap not in kernel???')
+            if not self.delay:
+                self.lgr.error('userReadHap not in kernel???')
             #SIM_break_simulation('fix this')
             return
         #self.lgr.debug('win7CallParams tid:%s userReadHap memory 0x%x len %d current_context %s' % (tid, memory.logical_address, memory.size, str(self.cpu.current_context)))
@@ -659,7 +673,8 @@ class Win7CallParams():
             return
         cpl = memUtils.getCPL(self.cpu)
         if cpl != 0:
-            self.lgr.error('userWriteHap not in kernel???  tid is %s' % tid)
+            if not self.delay:
+                self.lgr.error('userWriteHap not in kernel???  tid is %s' % tid)
             #SIM_break_simulation('fix this')
             return
         if memory.size <= 8:
@@ -667,7 +682,7 @@ class Win7CallParams():
         else:
             self.lgr.error('Simics error reading memory, size %d' % memory.size)
             new_value = 0
-        #self.lgr.debug('userWriteHap tid:%s (%s) wrote 0x%x to memory address 0x%x len %d context %s' % (tid, comm, new_value, memory.logical_address, memory.size, str(self.cpu.current_context)))
+        self.lgr.debug('userWriteHap tid:%s (%s) wrote 0x%x to memory address 0x%x len %d context %s cycle: 0x%x' % (tid, comm, new_value, memory.logical_address, memory.size, str(self.cpu.current_context), self.cpu.cycles))
         hexstring = '0x%x' % new_value
         ok = self.param_ref_tracker.addWrote(memory.logical_address, new_value, hexstring, memory.size)
         if not ok:
