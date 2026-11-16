@@ -390,16 +390,18 @@ class WinSyscall():
         if callname == 'sppsvc.exe':
             ''' windows licensing service. RESim will crash if computed entry because it does not seem to run in the same context as other apps.  runs in kernel?'''
             return
-        if not self.cpu.architecture.startswith('arm') and self.os_type != 'WIN10':
-            rax = self.mem_utils.getRegValue(self.cpu, 'rax')
-            if self.mem_utils.isKernel(rax):
-                # this is just an assumption.  TBD better way to determine if the call is internel, e.g., FlushKey resulting in WriteFile
-                self.lgr.debug('winSyscall syscallHap tid:%s rax 0x%x is kernel, assume internal kernel use of syscall' % (tid, rax))
-                #SIM_break_simulation('remove this')
-                return
-        else:
-            # TBD not yet handled
-            pass
+
+        # TBD avoid syscalls resulting in syscalls?
+        #if not self.cpu.architecture.startswith('arm') and self.os_type != 'WIN10':
+        #    rax = self.mem_utils.getRegValue(self.cpu, 'rax')
+        #    if self.mem_utils.isKernel(rax):
+        #        # this is just an assumption.  TBD better way to determine if the call is internel, e.g., FlushKey resulting in WriteFile
+        #        self.lgr.debug('winSyscall syscallHap tid:%s rax 0x%x is kernel, assume internal kernel use of syscall' % (tid, rax))
+        #        #SIM_break_simulation('remove this')
+        #        return
+        #else:
+        #    # TBD not yet handled
+        #    pass
         value = memory.logical_address
         self.lgr.debug('winSyscall syscallHap cell %s context %sfor tid:%s (%s) at 0x%x (memory 0x%x) callnum %d callname: %s hap name: %s cycle: 0x%x' % (self.cell_name, str(context), 
              tid, comm, break_eip, value, callnum, callname, self.name, self.cpu.cycles))
@@ -603,7 +605,7 @@ class WinSyscall():
         #    word_size = 4
         #self.lgr.debug('hacky sp is 0x%x ws %d' % (user_sp, word_size))
         do_stop_from_call = False
-        self.lgr.debug('syscallParse syscall name: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(self.call_params)))
+        self.lgr.debug('syscallParse syscall instance: %s tid:%s callname <%s> params: %s' % (self.name, tid, callname, str(self.call_params)))
         for call_param in self.call_params:
             if call_param.match_param.__class__.__name__ == 'TidFilter':
                 if tid != call_param.match_param.tid:
@@ -627,6 +629,7 @@ class WinSyscall():
                         alter_callname = self.ioctl_op_map[operation]
                         if self.stop_on_call:
                             do_stop_from_call = True
+                        self.lgr.debug('winSyscall syscallParse DeviceIOControlFile operation is %s' % alter_callname)
                     else:
                         self.lgr.debug('winSyscall syscallParse operation 0x%x NOT IN op map' % operation)
                 if self.call_list is not None and alter_callname not in self.call_list:
@@ -1262,6 +1265,9 @@ class WinSyscall():
 
         elif callname in ['CreateThread', 'CreateThreadEx']:
             exit_info.retval_addr = frame['param1']
+            this_ethread = self.task_utils.getCurThreadRec()
+            thread_list = self.task_utils.walkProcessThreads(this_ethread)
+            exit_info.msc = thread_list
             trace_msg = trace_msg+' retval_addr: 0x%x (handle addr)' % (exit_info.retval_addr)
 
         elif callname in ['AllocateVirtualMemory', 'FreeVirtualMemory', 'QueryVirtualMemory', 'UnmapViewOfSection']:
@@ -1526,6 +1532,7 @@ class WinSyscall():
             if call.subcall in ['CreateUserProcess', 'CreateProcessEx']:
                 cp = call
                 break
+        # TBD why done again?  same?
         if cp is None:
             for call in self.call_params:
                 self.lgr.debug('checkProg traceall call %s' % call)
@@ -1580,7 +1587,7 @@ class WinSyscall():
                             retval = True
                             #exit_info.call_params = cp 
                             #exit_info.call_params = None
-                            win_prog = winProg.WinProg(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.context_manager, self.soMap, self.stop_action, self.param, self.lgr)
+                            win_prog = winProg.WinProg(self.top, self.cpu, self.cell_name, self.mem_utils, self.task_utils, self.context_manager, self.soMap, self.stop_action, cp, self.lgr)
                             SIM_run_alone(win_prog.toNewProc, prog_string)
                             #SIM_run_alone(self.stopAlone, 'CreateUserProc of %s' % prog_string)
                     else:
@@ -2230,13 +2237,15 @@ class WinSyscall():
                     exit_info.delay_count_addr = exit_info.count_addr
                 else: 
                     if word_size == 4:
-                        #param_val = self.paramOffPtr(5, [0], frame, word_size) 
-                        param_val = frame['param5']
+                        # TBD why switched to just frame[param5]?  leave as paramOffptr
+                        param_val = self.paramOffPtr(5, [0], frame, word_size) 
+                        #param_val = frame['param5']
                         if param_val is None:
                             self.lgr.debug('winSyscall tid:%s failed to get delay_count_addr from stack2, count_addr is 0x%x set delay_count to none' % (tid, exit_info.count_addr))
                             exit_info.delay_count_addr = None
                         else:
-                            exit_info.delay_count_addr = param_val + 8
+                            #exit_info.delay_count_addr = param_val + 8
+                            exit_info.delay_count_addr = param_val + word_size
                             self.lgr.debug('winSyscall tid:%s delay count addr param_val 0x%x word_size %d' % (tid, param_val, word_size))
                     else:
                         exit_info.delay_count_addr = frame['param5'] + word_size
@@ -2424,7 +2433,11 @@ class WinSyscall():
         sp = self.mem_utils.getRegValue(self.cpu, 'sp')
         # stack base found via hurestic, windows libs manage it.
         #self.top.recordStackBase(tid, sp)
-        self.lgr.debug('winSyscall doRecordLoadAddr runToText got size 0x% sp 0x%xx' % (size, sp))
+        self.lgr.debug('winSyscall doRecordLoadAddr windProg got size 0x% sp 0x%xx' % (size, sp))
+        for cp in self.call_params:
+            if cp.name == 'toCreateProc':
+                self.lgr.debug('winSyscall doRecordLoadAddr sees we were also doing a toProc, lets break?')
+                SIM_break_simulation('in proc')
 
     def rmPendingCall(self, tid):
         if tid in self.pending_calls:
