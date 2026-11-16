@@ -250,7 +250,7 @@ class WinDLLMap():
         self.text[pid] = dll_info
         self.lgr.debug('winDLL addText for pid:%s %s' % (pid, fname))
 
-    def createSection(self, fd, section_handle, tid):
+    def createSection(self, fd, section_handle, tid, comm):
         pid = self.pidFromTID(tid)
         if pid in self.open_files:
             if fd in self.open_files[pid]:
@@ -258,7 +258,7 @@ class WinDLLMap():
                 if pid not in self.sections:
                     self.sections[pid] = {}
                 self.sections[pid][section_handle] = self.open_files[pid][fd]
-                self.lgr.debug('winDLL createSection pid:%s section handle 0x%x fname %s' % (pid, section_handle, self.open_files[pid][fd].fname))
+                self.lgr.debug('winDLL createSection pid:%s (%s) section handle 0x%x fname %s' % (pid, comm, section_handle, self.open_files[pid][fd].fname))
                 #del self.open_files[pid][fd]
                 
             else:                
@@ -876,9 +876,9 @@ class WinDLLMap():
         if tid is None:
             return self.task_utils.getMemUtils().wordSize(self.cpu)
         pid = self.pidFromTID(tid)
-        #self.lgr.debug('getMachineSize tid %s' % tid)
+        self.lgr.debug('getMachineSize tid %s' % tid)
         if pid in self.text:
-            #self.lgr.debug('getMachineSize tid %s in text' % tid)
+            self.lgr.debug('getMachineSize tid %s in text' % tid)
             if hasattr(self.text[pid], 'machine'):
                machine = self.text[pid].machine
                #self.lgr.debug('getMachineSize tid %s has machine %s' % (tid, machine))
