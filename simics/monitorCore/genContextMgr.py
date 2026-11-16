@@ -1425,6 +1425,9 @@ class GenContextMgr():
             self.lgr.debug('contextManager watchExit for tid 1, ignore')
             return False
         if tid is None:
+            if cur_tid is None:
+                self.lgr.debug('contextManager watchExit current tid is none?  bail')
+                return
             tid = cur_tid
             rec = self.task_utils.getCurThreadRec() 
         elif tid == '0':
@@ -1453,6 +1456,9 @@ class GenContextMgr():
                     watch_tid, watch_comm = self.task_utils.getTidCommFromGroupNext(list_addr)
                     if self.debugging_tid is not None and self.amWatching(watch_tid):
                         cell = self.resim_context
+            elif watch_tid is None:
+                self.lgr.debug('contextManager watchExit, watch_tid is None, bail')
+                return False
             if watch_tid == '0' and not self.top.isWindows():
                 # TBD um, windows pid zero points to this process as being next?
                 self.lgr.debug('contextManager watchExit, seems to be pid 0, ignore it')
