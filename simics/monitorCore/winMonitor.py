@@ -76,19 +76,19 @@ class WinMonitor():
         self.lgr.debug('winMonitor fo rcell %s' % cell_name)
 
 
-    def getWin7CallParams(self, stop_on, only, only_proc, track_params, this_tid=False):
+    def getWin7CallParams(self, stop_on, only, only_proc, track_params, this_tid=False, delay=False):
         #self.top.allowReverse()
         current_task_phys = self.task_utils.getPhysCurrentTask()
         self.top.stopThreadTrack()
         self.w7_call_params = win7CallParams.Win7CallParams(self.top, self.cpu, self.cell, self.cell_name, self.mem_utils, self.task_utils, self.context_manager, current_task_phys, self.param, self.lgr, 
-                stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params, this_tid=this_tid)
+                stop_on=stop_on, only=only, only_proc=only_proc, track_params=track_params, this_tid=this_tid, delay=delay)
 
     def rmCallParamBreaks(self):
         self.lgr.debug('winMonitor rmCallparamBreaks')
         self.w7_call_params.rmAllBreaks()
  
 
-    def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True, run=True):
+    def toCreateProc(self, comm=None, flist=None, binary=False, break_simulation=True, run=True, not_to_text=False):
         if self.top.osType(self.cell_name) == 'WINXP':
             call_name = 'CreateProcessEx'
             call_list = [call_name, 'OpenFile', 'CreateSection']
@@ -101,6 +101,8 @@ class WinMonitor():
             if binary:
                 params.param_flags.append('binary')
             call_params = [params]
+            if not_to_text:
+                params.param_flags.append('not_to_text')
         else:
             call_params = []
             self.traceMgr.open('/tmp/execve.txt', self.cpu)
@@ -114,7 +116,7 @@ class WinMonitor():
         self.lgr.debug('winMonitor debugAlone, call top debug')
         SIM_run_alone(self.top.debug, False)
 
-    def debugProc(self, proc, final_fun=None, pre_fun=None, new=False):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, new=False, run=True, not_to_text=False):
         ''' called to debug a windows process.  Set up a stop function to call debug after the process has hit the text section'''
 
         plist = self.task_utils.getTidsForComm(proc)
@@ -141,7 +143,7 @@ class WinMonitor():
             f1 = stopFunction.StopFunction(self.debugAlone, [None], nest=False)
             flist = []
             #flist = [f1]
-            self.toCreateProc(proc, flist=flist, break_simulation=False) 
+            self.toCreateProc(comm=proc, flist=flist, break_simulation=False, run=run, not_to_text=not_to_text) 
 
     def tasks(self, filter=None, file=None):
         plist = {}
