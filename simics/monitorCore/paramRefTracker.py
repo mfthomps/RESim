@@ -249,7 +249,7 @@ class ParamRefTracker():
             reverse_index = None
             forward_start = None
             for reference in self.refs:
-                if current_base is None or reference.best_base != current_base or (reference.addr != (current_addr - reference.size) and reference.addr != (current_addr + reference.size)):
+                if current_base is None or reference.best_base != current_base or reference.best_base_delta != current_base_delta or (reference.addr != (current_addr - reference.size) and reference.addr != (current_addr + reference.size)):
                     ''' TBD clean up any open runs ''' 
                     if running_count > 3 or len(running_hexstring)>32:
                         #start_addr = current_start - running_size + 1
@@ -269,7 +269,7 @@ class ParamRefTracker():
                         index = index + 1 
                         continue
 
-                    #self.lgr.debug('mergeRef NOT sequence ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
+                    self.lgr.debug('mergeRef NOT sequence ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
                     current_start = reference.addr
                     current_operator = reference.operator
                     current_base = reference.best_base
@@ -283,6 +283,7 @@ class ParamRefTracker():
                   
                 else:
                     #self.lgr.debug('mergeRef is a sequence ref.addr 0x%x  size %d  current_addr 0x%x'  % (reference.addr, reference.size, current_addr))
+                    self.lgr.debug('mergeRef is a sequence %s  size %d  current_addr 0x%x'  % (reference.toString(), reference.size, current_addr))
                     if reference.addr == (current_addr - reference.size):
                         running_hexstring = reference.hexstring+running_hexstring
                         reverse_index = True
