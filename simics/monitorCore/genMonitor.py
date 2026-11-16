@@ -798,10 +798,10 @@ class GenMonitor():
         run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
         run_to_mode_change.run2Kernel(cpu, flist=flist)
 
-    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False):
+    def run2User(self, cpu, flist=None, want_tid=None, any_tid=False, user_comm=None):
         self.lgr.debug('run2User')
         run_to_mode_change = runToModeChange.RunToModeChange(self, self.task_utils[self.target], self.mem_utils[self.target], self.context_manager[self.target], self.lgr)
-        run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid, any_tid=any_tid)
+        run_to_mode_change.run2User(cpu, flist=flist, want_tid=want_tid, any_tid=any_tid, user_comm=user_comm)
 
     def finishInit(self, cell_name):
             ''' Finish initializing a cell, assuming we have gotten to a state having at least an initial process. '''    
@@ -1934,6 +1934,7 @@ class GenMonitor():
             else:
                 self.run_to[self.target].toRunningProc(proc, plist, flist, run=run)
         else:
+            # no proc running
             cpu = self.cell_config.cpuFromCell(self.target)
         
             #f1 = stopFunction.StopFunction(self.cleanToProcHaps, [], False)
@@ -1951,14 +1952,14 @@ class GenMonitor():
                 self.toExecve(prog=proc, flist=[], binary=binary, any_exec=True, run=run)
 
         
-    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False, not_to_user=False):
+    def debugProc(self, proc, final_fun=None, pre_fun=None, track_threads=True, new=False, not_to_user=False, run=True, not_to_text=False):
         if not track_threads:
             # TBD fix this hack.  confusing since track_threads is a dict
             self.lgr.debug('genMonitor debugProc track_threads set to None')
             self.track_threads = None
         if self.isWindows():
             self.rmDebugWarnHap()
-            self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun, new=new)
+            self.winMonitor[self.target].debugProc(proc, final_fun, pre_fun, new=new, run=run, not_to_text=not_to_text)
             return
 
         if type(proc) is not str:
@@ -2033,7 +2034,7 @@ class GenMonitor():
                 watch_exit = True
             else:
                 watch_exit = False
-            self.toExecve(prog=proc, flist=flist, binary=True, watch_exit=watch_exit)
+            self.toExecve(prog=proc, flist=flist, binary=True, watch_exit=watch_exit, run=run)
        
 
     def listHasDebug(self, flist):
@@ -2161,20 +2162,20 @@ class GenMonitor():
     #    #self.lgr.debug('addProcList %s %s' % (tid, comm))
     #    self.proc_list[self.target][tid] = comm
  
-    def toUser(self, flist=None, want_tid=None, any_tid=False):
+    def toUser(self, flist=None, want_tid=None, any_tid=False, user_comm=None):
         self.rmDebugWarnHap()
         cpu = self.cell_config.cpuFromCell(self.target)
         self.lgr.debug('toUser want_tid %s cycle: 0x%x' % (want_tid, cpu.cycles))
         if self.isVxDKM(cpu=cpu):
             self.vxKMonitor[self.target].toModule()
         else:
-            self.run2User(cpu, flist, want_tid=want_tid, any_tid=any_tid)
+            self.run2User(cpu, flist, want_tid=want_tid, any_tid=any_tid, user_comm=user_comm)
 
-    def runToUserSpace(self, dumb=None):
-        self.lgr.debug('runToUserSpace')
+    def runToUserSpace(self, user_comm=None):
+        self.lgr.debug('runToUserSpace user_comm %s' % user_comm)
         self.is_monitor_running.setRunning(True)
         f1 = stopFunction.StopFunction(self.skipAndMail, [], nest=False)
-        self.toUser([f1])
+        self.toUser([f1], user_comm=user_comm)
 
     def toKernel(self, flist=None): 
         self.rmDebugWarnHap()
@@ -2994,6 +2995,8 @@ class GenMonitor():
         self.lgr.debug('stopTrace')
         self.is_monitor_running.setRunning(False)
         self.syscallManager[self.target].rmAllSyscalls()
+        if self.isWindows():
+            del self.traceAll[self.target]
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
@@ -3198,7 +3201,7 @@ class GenMonitor():
         self.toExecve(any_exec=True, run=False, linger=True) 
 
     def toExecve(self, prog=None, flist=None, binary=False, watch_exit=False, any_exec=False, run=True, linger=False):
-        self.lgr.debug('toExecve')
+        self.lgr.debug('toExecve run is %r' % run)
         cell = self.cell_config.cell_context[self.target]
         if prog is not None:    
             params = syscall.CallParams('toExecve', 'execve', prog, break_simulation=True) 
@@ -4695,7 +4698,7 @@ class GenMonitor():
         if status:   
             if not quiet:
                 print('Was running, set to not running')
-            #self.lgr.debug('notRunning set running false')
+            self.lgr.debug('notRunning set running false')
             self.is_monitor_running.setRunning(False)
 
     def getMemoryValue(self, addr):
@@ -4836,7 +4839,7 @@ class GenMonitor():
                 if so_word_size == 4:
                     retval = True
             else:
-                mode = self.task_utils[self.target].getExecMode()
+                mode = self.task_utils[target].getExecMode()
                 if mode == 3:
                     retval= True
         self.lgr.debug('compat32 returning %r' % retval)
@@ -6787,13 +6790,13 @@ class GenMonitor():
             retval = True
         return retval
 
-    def getWin7CallParams(self, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False):
+    def getWin7CallParams(self, stop_on=None, only=None, only_proc=None, track_params=False, this_tid=False, delay=False):
         ''' Use breakpoints set on the user space to identify call parameter 
             Optional stop_on will stop on exit from call'''
         if self.target in self.winMonitor:
             self.rmDebugWarnHap()
             self.checkOnlyIgnore()
-            self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params, this_tid=this_tid)
+            self.winMonitor[self.target].getWin7CallParams(stop_on, only, only_proc, track_params, this_tid=this_tid, delay=delay)
 
     def rmCallParamBreaks(self):
         self.lgr.debug('rmCallparamBreaks (genMonitor)')
@@ -6977,7 +6980,10 @@ class GenMonitor():
             self.magic_origin[self.target].deleteMagicHap() 
         resimSimicsUtils.cutRealWorld(lgr=self.lgr)
         # Note setting run means the call to resetOrigin will not return until simulation stops again.
-        self.resetOrigin(run=run)
+        if self.reverseEnabled():
+            self.resetOrigin(run=run)
+        else:
+            self.lgr.debug('cutRealWord, reverse not enabled, do not reset origin')
 
     def runTo32(self):
         self.run_to[self.target].runTo32()
@@ -7495,6 +7501,7 @@ class GenMonitor():
         if decoder.isCall(instruct[1]): 
             next_eip = eip + instruct[0]
             self.doBreak(next_eip)
+            self.lgr.debug('stepOver set break on next eip 0x%x' % next_eip)
             SIM_continue(0)
         else:
             self.stepN(1)
