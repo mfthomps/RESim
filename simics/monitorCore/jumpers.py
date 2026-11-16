@@ -157,10 +157,11 @@ class Jumpers():
             return False
         comm = None
         break_at_dest = False
+        break_at_source = False
         break_at_load = False
         patch = False
         replace = False
-        break_options = ['break', 'break_load']
+        break_options = ['break', 'break_load', 'break_source']
         if '=' in line:
             for item in parts[2:]:
                 key, value = resimUtils.getKeyValue(item)
@@ -175,6 +176,8 @@ class Jumpers():
                      replace = resimUtils.yesNoTrueFalse(value)
                 elif key == 'break': 
                      break_at_dest = resimUtils.yesNoTrueFalse(value)
+                elif key == 'break_source': 
+                     break_at_source = resimUtils.yesNoTrueFalse(value)
                 elif key == 'break_load': 
                      break_at_load = resimUtils.yesNoTrueFalse(value)
         else: 
@@ -186,6 +189,8 @@ class Jumpers():
             elif len(parts) == 3 and parts[2] in break_options:
                 if parts[2] == 'break':
                     break_at_dest = True
+                elif parts[2] == 'break_source':
+                    break_at_source = True
                 else:
                     break_at_load = True
             elif len(parts) > 2:
@@ -231,7 +236,7 @@ class Jumpers():
                 raise Exception("jumpers Error reading %s from %s, bad jumper" % (line, fname))
                 return False
 
-        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_load, patch, replace) 
+        jump_rec = self.JumperRec(prog, comm, from_addr, to_addr, break_at_dest, break_at_source, break_at_load, patch, replace) 
         if resimUtils.isSO(prog):
             self.lgr.debug('jumpers handleEntry %s isSO' % prog)
             self.handleSO(jump_rec)
@@ -263,7 +268,8 @@ class Jumpers():
             return
         indirect = False
         jmp = None
-        break_on_it = False
+        break_on_dest = False
+        break_on_source = False
         if '=' in parts[2]:
             for item in parts[2:]:
                 key, value = getKeyValue(item)
@@ -285,8 +291,10 @@ class Jumpers():
                     self.lgr.debug('RegSet: jmp is %s' % jmp)
                 elif key == 'break':
                     if value.lower() == 'true': 
-                        break_on_it = True
-                    self.lgr.debug('RegSet: jmp is %s' % jmp)
+                        break_on_dest = True
+                elif key == 'break_source':
+                    if value.lower() == 'true': 
+                        break_on_source = True
         else:
             reg = parts[2]
             try:
@@ -295,7 +303,7 @@ class Jumpers():
                 self.lgr.error('RegSet: bad value in %s' % line)
                 self.top.quit()
         
-        reg_set_rec = self.JumperRec(prog, None, prog_addr, to_addr=jmp, break_at_dest=break_on_it, reg=reg, value=new_value, indirect=indirect)
+        reg_set_rec = self.JumperRec(prog, None, prog_addr, to_addr=jmp, break_at_dest=break_on_dest, break_at_source=break_at_source, reg=reg, value=new_value, indirect=indirect)
         #def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
         if resimUtils.isSO(prog):
             self.handleSO(reg_set_rec)
@@ -417,6 +425,7 @@ class Jumpers():
             phys = self.mem_utils.v2p(self.cpu, addr)
             if phys is not None and phys != 0:
                 self.lgr.debug('jumper setProgJumper call setBreak for %s on phys 0x%x addr was 0x%x' % (jump_rec.prog, phys, addr))
+                self.lgr.debug('\t jump_rec %s' % jump_rec.toString())
                 self.setBreak(jump_rec, phys)
             else:
                 self.lgr.error('jumper failed to get phys for addr 0x%x' % addr)
@@ -509,16 +518,16 @@ class Jumpers():
             jump_rec = self.pending_libs[lib_addr]
             if jump_rec.image_base is None:
                 jump_rec.image_base = self.so_map.getImageBase(jump_rec.prog)
-            tid = self.top.getTID(target=self.cell_name)
+            cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
             # NOTE getPhys will set a page callback if not mapped
             phys = self.getPhys(jump_rec, load_addr, tid)
             if phys is not None and phys != 0:
-                self.lgr.debug('jumper libLoadCallback tid:%s got phys 0x%x for load_addr 0x%x, call setBreak' % (tid, phys, load_addr))
+                self.lgr.debug('jumper libLoadCallback tid:%s (%s) got phys 0x%x for load_addr 0x%x, call setBreak' % (tid, comm, phys, load_addr))
                 self.setBreak(jump_rec, phys)
             else:
                 offset = load_addr - jump_rec.image_base
                 linear = jump_rec.from_addr + offset
-                self.lgr.debug('jumper libLoadCallback tid:%s for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x name %s' % (tid, load_addr, jump_rec.image_base, offset, linear, jump_rec.lib_addr))
+                self.lgr.debug('jumper libLoadCallback tid:%s (%s) for load_addr 0x%x image_base 0x%x offset 0x%x linear 0x%x name %s' % (tid, comm, load_addr, jump_rec.image_base, offset, linear, jump_rec.lib_addr))
             if jump_rec.break_at_load:
                 SIM_break_simulation('Jumper DLL loaded %s' % lib_addr)
         else:
@@ -606,14 +615,19 @@ class Jumpers():
                 #destination = jump_rec.to_addr + offset
                 #source = jump_rec.from_addr + offset
     
-            self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
-            self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
-            self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
-            self.prev_dest_eip = self.top.getReg('pc', self.cpu)
-            if jump_rec.break_at_dest:
+            if jump_rec.break_at_source:
                 SIM_break_simulation('Jumper request')
-                self.lgr.debug('jumper doJump did break_simulation')
-            self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
+                self.lgr.debug('jumper doJump break_at_source did break_simulation')
+                print('Break at source, would change destination to 0x%x' % destination)
+            else:
+                self.top.writeRegValue('pc', destination, alone=True, target_cpu=self.cpu)
+                self.lgr.debug('jumper doJump wrote 0x%x to pc' % (destination))
+                self.lgr.debug('jumper doJump from 0x%x to 0x%x in comm %s' % (source, destination, comm))
+                self.prev_dest_eip = self.top.getReg('pc', self.cpu)
+                if jump_rec.break_at_dest:
+                    SIM_break_simulation('Jumper request')
+                    self.lgr.debug('jumper doJump did break_simulation')
+                self.lgr.debug('jumper doJump did it, eip now 0x%x' % self.prev_dest_eip)
 
     def doRegSet(self, reg_set_rec, memory):
         cpu, comm, tid = self.top.curThread(target_cpu=self.cpu)
@@ -654,12 +668,13 @@ class Jumpers():
             SIM_enable_breakpoint(self.breakpoints[lib_addr])
  
     class JumperRec():
-        def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
+        def __init__(self, prog, comm, from_addr, to_addr=None, break_at_dest=False, break_at_source=False, break_at_load=False, patch=False, replace=False, reg=None, value=None, indirect=False):
             self.prog = prog
             self.from_addr = from_addr
             self.to_addr = to_addr
             self.comm = comm
             self.break_at_dest = break_at_dest
+            self.break_at_source = break_at_source
             self.break_at_load = break_at_load
             self.patch = patch
             self.replace = replace
@@ -669,3 +684,6 @@ class Jumpers():
             # hex string
             self.value = value
             self.indirect = indirect
+        def toString(self):
+            retval = 'prog %s from_addr 0x%x break_at_dest %r break_at_source %r' % (self.prog, self.from_addr, self.break_at_dest, self.break_at_source)
+            return retval
