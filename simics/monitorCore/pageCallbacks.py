@@ -209,7 +209,7 @@ class PageCallbacks():
                 got_one = False
                 redo_addrs = []
 
-                table_base = self.getTableBase(use_pid)
+                table_base = self.getTableBase(None)
                 for addr in self.missing_tables[physical]:
                     pt = pageUtils.findPageTable(self.cpu, addr, self.lgr, use_sld=value, force_cr3=table_base)
                     if pt.phys_addr is None or pt.phys_addr == 0:
@@ -390,6 +390,9 @@ class PageCallbacks():
         op_type = mem_trans.op_type
         type_name = mem_trans.type_name
         physical = mem_trans.physical
+        if physical not in self.missing_page_bases:
+            self.lgr.error('pageCallback pageBaseUpdated physical 0x%x not in missing_page_baseses?' % physical)
+            return
         self.lgr.debug('pageBaseUpdated phys 0x%x len %d  type %s len of missing_tables[physical] %d' % (physical, length, type_name, len(self.missing_page_bases[physical])))
         #if length == 4 and self.cpu.architecture == 'arm':
         if op_type == Sim_Trans_Store:
@@ -435,7 +438,7 @@ class PageCallbacks():
             if op_type == Sim_Trans_Store:
                 value = memUtils.memoryValue(self.cpu, memory)
                 #self.lgr.debug('pageHap value is 0x%x' % value)
-            table_base = self.getTableBase(use_pid)
+            table_base = self.getTableBase(None)
             for addr in self.missing_pages[memory.physical_address]:
                 # TBD this was broken.  Not sure if it is now fixed
                 #offset = memUtils.bitRange(pdir_entry, 0, 19)
