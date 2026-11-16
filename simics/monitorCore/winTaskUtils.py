@@ -531,8 +531,12 @@ class WinTaskUtils():
         ptr2stack = gs_base+self.param.ptr2stack
         if not hasattr(self.param, 'param_version') or int(self.param.param_version) < 11:
             stack_val = self.mem_utils.readPtr(self.cpu, ptr2stack)
-            #self.lgr.debug('winTaskUtils frameFromRegsComputed, no_param_veresion or < 11 gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
-            user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
+            if stack_val is not None:
+                self.lgr.debug('winTaskUtils frameFromRegsComputed, no_param_version or < 11 gs_base 0x%x ptr2stack 0x%x stack_val 0x%x' % (gs_base, ptr2stack, stack_val))
+                user_stack = self.mem_utils.readPtr(self.cpu, stack_val-16)
+            else:
+                self.lgr.debug('winTaskUtils frameFromRegsComputed, no_param_version or < 11 gs_base 0x%x ptr2stack 0x%x got None for stack_val' % (gs_base, ptr2stack))
+                return frame
         else:
             user_stack = self.mem_utils.readPtr(self.cpu, ptr2stack)
         
@@ -746,7 +750,7 @@ class WinTaskUtils():
             #self.lgr.debug('winTaskUtils walk got new task_ptr 0x%x from next_head of 0x%x' % (task_ptr, next_head))
             if task_ptr in got:
                 #print('already got task_ptr 0x%x' % task_ptr)
-                self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
+                #self.lgr.debug('walk already got task_ptr 0x%x' % task_ptr)
                 break
             prev_pid = pid               
         #self.lgr.debug('walk return')
