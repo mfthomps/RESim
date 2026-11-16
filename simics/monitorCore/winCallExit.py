@@ -122,7 +122,10 @@ class WinCallExit():
         status = "Unknown - not mapped"
         if eax in winNTSTATUS.ntstatus_map:
             status = winNTSTATUS.ntstatus_map[eax]
-            trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
+            if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
+                trace_msg = 'tid:%s (%s) return from %s %s with status %s (0x%x)' % (tid, comm, callname, exit_info.socket_callname, status, eax)
+            else:
+                trace_msg = 'tid:%s (%s) return from %s with status %s (0x%x)' % (tid, comm, callname, status, eax)
         else:
             trace_msg = 'tid:%s (%s) return from %s with eax 0x%x (0x%x)' % (tid, comm, callname, eax, ueax)
             if callname in ['DeviceIoControlFile'] and exit_info.socket_callname is not None:
@@ -185,7 +188,7 @@ class WinCallExit():
 
                     if callname == 'OpenSection':
                         self.lgr.debug('this is an OpenSection WITHOUT an Open/CreateFile --> make section')
-                        self.soMap.createSection(fd, fd, tid)
+                        self.soMap.createSection(fd, fd, tid, comm)
                 self.openCallParams(exit_info)
             else:
                 exit_info.matched_param = None
@@ -258,7 +261,7 @@ class WinCallExit():
                     pass
                 else:
                     section_handle = exit_info.syscall_instance.paramOffPtr(1, [0], exit_info.frame, word_size) 
-                self.soMap.createSection(fd, section_handle, tid)
+                self.soMap.createSection(fd, section_handle, tid, comm)
                 trace_msg = trace_msg+' Handle: 0x%x section_handle: 0x%x' % (fd, section_handle)
             else:
                 trace_msg = trace_msg+' handle was None'
@@ -342,6 +345,15 @@ class WinCallExit():
                 else:
                     trace_msg = trace_msg+' Handle: 0x%x' % (fd)
                     self.lgr.debug('winCallExit %s' % (trace_msg))
+                    if exit_info.msc is not None:
+                        this_ethread = self.task_utils.getCurThreadRec()
+                        thread_list = self.task_utils.walkProcessThreads(this_ethread)
+                        for ethread in thread_list:
+                            if ethread not in exit_info.msc:
+                                new_thread_id = self.task_utils.getThreadId(ethread)
+                                self.lgr.debug('winCallExit think we have the new ethread 0x%x thread_id 0x%x' % (ethread, new_thread_id))
+                                trace_msg = trace_msg+' new thread id: %d' % (new_thread_id)
+                    
             else:
                 self.lgr.debug('winCallExit %s bad retval_addr?' % (trace_msg))
 
@@ -431,7 +443,7 @@ class WinCallExit():
                         trace_msg = trace_msg+' - Device not ready'
                         self.lgr.debug('winCallExit %s' % trace_msg)
                     else:
-                        # why was this being set to nothing?
+                        # why was this being set to nothing?  So later processing in windelay will populate it, e.g., with sent data 
                         self.lgr.debug('winCallExit %s  was ready and trace_msg was %s, remove because already recorded' % (exit_info.socket_callname, trace_msg))
                         trace_msg = ''
                         pass
