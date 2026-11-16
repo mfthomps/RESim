@@ -180,7 +180,7 @@ class DataWatch():
             self.backstop_cycles = defaultConfig.backstopCycles()
         else:
             self.backstop_cycles = backstop_cycles
-        self.lgr.debug('dataWatch backstop_cycles %s' % self.backstop_cycles)
+        self.lgr.debug('dataWatch cell %s backstop_cycles %s' % (self.cell_name, self.backstop_cycles))
         read_loop_string = os.getenv('READ_LOOP_MAX')
         if read_loop_string is None:
             self.read_loop_max = 10000
@@ -378,7 +378,7 @@ class DataWatch():
         self.no_reset = None
         self.reset_count = 0
         self.failed_comm_list = []
-        self.compat32 = self.top.compat32()
+        self.compat32 = self.top.compat32(target=self.cell_name)
 
     def addFreadAlone(self, dumb):
         self.lgr.debug('dataWatch addFreadAlone')
