@@ -317,7 +317,7 @@ class ExitMaze():
                 if len(parts) > 1:
                     op0 = parts[1]  
 
-                    dest = decode.addressFromExpression(self.cpu, op0, self.lgr)
+                    dest = decode.getAddressFromOperand(self.cpu, self.mem_utils, op0, self.lgr)
                     if dest is None:
                         self.lgr.debug('getBreaks could not get dest from %s from %s' % (op0, self.instructs[eip]))
                         return
