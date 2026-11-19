@@ -1,4 +1,5 @@
 #!/bin/bash
 echo "HOSTNAME IS $HOSTNAME"
 export HOSTNAME=$HOSTNAME
-$RESIM_DIR/simics/monitorCore/runPlayAFL.py $@
+echo $RESIM_DIR/simics/monitorCore/runPlayAFL.py "$@"
+$RESIM_DIR/simics/monitorCore/runPlayAFL.py "$@"
