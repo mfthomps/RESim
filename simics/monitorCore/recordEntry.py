@@ -227,7 +227,7 @@ class RecordEntry():
             if got_it is not None:
                 frame = self.sysenter_cycles[tid][got_it] 
                 ret_cycles = got_it
-            else:
+            elif cycles is not None:
                 frame = self.sysenter_cycles[tid][cycles] 
                 ret_cycles = cycles
                 self.lgr.debug('getPreviousCycleFrame did not find cycle greater than 0x%x, returning newest cycle 0x%x' % (cur_cycles, cycles))
@@ -253,8 +253,11 @@ class RecordEntry():
         save_cycles = {}
         for tid in self.sysenter_cycles:
             frame, cycles = self.getPreviousCycleFrame(tid)
-            save_cycles[tid] = [cycles, frame]
-            self.lgr.debug('recordEntry pickleit tid %s cycle 0x%x f %s' % (tid, cycles, str(frame)))
+            if cycles is not None:
+                save_cycles[tid] = [cycles, frame]
+                self.lgr.debug('recordEntry pickleit tid %s cycle 0x%x f %s' % (tid, cycles, str(frame)))
+            else:
+                self.lgr.debug('recordEntry pickleit tid %s no previousCycle frame' % (tid))
         try:
             pickle.dump( save_cycles, open( record_entry_file, "wb") ) 
         except TypeError as ex:
