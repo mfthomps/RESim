@@ -37,8 +37,8 @@ RESim aids reverse engineering of networks of Linux-based systems\footnote{And p
 The simulation can be paused for inspection, e.g., when a specified process is scheduled for execution, and subsequently continued, potentially with altered memory or register state.  The analyst can explicitly modify memory or register content, and can also dynamically augment memory content
 based on system events, e.g., change a password file entry as it is read by the {\tt su} program (see the Dmod function described in\ref{dmod}).
 
-RESim also provides interactive analysis of individual executing programs through use of either the IDA Pro or the Ghidra
-disassembler/debugger to control the running simulation.  The disassembler/debugger
+RESim also provides interactive analysis of individual executing programs through use of the Ghidra
+disassembler/debugger to control the running simulation\footnote{RESim also includes a deprecated plugin for IDA Pro that was tested through version 11.}.  The disassembler/debugger
 allows setting breakpoints to pause the simulation at selected events in either future time, or past time.  For 
 example, RESim can direct the simulation state to reverse until the most recent modification of a selected memory address.   During a RESim session,
 any point within the simulation can be \textit{bookmarked}, and that execution state can later be restored.  
@@ -108,7 +108,7 @@ RESim couples a disassembler/debugger client with the Simics simulation to prese
 
 Analysis is performed entirely through external observation of the simulated target system's memory and processor state, 
 without need for shells, software injection, or kernel symbol tables.   The analysis is said to be \textit{external} because the observation functions do
-not affect the state of the simulated system.  For example, when viewing code with the IDA Pro or Ghidra debugger, addresses that are not yet paged in will appear as containing zeros.
+not affect the state of the simulated system.  For example, when viewing code with the Ghidra debugger, addresses that are not yet paged in will appear as containing zeros.
 In most other systems, the debugger or its agent would run on the target, and thus the mere act of viewing the address with a debugger 
 would cause the kernel to page
 in the memory containing the referenced code.\footnote{See \ref{external} for another example of the implications}.
@@ -116,16 +116,28 @@ in the memory containing the referenced code.\footnote{See \ref{external} for an
 A key property that distinguishes RESim from other RE strategies is that analysis occurs on processes as they execute in their native environment, and as they interact with other processes and devices within the system.  Consider an example process that communicates with a remote computer via a network while also interacting with a local process via a pipe.  When the analyst pauses RESim for inspection, the entire system pauses.  The simulation can then be resumed (or single-stepped) from the precise state at which it was paused, without having to account for timeouts and other temporal-based discontinuities between the process of interest and its environment.
 
 \subsection{Limitations}
-RESim analyzes Linux-based systems (and some Windows based systems) for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  The current version of RESim supports 32-bit and 64-bit X86 ARM platforms.  It can also be 
-extended to support alternate architectures, e.g., PowerPC, supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
+RESim analyzes Linux-based systems (and some Windows based systems) for which copies of bootable media or root file systems can be obtained.  Analysis does not depend on a system map of the kernel, i.e., it works with stripped kernel images.  RESim currently supports 32-bit and 64-bit X86 and ARM platforms and 32-bit PowerPC.  It can also be 
+extended to support alternate architectures supported by Simics processor models \footnote{A summary of Simics device models is at: \url{https://www.windriver.com/products/simics/simics-supported-targets.html}}.  RESim is currently limited to single-processor (single core) models.  Simics supports
 multi-processor simulations (at reduced performance), but RESim has not yet been extended to monitor those.
 See section \ref{divergence} for information on potential divergence of simulations from real systems.
+
+Relatively generic platform models are used within the RESim simulation, and we very much depend on the OS abstracting hardware.  It would be challenging to extend  
+RESim (or any other dynamic analysis platform) to analyze applications on real-time operating systems that are tightly bound to specific hardware devices. 
+This applies to systems such as VxWorks (though we've some some initial analysis as described in \ref{vxworks}.  While most Linux and Windows bootable images will 
+boot on the generic x86 hardware platforms (thanks to the massive investment in BIOS), embedded Windows images often will not boot because upon initial installation, Windows
+binds the OS to the exact hardware configuration.  Analysis of embedded Windows applications may be possible by moving the root file system from the target image to a
+platform environment having an embedded Windows that was installed on the simulated platform, and is thus bound to that.  This of course precludes applications that rely on
+hardware missing from the model. 
 
 RESim and Simics are not ``record-and-replay'' tools (though Simics has that features to support that.)  We run, instrument and observe simulations of real systems.
 These simulations can and will diverge from real world results and multiple runs of what seem to be the same simulation will diverge from each other (as will
 multiple runs of real systems, even though they consume the same data.)  Sometimes the divergence is minimal, e.g., different timestamps within data.  Other times
 the divergence can be substantial.  The point is that you should not always expect the same results across multiple runs.  For example, full system traces
-may contain different data even though they commence from the same snapshot.  
+may contain different data even though they commence from the same snapshot. Active Simics service nodes within a configuration will feed divergence. 
+
+Simics 7 deprecated reverse execution.  RESim replaces much of the lost reversing functions with its "reverseMgr" module.
+See \url{https://github.com/mfthomps/Simics7\_Reversing}
+Simics 7 will not run on pre-Haswell CPUs, e.g., Dell R620.  However it should run on more recent servers.
 
 \subsection{Development and Availability}
 RESim is derived from the “Cyber Grand Challenge Monitor” (CGC), developed by the Naval Postgraduate School in support of the DARPA CGC competition.  
@@ -134,10 +146,10 @@ Simics “OS Awareness” or Eclipse-based interfaces.
 \begin{itemize}
 \item Simics is available as a commercial product from Wind River.  A free version for Intel processors is available at
 \url{https://www.intel.com/content/www/us/en/developer/articles/tool/simics-simulator.html}  RESim has be extended to work with this
-free version.  RESim requires Simics 6.  Preliminary support for Simics 7 has been implemented along with our own module for managing
+free version.  RESim requires Simics 6.  Support for Simics 7 has been implemented along with our own module for managing
 reverse execution, which was deprecated in Simics 7.
 
-\item IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
+\item Deprecated IDA Pro extensions are implemented using IDAPython, and are included within the RESim repo at
 \url{https://github.com/mfthomps/RESim/simics/ida}  
 
 \item The Ghidra plugins for RESim are available at: \url{https://github.com/mfthomps/RESimGhidraPlugins}  A fork 
@@ -148,7 +160,7 @@ RESim is available at: \url{https://github.com/mfthomps/AFL}.
 
 \item Preliminary Windows support is provided as described in \ref{Windows}.
 
-\item In addition to running on a local Simics installation, RESim can be offered as a network service to users running local copies of IDA Pro and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  
+\item In addition to running on a local Simics installation, RESim can be offered as a network service to users running local copies of Ghidra and an SSH session with a RESim console.  See the \textit{RESim Remote Access Guide}.  
 \end{itemize}
 
 
@@ -163,7 +175,7 @@ in this guide.  The general steps include:
 \item Construct a RESim configuration file to identify system image file locations and RESim parameters.
 \item Use RESim to extract a set of kernel parameters if not already extracted for the kernel images being used.
 \item Run the simulation to produce full system traces and processing reports for the simulated systems.
-\item Identify processes of interest, and use the RESim IDA Pro debugging client to analyze their behavior, e.g, the protocols they consume.
+\item Identify processes of interest, and use the RESim Ghidra debugging client to analyze their behavior, e.g, the protocols they consume.
 \item Use the integrated AFL fuzzer to improve code coverage within the targeted process.
 \item Analyze AFL and RESim artifacts to identify unexplored code paths and identify input data to reach those paths, potentially feeding those back to AFL.
 \item Automatically assess any crashes generated by AFL to identify potentially exploitable vulnerabilities.
@@ -208,12 +220,12 @@ presented with a command line interface console.  This console manages the simul
 \item Inspect memory and component states
 \item Enable reverse execution, i.e., allow reversing to events from that point forward
 \item Set and run to breakpoints, either in the future or in the past.
-\item Target RESim to focus on a specific process thread group, e.g., for dynamic analysis using IDA Pro.
+\item Target RESim to focus on a specific process thread group, e.g., for dynamic analysis using Ghidra.
 \end{itemize}
 \noindent See section \ref{commands} for details of RESim commands.
 
 A typical strategy with RESim is to initially perform a full system trace on a system as a means of identifying programs of interest, e.g., which can then be
-further analyzed using the interactive IDA Pro client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
+further analyzed using the interactive Ghidra debugger client.  The {\tt traceAll} command described below in \ref{commands} generates such a trace.  Note that a typical Linux-based
 system can perform tens of thousands of system calls during initial boot processing.  It may save considerable time to use the {\tt toProc} command to run forward to some
 event such as creation of {\tt rsyslogd} before issuing the {\tt traceAll} command.  Note that {\tt toProc} tracks processes creation and some system configuration settings such as
 IP addresses set using {\tt ip} or {\tt ifconfig} commands, which can be seen using the {\tt showNets} command.  Use the {\tt writeConfig} command to create a checkpoint,
@@ -224,9 +236,8 @@ see network ports being listened to. See the \ref{process_tracing} for more info
 Running wireshark from the Simics prompt will often tell you IP addresses used by the target.
 
 \subsection{Analyze a process}
-When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts IDA Pro with a suite of custom plugins that interact with the simulation.  If a binary image of the target program is available, standard IDA Pro analysis functions are performed.  If no program image is available, IDA Pro will still present disassembly information for the program as it exists in simulated system memory.  
-
-RESim extends IDA Pro debugger functions and the analyst accesses these functions via menus and hot keys.   The disassembler/debug client can be used to:
+When RESim is targeted for a given process it runs until that process is scheduled, after which the user starts Ghidra with a suite of custom plugins that interact with the simulation.  
+RESim extends the Ghidra debugger functions and the analyst accesses these functions via menus and hot keys.   The disassembler/debug client can be used to:
 \begin{itemize}
 \item Single-step through the program in either the forward or reverse direction
 \item Set and run to breakpoints in either direction
@@ -246,7 +257,7 @@ and vulnerability identification through automated guided fuzzing.  AFL provide 
 it continually augments based on feedback that RESim generates reflecting code paths reached by each input.  
 
 A set of RESim functions can then be used to replay AFL sessions to automatically identify and display unexplored code paths within
-the IDA client.  This allows the analyst to identify and generate inputs for additional code paths, and feed these inputs back into 
+the Ghidra client.  This allows the analyst to identify and generate inputs for additional code paths, and feed these inputs back into 
 new AFL sessions.  See section \ref{fuzz} for information on the use of AFL.
 
 See \ref{example-workflows} for detailed examples of RESim workflows.
@@ -281,7 +292,8 @@ Within a given simulated computer the scope of which processes are traced has fo
 \begin{enumerate}
 \item All processes are traced as they are scheduled and run.
 \item When debugging a selected program, only the threads within the associated process are traced.
-\item If {\tt ONLY\_PROGS} is set in the ini file, then only the programs listed in the named file are traced.
+\item If {\tt ONLY\_PROGS} is set in the ini file, then only the programs listed in the named file are traced.  Use quotes if the program name has
+spaces.  Append an optional "no\_watch\_exit" string to the end of the line as an optimization to skip tracking of thread exits for the process.
 \item If {\tt SKIP\_PROGS} is set in the ini file, then all programs other than those listed in the named file are traced.
 \end{enumerate}
 
@@ -289,7 +301,9 @@ A common use of process tracing is to create artifacts describing network usage,
 such things by watching system calls.  Thus, if you only start tracing a process \textit{after} it has bound to a port, then RESim will not tell you that
 the process is bound to the port.
 
-When tracing is selected, RESim will track loading of shared program libraries.
+When tracing is selected, RESim will track loading of shared program libraries.  Alternately use the trackThreads command to only watch system calls associated
+with shared program libraries.
+Use of {\tt ONLY\_PROGS} and {\tt SKIP\_PROGS} also affects thread tracking via trackThreads.
 
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls, storing the results in the logs subdirectory of the workspace.  
@@ -419,18 +433,23 @@ gather its shared library data prior to the process being loaded.
 
 \begin{itemize}
 
-\item {\tt debugProc(program\_name, trace\_threads=True, new=False)} – Initiate the debugger server for the given program name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching program.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between IDA Pro analysis and debugging of shared libraries and the originally loaded program.
+\item {\tt debugProc(program\_name, trace\_threads=True, new=False, not\_to\_user=False, not\_to\_text=False)} – Initiate the debugger server for the given program name.  If a process matching the given name is executing, system state advances until the process is scheduled.  If no matching process is currently executing, execution proceeds until an execve for a matching program.   If a copy of the named program is found on the RESim host, (i.e., to read its ELF header), then execution continues until the text segment is reached.  RESim tracks the process as it maps shared objects into memory (see Appendix C).  The resulting map of shared object library addresses is then available to the user to facilitate switching between Ghidra analysis and debugging of shared libraries and the originally loaded program.
 
 The process name is searched against the comm names of running processes, which are fifteen characters.  RESim will trucate input names to 15 characters.
 
 If the program is not yet running, consider providing the full program path, (e.g., /usr/bin/foo), because some systems resolve PATH searches by trying
 to exec each path, leading to many failed execve calls.
 
-Subsequent to the debugProc  function completion, IDA Pro can be attached to the simulator.  Most of the commands listed below have analogs available from within IDA Pro, once the RESim {\tt rev.py} plugin is loaded.
+For new processes, the {\tt not\_to\_text} flag causes the simulatoin to stop once user space in the process has been entered, otherwise the simulation continues until execution
+reaches the main text segment.  This flag is intended for use with Windows programs that perform considerable functions within DLLs before ever reaching the text segment.
 
-If execution transfers to a shared object library of interest, the associated library file can be found via the origProgAddr command described below.  Load that file into IDA Pro and rebase to the SO address
+The {\tt not\_to\_user} flag causes the simulation to stop once the named process is scheduled, without waiting to return to user space.  
+
+Subsequent to the debugProc  function completion, Ghidra can be attached to the simulator.  Most of the commands listed below have analogs available from within Ghidra, once the RESim {\tt rev.py} plugin is loaded.
+
+If execution transfers to a shared object library of interest, the associated library file can be found via the origProgAddr command described below.  Load that file into Ghidra and rebase to the SO address
 found via showSOMap prior to attaching the debugger.  If you have run reTrack or injectIO, you must re-run the command in order for the Watch Marks to 
-detect and report mem operations, e.g., memcpy -- and then refresh the IDA Data Watch window. 
+detect and report mem operations, e.g., memcpy -- and then refresh the Ghidra Watch window. 
 
 If you prefix the given process name with {\tt sh }, (sh followed by a space), RESim will look for a shell invocation of the script name that follows the sh.
 The {\tt trace\_threads} flag controls whether shared libraries of other processes will be tracked while looking for the given process.  The {\tt new} flag ignores any currently 
@@ -441,6 +460,15 @@ you may want to let the rest of the system initialize and settle out.  To achiev
 Simics \textit{ptime} command reflects that the system is not bogged down with initialization.  Then create your snapshot.  The state of the snapshot may not 
 have the target process scheduled,  but when you subsequently run debugSnap (see below), it will run forward to your process.  If your process is blocked in
 the kernel waiting for input, you may need to provide that input to see your process scheduled so that you can issue commands.
+
+Be aware that in some coding frameworks, the initial {\tt execve} of the desired program is followed by another execve of a loader, e.g., the Linux AppRun,
+which will subsequently execve the desired program again.  Watch console output and traces to catch this. View the logs or call traces to see how the program
+is unpacked, and move the actual target binary to your host for analysis and placement under RESIM\_IMAGE.   RESim will recognize program paths passed to debugProc such as
+{\tt /tmp/mount/MyDog} and if the program string is something like
+\begin{verbatim}
+    /tmp/.mount_MyDogoAk1Odl//bin/MyDog
+\end{verbatim}
+\noindent it will change that program string to {\tt /tmp/mount/MyyDog}, which should be used as the path when debugging or in runToProc.
 
 \item {\tt debugTidGroup(tid)} -- Initiate the debugger server for a given TID.  Intended for use after starting a session from a checkpoint created using
 {\tt writeConfig}.  This assumes process information had been generated in a previous session that was saved.  
@@ -454,9 +482,9 @@ threads that are waiting in the kernel.  If you want to run ahead to let the sys
 \item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
 
 \item {\tt stackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
-uses the IDA/Ghidra-generated function databases generated using idaDump.sh (or Ghidra) to aid in determining if 
+uses the Ghidra-generated function databases generated using idaDump.sh (or Ghidra) to aid in determining if 
 data references (watch marks) are made within known libc functions, e.g., strcpy.  The monitor-local {\tt stackTrace} command displays a
-stack trace that uses the IDA function database to resolve names.  Be sure to have generated function databases for any libraries that appear in stack traces.
+stack trace that uses the Ghidra function database to resolve names.  Be sure to have generated function databases for any libraries that appear in stack traces.
 This function \textbf{may not always be reliable}, e.g., phantom frames may appear based on calls that occurred previously. ARM stack frames may be
 difficult to determine due to its myriad ways of calling and returning. If the stack frame is not correct, and you rely on it, e.g., to reverse to some function
 call you see in a stack frame, you can become seriously misled.  Consider using runToText or similar to find where you came from.
@@ -547,8 +575,8 @@ Also see \ref{tracking}
 \begin{itemize}
 
 \item {\tt trackIO(FD, reset=False, count=1, mark\_logs=False, kbuf=False, run=True, \
-             commence=None, max\_marks=None, track\_calls=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
-points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the IDA client {\tt data watch} window (right click and refresh).
+             commence=None, max\_marks=None, track\_calls=False, force\_logical=False)} -- Combines the {\tt runToIO} and the {\tt watchData} functions to generate a list of data watch bookmarks that indicate execution
+points of relevant IO and references to received data.  This list of data watch bookmarks is displayed using {\tt showWatchMarks} or in the Ghidra {\tt data watch} window (click refresh).
 If an {\tt accept} call with the given FD is detected, the FD being tracked will be changed to that returned by the accept call.
 The trackIO function will break simulation after {\tt BACK\_STOP\_CYCLES} with no data references. If the debugged processes are in the kernel waiting to read on the given
 FD, RESim will ensure that call is tracked.  The count parameter can be used to track the Nth read or recv.   Data watches persist after the
@@ -560,6 +588,10 @@ the {\tt tagIterator} command and {\tt addIterator}.  The {\tt reset} parameter 
 \noindent Note that sending multiple packets via real networks will cause the origin to reset on each packet, thereby limiting the range of reverse execution.  It is generally simpler
 to use a driver computer to send multiple packets, using a program such as {\tt simics/bin/drive-driver} (see \ref{drive-driver}).  The {\tt -d} option of that program executes the Simics magic instruction to cause RESim to reset
 its origin just prior to the initial data transmission.  This also causes RESim to disconnect the real network to ensure that the reversible range does not receive any real-word leakage.
+
+By default, RESim will use breakpoints on physical memory to track data.  It assumes that pages consitituing a given buffer are contiguous in physical memory.
+This assumption often does not hold for larger buffers, but we make it in order to watch references by multiple processes to shared memory.  If dealing with large buffers,
+use the {\tt force\_logical} flag to cause RESim to set breakpoints on logical addresses.
 
 Use of the {\tt mark\_logs} option will include corresponding log entries from any use of {\tt traceFile} or {\tt TRACE\_BUFFERS} as watch marks.  This may help display diagnostics
 within your watch mark list as parsing encounters errors.
@@ -596,9 +628,9 @@ those that occurred prior to the origin (which gets reset on each data injection
 \item {\tt findRef(offset)} Display a list of each watch mark index value corresponding to an application read of data at the given offset into
 an input file, e.g., either an injectIO file or a drive-driver file.
 
-\item {\tt getWatchMarks()} Return a json list of watch marks created by watchData or trackIO, used by the IDA client.
+\item {\tt getWatchMarks()} Return a json list of watch marks created by watchData or trackIO, used by the Ghidra client.
 
-\item {\tt tagIterator(index)} Tag a watch mark as being an iterator.  The associated function is added to a file stored along with IDA functions
+\item {\tt tagIterator(index)} Tag a watch mark as being an iterator.  The associated function is added to a file stored along with Ghidra functions
 The intent is to avoid data watch events on each move, or access, e.g., a crc generator.
 
 \item {\tt addIterator(address)} Tag a function as being an iterator. The address can be any address within the function.  Use this if your tagIterator turns out
@@ -691,7 +723,7 @@ values, e.g., force eax to zero upon return.  Bring your own machine code.  TBD 
 and {\tt disconnect} commands.
 
 \item {\tt jumper(from, to} - Alter control flow by causing execution to jump to a given address whenever a given {\tt from} address is hit.  See
-the {\tt EXECUTION\_JUMPERS} ini environment value.
+the {\tt EXECUTION\_JUMPERS} ini section value.
 
 \end{itemize}
 
@@ -701,14 +733,14 @@ The following functions are intended for manual, ad-hoc code coverage analysis. 
 of fuzzing in \ref{fuzz}.
 \begin{itemize}
 \item {\tt mapCoverage(backstop=False, dead\_zone=False} -- Set breakpoints on all basic blocks in the text segment and use them to track code coverage. The basic block coverage is
-saved in a $<$prog$>$.hits file in IDA db directory, and will be read by the IDA client when the {\tt color} option is used. Subsequent uses of {\tt mapCoverage}
+saved in a $<$prog$>$.hits file in Ghidra db directory, and will be read by the Ghidra client when the {\tt color} option is used. Subsequent uses of {\tt mapCoverage}
 will reset the coverage tracking.  Use {\tt stopCoverage} to stop basic block tracking.  The basic blocks database is read from the .blocks file created
-by the {\tt idaDump.py} script or the Ghidra plugin's dump artifacts function.  See section \ref{coverage} for information on how the IDA client 
+by the {\tt idaDump.py} script or the Ghidra plugin's dump artifacts function.  See section \ref{coverage} for information on how the Ghidra client 
 represents code coverage and highlights branches that have not been taken.  The {\tt backstop} option causes execution to stop when {\tt BACK\_STOP\_CYCLES} pass without
 hitting a basic block.  The {\tt dead\_zone} option will record all basic blocks into a file that can later be used to ignore those basic blocks.  This is intended to
 remove background noise, e.g., behavior of threads of a process having nothing to do with your input data.  See the {\tt IGNORE\_BB\_LIST} ini parameter.
 
-\item {\tt showCoverage} -- display summary of basic block coverage.  Also see the IDA client {\tt color} and {\tt clear} options.
+\item {\tt showCoverage} -- display summary of basic block coverage.  Also see the Ghidra client {\tt color} and {\tt clear} options.
 
 \item{\tt goToBasicBlock} -- Skip the simulation state to the first hit of the block named by an address (requires use of {\tt mapCoverage}..
 
@@ -810,8 +842,8 @@ be a path to a single file.  The recommended method for processing multiple cras
 one for each data file.  The reports are written to /tmp/crash\_reports.
 
 \item{\tt replayAFL(target, index, FD, [instance=N], cover=False, afl\_mode=False)} -- Replay a specific AFL session named by a target and index identifier, e.g., {\tt 0012}.  Use the optional {\tt instance} if parallel AFL is used.  This function assumes a driver component. The driver will use the sendDriver.sh script to send the named file and
-a client program to the target using an address and port per the ini file {\tt TARGET\_IP} and {\tt TARGET\_PORT} values.  For UDP sessions, RESim will use the trackIO function on the given FD.  Use this to analyze multipacket processing.  For TCP, use {\tt replayAFLTCP} and the FD will be used to catch an {\tt accept} system call.  RESim will then use the returned FD for trackIO.  Set {\tt cover} to True to generate a coverage hits file.  You can then start IDA with the {\tt color} option, which
-will read that hits file.   You can then double click on entries in the IDA {\tt BNT} window to skip execution to the first hit of the selected BNT source block.
+a client program to the target using an address and port per the ini file {\tt TARGET\_IP} and {\tt TARGET\_PORT} values.  For UDP sessions, RESim will use the trackIO function on the given FD.  Use this to analyze multipacket processing.  For TCP, use {\tt replayAFLTCP} and the FD will be used to catch an {\tt accept} system call.  RESim will then use the returned FD for trackIO.  Set {\tt cover} to True to generate a coverage hits file.  You can then start Ghidra with the {\tt color} option, which
+will read that hits file.   You can then double click on entries in the Ghidra {\tt BNT} window to skip execution to the first hit of the selected BNT source block.
 Set {\tt afl\_mode} to report on blocks hit over 256 times in a session.
 
 Note that function uses a driver to send data, and this it should not be used with a {\tt prepInject} snapshot.
@@ -844,7 +876,7 @@ Initially handles simple ARM {\tt cmp reg, $<$value$>$} instructions.  The
 reverse track function is used to determine the source of the register content, and if that is a receive, it alters the data to satisfy the
 comparison and then uses {\tt retrack} to run forward and track the new execution flow.
 
-\item{\tt idaMessage} -- display the most recent message made available to IDA.  For example, after a runToBind, this will display the FD that was bound to.
+\item{\tt idaMessage} -- display the most recent message made available to Ghidra.  For example, after a runToBind, this will display the FD that was bound to.
 \item {\tt setTarget} -- Select which simulated component to observe and affect with subsequently issued commands.  Target names are as defined in the
 RESim configuration file used to start the session.
 
@@ -966,14 +998,14 @@ of either the workspace, or the RESim repo under {\tt simics/simicsScripts/targe
 \begin{verbatim}
 SIMICS_SCRIPT=x86-x58-ich10/genx86.simics
 \end{verbatim}
-\noindent would use the generic X86 platform distributed with RESim.  See \ref{target-platfroms} for available scripts.
+\noindent would use the generic X86 platform distributed with RESim.  See \ref{target-platforms} for available scripts.
 \item {\tt OS\_TYPE} Either LINUX or LINUX64
 RESim session.
 \item {\tt RESIM\_PARAM} Name of a parameter file created by getKernParams utility.
 \item {\tt RESIM\_UNISTD} Path to a Linux {\tt unistd*.h} file that will be parsed to map system call numbers to system calls.  For 64 bit
 Linux, use {\tt RESIM\_DIR/linux/ia64.tbl}
 \item {\tt RESIM\_ROOT\_PREFIX} Path to the root of a file system containing copies of target executables.  This is used by RESim read elf
-headers of target software and to locate analysis files generated by IDA Pro. 
+headers of target software and to locate analysis files generated by Ghidra. 
 \item {\tt RESIM\_ROOT\_SUBDIRS} An optional semicolon separated list of subdirectories off of the {\tt RESIM\_ROOT\_PREFIX} to limit the 
 search for executable images.
 \item {\tt BOOT\_CHUNKS} The number of cycles to execute during boot between checks to determine if the compnent has booted enough to track
@@ -983,7 +1015,8 @@ The default value is 900,000,000, which is too large for some ARM implementation
 \item {\tt DMOD} Optional file to pass to the {\tt runToDmod} command once the component has booted.  See \ref{dmod}.
 \item {\tt READ\_REPLACE} Optional file to cause memory values to be changed.  See \ref{read-replace}.
 \item {\tt REG\_SET} Optional file to cause register values to be changed.  See \ref{reg-set}.
-\item {\tt PLATFORM} One of the following: arm5; armMixed (analyze 32 and 64 bit apps); arm64 (analyze only 64 bit apps); arm32 (analyze only 32 bit apps).
+\item {\tt PLATFORM} One of the following: arm5; armMixed (analyze 32 and 64 bit apps); arm64 (analyze only 64 bit apps); arm32 (analyze only 32 bit apps);
+x86Mixed; x8632; x8664.
 \item {\tt INTERACT\_SCRIPT} Simics command script to be run after this component is loaded, which only occurs during boot, i.e., these are not run with snapshots.
 \item {\tt ALWAYS\_SCRIPT} Simics command script to be run on each startup, reqardless of whether the run is from a snapshot.
 \item {\tt ONLY\_PROGS} Optional name of a file that lists the programs that are to be watched or traced.  All others are ignored.
@@ -1023,13 +1056,13 @@ parameter to point to a different kernel.  See the directory at:
 {\tt simics/image\_build/arm-qsp} for information on rebuilding the ARM QSP kernel.  The root\_disk\_image should point to a root file system.
 A stock root file system can be found at: 
 \newline
-\url{https://nps.box.com/v/resim-arm-qsp-rootfs}
+\url{https://nps01-my.sharepoint.com/:f:/g/personal/mfthomps\_nps\_edu/IgCCGv59Q\_nmV4WlKxqm4Bx4ATFwlRceZTbJsxpwfNcdbDk?e=9WkTNI}
 The user\_disk|image appears as /dev/qspdc when the stock QSP kernel boots.  If it contains a partition table and file system, then the first
 partition is mounted on /mnt by the stock root fs as /dev/qspdc1.
 
 \item integrator-cp -- A 32-bit ARM platform modeled after the Integrator-cp.  A kernel and sample initrd image are at:
 \newline
-\url{https://nps.box.com/v/resim-arm5-images}
+\url{https://nps01-my.sharepoint.com/:f:/g/personal/mfthomps\_nps\_edu/IgDAehUWa6HwUbYzIru4yWm0AWSP59aJBnwljPeQADeoYBM?e=mcD2x8}
 
 \item armv8a/fvp.simics -- The Simics ARMv8-A Fixed Virtual Platform.  See the READMEs at simics/image\_build/arm\_fvp/README for information on building a kernel
 and ram disk.
@@ -1104,6 +1137,9 @@ By default, the Simics {\tt connect-real-network} command creates a service
 node that provides NAPT forwarding of traffic from targets that can reach the service node.  If you want the target to be able to
 reach external networks (e.g., to install packages), use the {\tt ALLOW\_REAL\_EXTERNAL} environment value, otherwise real dns and napt are disabled.
 
+Use the Simics connect-real-network-bridge to connect real hardware to your simulation on a common subnet. See the simics/setup directory for 
+configuration script examples to set that up.
+
 \subsubsection{DHCP}
 \label{DHCP}
 If you have an ARM or x86 target that requires DHCP to get an IP address, use the {\tt create\_network} environment variable, providing a value
@@ -1143,19 +1179,19 @@ e.g., to use {\tt drive-driver} script in a manner that disconnects the service 
 RESim sessions are started from the Simics workspace using the {\tt resim} command (the path to which should be in your PATH
 environment variable).
 
-RESim is controlled either through the simics command line, or using IDA Pro as described below.  Interaction with the simulated
+RESim is controlled either through the simics command line, or using Ghidra as described below.  Interaction with the simulated
 computers, e.g., ssh'ing to a driver computer, requires that the simulation be running and not paused.
 
 \subsection{Installation}
 \label{installation}
 RESim assumes you have installed and are somewhat familiar with Simics.  Versions  6 and 7 are supported
 as is the free version of Simics 7 from Intel. 
-It also assumes you have IDA Pro or Ghidra. 
-RESim can be used without IDA Pro or Ghidra, though you are limited to the command line and don't benefit from
-function analysis provided by IDA or Ghidra.
+It also assumes you have Ghidra. 
+RESim can be used without Ghidra, though you are limited to the command line and don't benefit from
+function analysis provided by Ghidra.
 
 Note if you are using an NPS-provided RESim server, this RESim installation will have already been done.  But
-see the IDA Pro installation below for information on installing IDA. 
+see the Ghidra installation below for information on installing Ghidra. 
 See the \textit{RESim Remote Access Guide} for information on remote access to RESim
 servers.  
 
@@ -1178,14 +1214,14 @@ non-interactive return so they are picked up by ssh):
 \begin{itemize}
 \item RESIM\_DIR  Path to your git clone.
 \item SIMDIR  Path to the Simics directory, e.g, {\tt .../simics6/install/simics-6/simics-6.0.89}.  
-\item IDA\_DIR Path to your IDA installation directory (define on system where you will run IDA.
-\item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and IDA.  Typically \$HOME/ida\_data
+\item IDA\_DIR Path to your IDA installation directory (define on system where you will run Ghidra.
+\item RESIM\_IDA\_DATA Path to directory to hold data use by RESim and Ghidra.  Typically \$HOME/ida\_data
 \item AFL\_DIR Path to directory containing the AFL executable (only needed to support fuzzing.)
 \item AFL\_DATA Path to directory containing the AFL seeds and output data.
 \item RESIM\_IMAGE Path to directory containing root file systems.  It may also contain disk images as a convenience for canned example ini files,
 You may place disk images anywhere and name them from the ini file.  See \ref{example-targets} for images that you may
 wish to download and place in this directory.
-\item IDA\_ANALYSIS Path to where IDA (or Ghidra) will store analysis artifacts, and where RESim will look for them.
+\item IDA\_ANALYSIS Path to where Ghidra will store analysis artifacts, and where RESim will look for them.
 Place this such that the parent directory is the same as the RESIM\_IMAGE path parent directory, e.g.,
 \begin{verbatim}
     export RESIM_IMAGE=/some/path/to_your/images
@@ -1212,9 +1248,7 @@ For Simics 6:
 \end{verbatim}
 
 \item Download the \textit{driver} disk image, which is used to interact with targets from:
-\begin{verbatim}
-   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
-\end{verbatim}
+\url{https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps\_nps\_edu/IQCV\_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw}
 \noindent should be copied to:
 \begin{verbatim}
 $RESIM_IMAGES/driver/driver_22.disk0.hd_image.craff
@@ -1245,6 +1279,7 @@ Contact Wind River to get those files (or contact mfthomps at nps.edu).
 
 \subsubsection{IDA Pro installation}
 \label{ida-install}
+NOTE: Support for IDA Pro is deprecated within RESim.  The latest plugin remains part of the repository.
 The following steps augment a standard IDA installation (which is not covered here.)
 \begin{itemize}
 \item The IDA Pro installation should be configured to use Python 2.7, which must be
@@ -1302,7 +1337,7 @@ to checkpoint directories in other workspaces.
 the file in the {\tt RESIM\_UNISTD} parameter.
 \item Copy the target systems root file system, or a subset of the file system containing binaries of interest to the local computer
 and name that path in the {\tt RESIM\_ROOT\_PREFIX} parameter.  These images are used when analyzing specified programs, and are given
-to IDA Pro for analysis.
+to Ghidrafor analysis.
 \item Set the {\tt CREATE\_RESIM\_PARAMS} parameter to YES so that the first run will create the kernel parameter file needed by RESim
 (unless the param file already exists, in which case you are done with initial setup).  
 \end{itemize}
@@ -1346,8 +1381,8 @@ Files containing binaries of programs to analzye will exist in two or three loca
 \item Within the file system on a virtual disk image named in the ini file, e.g., in the root file system image.
 \item Beneath the RESIM\_IMAGE directory (defined in your .resimrc file) will be a subdirectory whose path is named in the
 RESim ini file as {\tt RESIM\_ROOT\_PREFIX}, and the binaries will be beneath that, typically as a copy of the root file system.
-\item If your IDA or GHIDRA computer is other than the one that runs Simics, they you must also have a RESIM\_IMAGE directory on that
-computer, with a copy of the binaries for IDA or Ghidra to access (or an NSF mount of the files shared with the Simics host.)
+\item If your GHIDRA computer is other than the one that runs Simics, they you must also have a RESIM\_IMAGE directory on that
+computer, with a copy of the binaries for Ghidra to access (or an NSF mount of the files shared with the Simics host.)
 \end{enumerate}
 
 The directory structure under the RESIM\_IMAGE directory should look like:
@@ -1512,14 +1547,8 @@ then -z10000 tacked onto the ida command
 
 \subsection{Ghidra}
 \label{ghidra}
-A preliminay RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
+A RESim plugin for the Ghidra debugger is available at \url{https://github.com/mfthomps/RESimGhidraPlugins}.
 See that repo's README for installation instructions.  It is assumed that the user has experience with the Ghidra platform.
-
-Use of the Ghidra plugin requires a modified version of gdb, available at
-\url{https://github.com/mfthomps/binutils-gdb}.  The modification causes
-gdb to display responses from gdb "monitor" commands using the same FD as used
-for other gdb command results.  This is needed for Ghidra to see the results of monitor commands, which the plugin
-uses to interact with RESim.
 
 Ghidra also requires a modified version of the Simics gdb-remote program if Windows targets are to be
 analyzed.  Run the script at
@@ -1546,10 +1575,9 @@ check that path to see if the fuction, block, imports artifacts were already cre
 as desired, e.g., by dragging them to other tabbed windows.  If RESim windows do no appear, try going to the menu
 {\tt Window} / {\tt Debugger} and select the missing windows.  RESim windows have the icons that look like a spinning top or a bomb when Ghidra is sick..
 
-\item Use the RESim / Configure menu options to set the path to your customized gdb; the path to
-the file system root of the target binary, the host:port of your Simics host, and to set the ARM architecture if needed.
-
-\item Assuming you have the target debugging in RESim, attach to the GDB server by clicking the menu item at {\tt RESim / Attach Simulation}.
+\item Assuming you have the target debugging in RESim, attach to the GDB server by using Debugger / "Configure and Launch..." / gdb remote.  
+Set the Image to your image, which should follow the RESim path convention.   Set Target to \textit{remote}, host to your Simics host; Port to 9123;
+gdb command to \textit{gdb-multiarch}.  Leave Architecture and Endian as auto.
 
 \item If the Dynamic list does not align with the analysis listing, select the \textit{Modules} tab and click the red map button (2 headed arrow).
 
@@ -2975,17 +3003,13 @@ data that was read and would be replaced by injected data.
 Using the {\tt resim-ws.sh -e} command will create a workspace that includes files used in the CADET01 example.
 See the README-cadet01.txt files in {\tt simics/workspace}.
 The example requires two disk images located relative to your {\tt \$RESIM\_IMAGES} directory.  The target image from: 
-\begin{verbatim}
-   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQC-hSPskpwKRqvVSauYb_l4AU6FLcnA4awKbLYIQL5Pn18?e=9gzkHU
-\end{verbatim}
+\url{https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps\_nps\_edu/IQC-hSPskpwKRqvVSauYb\_l4AU6FLcnA4awKbLYIQL5Pn18?e=9gzkHU}
 \noindent should be copied to:
 \begin{verbatim}
 $RESIM_IMAGES/cadet01/cadet.disk0.hd_image.craff
 \end{verbatim}
 And the driver image at
-\begin{verbatim}
-   https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps_nps_edu/IQCV_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw
-\end{verbatim}
+   \url{https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps\_nps\_edu/IQCV\_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw}
 \noindent should be copied to:
 \begin{verbatim}
 $RESIM_IMAGES/driver/driver_22.disk0.hd_image.craff
@@ -3004,7 +3028,7 @@ Vulnerable services from the DARPA Cyber Grand Challenge are available as descri
 README in {\tt simics/examples/network\_file\_system} in your repo.
 The images described therein are located at: 
 \newline
-{\tt https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
+\url{https://nps01-my.sharepoint.com/:f:/g/personal/mfthomps\_nps\_edu/IgDOTGuzMBvAV6\_IRhefT-GSAUcMvxjyZt5f\_\_pQ4Wg8wfY?e=7Bkn2Q}
 
 \subsection{ARM Cortex A9 Sample}
 A sample ini file and parameter file for the ARM QSP platform is in 
@@ -3026,6 +3050,11 @@ Informaton on building the kernel image and building a ram disk of a root file s
 \begin{verbatim}
    simics/image_build/arm_fvp_jun26
 \end{verbatim}
+
+\subsection{Creating a new x86 target}
+Notes on creating a new x86-based target by copying ad-hoc target applications to a stock
+Ubuntu 24 server can be found in the
+README in {\tt simics/examples/new-target} in your repo.
 
 \subsection{Custom devices}
 Sample custom devices can be found in {\tt simics/modules/sample-i2c-device}.
@@ -3249,11 +3278,15 @@ the directory from which the tests are run.  Use the
 \begin{verbatim}
    $RESIM_DIR/simics/testing/cadet-test/tstcadet.sh
 \end{verbatim}
-\noindent command to initiate the testing.  The tests require the xdotool package.
-Windows functions are tested using:
+ARM analysis is tested using:
+\begin{verbatim}
+   $RESIM_DIR/simics/testing/openwrt/openwrt-test.sh
+\end{verbatim}
+Windows 7 functions are tested using:
 \begin{verbatim}
    $RESIM_DIR/simics/testing/windows/wintest.sh
 \end{verbatim}
+The windows tests include testing of kernel parameter generation.
 
 \section{License}
 
@@ -3323,15 +3356,19 @@ Data Aborts lead to page handling, unless it does not.  Of interest is that it c
 
 \subsection{External tracking of shared object libraries}
 \label{shared-libraries}
-During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in IDA Pro to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
+During dynamic analysis of a program, the program may call into a shared object library, and the user may wish to analyze the called library.  This note summarizes how RESim provides the user with information about shared object libraries, e.g., so that the target library can be opened in Ghidra to continue dynamic analysis.  This strategy does not require a shell on the target system, nor does it require knowledge that depends on a system map, e.g., 
 synthesizing access to {\tt /proc/$<$pid$>$/map}
 
 When the program of interest is loaded via an execve system call, breakpoints are set to catch the open system call.  The resulting callbacks look for opening of shared library files, i.e., *.so.*.   When shared objects are opened, breakpoints are then set to catch the next use of mmap by the process.  We assume the resulting allocated address is where the shared object will be loaded.  Empirical evidence indicates this simple brute force strategy works.  These breakpoints and callbacks persist until the process execution reaches the text segment of the program.
 
 RESim maintains maps of addresses of shared library files.  Use the {\tt showSOMap} command to view a list of libraries and their load
 addresses.  The {\tt stackTrace} command identfies the library of the current stack frame (or {\tt show} for the current instruction address.
-Once you know the library and its load address, open the library in IDA (and use {\tt dumpFuns.py} and {\tt findBlocks.py} to generate databases
-referened by RESim if not yet created). Rebase the program ({\tt Edit/Segment/rebase} and then attach to the debugger. NOTE, depending on the library, rebasing may take a while.
+Once you know the library and its load address, open the library in Ghidra and use the RESim dumpArtifacts menu option.  Note that Ghidra assigns a load offset to shared objects of 0x1000000 for 64 bit and 0x100000 for 32bit, and it assigns function names that reflect this. The Ghidra plug rebases the program to the offset from the ELF
+header (which would be zero for most shared objects) prior to generating artifacts.   
+
+Rebase the shared object in Ghidra before debugging, using the load offset displayed by showSOMap.
+
+For IDA, rebase the program ({\tt Edit/Segment/rebase} and then attach to the debugger. NOTE, depending on the library, rebasing may take a while.
 Wait for IDA to finish before attempting to attach the debugger.
 Switching between libraries currently requires that you exit IDA and then open the other library.
 
@@ -3364,7 +3401,29 @@ The stupidClose module detects these and suspends tracing of the thread until th
 that it may track basic blocks between the failed close and the next syscall in order to find an escape path.
 Name a list of offending programs in the filed named by {\tt STUPID\_CLOSERS} in the ini file.
 
-\subsection{Breakpoints can be complicated: Real and virtual addresses}
+\subsection{Physical and logical addresses}
+\subsubsection{Mapping logical to physical}
+Simics includes functions for logical (virtual) addresses to physical addresses, e.g., 
+the {\tt logical-to-physical} command.  These are not always useful because they mimick
+the translations performed by the hardware, which depends on the current privilege level
+of the tasks.  As a result, those functions will not translate a kernel address while in
+user mode.  The functions also fail on mode transition, e.g., a HAP invoked upon entry into
+the kernel will report privilege level zero, but the page translation will still occur as if
+in user mode.  RESim includes its own page table translation fuctions that track kernel page
+table base as well as the base addresses for different processes.  See the v2p functions
+in memUtils and the functions in pageUtils.
+
+\subsubsection{Which type of address to set breakpoints on?}
+Simics memory breakpoints can be set on either linear addresses or physical addresses.
+RESim often opts for use of physical addresses because:
+\begin{enumerate}
+\item When tracking data flows, a physical address will trigger HAPs from multiple processes when the memory location is accessed.
+\item Linear addresses are process local and thus linear address references made by different processes could trigger the HAP.
+The GenContextManager maintains a contexts to isolate breakpoints to threads of an individual process, but these are not always
+convenient.
+\end{enumerate}
+
+\subsubsection{Complicating effects of external analysis: references that never happen}
 \label{external}
 Use of a full system simulator enables \textit{external} dynamic analysis of the system.  The analysis is said to be
 “external” because the analysis mechanism implementation, e.g., the setting of breakpoints,  does not 
@@ -3421,8 +3480,6 @@ Note this property of the 64-bit Linux implementation has implications beyond tr
 engineer may wish to dynamically observe the opening of a particular file name observed within an executable image.
 Setting a "read" breakpoint on the virtual address of the observed file name would fail to catch the open function
 on 64-bit Linux, while it would have caught the open on 32-bit Linux.
-
-
 
 \section{Divergence Between Physical Systems and RESim Simulations}
 \label{divergence}
@@ -3550,6 +3607,9 @@ within a program being debugged.  Actually, use {\tt cgc.noReverse()} and {\tt c
 Haps maintained by the revToCall module.  Programs can be pathological with their use of syscalls.
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
+
+For slow booting systems, if you are not concerned about early processes, set the {\tt MONTITOR} env value to NO and boot the target to some reasonable milestone.
+Use write-configuration to create a snapshot, then enable MONITOR and go from there.   
 
 Pay attention to the {\tt BACK\_STOP\_CYCLES} environment variable in the ini.  A large value may be needed during initial testing,
 but that may need to be greatly reduced for fuzzing.
@@ -3882,8 +3942,8 @@ This appendix describes the driver images used internally at:
 $RESIM_IMAGE/driver/driver2.disk.hd_image.craff
 $RESIM_IMAGE/driver/driver_22.disk0.hd_image.craff
 \end{verbatim}
-The driver driver2.disk.hd\_image.craff is also available at \url{https://nps.box.com/s/ffuz7fgyn770xcgrdur0uf1bo1tur2gk}
-The driver driver\_22.disk0.hd\_image.craff is at  \url{https://nps.box.com/shared/static/je7bhh145oilzhk1mjunrg3h78j4bzdp.craff}
+The driver driver2.disk.hd\_image.craff is also available at \url{https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps\_nps\_edu/IQB7Pk3v7-guVK8C3I7eyvSdASMslJUBzK6iaRkY5dT7LEc?e=PFCNZy}
+The driver driver\_22.disk0.hd\_image.craff is at  \url{https://nps01-my.sharepoint.com/:u:/g/personal/mfthomps\_nps\_edu/IQCV\_MiNKTuQULQgny7z3A0RAc51gxYUK3ZwbxZvwhvPJiA?e=HRZgYw}
 
 The driver platform defined by the {\tt RESim/simics/workspace/ubuntu\_driver.ini} example has the Simics Agent pre-installed.  The
 {\tt driver-script.sh} in that directory can be copied and modified within your workspace.  The driver will download that shell script and execute
@@ -4096,13 +4156,14 @@ mean that all the syscalls you intend to catch are being caught.
 \subsection{Real networks: WARNING}
 \label{real-networks}
 Simics supports traffic between the simulation and a real network using {\tt connect-real-network} commands and related commands using a \textit{service node}.
-This can be useful to quickly generate new packets and send them to the target, but without needing to interact with a driver component.
+Services nodes are the mechinism by which traffic is sent from the host running Simics to the driver, or directly from the host to the target.
 Note however that Simics has limitations on the use of real networks when reverse execution is enabled, or memory shapshots ({\tt restore-snapshot} are used.  
 Some of these limitations can lead to silent corruption
-of the simulation.  Others to crashes.  An obvious limitation is that you cannot replay periods in which real network traffic was received (though Simics supports a separate IO replay feature).
+of the simulation.  Others to crashes.  An obvious limitation is that you cannot replay periods in which real network traffic was received (though Simics supports a separate IO replay feature).  Service nodes may also cause divergence between executions starting at the same snapshot.
 
 Most problems related to real network can be avoided by connecting and completing use of the real network prior to enabling reverse execution, e.g., via a debugProc command.  Or using
-{\tt resetOrigin} after all real-network IO is finished.  See the {\tt reset} option to the trackIO function.  It should be used when real-networks interact with drivers, e.g, an ssh
+{\tt resetOrigin} after all real-network IO is finished.  The {\tt cutRealWord} command will disable service nodes created by RESim, e.g., the one use by the driver.  
+Also see the {\tt reset} option to the trackIO function.  It should be used when real-networks interact with drivers, e.g, an ssh
 script to cause data to be sent to the target.
 
 Automation, such as the {\tt prepInject} function can make use of Simics magic instructions to allow a driver computer to cause a new origin
@@ -4406,6 +4467,7 @@ the user space address just prior to entering the kernel.  While these addresses
 or related library.  The current prepInject design presupposes different calling addresses for things like select and recv.  That seems to be a poor assumption.  
 
 \section{VxWorks DKM}
+\label{vxworks}
 Some functions have been added to support analysis of appliations written for VxWorks DKM environments.  Target applications are hosted on 
 the Simics zynqmp RPU processor.  The VxWorks DKM kernel must be rebuilt per the Simics and VxWorks instructions, and the resulting elf image is then
 named in the RESim ini file in order to extract symbol addresses of kernel function. RESim uses these addresses to catch "kernel calls", which cover the gambit of common library
@@ -4594,7 +4656,7 @@ after the or we get 0xc00084cc
 So getKernelParams likley should just record the oring value
 
 
-\subsection{Page tables}
+\subsection{PPC Page tables}
 Grim.  
 Block Address Translation (BAT) is used for kernel addresses.
 Inverted page tables with Segment/hashing used for user space.  See pageUtilsPPC32.py.
@@ -4739,6 +4801,56 @@ The dec21041 appears to work.
 
 Windows XP changes syscall number mapping frequently.  The ntdll.dll does the mapping.  The 
 RESim/windows/winxpSyscalls.py reads the ntdll.dll and generates a json map of call numbers to calls.
+
+\section{Windows 10}
+\subsection{EFI boot partitions}
+Sample target requires EFI boot. Windows EFI partitions may use mixed case.  Change directory names and
+file names within the partition to upper case.  Also, find the EFI/Microsoft/Boot/bootmgfw.efi and copy
+it to EFI/BOOT/BOOTX64.EFI
+
+Kernel aslr, diff of gs base lets us find the current task pointer.  But kernel code offsets, e.g., entry,
+are separate random offsets.  Use mmr\_ia32\_lstar to compute delta and adjust all entry/exits accordingly.
+computed syscall looks like:
+\begin{verbatim}
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6213d p:0x000000346213d  movsxd r11,dword ptr [r10+rax*4]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62141 p:0x0000003462141  mov rax,r11
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62144 p:0x0000003462144  sar r11,4
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62148 p:0x0000003462148  add r10,r11
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6214b p:0x000000346214b  cmp edi,0x20
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6214e p:0x000000346214e  jne 0xfffff8055ce621a0
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621a0 p:0x00000034621a0  and eax,0xf
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621a3 p:0x00000034621a3  je 0xfffff8055ce62260
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621a9 p:0x00000034621a9  shl eax,3
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621ac p:0x00000034621ac  lea rsp,[rsp-0x70]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621b1 p:0x00000034621b1  lea rdi,[rsp+0x18]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621b6 p:0x00000034621b6  mov rsi,qword ptr [rbp+0x100]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621bd p:0x00000034621bd  lea rsi,[rsi+0x20]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621c1 p:0x00000034621c1  test byte ptr [rbp+0xf0],0x1
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621c8 p:0x00000034621c8  je 0xfffff8055ce621e0
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621ca p:0x00000034621ca  cmp rsi,qword ptr [rip+0x1aa7af]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621d1 p:0x00000034621d1  cmovae rsi,qword ptr [rip+0x1aa7a7]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621d9 p:0x00000034621d9  hintnop(1f) eax, dword ptr [rax]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621e0 p:0x00000034621e0  lea r11,[rip+0x79]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621e7 p:0x00000034621e7  sub r11,rax
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce621ea p:0x00000034621ea  jmp r11
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62250 p:0x0000003462250  mov rax,qword ptr [rsi+0x10]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62254 p:0x0000003462254  mov qword ptr [rdi+0x10],rax
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62258 p:0x0000003462258  mov rax,qword ptr [rsi+0x8]
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6225c p:0x000000346225c  mov qword ptr [rdi+0x8],rax
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62260 p:0x0000003462260  test dword ptr [rip+0x303256],0x1
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6226a p:0x000000346226a  jne 0xfffff8055ce62703
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62270 p:0x0000003462270  test dword ptr [rip+0x3030ce],0x40
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce6227a p:0x000000346227a  jne 0xfffff8055ce62777
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62280 p:0x0000003462280  mov rax,r10
+[board.mb.cpu0.core[0][0]] cs:0xfffff8055ce62283 p:0x0000003462283  call rax
+
+\end{verbatim}
+\subsection{Windows Nested system calls}
+Not just a win10 thing:  Windows nests system calls in a manner that manifests when computed system call
+breakpoints are used.  For example, CreateUserProcess will call OpenFile.  Initial inspection suggested that
+a kernel address in rax correlated with nested calls, but that did not hold.  The winSyscall module does
+record pending calls that have not yet been exited.  Is this enough to avoid pending calls?
+Compare logs from a trackThreads run with those from a traceAll run
 
 \end{appendices}
 %\printIndex
