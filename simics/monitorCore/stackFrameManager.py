@@ -104,7 +104,7 @@ class StackFrameManager():
                 self.stack2_cache[key].append(st)
         st.printTrace(verbose)
 
-    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False, optimize=0):
+    def getStackTraceQuiet(self, max_frames=None, max_bytes=None, skip_recurse=False, stop_after_clib=False, optimize=0, use_cache=True):
         fun_mgr = self.top.getFunMgr()
         if fun_mgr is None:
             self.lgr.error('No function manager defined.  Debugging?')
@@ -121,10 +121,13 @@ class StackFrameManager():
                 else:
                     self.lgr.debug('stackFrameManager getStackTraceQuiet, no ida funs for comm %s' % comm)
                     return None
-        st = self.checkIpSpCache(tid)
+        if use_cache:
+            st = self.checkIpSpCache(tid)
+        else:
+            st = None
         if st is None:
             cycle = self.cpu.cycles
-            if cycle in self.stack_cache:
+            if use_cache and cycle in self.stack_cache:
                 st = self.stack_cache[cycle]
             else:
                 if tid not in self.stack_base:
@@ -138,12 +141,13 @@ class StackFrameManager():
                               stop_after_clib=stop_after_clib, use_bp=self.use_bp, optimize=optimize)
                 if stack_base is None:
                     self.recordMissingStackBase(tid, st.frames[-1].sp)
-                self.stack_cache[cycle] = st
-                key = self.cacheKey()
-                self.lgr.debug('stackFrameManager added key %s' % key)
-                if key not in self.stack2_cache:
-                    self.stack2_cache[key] = []
-                self.stack2_cache[key].append(st)
+                if use_cache:
+                    self.stack_cache[cycle] = st
+                    key = self.cacheKey()
+                    self.lgr.debug('stackFrameManager added key %s' % key)
+                    if key not in self.stack2_cache:
+                        self.stack2_cache[key] = []
+                    self.stack2_cache[key].append(st)
         return st
 
     def getStackTrace(self):
@@ -215,14 +219,21 @@ class StackFrameManager():
             self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChangeForStack, tid)
 
     def up(self):
+        # TBD what should this do?
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
         frames = st.getFrames(2)
         print(frames[1].dumpString())
+
+    def oneFrame(self, dumb=None):
+        st = self.getStackTraceQuiet(max_frames=1, max_bytes=1000, use_cache=False)
+        frames = st.getFrames(1)
+        print(frames[0].dumpString())
 
     def down(self):
         st = self.top.getStackTraceQuiet(max_frames=2, max_bytes=1000)
         frames = st.getFrames(2)
         #print(frames[1].dumpString())
+        self.top.setCommandCallback(self.oneFrame)
         self.top.revToAddr(frames[1].ip)
 
     def dumpStack(self, count=80, fname=None):
