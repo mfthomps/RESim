@@ -462,14 +462,14 @@ class DataWatch():
             if ret_to not in self.stack_buf_hap and ret_to != -1:
                 #self.lgr.debug('dataWatch setStackBufHaps add hap for eip 0x%x' % ret_to)
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
-                self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+                self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'dataWatch_stack_buf_hap')
 
     def setStackThisHaps(self):
         for ret_to in self.stack_this:
             if ret_to not in self.stack_this_hap:
                 #self.lgr.debug('dataWatch setStackThisHaps add hap for eip 0x%x' % ret_to)
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
-                self.stack_this_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackThisHap, None, proc_break, 'stack_this_hap')
+                self.stack_this_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackThisHap, None, proc_break, 'dataWatch_stack_this_hap')
 
     def stopStackThisHaps(self, immediate=False):
         for eip in self.stack_this_hap:
@@ -490,7 +490,7 @@ class DataWatch():
                 #self.lgr.debug('DataWatch manageStackThis stack buffer, set a break at 0x%x to delete this range on return' % ret_to)
                 if ret_to not in self.stack_this_hap:
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
-                    self.stack_this_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackThisHap, None, proc_break, 'stack_this_hap')
+                    self.stack_this_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackThisHap, None, proc_break, 'dataWatch_stack_this_hap')
                 #else:
                 #    self.lgr.debug('dataWatch manageStackThis 0x%x was already in the stack_this_hap, but was not in stack_this???' % ret_to)
             else:
@@ -513,7 +513,7 @@ class DataWatch():
             if ret_to not in self.stack_buffers:
                 self.stack_buffers[ret_to] = []
                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
-                self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+                self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'dataWatch_stack_buf_hap')
                 self.lgr.debug('dataWatch manageStackBuf added stack_buf_hap[0x%x] %d' % (ret_to, self.stack_buf_hap[ret_to]))
             else:
                 self.lgr.debug('dataWatch manageStackBuf eip 0x%x already in stack_buffers, no hap set' % ret_to)
@@ -936,14 +936,14 @@ class DataWatch():
                     if phys_block is None:
                         self.lgr.warning('dataWatch watchFunEntries, code at 0x%x not mapped, will not catch entry' % eip)
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, eip, 1, 0)
-                    name = 'mem_fun_entry_%s' % fun
+                    name = 'dataWatch_mem_fun_entry_%s' % fun
                     hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.memSomethingEntry, fun, proc_break, name)
                     self.mem_fun_entries[fun][eip].hap = hap
                     #self.lgr.debug('dataWatch watchFunEntries set fun entry break on 0x%x for fun %s context %s' % (eip, fun, self.cpu.current_context))
         if self.destroy_entry is not None and self.destroy_hap is None:
             #self.lgr.debug('dataWatch watchFunEntries add destroy entry hap')
             proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.destroy_entry, 1, 0)
-            self.destroy_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.destroyEntry, None, proc_break, 'destroy_entry') 
+            self.destroy_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.destroyEntry, None, proc_break, 'dataWatch_destroy_entry') 
 
     def watch(self, show_cmp=False, break_simulation=None, i_am_alone=False, no_backstop=False):
         if self.disabled:
@@ -2212,7 +2212,9 @@ class DataWatch():
                 self.recordFree(self.start[index], fun)
                 self.rmFree(fun, index)
             return 
-
+        if self.mem_something is None:
+            self.lgr.debug('dataWatch memSomethingEntry no mem_something yet, make one for fun %s' % fun)
+            self.mem_something = MemSomething(fun, eip, None, ret_addr, None, None, None, None, None, None)
         self.mem_something.fun = fun
         # NOTE returns above
         # special case check for memcpy of 1 byte
@@ -3232,7 +3234,7 @@ class DataWatch():
         resim_context = self.context_manager.getRESimContext()
         #proc_break = self.context_manager.genBreakpoint(cell, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
         proc_break = self.context_manager.genBreakpoint(resim_context, Sim_Break_Linear, Sim_Access_Execute, self.mem_something.ret_ip, 1, 0)
-        self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'memsomething_return_hap')
+        self.return_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.returnHap, skip_this, proc_break, 'dataWatch_memsomething_return_hap')
         self.lgr.debug('runToReturn set returnHap with breakpoint %d break at ret_ip 0x%x' % (proc_break, self.mem_something.ret_ip))
         self.context_manager.restoreDebugContext()
         if self.backstop is not None and not self.break_simulation and self.use_backstop:
@@ -3806,7 +3808,7 @@ class DataWatch():
                                 self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, op1, function = fun, ip=orig_ip, cycle=orig_cycle)
                                 self.lgr.debug('dataWatch checkNTOHL set finishCheckMoveHap')
                                 self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                                         self.finishCheckMoveHap, None, break_num, 'checkMove')
+                                         self.finishCheckMoveHap, None, break_num, 'dataWatch_checkMove')
                                 retval = True
                             break
                     elif next_instruct[1].startswith('mov') and self.decode.isReg(op1):
@@ -3920,7 +3922,7 @@ class DataWatch():
                     self.move_stuff = self.CheckMoveStuff(addr, trans_size, start, length, dest_op, ip=orig_ip, cycle=orig_cycle)
                     #self.lgr.debug('dataWatch loopAdHocMult addr 0x%x  start 0x%x set finishCheckMoveHap' % (addr, start))
                     self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                             self.finishCheckMoveHap, None, break_num, 'loopAdHoc')
+                             self.finishCheckMoveHap, None, break_num, 'dataWatch_loopAdHoc')
                     break
             return adhoc                
 
@@ -4112,7 +4114,7 @@ class DataWatch():
                 self.lgr.debug('dataWatch gotAdHocDest addr 0x%x  start 0x%x set finishCheckMoveHap on eip 0x%x current_context %s' % (addr, 
                       start, next_ip, self.cpu.current_context))
                 self.finish_check_move_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                         self.finishCheckMoveHap, our_reg, break_num, 'loopAdHoc')
+                         self.finishCheckMoveHap, our_reg, break_num, 'dataWatch_loopAdHoc')
         return adhoc
     def testCompare(self, mn, op1, op2, recent, ip):
         # look at test/cmp instructions and return flgs.  TBD needs to be built out.
@@ -4294,7 +4296,7 @@ class DataWatch():
                 track_sp = track_sp - word_size
                 ntoh_rec = self.NTOHType(track_sp, next_next_ip, fun)
                 self.transform_push_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", 
-                     self.transformPushHap, ntoh_rec, break_num, 'transformPush')
+                     self.transformPushHap, ntoh_rec, break_num, 'dataWatch_transformPush')
                 adhoc = True
         else:
             self.lgr.debug('dataWatch checkPushedData checkNTOHL found write to memory or a test of a pass by value')
@@ -4328,7 +4330,7 @@ class DataWatch():
                 if ret_to not in self.stack_buffers:
                     self.stack_buffers[ret_to] = []
                     proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, ret_to, 1, 0)
-                    self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'stack_buf_hap')
+                    self.stack_buf_hap[ret_to] = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.stackBufHap, None, proc_break, 'dataWatch_stack_buf_hap')
                     self.lgr.debug('dataWatch trackPush stack_buf_hap[0x%x] %d x added to stack_buffers' % (ret_to, self.stack_buf_hap[ret_to]))
                 else:
                     #self.lgr.debug('dataWatch trackPush eip 0x%x already in stack_buffers, no hap set' % ret_to)
@@ -5310,7 +5312,7 @@ class DataWatch():
                                 self.destroy_entry = frame.fun_addr
                                 self.lgr.debug('dataWatch checkFree add destroy entry hap')
                                 proc_break = self.context_manager.genBreakpoint(None, Sim_Break_Linear, Sim_Access_Execute, self.destroy_entry, 1, 0)
-                                self.destroy_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.destroyEntry, None, proc_break, 'destroy_entry') 
+                                self.destroy_hap = self.context_manager.genHapIndex("Core_Breakpoint_Memop", self.destroyEntry, None, proc_break, 'dataWatch_destroy_entry') 
                                 self.destroyEntry(None, None, None, None)
                         retval = True
                         break
