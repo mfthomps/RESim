@@ -1120,7 +1120,7 @@ class GenContextMgr():
         ''' stop watching for death of tasks ''' 
         for tid in self.task_rec_bp:    
             if self.task_rec_bp[tid] is not None:
-                self.lgr.debug('stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
+                self.lgr.debug('genContextManager stopWatchTasksAlone task_rec_bp delete bp %d' % self.task_rec_bp[tid])
                 RES_delete_breakpoint(self.task_rec_bp[tid])
                 if tid in self.task_rec_hap and self.task_rec_hap[tid] is not None:
                     RES_hap_delete_callback_id('Core_Breakpoint_Memop', self.task_rec_hap[tid])        
@@ -1132,7 +1132,7 @@ class GenContextMgr():
         self.debugging_tid = None
 
         self.restoreDefaultContext()
-        self.lgr.debug('stopWatchTasks reverted %s to default context %s All watch lists deleted debugging_tid to None' % (self.cpu.name, str(self.default_context)))
+        self.lgr.debug('genContextManager stopWatchTasks reverted %s to default context %s All watch lists deleted debugging_tid to None' % (self.cpu.name, str(self.default_context)))
 
     def resetWatchTasks(self, dumb=None):
         ''' Intended for use when going back in time '''
@@ -1144,13 +1144,13 @@ class GenContextMgr():
             #self.lgr.debug('resetWatchTasks tid was not, got current as tid:%s' % tid)
         #self.lgr.debug('resetWatchTasks tid:%s' % tid)
         self.stopWatchTasksAlone(None)
-        self.lgr.debug('resetWatchTasks back from stopWatch')
+        self.lgr.debug('genContextManager resetWatchTasks back from stopWatch')
         self.watchTasks(set_debug_tid = True, tid=str(tid))
         #self.lgr.debug('resetWatchTasks back from watchTasks')
         if not self.watch_only_this:
-            self.lgr.debug('resetWatchTasks tid %s' % tid)
+            self.lgr.debug('genContextManager resetWatchTasks tid %s' % tid)
             if tid == 1:
-                self.lgr.debug('resetWatchTasks got leader tid of 1, skip')
+                self.lgr.debug('genContextManager resetWatchTasks got leader tid of 1, skip')
                 return
             leader_tid = self.task_utils.getGroupLeaderTid(tid)
             if leader_tid is None:
@@ -1159,7 +1159,7 @@ class GenContextMgr():
                 tid_list = self.task_utils.getGroupTids(leader_tid)
                 for tid in tid_list:
                     if tid == 1:
-                        self.lgr.debug('resetWatchTasks got tid of 1, skip')
+                        self.lgr.debug('genContextManager resetWatchTasks got tid of 1, skip')
                     else:
                         self.addTask(tid)
 
@@ -1172,7 +1172,7 @@ class GenContextMgr():
                                  self.phys_current_task, self.mem_utils.WORD_SIZE, 0)
             self.lgr.debug('contextManager setTaskHap bp %d' % self.task_break)
             self.task_hap = RES_hap_add_callback_index("Core_Breakpoint_Memop", self.changedThread, self.cpu, self.task_break)
-            self.lgr.debug('setTaskHap cell %s break %s set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
+            self.lgr.debug('genContextManager setTaskHap cell %s break %s set on physical 0x%x' % (self.cell_name, self.task_break, self.phys_current_task))
         dumb, comm, cur_tid  = self.task_utils.curThread()
         if tid is None or tid == cur_tid:
             self.onlyOrIgnore(tid, comm, None)
