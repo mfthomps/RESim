@@ -377,7 +377,7 @@ class InjectIO():
             if self.trace_all or self.instruct_trace:
                 self.lgr.debug('injectIO call traceAll')
                 call_params = syscall.CallParams('injectIO', None, self.fd)
-                self.top.traceAll(call_params_list=[call_params], trace_file=self.save_json)
+                self.doTrace(call_params_list=[call_params], trace_file=self.save_json)
                 trace_msg = 'injected %d bytes to addr 0x%x\n' % (bytes_wrote, self.addr)
                 self.top.traceWrite(trace_msg)
                 if self.trace_fd is not None:
@@ -429,7 +429,7 @@ class InjectIO():
                 elif not self.mem_utils.isKernel(self.addr):
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
-                        self.top.traceAll()
+                        self.doTrace()
                         if self.trace_fd is not None:
                             self.lgr.debug('injectIO traceFD 0x%x' % self.trace_fd)
                             self.top.traceFD(self.trace_fd, raw=True)
@@ -449,7 +449,7 @@ class InjectIO():
                     self.context_manager.watchTasks()
                     if self.mark_logs:
                         self.lgr.debug('injectIO call traceAll for mark_logs')
-                        self.top.traceAll()
+                        self.doTrace()
                         if self.trace_fd is not None:
                             self.top.traceFD(self.trace_fd, raw=True)
                         self.top.traceBufferMarks(target=self.cell_name)
@@ -497,6 +497,13 @@ class InjectIO():
             self.lgr.debug('trackIO commonGo stay is true, make sure tracking is off''')
             self.top.stopTracking()
 
+    def doTrace(self, trace_file=None, call_params_list=[]):
+        if self.top.isWindows():
+            self.top.traceWindows()
+            if trace_file is not None:
+                self.lgr.error('injectIO doTrace trace_file not supported for windows yes')
+        else:
+            self.traceAll(trace_file=trace_file, call_params=call_params)
     def injectCallback(self):
         ''' called at the end of the debug hap chain, meaning we are in the target process. 
             Intended for watching process other than the one reading the data. 
@@ -512,7 +519,7 @@ class InjectIO():
         if self.trace_all:
             # Would be confusing because there are no events from which to measure a backstop.
             #self.backstop.setFutureCycle(self.backstop_cycles)
-            self.top.traceAll(trace_file=self.save_json)
+            self.doTrace(trace_file=self.save_json)
         elif self.instruct_trace:
             base = os.path.basename(self.dfile)
             print('base is %s' % base)
@@ -529,7 +536,7 @@ class InjectIO():
             self.top.traceMalloc()
         if self.mark_logs:
             self.lgr.debug('injectIO injectCallback call traceAll for mark_logs')
-            self.top.traceAll()
+            self.doTrace()
             if self.trace_fd is not None:
                 self.top.traceFD(self.trace_fd, raw=True)
             self.top.traceBufferMarks(target=self.cell_name)
