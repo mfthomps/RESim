@@ -386,18 +386,30 @@ class IDAFuns():
 
     def getFunEntry(self, fun_name):
         ''' get the loaded address of the entry of a given function name, with preference to the largest function '''
+        if fun_name is None:
+            return None
         big = 0
         retval = None
+        got_match = False
         for fun in self.funs:
-            if self.funs[fun]['name'] == fun_name:
+            if fun_name.startswith(self.funs[fun]['name']):
+                matches = fun_name == self.funs[fun]['name']
+                if not matches and got_match:
+                    continue
+                force_match = False
+                if matches and not got_match: 
+                    force_match = True
+                    got_match = True
+                #print('getFunEntry got startswith match %s' % self.funs[fun]['name'])
+                #print('getFunEntry got match')
                 if 'ranges' in self.funs[fun]:
                     size = self.funs[fun]['ranges'][0]['end'] - self.funs[fun]['ranges'][0]['start']
-                    if size > big:
+                    if size > big or force_match:
                         big = size
                         retval = self.funs[fun]['ranges'][0]['start']
                 else:
                     size = self.funs[fun]['end'] - self.funs[fun]['start'] 
-                    if size > big:
+                    if size > big or force_match:
                         big = size
                         retval = self.funs[fun]['start']
         return retval
