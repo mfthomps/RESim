@@ -39,7 +39,7 @@ class BackStop():
             if not self.top.hasAFL():
                 self.lgr.debug('backStop cycle_handler going to break simuation cpu is %s cycles: 0x%x callback %s' % (self.cpu.name, self.cpu.cycles, str(self.callback)))
             self.clearCycle()
-            SIM_break_simulation('hit final cycle')
+            SIM_break_simulation('backstop hit final cycle')
             self.top.notRunning(quiet=True)
             '''
             cmd_callback = self.top.getCommandCallback()
@@ -51,6 +51,7 @@ class BackStop():
                 self.callback()
             if self.report_backstop:
                 rprint('Backstop hit.')
+            self.top.flushTrace()
         else: 
             rprint('backStop cycle_handler lingering after cpu set to None, ignore')
             SIM_continue(0)
