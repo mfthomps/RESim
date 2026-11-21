@@ -66,7 +66,7 @@ class Coverage():
         self.block_total = 0
         self.funs = None
         self.funs_hit = []
-        # dict of unique bb addrs hit, value is record with cycle and packet number
+        # dict whose keys is unique bb addrs hit, value is record with cycle and packet number.  Only first hit
         self.blocks_hit = OrderedDict()
         self.analysis_path = analysis_path
         self.prog_path = prog_path
@@ -80,6 +80,11 @@ class Coverage():
         self.prev_loc = None
         self.map_size = None
         self.trace_bits = None
+        # key is bb addr value is random used to distinguish execution of a basic block for afl.  Something like:
+        #       cur_loc = self.afl_map[this_addr]
+        #       index = cur_loc ^ self.prev_loc
+        #       self.trace_bits[index] =  self.trace_bits[index]+1
+        #        self.prev_loc = cur_loc >> 1
         self.afl_map = {}
         self.proc_status = 0
         # quantity of unique blocks hit
@@ -156,7 +161,9 @@ class Coverage():
         self.alternate_callback = None
         # page base updates that happened while waiting for return to user space
         self.page_base_trans = []
-        
+       
+        self.record_all = False
+        self.all_hits_list = [] 
         self.lgr.debug('Coverage for cpu %s, map_funs %r' % (self.cpu.name, self.map_funs))
      
     def loadBlocks(self, block_file):
@@ -238,7 +245,7 @@ class Coverage():
         return bp
 
     def setPhysBreak(self, phys_addr):
-        if self.afl:
+        if self.afl or self.record_all:
             bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, 0)
         else:
             bp = SIM_breakpoint(self.cpu.physical_memory, Sim_Break_Physical, Sim_Access_Execute, phys_addr, 1, Sim_Breakpoint_Temporary)
@@ -356,6 +363,7 @@ class Coverage():
             # only_funs is list of start addresses for ranges in function, most of which have one range.
             for fun in self.only_funs:
                 fun_adjusted = fun + self.offset
+                self.lgr.debug('coverage setBlockBreaks only_funs fun 0x%x offset 0x%x adjusted 0x%x' % (fun, self.offset, fun_adjusted))
                 fun_entry = self.top.getFunAddr(fun_adjusted) - self.offset
                 if fun_entry not in did_funs:
                     did_funs.append(fun_entry)
@@ -872,6 +880,10 @@ class Coverage():
                 self.cpu.iface.int_register.write(self.pc_reg, self.jumpers[this_addr])
                 #self.lgr.debug('coverage jumpers jump to 0x%x' % self.jumpers[addr]) 
                 prejump_addr = this_addr
+            if self.record_all:
+                adjusted_addr = this_addr - self.offset
+                self.all_hits_list.append(adjusted_addr)
+                self.lgr.debug('coverage record_all added 0x%x cycle: 0x%x' % (adjusted_addr, self.cpu.cycles))
             if self.record_hits:
                 #self.lgr.debug('coverage this_addr is 0x%x' % this_addr) 
                 adjusted_addr = this_addr - self.offset
@@ -995,6 +1007,7 @@ class Coverage():
         self.lgr.debug('coverage showCoverage Hit %d of %d functions' % (len(self.funs_hit), len(self.blocks)))
 
     def saveCoverage(self, fname = None):
+        ''' save a list of bb's hit, does this by getting keys from blocks_hit '''
         if not self.enabled or self.no_save:
             return
         self.lgr.debug('saveCoverage for %d functions' % len(self.funs_hit))
@@ -1025,6 +1038,14 @@ class Coverage():
             dead_file = '%s.pre.hits' % self.hits_path
             self.saveDeadFile(dead_file=dead_file)
             SIM_run_alone(SIM_run_command, 'q')
+
+    def saveRecordAll(self, fname):
+        if self.record_all:
+            with open(fname, 'w') as fh:
+                fh.write(json.dumps(self.all_hits_list))
+            print('Saved %d all hits to %s' % (len(self.all_hits_list), fname))
+        else:
+            print('Not recording all hits.')
 
     def restoreAFLBreaks(self):
         ''' leave unused code as cautionary tale re: pom '''
@@ -1211,7 +1232,7 @@ class Coverage():
 
     def enableCoverage(self, tid, fname=None, prog_path=None, backstop=None, backstop_cycles=None, afl=False, linear=False, 
                        create_dead_zone=False, manual_dead_zone=False, no_save=False, only_thread=False, record_hits=True, 
-                       diag_hits=False, report_coverage=False, map_funs=False, only_funs=None):
+                       diag_hits=False, report_coverage=False, map_funs=False, only_funs=None, record_all_hits=False):
         self.enabled = True
         self.tid = tid
         self.create_dead_zone = create_dead_zone
@@ -1223,6 +1244,7 @@ class Coverage():
         self.report_coverage = report_coverage
         self.map_funs = map_funs
         self.only_funs = only_funs
+        self.record_all = record_all_hits
         self.lgr.debug('Coverage enableCoverage, map_funs %r' % map_funs) 
         if fname is not None:
             if os.path.isfile(fname) and 'analysis' in fname:
