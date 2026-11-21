@@ -1745,7 +1745,7 @@ class StackTrace():
         fname = self.soMap.getSOFile(called_from_address)
         if fname is None:
             fname = 'unknown'
-        if called_to_address is None:
+        if called_to_address is None and called_fun_name is not None:
             called_to_address = self.fun_mgr.getFunEntry(called_fun_name)
         frame = self.FrameEntry(called_from_address, fname, instruction, stack_ptr, fun_addr=called_to_address, fun_name=called_fun_name, 
                                ret_addr=return_addr, ret_to_addr=addr_of_ret_addr)
