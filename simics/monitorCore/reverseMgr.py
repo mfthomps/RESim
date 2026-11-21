@@ -71,6 +71,7 @@ import re
 import traceback
 import cli
 import logging
+import time
 NOUTILS = False
 try:
     import resimSimicsUtils
