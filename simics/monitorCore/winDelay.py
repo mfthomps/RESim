@@ -101,7 +101,7 @@ class WinDelay():
         if self.exit_info is None:
             self.lgr.debug('winDelay doDataWatch BUT NO EXIT INFO')
             return
-        self.lgr.debug('winDelay doDataWatch')
+        self.lgr.debug('winDelay doDataWatch cycle: 0x%x' % self.cpu.cycles)
         if self.data_watch is not None:
             self.lgr.debug('winDelay doDataWatch call setRange for 0x%x count 0x%x' % (self.exit_info.retval_addr, self.return_count))
             if self.kbuffer is not None:
@@ -263,7 +263,7 @@ class WinDelay():
                 SIM_run_alone(self.toUserAlone, None)
             ''' Remove the break/hap '''
             hap = self.count_write_hap
-            self.lgr.debug('winDelay writeCountHap tid:%s return_count was %d from address 0x%x, removing count_write_hap %d' % (self.tid, return_count, memory.logical_address, hap))
+            self.lgr.debug('winDelay writeCountHap tid:%s return_count was %d from address 0x%x, removing count_write_hap %d cycles: 0x%x' % (self.tid, return_count, memory.logical_address, hap, self.cpu.cycles))
             SIM_run_alone(self.rmHap, hap) 
             self.count_write_hap = None
             #if self.did_exit and self.exit_info.syscall_instance is not None:
@@ -275,7 +275,7 @@ class WinDelay():
     def toUserAlone(self, dumb):
         self.to_user_count = 0
         self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", self.cpu, 0, self.modeChanged, self.tid)
-        self.lgr.debug('winDelay toUserAlone, set mode hap for tid:%s' % self.tid)
+        self.lgr.debug('winDelay toUserAlone, set mode hap for tid:%s cycle: 0x%x' % (self.tid, self.cpu.cycles))
 
     def modeChanged(self, want_tid, one, old, new):
         if self.mode_hap is None:
@@ -288,13 +288,13 @@ class WinDelay():
                 self.to_user_count = 0
                 SIM_run_alone(self.doDataWatch, True)
             else:    
-                #self.lgr.debug('winDelay mode changed wrong tid, wanted %s got %s' % (want_tid, this_tid))
+                self.lgr.debug('winDelay mode changed wrong tid, wanted %s got %s cycle: 0x%x' % (want_tid, this_tid, self.cpu.cycles))
                 return
         cpl = memUtils.getCPL(self.cpu)
         if new == Sim_CPU_Mode_Supervisor:
             self.lgr.warning('winDelay mode changed wrong mode, new is supervisor?')
         else:
-            self.lgr.debug('winDelay mode changed in user, call doDataWatch')
+            self.lgr.debug('winDelay mode changed in user, call doDataWatch cycle: 0x%x' % self.cpu.cycles)
             SIM_run_alone(self.doDataWatch, True)
         
     def rmHap(self, hap, immediate=False): 
