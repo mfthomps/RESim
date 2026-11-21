@@ -148,4 +148,5 @@ class RunToReturn():
         SIM_run_command('pselect %s' % self.cpu.name)
         SIM_run_command('si')
         self.top.show()
+        SIM_run_command('disassemble')
         print('done')
