@@ -1599,7 +1599,7 @@ class WinSyscall():
     def stopAlone(self, msg):
         ''' NOTE: this is also called by sharedSyscall/winCallExit and winDelay '''
         is_running = self.top.isRunning()
-        self.lgr.debug('winSyscall stopAlone is running? %r' % is_running)
+        self.lgr.debug('winSyscall stopAlone is running? %r cycle: 0x%x' % (is_running, self.cpu.cycles))
         eip = self.top.getEIP()
         if self.stop_action is not None:
             self.stop_action.setExitAddr(eip)
