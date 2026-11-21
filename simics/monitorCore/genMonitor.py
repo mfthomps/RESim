@@ -828,7 +828,9 @@ class GenMonitor():
             span = self.getCompDict(cell_name, 'REVERSE_SPAN')
             if span is not None:
                 span = int(span, 16)
-                self.lgr.debug('Using reverse span of 0x%x' % span)
+                self.lgr.debug('Using reverse span from ini file of 0x%x' % span)
+            else:
+                self.lgr.debug('No reverse span set, will use default')
             force_new=False
             if resimUtils.yesNoTrueFalse(os.getenv('FORCE_NEW_REVERSE')):
                 force_new=True
@@ -993,6 +995,11 @@ class GenMonitor():
             self.lgr.error('Found BACKSTOP_CYCLES, replace that with BACK_STOP_CYLES')
             self.quit()
             return
+        bad_reverse_span = os.getenv('REVERSE_SPAN')
+        if bad_reverse_span is not None:
+            self.lgr.error('Found REVERSE_SPAN in environment section of ini, move it to device sections')
+            self.quit()
+            return
         no_vmp = os.getenv('NO_VMP')
         if resimUtils.yesNoTrueFalse(no_vmp): 
             SIM_run_command('disable-vmp')
@@ -1001,6 +1008,7 @@ class GenMonitor():
             self.snapInit()
             self.runScripts()
             return
+    
         self.runPreScripts()
         #self.fs_mgr = fsMgr.FSMgr(self.cell_config.cell_context, self.param, self.cell_config, self.lgr)
         self.initCells()
@@ -4431,6 +4439,7 @@ class GenMonitor():
             self.dataWatch[self.target].setRange(start, length, msg) 
         self.is_monitor_running.setRunning(True)
         if self.dataWatch[self.target].watch(show_cmp, break_simulation=False):
+            self.track_started = True
             self.continueForward()
             #SIM_continue(0)
         else: 
@@ -5232,7 +5241,7 @@ class GenMonitor():
             sor=False, cover=False, target=None, targetFD=None, trace=False, 
             save_json=None, limit_one=False, no_rop=False, go=True, max_marks=None, instruct_trace=False, mark_logs=False,
             break_on=None, no_iterators=False, only_thread=False, no_track=False, no_reset=None, count=1, no_page_faults=False, 
-            trace_all=False, run=True, reset_debug=False, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False):
+            trace_all=False, run=True, reset_debug=False, src_addr=None, malloc=False, track_malloc=False, trace_fd=None, fname=None, no_backstop=False, no_trace_dbg=False):
         ''' Inject data into application or kernel memory.  This function assumes you are at a suitable execution point,
             e.g., created by prepInject or prepInjectWatch.  
             Use go=False and then go yourself if you are getting the instance for your own use, otherwise
@@ -5277,8 +5286,6 @@ class GenMonitor():
         if trace_all:
             trace = True
             no_trace_dbg = True
-        else:
-            no_trace_dbg = False
         if trace:
             self.traceBufferTarget(target_cell, msg='injectIO traceAll')
 
@@ -5509,7 +5516,7 @@ class GenMonitor():
             self.ropCop[self.target].watchROP(watching=watching, callback=callback, addr=addr, size=size)
 
     def enableCoverage(self, fname=None, backstop_cycles=None, report_coverage=False, 
-                       dead_zone=False, manual_dead_zone=False, map_funs=False, only_funs=None):
+                       dead_zone=False, manual_dead_zone=False, map_funs=False, only_funs=None, record_all_hits=False, only_thread=False):
         ''' Enable code coverage '''
         ''' Intended for use with trackIO, playAFL, etc '''
         if self.coverage is not None:
@@ -5518,12 +5525,31 @@ class GenMonitor():
             self.lgr.debug('enableCoverage map_funs %r' % map_funs)
             self.coverage.enableCoverage(tid, fname=analysis_path, backstop = self.back_stop[self.target], backstop_cycles=backstop_cycles, 
               report_coverage=report_coverage, create_dead_zone=dead_zone, manual_dead_zone=manual_dead_zone, 
-               map_funs=map_funs, only_funs=only_funs)
+               map_funs=map_funs, only_funs=only_funs, record_all_hits=record_all_hits, only_thread=only_thread)
             self.coverage.doCoverage()
         else:
             self.lgr.error('enableCoverage, no coverage defined')
 
-    def mapCoverage(self, fname=None, backstop=False, dead_zone=False, map_funs=False, only_funs=None):
+    def funEntries(self, fname):
+        cover_only_funs = None
+        if fname is not None:
+            if os.path.isfile(fname):
+                try:
+                    cover_only_funs = json.load(open(fname))
+                except:
+                    cover_only_funs = []
+                    with open(fname) as fh:
+                        for line in fh:
+                            fun = line.strip()
+                            fentry = self.getFunEntry(fun, orig=True)
+                            if fentry is None:
+                                self.lgr.error('funEntries from %s, no function for %s' % (fname, fun))
+                            cover_only_funs.append(fentry)
+            else:
+                self.lgr.error('No only_funs file at %s' % only_funs)
+        return cover_only_funs
+
+    def mapCoverage(self, fname=None, backstop=False, dead_zone=False, map_funs=False, only_funs=None, record_all=False, only_thread=False):
         ''' Enable code coverage and do mapping '''
         ''' Not intended for use with trackIO, use enableCoverage for that '''
         if fname is not None:
@@ -5545,15 +5571,9 @@ class GenMonitor():
         backstop_cycles = None
         if backstop:
             backstop_cycles = defaultConfig.backstopCycles()      
-        cover_only_funs = None
-        if only_funs is not None:
-            if os.path.isfile(only_funs):
-                cover_only_funs = json.load(open(only_funs))
-            else:
-                self.lgr.error('No only_funs file at %s' % only_funs)
-                return
+        cover_only_funs = self.funEntries(only_funs)
         self.enableCoverage(fname=analysis_path, backstop_cycles=backstop_cycles, report_coverage=backstop, 
-             dead_zone=dead_zone, manual_dead_zone=dead_zone, map_funs=map_funs, only_funs=cover_only_funs)
+             dead_zone=dead_zone, manual_dead_zone=dead_zone, map_funs=map_funs, only_funs=cover_only_funs, record_all_hits=record_all, only_thead=only_thread)
 
     def showCoverage(self):
         self.coverage.showCoverage()
@@ -5597,6 +5617,10 @@ class GenMonitor():
     def saveHits(self, fname):
         self.lgr.debug('saveHits %s' % fname)
         self.coverage.saveHits(fname)
+
+    def saveRecordAll(self, fname):
+        self.lgr.debug('saveRecordAll %s' % fname)
+        self.coverage.saveRecordAll(fname)
 
     def difCoverage(self, fname):
         ''' TBD not used'''
@@ -6395,7 +6419,7 @@ class GenMonitor():
             self.stop_hap = None
             self.RES_delete_stop_hap(hap)
             self.lgr.debug('stopStepN call skipAndMail')
-            self.skipAndMail()
+            self.skipAndMail(restore_debug=False)
 
     def stepN(self, n):
         ''' Used by runToSyscall to step out of kernel. '''
@@ -6645,6 +6669,7 @@ class GenMonitor():
         fun_name = self.fun_mgr.funFromAddr(addr)
         if fun_name is not None:
             entry = self.fun_mgr.getFunEntry(fun_name)
+            print('Function for address 0x%x is %s' % (addr, fun_name))
             print('Function for address 0x%x is %s, entry 0x%x file %s' % (addr, fun_name, entry, so))
         elif self.isVxDKM():
             fun_name = self.task_utils[self.target].getGlobalSym(addr)
@@ -7078,13 +7103,24 @@ class GenMonitor():
     def showFunEntries(self, fun_name):
         self.fun_mgr.showFunAddrs(fun_name)
 
-    def getFunEntry(self, fun_name):
-        ''' get the entry of a given function name, with preference to the largest function '''
+    def getFunEntry(self, fun_name, orig=False):
+        ''' get the loaded entry address of a given function name, with preference to the largest function '''
         if self.fun_mgr is None:
             self.lgr.error('getFunEntry, no function manager')
             return None
-        return self.fun_mgr.getFunEntry(fun_name)
-
+        loaded_entry = self.fun_mgr.getFunEntry(fun_name)
+        if loaded_entry is None:
+            self.lgr.debug('getFunEntry failed to get entry for fun %s' % fun_name)
+            return None
+        self.lgr.debug('getFunEntry loaded_entry of %s is 0x%x' % (fun_name, loaded_entry))
+        if orig:
+            so = self.getSOFile(loaded_entry)
+            offset = self.getLoadOffset(so)
+            retval = loaded_entry - offset        
+            self.lgr.debug('getFunEntry so %s subtracted offset 0x%x to get 0x%x' % (so, offset, retval))
+        else:
+            retval = loaded_entry
+        return retval
 
     def curThreadRec(self):
         cur_thread_rec = self.task_utils[self.target].getCurThreadRec()
