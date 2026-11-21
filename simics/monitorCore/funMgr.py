@@ -538,6 +538,9 @@ class FunMgr():
 
     def getFunEntry(self, fun_name):
         ''' get the loaded entry address for the named funtion.  If not in the fun list, check the exports.'''
+        if fun_name is None:
+            self.lgr.error('funMgr called with fun_name of None')
+            return None
         retval = None
         comm = self.getComm()
         if comm in self.ida_funs:
