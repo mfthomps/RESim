@@ -139,6 +139,8 @@ class WinTaskUtils():
         else:
             self.lgr.error('WinTaskUtils unknow os type %s' % self.os_type)
             return
+
+        self.rec_addr_cache = {}
         if os.path.isfile(guimapfile):
             cm = json.load(open(guimapfile))     
             for call in cm:
@@ -856,6 +858,8 @@ class WinTaskUtils():
 
     def getRecAddrForTid(self, tid):
         ''' find the task pointer (ETHREAD) for a given tid (pid-thread_id)'''
+        if tid in self.rec_addr_cache:
+            return self.rec_addr_cache[tid] 
         ret_rec = None
         thread_part = None
         if tid is None:
@@ -893,6 +897,8 @@ class WinTaskUtils():
                        self.lgr.debug('winTaskUtils thread_part None')
                        ret_rec = thread_head - self.THREAD_NEXT
                    break
+        if ret_rec is not None: 
+            self.rec_addr_cache[tid]  = ret_rec
         return ret_rec
     def showThreadHead(self, ts):
        thread_head_addr = ts+self.THREAD_HEAD
