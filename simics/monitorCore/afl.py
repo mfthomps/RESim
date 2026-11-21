@@ -474,16 +474,16 @@ class AFL():
             if self.test_file is not None:
                 if status == AFL_CRASH:
                     self.lgr.debug('afl test file, found %d unique hits, CRASHED.  Done.' % self.total_hits)
-                    print('afl test file %s, found %d unique hits crashed !! ' % (self.test_file, self.total_hits))
+                    print('afl test file %s, found %d unique AFL hits crashed !! ' % (self.test_file, self.total_hits))
                 elif status == AFL_HANG:
                     self.lgr.debug('afl test file, found %d unique hits, HUNG. Done' % self.total_hits)
-                    print('afl test file %s, found %d unique hits hung ' % (self.test_file, self.total_hits))
+                    print('afl test file %s, found %d unique AFL hits hung ' % (self.test_file, self.total_hits))
                 else:
                     now = time.time()
                     delta = (now - self.tmp_time)
                     self.lgr.debug('afl test file, found %d unique hits (AFL accounting). 0x%x cycles in %.2f seconds iteration %d repeat: %d' % (self.total_hits, 
                             delta_cycles, delta, self.iteration, self.repeat))
-                    print('afl test file %s, found %d unique hits, 0x%x cycles %.2f seconds iteration %d' % (self.test_file, self.total_hits, delta_cycles, delta, self.iteration))
+                    print('afl test file %s, found %d unique hits (AFL accounting), 0x%x cycles %.2f seconds iteration %d' % (self.test_file, self.total_hits, delta_cycles, delta, self.iteration))
                 if self.iteration < self.repeat:
                     self.total_hits = 0
                     now = time.time()
