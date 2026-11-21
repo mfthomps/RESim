@@ -389,7 +389,7 @@ class PageFaultGen():
             return
         self.faulted_pages[tid].append(fault_addr)
 
-        #self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
+        self.lgr.debug('pageFaultHap for %s (%s)  faulting address: 0x%x eip: 0x%x cycle: 0x%x context:%s user_eip: 0x%x' % (tid, comm, fault_addr, cur_pc, self.cpu.cycles, self.cpu.current_context, self.user_eip))
 
         #self.lgr.debug('pageFaultHap for %s (%s) at 0x%x  faulting address: 0x%x' % (tid, comm, eip, fault_addr))
         #self.lgr.debug('len of faulted pages is now %d' % len(self.faulted_pages))
@@ -411,10 +411,15 @@ class PageFaultGen():
                 else:
                     self.lgr.debug('pageFaultGen pageFaultHap tid:%s, faulting address in kernel, addr: 0x%x cycles: 0x%x IGNORE in windows?' % (tid, fault_addr, self.cpu.cycles))
             else:
-                self.pending_faults[tid] = prec
-                if self.mode_hap is None:
-                    self.lgr.debug('pageFaultGen adding mode hap')
-                    self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
+                # user space page fault
+                instruct = SIM_disassemble_address(self.cpu, self.user_eip, 1, 0)
+                if fault_addr == 0 and 'gs:[' in instruct[1] and self.top.isWindows(target=self.target):
+                    self.lgr.debug('pageFaultGen user_eip 0x%x %s got zero, windows special case? Ignore' % (self.user_eip, instruct[1]))
+                else:
+                    self.pending_faults[tid] = prec
+                    if self.mode_hap is None:
+                        self.lgr.debug('pageFaultGen adding mode hap for fault addr 0x%x' % fault_addr)
+                        self.mode_hap = RES_hap_add_callback_obj("Core_Mode_Change", cpu, 0, self.modeChanged, tid)
         #else:
         #    self.lgr.debug('pageFaultHap tid %s already in pending faults' % tid)
             
