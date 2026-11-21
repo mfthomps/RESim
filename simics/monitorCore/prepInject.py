@@ -185,44 +185,50 @@ class PrepInject():
         self.lgr.debug('prepInject instrument Last buffer of %d bytes written to logs/orig_buffer.io' % ret_count)
         print('Last buffer of %d bytes written to logs/orig_buffer.io' % ret_count)
 
-        frame, cycle = self.top.getRecentEnterCycle()
-        origin = self.top.getFirstCycle()
-        call = self.top.syscallName(frame['syscall_num'])
-        self.lgr.debug('prepInject instrumentAlone origin 0x%x recent call cycle 0x%x tid:%s call %s' % (origin, cycle, tid, call))
-        if cycle <= origin:
-            self.lgr.debug('prepInject instrumentAlone Entry into kernel is prior to first cycle, cannot record call_ip')
-            if self.top.didMagicOrigin():
-                self.lgr.debug('prepInject instrumentAlone go to origin')
-                self.top.goToOrigin()
-                self.lgr.debug('prepInject instrumentAlone back from go to origin, do toTid')
-                self.top.toTid(tid, callback = self.tidScheduled)
-            else:
-                print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
-                print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
-                self.finishNoCall(read_original=False)          
-        else: 
-            if self.exit_info.retval_addr is None:
-                self.lgr.error('prepInject instrumentAlone, retval_addr is None')
-                return
-            orig_buffer = None
-            ''' return to the call to record that IP and original data in the buffer.  That is in case we inject less than the most recent read,
-                the remaining data will not reflect what it would have been.'''
-            previous = cycle - 1
-            self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
-
-            if self.top.skipToCycle(previous, cpu=self.cpu, disable=True):
-                self.call_ip = self.top.getEIP(self.cpu)
-                ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
-                orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
-                self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
-            else:
-                self.lgr.error('prepInject instrument failed skip to syscall')
-            ''' skip back to return so the snapshot is ready to inject input '''
-            self.lgr.debug('prepInjectInstrument skip back to ret_cycle 0x%x' % self.ret_cycle)
-            self.top.skipToCycle(self.ret_cycle, cpu=self.cpu, disable=True)
-            current_ip = self.top.getEIP(self.cpu)
-            self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
-            self.pickleit(self.snap_name, self.exit_info, orig_buffer)
+        if not self.top.isWindows():
+            frame, cycle = self.top.getRecentEnterCycle()
+            origin = self.top.getFirstCycle()
+            call = self.top.syscallName(frame['syscall_num'])
+            self.lgr.debug('prepInject instrumentAlone origin 0x%x recent call cycle 0x%x tid:%s call %s' % (origin, cycle, tid, call))
+            if cycle <= origin:
+                self.lgr.debug('prepInject instrumentAlone Entry into kernel is prior to first cycle, cannot record call_ip')
+                if self.top.didMagicOrigin():
+                    self.lgr.debug('prepInject instrumentAlone go to origin')
+                    self.top.goToOrigin()
+                    self.lgr.debug('prepInject instrumentAlone back from go to origin, do toTid')
+                    self.top.toTid(tid, callback = self.tidScheduled)
+                else:
+                    print('Warning: No magic instruction 99 detected, and thus original buffer data will not be restored.')
+                    print('Content of the buffer is corrupted by the data sent to the target for prep_inject.')
+                    self.finishNoCall(read_original=False)          
+            else: 
+                if self.exit_info.retval_addr is None:
+                    self.lgr.error('prepInject instrumentAlone, retval_addr is None')
+                    return
+                orig_buffer = None
+                # return to the call to record that IP and original data in the buffer.  That is in case we inject less than the most recent read,
+                #    the remaining data will not reflect what it would have been.
+                previous = cycle - 1
+                self.lgr.debug('prepInject instrument try to skip to previous cycle 0x%x' % previous)
+    
+                if self.top.skipToCycle(previous, cpu=self.cpu, disable=True):
+                    self.call_ip = self.top.getEIP(self.cpu)
+                    ''' TBD generalize for use with recvmsg msghdr multiple buffers'''
+                    orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
+                    self.lgr.debug('instrument  skipped to call IP: 0x%x tid:%s callnum: %d cycle is 0x%x len of orig_buffer %d' % (self.call_ip, tid, frame['syscall_num'], self.cpu.cycles, len(orig_buffer)))
+                else:
+                    self.lgr.error('prepInject instrument failed skip to syscall')
+                ''' skip back to return so the snapshot is ready to inject input '''
+                self.lgr.debug('prepInjectInstrument skip back to ret_cycle 0x%x' % self.ret_cycle)
+                self.top.skipToCycle(self.ret_cycle, cpu=self.cpu, disable=True)
+                current_ip = self.top.getEIP(self.cpu)
+                # end of if not windows
+        else:
+            orig_buffer = self.mem_utils.readBytes(self.cpu, self.exit_info.retval_addr, length) 
+            self.lgr.debug('prepInject instrumentAlone windows just pickleit?')
+ 
+        self.lgr.debug('instrument skipped to ret cycle 0x%x eip now 0x%x' % (self.ret_cycle, current_ip))
+        self.pickleit(self.snap_name, self.exit_info, orig_buffer)
 
     def instrumentIO(self, callname):
         self.lgr.debug("prepInject in instrument IO, callname is %s" % callname);
