@@ -22,6 +22,7 @@ def rprint(string):
     SIM_log_info(1, rl, 0, string)
 
 def reverseEnabled():
+        # ONLY use with simics 6
         cmd = 'sim.status'
         #cmd = 'sim.info.status'
         dumb, ret = cli.quiet_run_command(cmd)
@@ -34,6 +35,7 @@ def reverseEnabled():
             return False
 
 def skipToTest(cpu, cycle, lgr, disable_vmp=False):
+        # only use with simics 6
         limit=100
         count = 0
         while SIM_simics_is_running() and count<limit:
