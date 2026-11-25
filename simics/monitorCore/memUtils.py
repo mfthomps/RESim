@@ -1756,6 +1756,8 @@ class MemUtils():
     def getCallNum(self, cpu):
         if not self.param.arm_svc:
             callnum = self.getRegValue(cpu, 'syscall_num')
+            if self.top.isWindows(cpu=cpu): 
+                callnum = callnum & 0x3fff
         else:
             lr = self.getRegValue(cpu, 'lr')
             val = self.readWord(cpu, lr-4)
