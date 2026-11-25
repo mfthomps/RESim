@@ -2246,7 +2246,10 @@ class WinSyscall():
                         else:
                             #exit_info.delay_count_addr = param_val + 8
                             exit_info.delay_count_addr = param_val + word_size
-                            self.lgr.debug('winSyscall tid:%s delay count addr param_val 0x%x word_size %d' % (tid, param_val, word_size))
+                            user_stack = frame['sp']+0x28
+                            rsp3 = user_stack + 2*self.mem_utils.wordSize(self.cpu)
+                            self.lgr.debug('winSyscall tid:%s delay count addr param_val 0x%x word_size %d rsp3 0x%x' % (tid, param_val, word_size, rsp3))
+                            exit_info.msc = rsp3
                     else:
                         exit_info.delay_count_addr = frame['param5'] + word_size
                
