@@ -129,11 +129,12 @@ binds the OS to the exact hardware configuration.  Analysis of embedded Windows 
 platform environment having an embedded Windows that was installed on the simulated platform, and is thus bound to that.  This of course precludes applications that rely on
 hardware missing from the model. 
 
-RESim and Simics are not ``record-and-replay'' tools (though Simics has that features to support that.)  We run, instrument and observe simulations of real systems.
-These simulations can and will diverge from real world results and multiple runs of what seem to be the same simulation will diverge from each other (as will
+RESim is not a ``record-and-replay'' tool (though Simics has that features to support that.)  We run, instrument and observe simulations of real systems.
+These simulations can and will diverge from real world results and multiple runs of what seem to be the same simulation may diverge from each other (as will
 multiple runs of real systems, even though they consume the same data.)  Sometimes the divergence is minimal, e.g., different timestamps within data.  Other times
 the divergence can be substantial.  The point is that you should not always expect the same results across multiple runs.  For example, full system traces
-may contain different data even though they commence from the same snapshot. Active Simics service nodes within a configuration will feed divergence. 
+may contain different data even though they commence from the same snapshot. Active Simics service nodes within a configuration will contribute to divergence. 
+And use of vmp with Intel targets typically results in divergence.
 
 Simics 7 deprecated reverse execution.  RESim replaces much of the lost reversing functions with its "reverseMgr" module.
 See \url{https://github.com/mfthomps/Simics7\_Reversing}
@@ -271,7 +272,6 @@ If this documentation falls out of sync, or you need to fix broken stuff, refer 
 
 There are also a set of utility commands that run from a bash prompt (rather than from Simics).  See section \ref{utilities} for a list of those.
 
-\label{commands}
 \subsection{General display}
 \begin{itemize}
 \item {\tt show} -- Show current process information for the currently monitored target.
@@ -308,7 +308,7 @@ Use of {\tt ONLY\_PROGS} and {\tt SKIP\_PROGS} also affects thread tracking via 
 \begin{itemize}
 \item {\tt traceAll} – Begin tracing all system calls, storing the results in the logs subdirectory of the workspace.  
 If a program was selected using debugProc as described below, limit the reporting to that process and its threads.  
-To limit tracing to the current thread, first issue the {\tt debugThis} command.
+To limit tracing to the current thread, first issue the {\tt onlyThis} command.
 See the {\tt saveTraces} command below, and the {\tt traceReport.sh} script which will parse system call logs and create reports on file, network and IPC (System V) usage.
 Also see the {\tt showFDs.ph} utility as a way to find open file descriptors at a given cycle, e.g., to answer question such as: "The trace shows a message being read
 on from an FD, what is that FD associated with at this time?".
@@ -372,8 +372,8 @@ See section \ref{maze}.
 \item {\tt noExitMaze} -- Do not check for tight timing  loops.
 See section \ref{maze}.
 
-\item {\tt instructTrace(file, all\_proc=False, kernel=False, watch\_threads=False) -- Generate an instruction trace and save it into the named file. Use the kernel
-flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all threads of the current process.}  The file name is relative to /tmp.
+\item {\tt instructTrace(file, all\_proc=False, kernel=False, watch\_threads=False)} -- Generate an instruction trace and save it into the named file. Use the kernel
+flag to observe traces within the kernel. Use {\tt watch\_threads} to trace all threads of the current process.  The file name is relative to /tmp.
 
 \item {\tt traceFuns} - Generate trace messages when each function within a target is entered.  Currently these message go to the resim log and assume ARM32.
 
@@ -479,7 +479,7 @@ threads that are waiting in the kernel.  If you want to run ahead to let the sys
 
 \item {\tt debugIfNot} -- Will call debugPidGroup for the currently scheduled process.
 
-\item {\tt debugThis} -- Limit debugging to the current thread, ignoring other threads.
+\item {\tt onlyThis} -- Limit debugging to the current thread, ignoring other threads.
 
 \item {\tt stackTrace} – shows the call stack as seen by the monitor.  The Ida client uses this to maintain its view of the callstack.  The monitor
 uses the Ghidra-generated function databases generated using idaDump.sh (or Ghidra) to aid in determining if 
@@ -3602,8 +3602,8 @@ We currently have a patch that will be included in the next Simics 6 release in 
 \end{itemize}
 
 \section{Performance tricks}
-Use disable-reverse-execution whenever you do not really need reversing, e.g., while moving forward to a known connect or accept
-within a program being debugged.  Actually, use {\tt cgc.noReverse()} and {\tt cgc.allowReverse()}, which will disable the sysenter
+Use noReverse() whenever you do not really need reversing, e.g., while moving forward to a known connect or accept
+within a program being debugged, and then allowReverse to enable it. The noReverse operation will disable the sysenter
 Haps maintained by the revToCall module.  Programs can be pathological with their use of syscalls.
 
 Instead of tracing all from a boot, consider running ahead until the systemd-logind or rsyslogd is created.
@@ -3631,6 +3631,10 @@ on an FD, do so without setting debug.  Then, once the accept is done, you can s
 Simics 6.0.157 snapshots were about 30\% faster than more recent versions, including Simics 7.
 
 See \ref{stupid-close} for handling bulk calls to close.
+
+For Simics 7, experiment with the {\tt REVERSE\_SPAN} target value to reduce the quantity of saved memory snapshots.
+
+Use {\tt IGNORE\_PROGS} or {\tt ONLY\_PROGS}.
 
 \section{New disk images}
 For x86, use put the workspace/dvd.simics in targets.  Edit it to name an installation iso.  You may need to change the date in
@@ -4851,6 +4855,11 @@ breakpoints are used.  For example, CreateUserProcess will call OpenFile.  Initi
 a kernel address in rax correlated with nested calls, but that did not hold.  The winSyscall module does
 record pending calls that have not yet been exited.  Is this enough to avoid pending calls?
 Compare logs from a trackThreads run with those from a traceAll run
+\subsection{Asynch IO}
+The RECV asynchronous IO call includes a parameter of the address to which the kernel should provide the read count when
+the RECV has completed.  In addition to updating this address, the kernel also places the read count at the address of
+the 7th parameter of the RECV call, i.e., the third stack parameter.  Applications rely on this and thus prepInject/injectIO
+must handle it.
 
 \end{appendices}
 %\printIndex
