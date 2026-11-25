@@ -100,6 +100,7 @@ class InjectIO():
 
         self.snap_name = snap_name
         self.addr_of_count = None
+        self.sp_addr_of_count = None
         
         # Loading pickle below. init those variable above
         self.loadPickle(snap_name)
@@ -401,6 +402,9 @@ class InjectIO():
                             if self.addr_of_count is not None:
                                 self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-count', backstop=False, recv_addr=self.addr_of_count, max_len = 4)
                                 self.lgr.debug('injectIO set data watch on addr of count 0x%x' % self.addr_of_count)
+                            if self.sp_addr_of_count is not None:
+                                self.dataWatch.setRange(self.addr_of_count, 4, 'injectIO-sp_count', backstop=False, recv_addr=self.sp_addr_of_count, max_len = 4)
+                                self.lgr.debug('injectIO set data watch on sp_addr of count 0x%x' % self.sp_addr_of_count)
      
                             ''' special case'''
                             if self.max_len == 1:
@@ -658,6 +662,9 @@ class InjectIO():
             if 'addr_of_count' in so_pickle and so_pickle['addr_of_count'] is not None: 
                 self.addr_of_count = so_pickle['addr_of_count']
                 self.lgr.debug('injectIO load addr_of_count 0x%x' % (self.addr_of_count))
+            if 'sp_addr_of_count' in so_pickle and so_pickle['sp_addr_of_count'] is not None: 
+                self.sp_addr_of_count = so_pickle['sp_addr_of_count']
+                self.lgr.debug('injectIO load sp_addr_of_count 0x%x' % (self.sp_addr_of_count))
         else:
             self.lgr.error('injectIO expected to find a pickle at %s, cannot continue' % afl_file) 
             self.top.quit()
