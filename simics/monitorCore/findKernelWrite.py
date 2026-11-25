@@ -136,7 +136,7 @@ class findKernelWrite():
             value = self.mem_utils.readByte(self.cpu, self.addr)
         self.value = value
         dumb, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d' % (tid, value, addr, phys, self.num_bytes))
+        self.lgr.debug( 'findKernelWrite go tid:%s of 0x%x to addr %x, phys %x num_bytes: %d track: %r' % (tid, value, addr, phys, self.num_bytes, self.track))
         pcell = self.cpu.physical_memory
         self.kernel_write_break = self.reverse_mgr.SIM_breakpoint(pcell, Sim_Break_Physical, Sim_Access_Write, 
             phys, self.num_bytes, 0)
@@ -587,7 +587,7 @@ class findKernelWrite():
         instruct = SIM_disassemble_address(self.cpu, eip, 1, 0)
         orig_cycle = self.bookmarks.getFirstCycle()
         dumb, comm, tid = self.task_utils.curThread() 
-        self.lgr.debug( 'in thinkWeWrote tid:%s, cycle 0x%x eip: %x  %s cpl: %d orig cycle 0x%x' % (tid, cycle, eip, str(instruct), cpl, orig_cycle))
+        self.lgr.debug( 'in thinkWeWrote tid:%s, cycle 0x%x eip: %x  %s cpl: %d track: %r orig cycle 0x%x' % (tid, cycle, eip, str(instruct), cpl, self.track, orig_cycle))
         if self.stop_write_hap is not None:
                 self.lgr.debug('thinkWeWrote delete stop_write_hap')
                 self.top.RES_delete_stop_hap(self.stop_write_hap)
