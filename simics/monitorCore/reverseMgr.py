@@ -75,6 +75,7 @@ import time
 NOUTILS = False
 try:
     import resimSimicsUtils
+    import resimUtils
 except:
     NOUTILS = True
 def getTokenValue(line, token):
@@ -276,20 +277,22 @@ class BPEnabler():
                 cli.quiet_run_command(cmd)
 
 class Performance():
-    def __init__(self, cpu, sample_rate, do_log, lgr, top=None):
+    def __init__(self, cpu, sample_rate, starting_free, do_log, lgr, top=None):
         self.sample_rate = sample_rate
         self.lgr = lgr
         self.do_log = do_log
         self.cpu = cpu
+        self.starting_free = starting_free
         self.time_stamps = {}
-        self.lgr.debug('Performance begin, sample_rate %d do_log %r' % (sample_rate, do_log))
+        self.lgr.debug('reverseMgr Performance begin, sample_rate %d do_log %r' % (sample_rate, do_log))
 
     def spanHit(self, cycle):
         if self.sample_rate == 1 or self.test_cycles > self.sample_rate:
             self.time_stamps[cycle] = time.perf_counter_ns()
             if self.do_log:
                 size = self.snapSize()
-                #self.lgr.debug('reverseMgr cycleHandlerAlone cycles now 0x%x snapshot size %s' % (self.cpu.cycles, f"{size:,}"))
+                percent_used = int((size / self.starting_free) * 100)
+                self.lgr.debug('reverseMgr spanHit cycles now 0x%x snapshot size %s percent used %d' % (self.cpu.cycles, f"{size:,}", percent_used))
             self.test_cycles = 0
         self.test_cycles = self.test_cycles + 1
 
@@ -334,9 +337,10 @@ class ReverseMgr():
     Parameter lgr: A python logging module
     Parameter top: Optional module that implements a "getEIP" function for debugging
     Parameter span: Optional span value.  Default is 0x100000
+    Parameter ram_limit: Optional maximum percentage of initial free ram consumed by snapshots.  Default is 50%. Simulation will stop when reached.
              
     '''
-    def __init__(self, conf, cpu, arg, int_t, output_modes, lgr, top=None, span=None, force_new=False, report_performance=False):
+    def __init__(self, conf, cpu, arg, int_t, output_modes, lgr, top=None, span=None, force_new=False, report_performance=False, ram_limit=None):
         self.conf = conf
         self.cpu = cpu
         self.lgr = lgr
@@ -347,9 +351,12 @@ class ReverseMgr():
         if span is None:
             self.cycle_span = 0x100000
             #self.cycle_span =  0x1000000
-
         else:
             self.cycle_span = span
+        if ram_limit is None:
+            self.ram_limit = 50
+        else:
+            self.ram_limit = ram_limit
         self.force_new = force_new
         self.report_performance = report_performance
         self.output_modes = output_modes
@@ -374,13 +381,18 @@ class ReverseMgr():
         self.delta_cycle_event = None
         # the event handler for when we reach the latest_span_end to snapshot and set the next span event
         self.recording_end_cycle_event = None
+        if not NOUTILS:
+            self.starting_ram = resimUtils.getFree(value=True) * 1000
+            self.lgr.debug('reverseMgr starting_ram %d' % self.starting_ram)
+        else:
+            self.starting_ram = None
 
         # SEE declerations in reset
         self.reset()
         # breakpoints set via SIM_breakpoint
         self.sim_breakpoints = []
      
-        self.performance = Performance(cpu, 1, True, self.lgr, None)
+        self.performance = Performance(cpu, 1, self.starting_ram, True, self.lgr, None)
         if not self.nativeReverse():
             self.defineCommands(arg, int_t)
 
@@ -482,7 +494,7 @@ class ReverseMgr():
         self.latest_span_end = self.cpu.cycles
         if self.report_performance and self.top is not None:
             eip = self.top.getEIP()
-            #self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
+            self.lgr.debug('reverseMgr cycle_handler cycles 0x%x now at 0x%x eip: 0x%x' % (cycles, self.latest_span_end, eip))
         SIM_run_alone(self.cycleHandlerAlone, cycles)
 
     def takeSnapshot(self, name):
@@ -498,6 +510,12 @@ class ReverseMgr():
         else:
             SIM_take_snapshot(name)
         self.snapshot_names.append(name)
+        size = self.performance.snapSize()
+        percent_used = int((size / self.starting_ram) * 100)
+        if percent_used > self.ram_limit:
+            msg = '%d percent of ram used, stopping' % percent_used
+            print(msg)
+            SIM_break_simulation(msg)
         #self.lgr.debug('reverseMgr took snapshot %s' % name)
 
     def getPreviousName(self, name):
@@ -596,6 +614,7 @@ class ReverseMgr():
         if self.latest_span_end != self.cpu.cycles:
             self.lgr.error('reverseMgr cycleHandlerAlone drifted cycles now 0x%x expected 0x%x' % (self.cpu.cycles, self.latest_span_end))
         cycle_mark = 'cycle_%x' % self.latest_span_end 
+        #self.lgr.debug('reverseMgr cycleHandlerAlone mark %s' % cycle_mark)
         self.takeSnapshot(cycle_mark)
         self.span_record[self.latest_span_end] = {}
         for cpu in self.cpu_list:
@@ -669,7 +688,7 @@ class ReverseMgr():
             self.span_record[self.origin_cycle] = {}
             for cpu in self.cpu_list:
                 self.span_record[self.origin_cycle][cpu] = cpu.cycles
-            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x' % (self.origin_cycle))
+            self.lgr.debug('reverseMgr enableReverse starting cycle 0x%x.  call disable-vmp' % (self.origin_cycle))
             # TBD Simics bug?  DO NOT RESTORE, or you will disable real-network interfaces
             #self.restoreSnapshot('origin')
             dumb, status = cli.quiet_run_command('disable-vmp')
@@ -1546,6 +1565,10 @@ class ReverseMgr():
 
     def showSizeChanges(self):
         self.performance.showSizeChanges()
+
+    def reportPerformance(self):
+        self.lgr.debug('reverseMgr reportPerformance')
+        self.report_performance = True
 
     def defineCommands(self, arg, int_t):
         cli.new_command(
