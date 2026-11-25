@@ -827,7 +827,7 @@ class GenContextMgr():
         elif not self.top.isWindows(target=self.cell_name) and tid in self.tid_cache and new_addr not in self.watch_rec_list:
             self.lgr.debug('***********   tid %s in cache, but new_addr 0x%x not in watch list? eh?' % (tid, new_addr))
         elif self.top.isWindows(target=self.cell_name):
-            if tid not in self.tid_cache  and tid != self.task_utils.recentExitTid():
+            if not self.watch_only_this and tid not in self.tid_cache  and tid != self.task_utils.recentExitTid():
                 pid = tid.split('-')[0]
                 if pid != self.task_utils.recentExitTid():
                     for tid_item in self.tid_cache:
