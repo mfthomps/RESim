@@ -436,6 +436,7 @@ class reverseToCall():
         self.top.skipAndMail()
         self.lgr.debug('tryBackToCallStopped did skipAndMail')
         self.context_manager.setExitBreaks()
+        SIM_run_command('disassemble')
 
     def jumpStopped(self, dumb, one, exception, error_string):
         eip = self.top.getEIP(self.cpu)
@@ -450,7 +451,7 @@ class reverseToCall():
         self.top.skipAndMail()
 
     def skipToTest(self, cycle):
-        return self.top.skipToCycle(cycle)
+        return self.top.skipToCycle(cycle, disable=True, cpu=self.cpu)
 
     def isExit(self, instruct, eip):
         if self.cpu.architecture.startswith('arm'):
@@ -524,7 +525,7 @@ class reverseToCall():
         self.lgr.debug('reservseToCall, call get procInfo')
         eip = self.top.getEIP(self.cpu)
         self.recent_proc_info = procInfo.procInfo(comm, self.cpu, self.tid, eip=eip)
-        self.lgr.debug('reverseToCall doRevtoCall, got my_args ')
+        self.lgr.debug('reverseToCall doRevtoCall, progInfo tid set to self.tid:%s' % self.tid)
         self.tryBackOne()
         self.lgr.debug('reservseToCall, back from tryBackOne')
 
