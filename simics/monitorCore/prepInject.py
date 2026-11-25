@@ -55,6 +55,7 @@ class PrepInject():
         self.ret_cycle = None
         # for windows 
         self.addr_of_count = None
+        self.sp_addr_of_count = None
 
         self.commence = commence
 
@@ -141,6 +142,7 @@ class PrepInject():
                 #else:
                 #    self.addr_of_count = self.exit_info.count_addr
                 self.addr_of_count = self.exit_info.delay_count_addr
+                self.sp_addr_of_count = self.exit_info.msc
                 self.lgr.debug('prepInject getLength windows, address of count 0x%x' % self.addr_of_count)
         return length
 
@@ -275,6 +277,7 @@ class PrepInject():
         pickDict['orig_buffer'] = orig_buffer
         if self.top.isWindows():
             pickDict['addr_of_count'] = self.addr_of_count
+            pickDict['sp_addr_of_count'] = self.sp_addr_of_count
         afl_file = os.path.join('./', name, self.cell_name, 'afl.pickle')
         pickle.dump( pickDict, open( afl_file, "wb") ) 
         if self.call_ip is not None:
