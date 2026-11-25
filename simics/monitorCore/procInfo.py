@@ -29,8 +29,8 @@ class procInfo():
         self.comm = comm
         self.pid = pid
         self.tid = str(pid)
-        if '-' in self.tid:
-            self.tid = self.tid.split('-')[0]
+        #if '-' in self.tid:
+        #    self.tid = self.tid.split('-')[0]
         self.context_manager = context_manager
         self.enabled_tracking = enabled_tracking
         self.cur_addr=cur_addr
