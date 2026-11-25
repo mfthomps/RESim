@@ -2051,12 +2051,12 @@ class GenMonitor():
                 return True
         return False
 
-    def debugThis(self):
+    def onlyThis(self):
         ''' Intended for use while debugging a process that clones and you want to only watch 
             the current clone '''
+        self.lgr.debug('onlyThis')
         self.context_manager[self.target].watchOnlyThis()
         print('now debugging only:')
-        self.lgr.debug('debugThis')
         self.show()
 
     def debugAll(self):
@@ -2248,7 +2248,7 @@ class GenMonitor():
             if previous > start:
                 count = 0
                 while current != previous:
-                    self.skipToCyle(previous, quiet=quiet)
+                    self.skipToCyle(previous, quiet=quiet, disable=True)
                     eip = self.getEIP(cpu)
                     current = cpu.cycles
                     instruct = SIM_disassemble_address(cpu, eip, 1, 0)
@@ -2818,9 +2818,9 @@ class GenMonitor():
         self.lgr.debug('rev1NoMail')
         dum, cpu = self.context_manager[self.target].getDebugTid() 
         new_cycle = cpu.cycles - 1
-        self.skipToCycle(new_cycle)
+        self.skipToCycle(new_cycle, disable=True)
         self.lgr.debug('rev1NoMail skipped to 0x%x  cycle is 0x%x' % (new_cycle, cpu.cycles))
-        SIM_run_command('disassemble')
+        #SIM_run_command('disassemble')
 
     def rev1(self):
         if self.reverseEnabled():
@@ -2871,6 +2871,7 @@ class GenMonitor():
 
     def revToWrite(self, addr):
         ''' reverse until a write to given address '''
+        self.lgr.debug('revToWrite addr: 0x%x' % addr)
         self.stopAtKernelWrite(addr)
 
     def runToCall(self, callname, tid=None, subcall=None, run=True, stop_on_call=False, linger=False, trace=False, nth=None):
@@ -3004,7 +3005,7 @@ class GenMonitor():
         self.is_monitor_running.setRunning(False)
         self.syscallManager[self.target].rmAllSyscalls()
         if self.isWindows():
-            del self.traceAll[self.target]
+            self.traceAll[self.target] = None
 
     def rmCallTrace(self, cell_name, callname):
         ''' remove a call trace and all of its aliases '''
@@ -3721,7 +3722,7 @@ class GenMonitor():
                     if self.reverseEnabled() and self.getFirstCycle() != cpu.cycles:
                         self.lgr.debug('runTo, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
                         prev_cycle = cpu.cycles - 2
-                        self.skipToCycle(prev_cycle, cpu=cpu)
+                        self.skipToCycle(prev_cycle, cpu=cpu, disable=True)
                 self.lgr.debug('runTo, call to setExits')
                 the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
 
@@ -4111,7 +4112,7 @@ class GenMonitor():
                     if self.reverseEnabled() and self.getFirstCycle() != cpu.cycles:
                         self.lgr.debug('runToInput, not in kernel, rev enabled, have frames, try rev 2 before tracking syscalls')
                         prev_cycle = cpu.cycles - 2
-                        self.skipToCycle(prev_cycle, cpu=cpu)
+                        self.skipToCycle(prev_cycle, cpu=cpu, disable=True)
                     
                 self.lgr.debug('runToInput, call to setExits')
                 the_syscall.setExits(frames, context_override=self.context_manager[self.target].getRESimContext()) 
@@ -6990,7 +6991,7 @@ class GenMonitor():
         else:
             # assume user invoked, make sure we are not tracking, or that will mess things up
             self.stopTracking()
-            self.lgr.debug('skipToCycle assume user invoked did stopTracking')
+            self.lgr.debug('skipToCycle assume user invoked, did stopTracking')
         retval = self.skip_to_mgr[self.target].skipToTest(cycle, quiet=quiet)
         self.context_manager[self.target].clearReverseContext()
         if disable:
@@ -7377,7 +7378,10 @@ class GenMonitor():
     def enableReverse(self, target=None):
         if target is None:
             target = self.target
-        self.reverse_mgr[target].enableReverse()
+        if not self.reverse_mgr[target].reverseEnabled(): 
+            self.reverse_mgr[target].enableReverse()
+        else:
+            self.lgr.debug('enableReverse called while reverse was already enabled')
 
     def disableReverse(self):
         self.reverse_mgr[self.target].disableReverse()
@@ -7614,6 +7618,9 @@ class GenMonitor():
                 print('Failed')
         else:
             print('No function found for 0x%x' % addr)
+
+    def reportPerformance(self):
+        self.reverse_mgr[self.target].reportPerformance()
 
 if __name__=="__main__":        
     print('instantiate the GenMonitor') 
