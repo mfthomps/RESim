@@ -142,7 +142,7 @@ class Win7CallParams():
 
         if self.reverse_to_call and only is not None:
             self.lgr.debug('win7CallParams enable reverse')
-            SIM_run_command('enable-reverse-execution')
+            self.top.enableReverse()
         if track_params:
             track_log_file = os.path.join('logs', 'call_params.log')
             self.track_log = open(track_log_file, 'w')
@@ -272,7 +272,7 @@ class Win7CallParams():
         else:
             ''' debugging, skip back to entry '''
             frame, cycle = self.top.getPreviousEnterCycle()
-            resimSimicsUtils.skipToTest(self.cpu, cycle, self.lgr)
+            self.top.skipToCycle(cycle, cpu=self.cpu)
             self.lgr.debug('win7Callparams reverseToSyscall was debug, so skipped to cycle 0x%x' % cycle)
             SIM_run_alone(self.rmAllBreaks, self.trackFromSysEntry)
 
@@ -556,6 +556,7 @@ class Win7CallParams():
                 pass
                 #SIM_break_simulation('exitTrackHap rax 0x%x' % rax)
             self.lgr.debug('win7CallParams exitTrackHap rax 0x%x' % rax)
+            self.top.flushTrace()
 
     def rmUserHap(self, user_hap):
         if self.one_entry is not None:
