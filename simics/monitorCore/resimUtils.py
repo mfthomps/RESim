@@ -722,7 +722,8 @@ def getLoadOffsetFromSO(so_json, prog, lgr=None):
         retval = offset
     return retval 
 
-def getFree():
+def getFree(value=False):
+    ''' return the percentage of system memory that is free '''
     cmd = "free"
     with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as ps:
         output = ps.communicate()
@@ -738,8 +739,12 @@ def getFree():
                  else:
                      free = int(parts[3])
                  #print('tot %s   free %s' % (tot, free))             
-                 percent = (free / tot) * 100
-                 return int(percent)
+                 if not value:
+                     percent = (free / tot) * 100
+                     return int(percent)
+                 else:
+                     return free
+            
     return None
 
 def getExecList(ini, lgr=None):
