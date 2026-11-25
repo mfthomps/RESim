@@ -128,6 +128,7 @@ class WriteData():
 
         # for windows
         self.addr_of_count = None
+        self.sp_addr_of_count = None
 
         self.stop_callback = stop_callback
 
@@ -268,6 +269,7 @@ class WriteData():
                 exit_info.retval_addr = self.user_space_addr
                 exit_info.count_addr = self.addr_of_count
                 exit_info.delay_count_addr = self.addr_of_count
+                exit_info.msc = self.sp_addr_of_count
                 asynch_handler = winDelay.WinDelay(self.top, self.cpu, tid, comm, exit_info, self.user_space_addr, 
                         self.mem_utils, self.context_manager, None, None, None, self.fd, len(data), None, self.lgr, watch_count_addr=False)
 
@@ -358,9 +360,13 @@ class WriteData():
             if word_size == 4:
                 #self.mem_utils.writeWord32(self.cpu, self.addr_of_count, count)
                 self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=4)
+                if self.sp_addr_of_count is not None:
+                    self.top.writeWord(self.sp_addr_of_count, count, target_cpu=self.cpu, word_size=4)
             else: 
                 #self.mem_utils.writeWord(self.cpu, self.addr_of_count, count)
                 self.top.writeWord(self.addr_of_count, count, target_cpu=self.cpu, word_size=8)
+                if self.sp_addr_of_count is not None:
+                    self.top.writeWord(self.sp_addr_of_count, count, target_cpu=self.cpu, word_size=8)
             #self.lgr.debug('writeData wrote count value %d to addr 0x%x' % (count, self.addr_of_count))
         else:
             self.cpu.iface.int_register.write(self.len_reg_num, count)
@@ -1234,6 +1240,9 @@ class WriteData():
             if 'addr_of_count' in so_pickle: 
                 self.addr_of_count = so_pickle['addr_of_count']
                 self.lgr.debug('writeData load add_of_count 0x%x' % (self.addr_of_count))
+            if 'sp_addr_of_count' in so_pickle: 
+                self.sp_addr_of_count = so_pickle['sp_addr_of_count']
+                self.lgr.debug('writeData load sp_add_of_count 0x%x' % (self.sp_addr_of_count))
         else:
             self.lgr.debug('injectIO load, no pickle file at %s' % afl_file)
 
